@@ -847,8 +847,8 @@ const tosActivities = [
 ]
 const tosInstance = { projectId: 'project-1', tosVersion: '16.3.0.110', templateVersionId: 'template-v1', activities: tosActivities, dates: { parent: '2026-01-01', collect: '2025-12-31', ota: '2026-02-01', renamed: '2025-01-01' }, createdBy: '张三', createdAt: NOW, updatedBy: '张三', updatedAt: NOW }
 assert.deepEqual(planRules.validateTosMrInstanceDates(tosInstance, { planStartDate: '2026-01-01', planEndDate: '2026-01-31' }), [
-  { rowKey: 'project-1::16.3.0.110', activityId: 'collect', activityName: ' 修改点收集开始时间 ', message: '修改点收集开始时间不能早于一级计划中的计划开始时间' },
-  { rowKey: 'project-1::16.3.0.110', activityId: 'ota', activityName: 'OTA开放验证&部署', message: 'OTA开放验证&部署不能晚于一级计划中的计划完成时间' },
+  { rowKey: 'project-1::16.3.0.110', activityId: 'collect', activityName: ' 修改点收集开始时间 ', message: '修改点收集开始时间不能早于一级计划中的计划开始时间（2026-01-01）', boundaryDate: '2026-01-01', boundaryType: 'minimum' },
+  { rowKey: 'project-1::16.3.0.110', activityId: 'ota', activityName: 'OTA开放验证&部署', message: 'OTA开放验证&部署不能晚于一级计划中的计划完成时间（2026-01-31）', boundaryDate: '2026-01-31', boundaryType: 'maximum' },
 ])
 assert.deepEqual(planRules.validateTosMrInstanceDates({ ...tosInstance, dates: { collect: '', ota: '' } }, { planStartDate: '', planEndDate: '' }), [])
 
@@ -1141,38 +1141,77 @@ const immutableValidationBefore = structuredClone(immutableValidationRows)
 dateRules.validateJointMachineRows({ tosInstances: [tos140], machinePlans: immutableValidationRows })
 assert.deepEqual(immutableValidationRows, immutableValidationBefore)
 assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { collect: '2026-06-23', lock: '2026-06-25' })]).map(error => error.message), [
-  '修改点收集开始时间需与tOS项目时间保持一致', '修改点锁定时间需与tOS项目时间保持一致',
+  '修改点收集开始时间需与tOS项目时间保持一致（2026-06-22）', '修改点锁定时间需与tOS项目时间保持一致（2026-06-24）',
 ])
-assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { 'mp-deadline': '2026-06-26' })]).map(error => error.message), ['整机产品项目的MP入库截止时间不得晚于tOS项目时间'])
-assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { transfer: '2026-06-27' })]).map(error => error.message), ['版本转测时间应等于tOS版本转测时间'])
+const collectionAndLockErrors = errorsFor([machineRow('m1', '16.3.0.140', '1', { collect: '2026-06-23', lock: '2026-06-25' })])
+assert.deepEqual(collectionAndLockErrors.map(error => [error.boundaryDate, error.boundaryType]), [
+  ['2026-06-22', 'equality'], ['2026-06-24', 'equality'],
+])
+assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { 'mp-deadline': '2026-06-26' })]), [{
+  rowKey: 'm1::16.3.0.140', activityId: 'mp-deadline', activityName: 'MP入库截止时间',
+  message: '整机产品项目的MP入库截止时间不得晚于tOS项目时间（2026-06-25）', boundaryDate: '2026-06-25', boundaryType: 'maximum',
+}])
+assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '1', { transfer: '2026-06-27' })]), [{
+  rowKey: 'm1::16.3.0.140', activityId: 'transfer', activityName: '版本转测时间',
+  message: '版本转测时间应等于tOS版本转测时间（2026-06-26）', boundaryDate: '2026-06-26', boundaryType: 'equality',
+}])
 assert.deepEqual(errorsFor([machineRow('m1', '16.3.0.140', '2', { transfer: '2026-07-02' }), machineRow('m2', '16.3.0.140', '2', { transfer: '2026-07-03' })]).filter(error => error.activityName === '版本转测时间').map(error => error.message), [
-  '同一1+N转测类型的版本转测时间需保持一致', '同一1+N转测类型的版本转测时间需保持一致',
+  '同一1+N转测类型的版本转测时间需保持一致（2026-07-03）', '同一1+N转测类型的版本转测时间需保持一致（2026-07-02）',
 ])
-assert.ok(errorsFor([machineRow('base', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('m2', '16.3.0.140', '2', { transfer: '2026-07-02' })]).some(error => error.message === '版本转测时间需晚于上一个1+N转测类型至少1周'))
+assert.ok(errorsFor([machineRow('base', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('m2', '16.3.0.140', '2', { transfer: '2026-07-02' })]).some(error => error.message === '版本转测时间需晚于上一个1+N转测类型至少1周（2026-07-03）'))
 assert.equal(errorsFor([machineRow('base', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('m2', '16.3.0.140', '2', { transfer: '2026-07-03' })]).some(error => error.message.includes('至少1周')), false)
 // Type gaps compare to the greatest existing smaller numeric type (3, not 1).
-assert.ok(errorsFor([machineRow('one', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('three', '16.3.0.140', '3', { transfer: '2026-07-10' }), machineRow('five', '16.3.0.140', '5', { transfer: '2026-07-16' })]).some(error => error.rowKey === 'five::16.3.0.140' && error.message === '版本转测时间需晚于上一个1+N转测类型至少1周'))
-assert.ok(errorsFor([machineRow('m', '16.3.0.140', '2', { transfer: '2026-07-21' })]).some(error => error.message === '版本转测时间需晚于上一个1+N转测类型至少1周'))
+assert.ok(errorsFor([machineRow('one', '16.3.0.140', '1', { transfer: '2026-06-26' }), machineRow('three', '16.3.0.140', '3', { transfer: '2026-07-10' }), machineRow('five', '16.3.0.140', '5', { transfer: '2026-07-16' })]).some(error => error.rowKey === 'five::16.3.0.140' && error.message === '版本转测时间需晚于上一个1+N转测类型至少1周（2026-07-17）'))
+assert.ok(errorsFor([machineRow('m', '16.3.0.140', '2', { transfer: '2026-07-21' })]).some(error => error.message === '版本转测时间不能超过下一个tOS版本的测试开始时间（2026-07-20）'))
+
+const dynamicPreviousBoundaryErrors = errorsFor([
+  machineRow('previous-a', '16.3.0.140', '2', { transfer: '2026-07-01' }),
+  machineRow('previous-b', '16.3.0.140', '2', { transfer: '2026-07-05' }),
+  machineRow('current', '16.3.0.140', '3', { transfer: '2026-07-10' }),
+]).filter(error => error.rowKey === 'current::16.3.0.140' && error.activityName === '版本转测时间')
+assert.deepEqual(dynamicPreviousBoundaryErrors, [{
+  rowKey: 'current::16.3.0.140', activityId: 'transfer', activityName: '版本转测时间',
+  message: '版本转测时间需晚于上一个1+N转测类型至少1周（2026-07-12）', boundaryDate: '2026-07-12', boundaryType: 'minimum',
+}])
 
 const boundedFields = ['测试开始时间', '测试完成时间', '评审时间', '软件归档时间', 'OTA开放验证&部署']
 const idByName = Object.fromEntries(mrActivities.filter(activity => activity.parentId).map(activity => [activity.activityName, activity.id]))
 for (const name of boundedFields) {
   const id = idByName[name]
-  assert.ok(errorsFor([machineRow('m', '16.3.0.140', '1', { [id]: '2026-01-01' })]).some(error => error.message === `${name}不早于tOS项目时间，可与tOS项目保持一致，且不能超过下一个tOS版本的测试开始时间`))
-  assert.ok(errorsFor([machineRow('m', '16.3.0.140', '1', { [id]: '2026-07-21' })]).some(error => error.message === `${name}不早于tOS项目时间，可与tOS项目保持一致，且不能超过下一个tOS版本的测试开始时间`))
+  const tosFieldDate = tos140.dates[id]
+  assert.ok(errorsFor([machineRow('m', '16.3.0.140', '1', { [id]: '2026-01-01' })]).some(error => error.message === `${name}不早于tOS项目时间，可与tOS项目保持一致（${tosFieldDate}）` && error.boundaryDate === tosFieldDate && error.boundaryType === 'minimum'))
+  assert.ok(errorsFor([machineRow('m', '16.3.0.140', '1', { [id]: '2026-07-21' })]).some(error => error.message === `${name}不能超过下一个tOS版本的测试开始时间（2026-07-20）` && error.boundaryDate === '2026-07-20' && error.boundaryType === 'maximum'))
   const previousDate = '2026-07-01'
-  assert.ok(errorsFor([machineRow('prev', '16.3.0.140', '3', { [id]: previousDate }), machineRow('current', '16.3.0.140', '5', { [id]: '2026-07-07' })]).some(error => error.message === `${name}需晚于上一个1+N转测类型至少1周，且不能超过下一个tOS版本的${name}`))
+  assert.ok(errorsFor([machineRow('prev', '16.3.0.140', '3', { [id]: previousDate }), machineRow('current', '16.3.0.140', '5', { [id]: '2026-07-07' })]).some(error => error.message === `${name}需晚于上一个1+N转测类型至少1周（2026-07-08）` && error.boundaryDate === '2026-07-08' && error.boundaryType === 'minimum'))
 }
+const correspondingNextActivityErrors = errorsFor([machineRow('m', '16.3.0.140', '2', { review: '2026-07-28' })])
+assert.ok(correspondingNextActivityErrors.some(error => (
+  error.message === '评审时间不能超过下一个tOS版本的评审时间（2026-07-27）'
+  && error.boundaryDate === '2026-07-27'
+  && error.boundaryType === 'maximum'
+)))
+const crossedBoundsCurrent = makeTosInstance('16.3.0.140', { review: '2026-07-30' })
+const crossedBoundsNext = makeTosInstance('16.3.0.145', { 'test-start': '2026-07-20' })
+const crossedBoundsErrors = errorsFor([machineRow('crossed', '16.3.0.140', '1', { review: '2026-07-25' })], [crossedBoundsCurrent, crossedBoundsNext])
+assert.deepEqual(crossedBoundsErrors.map(error => [error.boundaryType, error.boundaryDate, error.message]), [
+  ['minimum', '2026-07-30', '评审时间不早于tOS项目时间，可与tOS项目保持一致（2026-07-30）'],
+  ['maximum', '2026-07-20', '评审时间不能超过下一个tOS版本的测试开始时间（2026-07-20）'],
+])
 // Last tOS version has no next upper bound, while missing references skip comparison.
 assert.deepEqual(errorsFor([machineRow('last', '16.3.0.150', '1', { 'test-start': '2027-01-01' })]).filter(error => error.activityName === '测试开始时间'), [])
 assert.deepEqual(errorsFor([machineRow('missing-ref', '16.3.0.999', '1', { transfer: '2027-01-01' })], [makeTosInstance('16.3.0.999', {})]), [])
 const malformedErrors = errorsFor([machineRow('bad', '16.3.0.140', '1', { transfer: '2026-02-30', review: 'not-a-date' })])
 assert.deepEqual(malformedErrors.map(error => error.message), ['版本转测时间日期格式不正确', '评审时间日期格式不正确'])
+assert.ok(malformedErrors.every(error => error.boundaryDate === undefined && error.boundaryType === undefined))
 const aliasValidationErrors = errorsFor([
   machineRow('alias-a', '016.03.00.140.0', '2', { transfer: '2026-07-02' }),
   machineRow('alias-b', '16.3.0.140', '2', { transfer: '2026-07-03' }),
 ])
-assert.equal(aliasValidationErrors.filter(error => error.message === '同一1+N转测类型的版本转测时间需保持一致').length, 2)
+assert.equal(aliasValidationErrors.filter(error => (
+  error.message.startsWith('同一1+N转测类型的版本转测时间需保持一致（')
+  && error.boundaryType === 'equality'
+  && error.message.endsWith(`（${error.boundaryDate}）`)
+)).length, 2)
 
 const naSource = machineRow('na', '16.3.0.140', 'N/A', { transfer: '2026-01-01' })
 const clearedNa = dateRules.clearDatesForNa(naSource)
@@ -1187,10 +1226,17 @@ const grouped = dateRules.groupMrErrorsByRow([
   { rowKey: 'r2', activityId: 'a', activityName: 'A', message: 'E2' },
   { rowKey: 'r1', activityId: 'b', activityName: 'B', message: 'E1' },
   { rowKey: 'r2', activityId: 'a', activityName: 'A', message: 'E2' },
+  { rowKey: 'r3', activityId: 'c', activityName: 'C', message: 'E3', boundaryDate: '2026-01-01', boundaryType: 'minimum' },
+  { rowKey: 'r3', activityId: 'c', activityName: 'C', message: 'E3', boundaryDate: '2026-01-01', boundaryType: 'minimum' },
+  { rowKey: 'r3', activityId: 'c', activityName: 'C', message: 'E3', boundaryDate: '2026-01-02', boundaryType: 'minimum' },
 ])
 assert.deepEqual(grouped, {
   r2: [{ rowKey: 'r2', activityId: 'a', activityName: 'A', message: 'E2' }],
   r1: [{ rowKey: 'r1', activityId: 'b', activityName: 'B', message: 'E1' }],
+  r3: [
+    { rowKey: 'r3', activityId: 'c', activityName: 'C', message: 'E3', boundaryDate: '2026-01-01', boundaryType: 'minimum' },
+    { rowKey: 'r3', activityId: 'c', activityName: 'C', message: 'E3', boundaryDate: '2026-01-02', boundaryType: 'minimum' },
+  ],
 })
 
 // Read-only adapters: select only the latest published L1 source from the effective scope.

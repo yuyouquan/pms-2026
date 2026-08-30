@@ -169,10 +169,24 @@ export function validateTosMrInstanceDates(instance: TosMrVersionInstance, bound
     const date = normalizeMrBusinessDate(instance.dates[activity.id])
     if (!date) return
     if (name === COLLECT_START && startBound && date < startBound) {
-      errors.push({ rowKey, activityId: activity.id, activityName: activity.activityName, message: '修改点收集开始时间不能早于一级计划中的计划开始时间' })
+      errors.push({
+        rowKey,
+        activityId: activity.id,
+        activityName: activity.activityName,
+        message: `修改点收集开始时间不能早于一级计划中的计划开始时间（${startBound}）`,
+        boundaryDate: startBound,
+        boundaryType: 'minimum',
+      })
     }
     if (name === OTA_RELEASE && endBound && date > endBound) {
-      errors.push({ rowKey, activityId: activity.id, activityName: activity.activityName, message: 'OTA开放验证&部署不能晚于一级计划中的计划完成时间' })
+      errors.push({
+        rowKey,
+        activityId: activity.id,
+        activityName: activity.activityName,
+        message: `OTA开放验证&部署不能晚于一级计划中的计划完成时间（${endBound}）`,
+        boundaryDate: endBound,
+        boundaryType: 'maximum',
+      })
     }
   })
   return errors

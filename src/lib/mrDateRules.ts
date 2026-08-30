@@ -4,6 +4,7 @@ import type {
   JointMachinePlan,
   JointValidationInput,
   MarketDateValidationInput,
+  MrBoundaryType,
   MrCellError,
   TosMrVersionInstance,
 } from '@/types/mrVersionPlan'
@@ -52,12 +53,19 @@ function numericType(row: JointMachinePlan): number | null {
   return Number.isInteger(value) ? value : null
 }
 
-function makeError(row: JointMachinePlan, instance: TosMrVersionInstance, name: string, message: string): MrCellError {
+function makeError(
+  row: JointMachinePlan,
+  instance: TosMrVersionInstance,
+  name: string,
+  message: string,
+  boundary?: { date: string; type: MrBoundaryType },
+): MrCellError {
   return {
     rowKey: rowKey(row),
     activityId: activityByName(instance, name)?.id ?? name,
     activityName: name,
-    message,
+    message: boundary ? `${message}（${boundary.date}）` : message,
+    ...(boundary ? { boundaryDate: boundary.date, boundaryType: boundary.type } : {}),
   }
 }
 
@@ -83,6 +91,19 @@ function previousTypeRows(rows: readonly JointMachinePlan[], current: JointMachi
     .filter((item): item is { row: JointMachinePlan; type: number } => item.type !== null && item.type < currentType)
   const greatest = candidates.reduce<number | null>((result, item) => result === null || item.type > result ? item.type : result, null)
   return greatest === null ? [] : candidates.filter(item => item.type === greatest).map(item => item.row)
+}
+
+function latestPreviousMinimum(
+  rows: readonly JointMachinePlan[],
+  instance: TosMrVersionInstance,
+  name: string,
+): string {
+  return rows.reduce((latest, row) => {
+    const value = normalizeMrBusinessDate(rawMachineDate(row, instance, name))
+    if (!value) return latest
+    const minimum = addDays(value, 7)
+    return !latest || minimum > latest ? minimum : latest
+  }, '')
 }
 
 export function validateJointMachineRows(input: JointValidationInput): MrCellError[] {
@@ -120,13 +141,17 @@ export function validateJointMachineRows(input: JointValidationInput): MrCellErr
       if (malformed.has(name)) return
       const value = normalizeMrBusinessDate(rawMachineDate(row, instance, name))
       const reference = normalizeMrBusinessDate(rawTosDate(instance, name))
-      if (value && reference && value !== reference) errors.push(makeError(row, instance, name, EQUALITY_MESSAGES[name]))
+      if (value && reference && value !== reference) {
+        errors.push(makeError(row, instance, name, EQUALITY_MESSAGES[name], { date: reference, type: 'equality' }))
+      }
     })
 
     if (!malformed.has(MP_DEADLINE)) {
       const value = normalizeMrBusinessDate(rawMachineDate(row, instance, MP_DEADLINE))
       const reference = normalizeMrBusinessDate(rawTosDate(instance, MP_DEADLINE))
-      if (value && reference && value > reference) errors.push(makeError(row, instance, MP_DEADLINE, '整机产品项目的MP入库截止时间不得晚于tOS项目时间'))
+      if (value && reference && value > reference) {
+        errors.push(makeError(row, instance, MP_DEADLINE, '整机产品项目的MP入库截止时间不得晚于tOS项目时间', { date: reference, type: 'maximum' }))
+      }
     }
 
     if (!malformed.has(TRANSFER)) {
@@ -134,15 +159,17 @@ export function validateJointMachineRows(input: JointValidationInput): MrCellErr
       if (value) {
         if (type === 1) {
           const reference = normalizeMrBusinessDate(rawTosDate(instance, TRANSFER))
-          if (reference && value !== reference) errors.push(makeError(row, instance, TRANSFER, '版本转测时间应等于tOS版本转测时间'))
+          if (reference && value !== reference) {
+            errors.push(makeError(row, instance, TRANSFER, '版本转测时间应等于tOS版本转测时间', { date: reference, type: 'equality' }))
+          }
         } else {
-          const violatesPrior = previousRows.some(previous => {
-            const previousValue = normalizeMrBusinessDate(rawMachineDate(previous, instance, TRANSFER))
-            return !!previousValue && value < addDays(previousValue, 7)
-          })
+          const previousMinimum = latestPreviousMinimum(previousRows, instance, TRANSFER)
           const nextStart = next ? normalizeMrBusinessDate(rawTosDate(next, TEST_START)) : ''
-          if (violatesPrior || (nextStart && value > nextStart)) {
-            errors.push(makeError(row, instance, TRANSFER, '版本转测时间需晚于上一个1+N转测类型至少1周'))
+          if (previousMinimum && value < previousMinimum) {
+            errors.push(makeError(row, instance, TRANSFER, '版本转测时间需晚于上一个1+N转测类型至少1周', { date: previousMinimum, type: 'minimum' }))
+          }
+          if (nextStart && value > nextStart) {
+            errors.push(makeError(row, instance, TRANSFER, '版本转测时间不能超过下一个tOS版本的测试开始时间', { date: nextStart, type: 'maximum' }))
           }
         }
       }
@@ -155,17 +182,20 @@ export function validateJointMachineRows(input: JointValidationInput): MrCellErr
       if (type === 1) {
         const reference = normalizeMrBusinessDate(rawTosDate(instance, name))
         const nextStart = next ? normalizeMrBusinessDate(rawTosDate(next, TEST_START)) : ''
-        if ((reference && value < reference) || (nextStart && value > nextStart)) {
-          errors.push(makeError(row, instance, name, `${name}不早于tOS项目时间，可与tOS项目保持一致，且不能超过下一个tOS版本的测试开始时间`))
+        if (reference && value < reference) {
+          errors.push(makeError(row, instance, name, `${name}不早于tOS项目时间，可与tOS项目保持一致`, { date: reference, type: 'minimum' }))
+        }
+        if (nextStart && value > nextStart) {
+          errors.push(makeError(row, instance, name, `${name}不能超过下一个tOS版本的测试开始时间`, { date: nextStart, type: 'maximum' }))
         }
       } else {
-        const violatesPrior = previousRows.some(previous => {
-          const previousValue = normalizeMrBusinessDate(rawMachineDate(previous, instance, name))
-          return !!previousValue && value < addDays(previousValue, 7)
-        })
+        const previousMinimum = latestPreviousMinimum(previousRows, instance, name)
         const nextValue = next ? normalizeMrBusinessDate(rawTosDate(next, name)) : ''
-        if (violatesPrior || (nextValue && value > nextValue)) {
-          errors.push(makeError(row, instance, name, `${name}需晚于上一个1+N转测类型至少1周，且不能超过下一个tOS版本的${name}`))
+        if (previousMinimum && value < previousMinimum) {
+          errors.push(makeError(row, instance, name, `${name}需晚于上一个1+N转测类型至少1周`, { date: previousMinimum, type: 'minimum' }))
+        }
+        if (nextValue && value > nextValue) {
+          errors.push(makeError(row, instance, name, `${name}不能超过下一个tOS版本的${name}`, { date: nextValue, type: 'maximum' }))
         }
       }
     })
@@ -186,7 +216,12 @@ export function validateJointMachineRows(input: JointValidationInput): MrCellErr
   })
   sameTypes.forEach(group => {
     if (new Set(group.map(item => item.value)).size <= 1) return
-    group.forEach(item => errors.push(makeError(item.row, item.instance, TRANSFER, '同一1+N转测类型的版本转测时间需保持一致')))
+    group.forEach(item => {
+      const reference = group.find(candidate => candidate.value !== item.value)?.value
+      if (reference) {
+        errors.push(makeError(item.row, item.instance, TRANSFER, '同一1+N转测类型的版本转测时间需保持一致', { date: reference, type: 'equality' }))
+      }
+    })
   })
   return errors
 }
@@ -209,7 +244,7 @@ export function groupMrErrorsByRow(errors: readonly MrCellError[]): Record<strin
   const grouped: Record<string, MrCellError[]> = {}
   const seen = new Set<string>()
   errors.forEach(error => {
-    const identity = `${error.rowKey}\u0000${error.activityId}\u0000${error.message}`
+    const identity = `${error.rowKey}\u0000${error.activityId}\u0000${error.message}\u0000${error.boundaryDate ?? ''}\u0000${error.boundaryType ?? ''}`
     if (seen.has(identity)) return
     seen.add(identity)
     ;(grouped[error.rowKey] ??= []).push({ ...error })

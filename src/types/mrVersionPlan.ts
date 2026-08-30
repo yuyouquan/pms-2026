@@ -2,6 +2,7 @@ export type MrTemplateVersionStatus = '已发布' | '修订中'
 export type MrTransferType = 'N/A' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8'
 export type MrPlanViewMode = 'vertical' | 'horizontal'
 export type MrActivityDateMap = Record<string, string>
+export type MrBoundaryType = 'minimum' | 'maximum' | 'equality'
 
 export interface MrTemplateActivity {
   id: string
@@ -167,6 +168,8 @@ export interface MrCellError {
   activityId: string
   activityName: string
   message: string
+  boundaryDate?: string
+  boundaryType?: MrBoundaryType
 }
 
 export interface MrTosProjectSource {
