@@ -1,6 +1,8 @@
 import { normalizeMrTemplateActivities, numberMrTemplateActivities } from '@/lib/mrTemplateRules'
 import type {
   CreateTosMrVersionInput,
+  MrBoundaryError,
+  MrBoundaryType,
   MrCellError,
   MrGroupedColumn,
   MrLeafColumn,
@@ -42,6 +44,21 @@ function isValidDateOnly(value: string): boolean {
   date.setUTCHours(0, 0, 0, 0)
   date.setUTCFullYear(year, month - 1, day)
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+}
+
+export function makeMrBoundaryError(
+  base: Pick<MrCellError, 'rowKey' | 'activityId' | 'activityName'>,
+  message: string,
+  date: string,
+  type: MrBoundaryType,
+): MrBoundaryError {
+  if (!isValidDateOnly(date)) throw new Error('MR边界日期格式不正确')
+  return {
+    ...base,
+    message: `${message}（${date}）`,
+    boundaryDate: date,
+    boundaryType: type,
+  }
 }
 
 function formatShanghaiDate(value: Date): string {
@@ -169,24 +186,20 @@ export function validateTosMrInstanceDates(instance: TosMrVersionInstance, bound
     const date = normalizeMrBusinessDate(instance.dates[activity.id])
     if (!date) return
     if (name === COLLECT_START && startBound && date < startBound) {
-      errors.push({
-        rowKey,
-        activityId: activity.id,
-        activityName: activity.activityName,
-        message: `修改点收集开始时间不能早于一级计划中的计划开始时间（${startBound}）`,
-        boundaryDate: startBound,
-        boundaryType: 'minimum',
-      })
+      errors.push(makeMrBoundaryError(
+        { rowKey, activityId: activity.id, activityName: activity.activityName },
+        '修改点收集开始时间不能早于一级计划中的计划开始时间',
+        startBound,
+        'minimum',
+      ))
     }
     if (name === OTA_RELEASE && endBound && date > endBound) {
-      errors.push({
-        rowKey,
-        activityId: activity.id,
-        activityName: activity.activityName,
-        message: `OTA开放验证&部署不能晚于一级计划中的计划完成时间（${endBound}）`,
-        boundaryDate: endBound,
-        boundaryType: 'maximum',
-      })
+      errors.push(makeMrBoundaryError(
+        { rowKey, activityId: activity.id, activityName: activity.activityName },
+        'OTA开放验证&部署不能晚于一级计划中的计划完成时间',
+        endBound,
+        'maximum',
+      ))
     }
   })
   return errors

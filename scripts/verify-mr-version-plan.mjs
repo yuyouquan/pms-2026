@@ -11,8 +11,10 @@ const templateMocksSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
 const task13PackageJson = JSON.parse(readSource(root, 'package.json'))
 const mrBrowserVerifierSource = readSource(root, 'screenshots/verify-mr-version-plan-browser.mjs')
 const planRules = loadTypeScriptModule(root, 'src/lib/mrVersionPlanRules.ts')
+const planRulesSource = readSource(root, 'src/lib/mrVersionPlanRules.ts')
 const aggregationRules = loadTypeScriptModule(root, 'src/lib/mrAggregationRules.ts')
 const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
+const dateRulesSource = readSource(root, 'src/lib/mrDateRules.ts')
 const adapter = loadTypeScriptModule(root, 'src/lib/mrPlanSourceAdapters.ts')
 const shanghaiBusinessDate = loadTypeScriptModule(root, 'src/lib/shanghaiBusinessDate.ts')
 const templateCompare = loadTypeScriptModule(root, 'src/lib/mrTemplateCompare.ts')
@@ -40,6 +42,32 @@ const navigationRules = loadTypeScriptModule(root, 'src/lib/mrNavigationRules.ts
 const templateCompatibility = loadTypeScriptModule(root, 'src/lib/projectTemplateCompatibility.ts')
 const machineMrVersionPlanSource = readSource(root, 'src/components/plans/MachineMrVersionPlan.tsx')
 const NOW = '2026-08-29T08:00:00.000Z'
+
+// Comparison errors must use one required-boundary constructor. This prevents
+// either validator from hand-writing a comparison error without its date/type,
+// while malformed input keeps a deliberately boundary-free construction path.
+assert.match(planRulesSource, /export function makeMrBoundaryError\([\s\S]*date: string,[\s\S]*type: MrBoundaryType,[\s\S]*\): MrBoundaryError/)
+assert.doesNotMatch(planRulesSource, /makeMrBoundaryError\([\s\S]*boundary\?/)
+assert.equal([...planRulesSource.matchAll(/errors\.push\(makeMrBoundaryError\(/g)].length, 2)
+assert.equal([...dateRulesSource.matchAll(/errors\.push\(makeMrBoundaryError\(/g)].length, 10)
+assert.doesNotMatch(planRulesSource, /errors\.push\(\s*\{/)
+assert.doesNotMatch(dateRulesSource, /errors\.push\(makeError\(/)
+assert.match(dateRulesSource, /errors\.push\(makeMrFormatError\(/)
+assert.deepEqual(planRules.makeMrBoundaryError(
+  { rowKey: 'row', activityId: 'activity', activityName: '测试开始时间' },
+  '测试开始时间不能早于下限',
+  '2026-07-01',
+  'minimum',
+), {
+  rowKey: 'row', activityId: 'activity', activityName: '测试开始时间',
+  message: '测试开始时间不能早于下限（2026-07-01）', boundaryDate: '2026-07-01', boundaryType: 'minimum',
+})
+assert.throws(() => planRules.makeMrBoundaryError(
+  { rowKey: 'row', activityId: 'activity', activityName: '测试开始时间' },
+  '测试开始时间不能早于下限',
+  '',
+  'minimum',
+), /MR边界日期格式不正确/)
 
 // Machine project-space MR projection: only meaningful numeric joint rows
 // project into the market plan, with structure retained from the exact tOS

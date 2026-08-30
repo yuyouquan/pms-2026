@@ -172,6 +172,11 @@ export interface MrCellError {
   boundaryType?: MrBoundaryType
 }
 
+export type MrBoundaryError = MrCellError & {
+  boundaryDate: string
+  boundaryType: MrBoundaryType
+}
+
 export interface MrTosProjectSource {
   projectId: string
   tosProjectKey: string
