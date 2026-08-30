@@ -178,7 +178,7 @@ const modal = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx
 assert.match(modal, /TechnicalProjectCreateFields/, 'project modal renders focused technical fields')
 assert.doesNotMatch(modal, /projectType === ['"]技术项目['"][\s\S]{0,200}name="responsiblePersons"/, 'technical project must not render the generic owner input')
 assert.match(modal, /useOverlayInteraction/, 'project modal reuses the shared overlay submission guard')
-assert.match(modal, /const handleSubmit = async \(\) => \{\s*if \(isCreateDraftInteractionBlocked\) return\s*if \(!tryBeginSubmit\(\)\) return\s*setSubmitting\(true\)\s*try \{/, 'project submit locks synchronously before asynchronous validation')
+assert.match(modal, /const handleSubmit = async \(\) => \{\s*if \(isCreateDraftInteractionBlocked\) return\s*if \(!tryBeginSubmit\(\)\) return\s*const submitSession =[\s\S]{0,360}setSubmitting\(true\)\s*try \{/, 'project submit captures the draft session and locks synchronously before asynchronous validation')
 assert.match(modal, /await form\.validateFields\(\)/, 'project submit still uses asynchronous Ant form validation')
 assert.match(modal, /finally \{[\s\S]{0,180}setSubmitting\(false\)[\s\S]{0,120}releaseSubmission\(\)/, 'all validation, business, and submit exits release the shared lock')
 const submissionGuardModule = loadTypeScriptModule(root, 'src/lib/submissionGuard.ts')
@@ -466,6 +466,16 @@ assert.ok(configHandlerReachableNodes.some(node => node.getText(technicalInforma
 const configModalMount = liveJsxMounts(technicalInformationReachableNodes, technicalInformationSourceFile, 'SubprojectConfigModal')[0]
 assert.ok(staticJsxAttributeText(jsxAttribute(configModalMount, 'open')).includes('configuringChild'), 'mounted configuration modal consumes the state opened by its button')
 const createFields = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
+assert.match(createFields, /fields:\s*readonly ProjectInfoFieldDefinition\[\]/, 'technical create fields receive the ordered create projection')
+assert.match(createFields, /fields\.map\(field =>/, 'technical create Form.Items preserve projection order')
+assert.match(
+  createFields,
+  /const isRequired = !field\.readOnly[\s\S]{0,160}validateRequiredOnCreate \? field\.requiredOnCreate : field\.required/,
+  'create uses requiredOnCreate while edit uses required, and source snapshots are never revalidated as user input',
+)
+assert.match(createFields, /TECHNICAL_SOURCE_SNAPSHOT_KEYS\.has\(field\.key\)[\s\S]{0,160}<Input disabled/, 'project category, track, child name, and status stay disabled source snapshots')
+assert.match(modal, /fields=\{technicalCreateFields\}/, 'project modal forwards the technical create projection')
+assert.equal((createFields.match(/<Form\.Item/g) || []).length, 1, 'technical create fields use one generic Form.Item renderer without duplicate test representatives')
 assert.match(createFields, /useSingleEnumOptions\(['"]core-value['"]/, 'project value consumes the shared core-value configuration')
 assert.match(createFields, /useTmgOptions|getTmgSubdomainState/, 'technical create/edit fields consume live TMG rows')
 assert.match(createFields, /暂无可用配置，请先在配置中心维护/, 'empty TMG child config shows maintenance guidance')
@@ -571,6 +581,7 @@ const conflictingTechnicalValues = projectStoreModule.migrateProjectState({ proj
 assert.equal(conflictingTechnicalValues?.technicalTrack, '根字段自定义赛道', 'root technical field deterministically remains primary on legacy conflict')
 assert.equal(conflictingTechnicalValues?.fieldValues?.technicalTrack, '嵌套字段自定义赛道', 'legacy conflict does not destroy the nested technical field value')
 const permissionModule = loadTypeScriptModule(root, 'src/stores/permission.ts')
+assert.equal(permissionModule.TECHNICAL_TEAM_PERMISSION_MAPPING['其他'], 'technicalOther', 'technical Other is a fixed permission role backed by the create/edit field')
 const blankManagerValues = projectStoreModule.migrateProjectState({ projects: [{
   ...technicalSeeds.find(project => project.id === '9'), technicalProjectManager: '', fieldValues: { technicalProjectManager: '' },
 }] }, 6).projects.find(project => project.id === '9')
@@ -579,11 +590,28 @@ assert.equal(blankManagerValues?.fieldValues?.technicalProjectManager, '张三',
 permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
 permissionModule.usePermissionStore.getState().ensureProjectPermissions([blankManagerValues])
 assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '技术项目经理')?.members, ['张三'], 'permission hydration reads the seeded nested technical manager membership')
+const technicalOtherProject = {
+  ...blankManagerValues,
+  technicalOther: '张三',
+  fieldValues: { ...blankManagerValues.fieldValues, technicalOther: '张三' },
+}
+permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
+permissionModule.usePermissionStore.getState().ensureProjectPermissions([technicalOtherProject])
+assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '其他')?.members, ['张三'], 'permission hydration includes Other membership after technical creation')
+permissionModule.usePermissionStore.getState().syncProjectTeamPermissionMembers({
+  ...technicalOtherProject,
+  technicalOther: '李四',
+  fieldValues: { ...technicalOtherProject.fieldValues, technicalOther: '李四' },
+})
+assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '其他')?.members, ['李四'], 'permission sync updates Other membership after technical editing')
 permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
 permissionModule.usePermissionStore.getState().ensureProjectPermissions(technicalSeeds.filter(project => project.id.startsWith('mock-tech-')))
 for (const project of technicalSeeds.filter(project => project.id.startsWith('mock-tech-'))) {
   const roles = permissionModule.usePermissionStore.getState().rolesByProject[project.id]
   assert.deepEqual(roles.map(role => role.name), Object.keys(permissionModule.TECHNICAL_TEAM_PERMISSION_MAPPING), `${project.id} hydrates every fixed technical role`)
-  assert.ok(roles.every(role => role.members.length === 1 && role.members[0] === project[permissionModule.TECHNICAL_TEAM_PERMISSION_MAPPING[role.name]]), `${project.id} hydrates fixed-role membership from every technical team field`)
+  assert.ok(roles.every(role => {
+    const expectedMember = project[permissionModule.TECHNICAL_TEAM_PERMISSION_MAPPING[role.name]]
+    return expectedMember ? role.members.length === 1 && role.members[0] === expectedMember : role.members.length === 0
+  }), `${project.id} hydrates fixed-role membership from every populated technical team field without affecting optional roles`)
 }
 console.log('technical project contract passed')

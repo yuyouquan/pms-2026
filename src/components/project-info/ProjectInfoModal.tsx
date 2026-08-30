@@ -9,6 +9,7 @@ import TechnicalProjectCreateFields from '@/components/technical-project/Technic
 import {
   getProjectInfoFields,
   isTargetProjectInfoType,
+  type ProjectInfoFieldDefinition,
   type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
 import {
@@ -26,6 +27,7 @@ import {
   deriveMachineProjectInfoValues,
   deriveProjectResponsiblePersons,
   deriveTosProjectAggregates,
+  getProjectInfoCreateFields,
   getProjectInfoModalFields,
   getProjectInfoModalGroups,
   getProjectInfoModalSubmitValues,
@@ -190,6 +192,15 @@ export default function ProjectInfoModal({
     || projectType === PROJECT_CATEGORY_CAPABILITY
     || projectType === PROJECT_TYPE_TOS_VERSION
   const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
+  const createFields = useMemo(() => getProjectInfoCreateFields(projectType), [projectType])
+  const machineCreateFields = useMemo(
+    () => mode === 'create' && isMachineProjectType(projectType) ? createFields : [],
+    [createFields, mode, projectType],
+  )
+  const technicalCreateFields = useMemo(
+    () => isTechnicalProject ? createFields : [],
+    [createFields, isTechnicalProject],
+  )
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
   const firstLaunchOptions = useMemo(() => existingProjects
@@ -374,7 +385,9 @@ export default function ProjectInfoModal({
       type: normalizedProjectType,
       secondaryCategory: normalizedProjectType === PROJECT_CATEGORY_MACHINE
         ? classification.secondaryCategory || ''
-        : '',
+        : normalizedProjectType === PROJECT_CATEGORY_TECH
+          ? String(project.fieldValues?.ipmProjectType || project.ipmProjectType || project.secondaryCategory || '')
+          : '',
       responsiblePersons,
       healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : '',
       status: typeof project.status === 'string' ? project.status : '',
@@ -442,7 +455,11 @@ export default function ProjectInfoModal({
         form.setFieldsValue({
           ...draft.values,
           type: restoredType || undefined,
-          secondaryCategory: restoredClassification?.pmsSecondaryCategory,
+          secondaryCategory: restoredType === PROJECT_CATEGORY_TECH
+            ? restoredEntry?.ipmProjectCategoryName || draft.values.secondaryCategory
+            : restoredClassification?.pmsSecondaryCategory,
+          projectName: restoredEntry?.name || draft.values.projectName,
+          technicalTrack: restoredEntry?.technicalTrack || draft.values.technicalTrack,
         } as ProjectInfoFormState)
         lastAppliedSourceRef.current = `${restoredBid}::${restoredType}`
         const modalGroupKeys = new Set<string>(getProjectInfoModalGroups(restoredType).map(group => group.key))
@@ -476,6 +493,7 @@ export default function ProjectInfoModal({
     const type = nextType || String(form.getFieldValue('type') || '')
     const configuredStatusValues = rowsByType[getProjectStatusEnumType(type)].map(row => row.value)
     form.setFieldsValue({
+      projectName: entry.name,
       marketName: sourceValues.marketName || '',
       brand: sourceValues.brand || '',
       productLine: sourceValues.productLine || '',
@@ -487,6 +505,7 @@ export default function ProjectInfoModal({
       }),
       technicalTrack: entry.technicalTrack || '',
       ipmProjectType: entry.ipmProjectCategoryName,
+      ...(type === PROJECT_CATEGORY_TECH ? { secondaryCategory: entry.ipmProjectCategoryName } : {}),
     })
     if (isMachineProjectType(type)) {
       const derivedValues = deriveMachineProjectInfoValues({ ...entry, ...sourceValues })
@@ -778,6 +797,15 @@ export default function ProjectInfoModal({
   const handleSubmit = async () => {
     if (isCreateDraftInteractionBlocked) return
     if (!tryBeginSubmit()) return
+    const submitSession = mode === 'create' ? currentCreateDraftSessionRef.current : null
+    if (mode === 'create' && (
+      !submitSession
+      || draftReadStatusRef.current !== 'ready'
+      || !isCurrentCreateDraftSession(submitSession)
+    )) {
+      releaseSubmission()
+      return
+    }
     setSubmitting(true)
     try {
     const enumState = useEnumStore.getState()
@@ -907,13 +935,6 @@ export default function ProjectInfoModal({
       message.error('未找到项目名称')
       return
     }
-    const submitSession = mode === 'create' ? currentCreateDraftSessionRef.current : null
-    if (mode === 'create' && (
-      !submitSession
-      || draftReadStatusRef.current !== 'ready'
-      || !isCurrentCreateDraftSession(submitSession)
-    )) return
-
     cancelDraftSave()
       const submitResult = await onSubmit({
         bid: values.bid,
@@ -964,6 +985,67 @@ export default function ProjectInfoModal({
       if (componentMountedRef.current) setSubmitting(false)
       releaseSubmission()
     }
+  }
+
+  const renderProjectInfoField = (field: ProjectInfoFieldDefinition) => {
+    const active = !field.visibleWhen || field.visibleWhen(watchedValues)
+    if (!active) return null
+    const renderedField = field.key === 'firstSaleTosVersion' && isLegacyMachine
+      ? { ...field, key: 'currentTosVersion', label: '当前tOS版本', readOnly: false }
+      : field.key === 'firstSaleTosVersion'
+        ? { ...field, readOnly: false }
+      : field.key === 'currentTosVersion'
+        ? { ...field, readOnly: !isLegacyMachine }
+        : field
+    const isRequired = !renderedField.readOnly
+      && (mode === 'create' ? field.requiredOnCreate : field.required)
+    return (
+      <Form.Item
+        key={field.key}
+        data-project-create-field={field.key}
+        label={renderedField.label}
+        name={renderedField.key}
+        {...(field.key === 'chipCode' ? {
+          getValueProps: () => ({ value: selectedChipOptionId }),
+          getValueFromEvent: (rowId: string) => resolveChipRow(rowsByType, rowId)?.chipCode || '',
+        } : {})}
+        extra={field.conditionalHint}
+        className={field.inputType === 'jira' ? 'pms-project-info-form-span' : undefined}
+        rules={isRequired
+          ? [{ required: true, message: `请填写${renderedField.label}` }]
+          : undefined}
+      >
+        {field.key === 'status' ? (
+          <Select
+            options={projectStatusOptions}
+            placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
+          />
+        ) : field.key === 'chipCode' ? (
+          <Select
+            value={selectedChipOptionId}
+            options={chipOptions}
+            showSearch
+            optionFilterProp="label"
+            placeholder={chipOptions.length ? '请选择芯片编码 / 型号 / 平台' : '暂无可用配置，请先在配置中心维护'}
+            onChange={(rowId) => {
+              const chip = resolveChipRow(rowsByType, rowId)
+              if (!chip) return
+              form.setFieldsValue({
+                chipCode: chip.chipCode,
+                chipModel: chip.chipModel,
+                chipPlatform: chip.chipPlatform,
+              })
+            }}
+          />
+        ) : (
+          <ProjectInfoFieldInput
+            field={renderedField}
+            firstLaunchProjectOptions={firstLaunchOptions}
+            optionsOverride={isMachineProjectType(projectType) ? machineFieldOptions[field.key] : undefined}
+          />
+        )}
+      </Form.Item>
+    )
   }
 
   return (
@@ -1025,8 +1107,8 @@ export default function ProjectInfoModal({
           }
         }}
       >
-        <div className="pms-project-info-form-grid pms-project-info-universal">
-          {mode === 'create' ? (
+        {mode === 'create' && (
+          <div className="pms-project-info-form-grid pms-project-info-universal" aria-label="IPM项目来源">
             <Form.Item label="项目名" name="bid" rules={[{ required: true, message: '请选择项目名' }]}>
               <Select
                 showSearch
@@ -1035,40 +1117,54 @@ export default function ProjectInfoModal({
                 options={candidateProjects.map(item => ({ label: `${item.name}（${item.bid}）`, value: item.bid }))}
               />
             </Form.Item>
-          ) : (
-            <Form.Item label="项目名" name="projectName"><Input disabled /></Form.Item>
-          )}
-          <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>
-            <Select disabled options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
-          </Form.Item>
-          {projectType === PROJECT_CATEGORY_MACHINE && (
-            <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
-              <Select disabled options={secondaryCategoryOptions} />
-            </Form.Item>
-          )}
-          {showConfiguredProjectStatus && !isMachineProjectType(projectType) && (
-            <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
-              <Select
-                disabled={projectType === PROJECT_TYPE_TOS_VERSION}
-                options={projectStatusOptions}
-                placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
-              />
-            </Form.Item>
-          )}
-          {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (
-            <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
-              <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
-            </Form.Item>
-          )}
-          {isTargetProjectInfoType(projectType) && (
-            <Form.Item label="健康状态" name="healthStatus" rules={[{ required: true, message: '请选择健康状态' }]}>
-              <Select
-                options={healthOptions}
-                placeholder={healthOptions.length ? '请选择健康状态' : '暂无可用配置，请先在配置中心维护'}
-              />
-            </Form.Item>
-          )}
-        </div>
+          </div>
+        )}
+
+        {(mode === 'edit' || (!isMachineProjectType(projectType) && !isTechnicalProject)) && (
+          <div className="pms-project-info-form-grid pms-project-info-universal">
+            {mode === 'edit' && !isTechnicalProject && (
+              <Form.Item label="项目名" name="projectName"><Input disabled /></Form.Item>
+            )}
+            {!isTechnicalProject && (
+              <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>
+                <Select disabled options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
+              </Form.Item>
+            )}
+            {mode === 'edit' && projectType === PROJECT_CATEGORY_MACHINE && (
+              <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
+                <Select disabled options={secondaryCategoryOptions} />
+              </Form.Item>
+            )}
+            {showConfiguredProjectStatus && !isMachineProjectType(projectType) && !isTechnicalProject && (
+              <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
+                <Select
+                  disabled={projectType === PROJECT_TYPE_TOS_VERSION}
+                  options={projectStatusOptions}
+                  placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
+                />
+              </Form.Item>
+            )}
+            {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (
+              <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
+                <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
+              </Form.Item>
+            )}
+            {isTargetProjectInfoType(projectType) && (mode === 'edit' || !isMachineProjectType(projectType)) && (
+              <Form.Item label="健康状态" name="healthStatus" rules={[{ required: true, message: '请选择健康状态' }]}>
+                <Select
+                  options={healthOptions}
+                  placeholder={healthOptions.length ? '请选择健康状态' : '暂无可用配置，请先在配置中心维护'}
+                />
+              </Form.Item>
+            )}
+          </div>
+        )}
+
+        {machineCreateFields.length > 0 && (
+          <div className="pms-project-info-form-grid pms-project-create-fields" aria-label="整机项目新建字段">
+            {machineCreateFields.map(renderProjectInfoField)}
+          </div>
+        )}
 
         {projectType !== PROJECT_TYPE_TOS_VERSION && aggregateWarnings.length > 0 && (
           <Alert type="warning" showIcon style={{ marginBottom: 12 }} title="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
@@ -1081,16 +1177,16 @@ export default function ProjectInfoModal({
         {isTechnicalProject && (
           <TechnicalProjectCreateFields
             form={form}
+            fields={technicalCreateFields}
             existingProjects={existingProjects}
             currentProjectId={project?.id}
-            ipmProjectType={mode === 'create' ? selectedCandidate?.ipmProjectCategoryName || '' : String(watchedValues.ipmProjectType || project?.fieldValues?.ipmProjectType || project?.ipmProjectType || '')}
-            technicalTrack={mode === 'create' ? selectedCandidate?.technicalTrack || '' : String(watchedValues.technicalTrack || project?.fieldValues?.technicalTrack || '')}
             historicalDomain={mode === 'edit' ? String(project?.fieldValues?.tmg || project?.tmg || '') : undefined}
             historicalSubdomain={mode === 'edit' ? String(project?.fieldValues?.subdomain || project?.subdomain || '') : undefined}
+            validateRequiredOnCreate={mode === 'create'}
           />
         )}
 
-        {groups.length > 0 && (
+        {machineCreateFields.length === 0 && groups.length > 0 && (
           <Collapse
             className="pms-project-info-form-groups"
             activeKey={activeGroups}
@@ -1110,62 +1206,7 @@ export default function ProjectInfoModal({
                 label: <Space><span className="pms-project-info-group-dot" style={{ background: GROUP_COLORS[group.key] }} /><strong>{group.label}</strong><Tag>{groupFields.length} 项</Tag></Space>,
                 children: (
                   <div className="pms-project-info-form-grid">
-                    {groupFields.map(field => {
-                      const active = !field.visibleWhen || field.visibleWhen(watchedValues)
-                      if (!active) return null
-                      const isRequired = mode === 'create' ? field.requiredOnCreate : field.required
-                      const renderedField = field.key === 'firstSaleTosVersion'
-                        ? { ...field, readOnly: isLegacyMachine }
-                        : field.key === 'currentTosVersion'
-                          ? { ...field, readOnly: !isLegacyMachine }
-                          : field
-                      return (
-                        <Form.Item
-                          key={field.key}
-                          label={field.label}
-                          name={field.key}
-                          {...(field.key === 'chipCode' ? {
-                            getValueProps: () => ({ value: selectedChipOptionId }),
-                            getValueFromEvent: (rowId: string) => resolveChipRow(rowsByType, rowId)?.chipCode || '',
-                          } : {})}
-                          extra={field.conditionalHint}
-                          className={field.inputType === 'jira' ? 'pms-project-info-form-span' : undefined}
-                          rules={isRequired
-                            ? [{ required: true, message: `请填写${field.label}` }]
-                            : undefined}
-                        >
-                          {field.key === 'status' ? (
-                            <Select
-                              options={projectStatusOptions}
-                              placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
-                            />
-                          ) : field.key === 'chipCode' ? (
-                            <Select
-                              value={selectedChipOptionId}
-                              options={chipOptions}
-                              showSearch
-                              optionFilterProp="label"
-                              placeholder={chipOptions.length ? '请选择芯片编码 / 型号 / 平台' : '暂无可用配置，请先在配置中心维护'}
-                              onChange={(rowId) => {
-                                const chip = resolveChipRow(rowsByType, rowId)
-                                if (!chip) return
-                                form.setFieldsValue({
-                                  chipCode: chip.chipCode,
-                                  chipModel: chip.chipModel,
-                                  chipPlatform: chip.chipPlatform,
-                                })
-                              }}
-                            />
-                          ) : (
-                            <ProjectInfoFieldInput
-                              field={renderedField}
-                              firstLaunchProjectOptions={firstLaunchOptions}
-                              optionsOverride={isMachineProjectType(projectType) ? machineFieldOptions[field.key] : undefined}
-                            />
-                          )}
-                        </Form.Item>
-                      )
-                    })}
+                    {groupFields.map(renderProjectInfoField)}
                   </div>
                 ),
               }

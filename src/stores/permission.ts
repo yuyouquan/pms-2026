@@ -13,6 +13,7 @@ export const TECHNICAL_TEAM_PERMISSION_MAPPING = {
   '质量代表': 'qualityRepresentative',
   '产品代表': 'productRepresentative',
   '标准化代表': 'standardizationRepresentative',
+  '其他': 'technicalOther',
 } as const
 
 export const TOS_TEAM_PERMISSION_MAPPING = {

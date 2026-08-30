@@ -15,8 +15,12 @@ import { getPreProjectCandidates, switchDeliverableMode } from '@/lib/technicalP
 import { useEnumStore } from '@/stores/enums'
 import type { ProjectInfoProject } from '@/lib/projectInfoValues'
 import type { DeliverableValue } from '@/types/technicalProject'
+import type { ProjectInfoFieldDefinition } from '@/constants/projectInfoSchema'
 
 const personOptions = ALL_USERS.map(user => ({ label: user, value: user }))
+const TECHNICAL_SOURCE_SNAPSHOT_KEYS = new Set(['secondaryCategory', 'technicalTrack', 'projectName', 'status'])
+const technicalTeamFieldsByKey = new Map(TECHNICAL_TEAM_FIELDS.map(field => [field.key, field]))
+const technicalDeliverableFieldsByKey = new Map(TECHNICAL_DELIVERABLE_FIELDS.map(field => [field.key, field]))
 
 function DeliverableControl({ label, value, onChange }: { label: string; value?: DeliverableValue; onChange?: (value: DeliverableValue) => void }) {
   const [kind, setKind] = useState<'url' | 'file'>(value?.kind || 'url')
@@ -82,20 +86,20 @@ function YearControl({ value, onChange }: { value?: string; onChange?: (value: s
 
 export default function TechnicalProjectCreateFields({
   form,
+  fields,
   existingProjects,
   currentProjectId,
-  ipmProjectType,
-  technicalTrack,
   historicalDomain,
   historicalSubdomain,
+  validateRequiredOnCreate,
 }: {
   form: FormInstance
+  fields: readonly ProjectInfoFieldDefinition[]
   existingProjects: ProjectInfoProject[]
   currentProjectId?: string
-  ipmProjectType: string
-  technicalTrack: string
   historicalDomain?: string
   historicalSubdomain?: string
+  validateRequiredOnCreate: boolean
 }) {
   const tmg = String(Form.useWatch('tmg', form) || '')
   const projectValue = String(Form.useWatch('projectValue', form) || '')
@@ -128,71 +132,94 @@ export default function TechnicalProjectCreateFields({
     if (!isLive) form.setFieldValue('subdomain', undefined)
   }
 
+  const fieldLabel = (field: ProjectInfoFieldDefinition) => (
+    field.key === 'tmg' ? 'TMG 及技术领域' : field.label
+  )
+
+  const renderTechnicalControl = (field: ProjectInfoFieldDefinition) => {
+    if (TECHNICAL_SOURCE_SNAPSHOT_KEYS.has(field.key)) return <Input disabled />
+    if (field.key === 'tmg') {
+      return (
+        <Select
+          showSearch
+          optionFilterProp="label"
+          placeholder={domainOptions.length ? '请选择技术领域' : '暂无可用配置，请先在配置中心维护'}
+          options={domainOptions}
+          onChange={handleDomainChange}
+        />
+      )
+    }
+    if (field.key === 'subdomain') {
+      return (
+        <Select
+          disabled={!tmg || subdomainDisabled}
+          showSearch
+          optionFilterProp="label"
+          placeholder={subdomainDisabled ? '无' : subdomainOptions.length ? '请选择子领域' : '暂无可用配置，请先在配置中心维护'}
+          options={subdomainOptions}
+        />
+      )
+    }
+    if (field.key === 'projectValue') {
+      return (
+        <Select
+          allowClear
+          showSearch
+          optionFilterProp="label"
+          placeholder={projectValueOptions.length ? '请选择项目价值' : '暂无可用配置，请先在配置中心维护'}
+          options={projectValueOptions}
+        />
+      )
+    }
+    if (field.key === 'projectYear') return <YearControl />
+    if (field.key === 'preProjectId') {
+      return <Select allowClear showSearch optionFilterProp="label" placeholder="搜索全部 PMS 项目（选填）" options={preProjectOptions} />
+    }
+    const teamField = technicalTeamFieldsByKey.get(field.key as typeof TECHNICAL_TEAM_FIELDS[number]['key'])
+    if (teamField) {
+      return <Select allowClear showSearch optionFilterProp="label" placeholder={`请选择${teamField.label}`} options={personOptions} />
+    }
+    const deliverableField = technicalDeliverableFieldsByKey.get(field.key as typeof TECHNICAL_DELIVERABLE_FIELDS[number]['key'])
+    if (deliverableField) return <DeliverableControl label={deliverableField.label} />
+    return <Input disabled />
+  }
+
   return (
     <div className="pms-technical-project-fields">
-      <div className="pms-technical-section-heading"><span>技术信息</span></div>
+      <div className="pms-technical-section-heading"><span>技术项目信息</span><small>项目分类、技术赛道、子项目名称和项目状态来自 IPM 项目快照</small></div>
       <div className="pms-project-info-form-grid">
-        <Form.Item label="技术赛道" name="technicalTrack"><Input disabled value={technicalTrack} /></Form.Item>
-        <Form.Item label="TMG 及技术领域" name="tmg" rules={[{ required: true, message: '请选择 TMG 及技术领域' }]}>
-          <Select
-            showSearch
-            optionFilterProp="label"
-            placeholder={domainOptions.length ? '请选择技术领域' : '暂无可用配置，请先在配置中心维护'}
-            options={domainOptions}
-            onChange={handleDomainChange}
-          />
-        </Form.Item>
-        <Form.Item label="子领域" name="subdomain" rules={[
-          {
-            validator: async (_, value) => {
-              if (tmg && !subdomainOptions.some(option => !option.disabled) && !String(value || '').trim()) {
-                throw new Error('暂无可用配置，请先在配置中心维护')
-              }
-            },
-          },
-          { required: true, message: '请选择子领域' },
-        ]}>
-          <Select
-            disabled={!tmg || subdomainDisabled}
-            showSearch
-            optionFilterProp="label"
-            placeholder={subdomainDisabled ? '无' : subdomainOptions.length ? '请选择子领域' : '暂无可用配置，请先在配置中心维护'}
-            options={subdomainOptions}
-          />
-        </Form.Item>
-        <Form.Item label="前置项目" name="preProjectId">
-          <Select allowClear showSearch optionFilterProp="label" placeholder="搜索全部 PMS 项目（选填）" options={preProjectOptions} />
-        </Form.Item>
-        <Form.Item label="项目年份" name="projectYear" rules={[{ required: true, message: '请选择项目年份' }, { pattern: /^\d{4}$/, message: '请选择四位项目年份' }]}>
-          <YearControl />
-        </Form.Item>
-        <Form.Item label="项目价值" name="projectValue" className="pms-project-info-form-span">
-          <Select
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder={projectValueOptions.length ? '请选择项目价值（选填）' : '暂无可用配置，请先在配置中心维护'}
-            options={projectValueOptions}
-          />
-        </Form.Item>
-      </div>
-
-      <div className="pms-technical-section-heading"><span>团队人员</span><small>技术项目负责人将自动成为项目责任人</small></div>
-      <div className="pms-project-info-form-grid">
-        {TECHNICAL_TEAM_FIELDS.map(field => (
-          <Form.Item key={field.key} label={field.label} name={field.key} rules={field.required ? [{ required: true, message: `请选择${field.label}` }] : undefined}>
-            <Select allowClear showSearch optionFilterProp="label" placeholder={`请选择${field.label}`} options={personOptions} />
-          </Form.Item>
-        ))}
-      </div>
-
-      <div className="pms-technical-section-heading"><span>交付物</span><small>每项可选择链接或单个文件</small></div>
-      <div className="pms-project-info-form-grid">
-        {TECHNICAL_DELIVERABLE_FIELDS.map(field => (
-          <Form.Item key={field.key} label={field.label} name={field.key}>
-            <DeliverableControl label={field.label} />
-          </Form.Item>
-        ))}
+        {fields.map(field => {
+          const isRequired = !field.readOnly
+            && (validateRequiredOnCreate ? field.requiredOnCreate : field.required)
+          const label = fieldLabel(field)
+          const requiredRule = isRequired ? [{ required: true, message: `请选择${label}` }] : []
+          const rules = field.key === 'subdomain'
+            ? [
+                {
+                  validator: async (_: unknown, value: unknown) => {
+                    if (tmg && !subdomainOptions.some(option => !option.disabled) && !String(value || '').trim()) {
+                      throw new Error('暂无可用配置，请先在配置中心维护')
+                    }
+                  },
+                },
+                ...requiredRule,
+              ]
+            : field.key === 'projectYear'
+              ? [...requiredRule, { pattern: /^\d{4}$/, message: '请选择四位项目年份' }]
+              : requiredRule.length ? requiredRule : undefined
+          return (
+            <Form.Item
+              key={field.key}
+              data-project-create-field={field.key}
+              label={label}
+              name={field.key}
+              className={field.inputType === 'deliverable' ? 'pms-project-info-form-span' : undefined}
+              rules={rules}
+            >
+              {renderTechnicalControl(field)}
+            </Form.Item>
+          )
+        })}
       </div>
     </div>
   )

@@ -53,7 +53,13 @@ const draft = {
 const liSiDraft = {
   schemaVersion: PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
   ownerId: '李四',
-  values: { bid: 'BID-2', type: '技术项目', responsiblePersons: ['李四'] },
+  values: {
+    bid: 'BID-2',
+    type: '技术项目',
+    responsiblePersons: ['李四'],
+    technicalProjectManager: '王五',
+    technicalOther: '跨域协同',
+  },
   activeGroups: ['extended'],
   updatedAt: '2026-07-20T01:00:00.000Z',
 }
@@ -62,6 +68,7 @@ await repository.save(draft)
 await repository.save(liSiDraft)
 assert.deepEqual(await repository.get('张三'), draft, '张三 should round-trip only their own draft')
 assert.deepEqual(await repository.get('李四'), liSiDraft, '李四 should round-trip only their own draft')
+assert.equal((await repository.get('李四'))?.values.technicalOther, '跨域协同', 'new technical fields must survive draft recovery')
 assert.equal(storage.keys().length, 2)
 
 const storedKey = storage.keys().find((key) => key.includes(encodeURIComponent('张三')))
@@ -233,7 +240,7 @@ assert.doesNotMatch(addProjectSubmitBlock, /onCancel\(\)/)
 assert.doesNotMatch(addProjectSubmitBlock, /setActiveModule|setProjectSpaceModule|项目创建成功/)
 assertOrdered(addProjectAfterCreateBlock, [
   "setProjectSpaceModule('basic')",
-  "setActiveModule('projectSpace')",
+  "enterProjectSpace({ module: 'projectList' })",
   "message.success('项目创建成功')",
 ], 'post-create callback must own navigation and success feedback')
 assert.match(addProjectModalSource, /onAfterCreate={handleAfterCreate}/)
@@ -242,20 +249,20 @@ assert.match(modalSource, /closable={!isDraftInteractionLocked}/)
 assert.match(modalSource, /mask={{ closable: !isDraftInteractionLocked }}/)
 assert.match(modalSource, /keyboard={!isDraftInteractionLocked}/)
 assert.match(modalSource, /cancelButtonProps={{ disabled: isDraftInteractionLocked }}/)
-assert.match(modalSource, /okButtonProps={{ disabled: isCreateDraftInteractionBlocked }}/)
+assert.match(modalSource, /okButtonProps={{ disabled: [^}]*isCreateDraftInteractionBlocked[^}]*}}/)
 assert.match(modalSource, /const draftInteractionDescription = isDraftHydrating/)
 assert.match(modalSource, /正在恢复项目草稿/)
 assert.match(modalSource, /正在创建项目/)
 assert.match(modalSource, /<Spin spinning={isDraftInteractionLocked} description={draftInteractionDescription}>/)
 assert.match(modalSource, /<Form[\s\S]*disabled={isCreateDraftInteractionBlocked}/)
-assert.match(modalSource, /disabled={isDraftInteractionLocked}[\s\S]*重新填写/)
+assert.match(modalSource, /disabled=\{[^}]*isDraftInteractionLocked[^}]*\}[\s\S]*重新填写/)
 assert.match(requestCloseBlock, /if \(submitting\) return/)
 assert.match(requestResetBlock, /isDraftInteractionLocked/)
 assert.match(modalSource, /draftReadStatus !== 'ready' \|\| submitting/)
 assert.match(modalSource, /if \(isCreateDraftInteractionBlocked\) return[\s\S]*setActiveGroups/)
 assert.doesNotMatch(modalSource, /maskClosable=/)
 assert.doesNotMatch(modalSource, /\btip=/)
-assert.match(modalSource, /message="项目草稿读取失败"/)
+assert.match(modalSource, /title="项目草稿读取失败"/)
 assert.match(modalSource, /description="已保存的内容暂时无法恢复，当前填写和自动保存已暂停。"/)
 assert.match(modalSource, /重新读取/)
 assertOrdered(retryHydrationBlock, [

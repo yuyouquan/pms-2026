@@ -9,9 +9,11 @@ const technical = loadTypeScriptModule(root, 'src/constants/technicalProject.ts'
 const preferences = loadTypeScriptModule(root, 'src/lib/projectFieldPreferences.ts')
 const projectInfoValues = loadTypeScriptModule(root, 'src/lib/projectInfoValues.ts')
 const projectInfoRules = loadTypeScriptModule(root, 'src/lib/projectInfoRules.ts')
+const technicalProjectRules = loadTypeScriptModule(root, 'src/lib/technicalProjectRules.ts')
 const schemaSource = readSource(root, 'src/constants/projectInfoSchema.ts')
 const technicalSource = readSource(root, 'src/constants/technicalProject.ts')
 const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
+const technicalCreateSource = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
 
 const machineCreateKeys = [
   'firstSaleTosVersion', 'status', 'versionType', 'softwareProjectLevel',
@@ -276,6 +278,48 @@ assert.equal(
   1,
   'the modal source must keep only one explicit universal status render path',
 )
+assert.match(modalSource, /getProjectInfoCreateFields/, 'create pages must consume the ordered create projection')
+assert.match(
+  modalSource,
+  /aria-label="IPM项目来源"[\s\S]*aria-label="整机项目新建字段"/,
+  'the IPM source selector must render before the machine business fields',
+)
+assert.match(
+  modalSource,
+  /machineCreateFields\.map\(renderProjectInfoField\)/,
+  'all machine business Form.Items must be rendered directly from the ordered create projection',
+)
+assert.match(modalSource, /data-project-create-field=\{field\.key\}/, 'rendered create fields must expose their source key in the live DOM')
+assert.match(
+  modalSource,
+  /const isRequired = !renderedField\.readOnly[\s\S]{0,160}field\.requiredOnCreate/,
+  'read-only source snapshots must stay disabled without participating in create validation',
+)
+assert.doesNotMatch(
+  modalSource,
+  /machineCreateFields\.filter\([^\n]*readOnly/,
+  'read-only machine fields must not be removed from the 34-field page projection',
+)
+assert.match(
+  modalSource,
+  /fields=\{technicalCreateFields\}/,
+  'the technical form must receive the same ordered create projection',
+)
+assert.match(
+  technicalCreateSource,
+  /fields\.map\(field =>/,
+  'the technical page must render its Form.Items from the ordered create projection',
+)
+assert.match(
+  technicalCreateSource,
+  /TECHNICAL_SOURCE_SNAPSHOT_KEYS\.has\(field\.key\)[\s\S]{0,160}<Input disabled/,
+  'the first four source-derived technical fields must render as disabled snapshots',
+)
+assert.equal(
+  (technicalCreateSource.match(/<Form\.Item/g) || []).length,
+  1,
+  'the technical renderer must own one generic Form.Item path so team and snapshot fields cannot be duplicated',
+)
 
 const technicalInfoTeamFields = schema.TECHNICAL_PROJECT_INFO_FIELDS.filter(field => field.group === 'team')
 assert.deepEqual(
@@ -390,5 +434,21 @@ const mergedTechnical = projectInfoValues.mergeProjectInfoValues({
 }, { technicalOther: '协同丙' })
 assert.equal(mergedTechnical.technicalOther, '协同丙')
 assert.equal(projectInfoValues.getProjectInfoValue(mergedTechnical, 'technicalOther'), '协同丙')
+
+const machineCreatePayload = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
+  machineQualityRepresentative: ['质量甲'],
+  machineOther: ['协同乙'],
+})
+assert.deepEqual(machineCreatePayload.machineQualityRepresentative, ['质量甲'])
+assert.deepEqual(machineCreatePayload.machineOther, ['协同乙'])
+
+const technicalCreatePayload = technicalProjectRules.normalizeTechnicalProjectValues({
+  technicalLead: '张三',
+  technicalProjectManager: '李白',
+  technicalOther: '协同丙',
+})
+assert.equal(technicalCreatePayload.technicalLead, '张三')
+assert.equal(technicalCreatePayload.technicalProjectManager, '李白')
+assert.equal(technicalCreatePayload.technicalOther, '协同丙', 'the new technical role must survive create/edit payload normalization')
 
 console.log('project field order follow-up contract passed')

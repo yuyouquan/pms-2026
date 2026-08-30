@@ -15,7 +15,28 @@ const allowedConsoleErrors = [
   'Warning: [antd: Space] `direction` is deprecated.',
   'Warning: [antd: Divider] `type` is deprecated.',
   'Warning: [antd: Drawer] `width` is deprecated.',
+  'Warning: [antd: Modal] `maskClosable` is deprecated.',
+  'Warning: [antd: Modal] Static function can not consume context like dynamic theme.',
   'Warning: [antd: Descriptions] Sum of column `span` in a line not match `column` of Descriptions.',
+  'Warning: [antd: message] Static function can not consume context like dynamic theme.',
+]
+const MACHINE_CREATE_LABELS = [
+  '首销tOS版本', '项目状态', '版本类型', '软件项目等级', '是否首发项目', '产品系列',
+  '研发模式', '开发模式', '升级策略', '系统类型', 'Kernel版本', '是否大版本升级',
+  '机型分类', '保密级别', '芯片编码', '芯片型号', '芯片平台', '内存大小', '起步RAM',
+  '是否二段式', '是否外研Mini版本', '整机PD', 'PCBA表', '出货国家表', '关键器件选型表',
+  'JIRA项目', 'SPM', 'SPP', 'CMO', '软件SE', '质量代表', '开发代表', '测试代表', '其他',
+]
+const MACHINE_CONDITIONAL_LABELS = new Set(['是否二段式', '是否外研Mini版本'])
+const MACHINE_READ_ONLY_FIELD_KEYS = [
+  'researchMode', 'androidMajorUpgrade', 'modelCategory', 'confidentialityLevel',
+  'chipModel', 'chipPlatform', 'memorySize', 'startingRam',
+]
+const TECHNICAL_CREATE_LABELS = [
+  '项目分类', '技术赛道', '子项目名称', '项目状态', 'TMG 及技术领域', '子领域',
+  '项目价值', '项目年份', '前置项目', '技术项目负责人', '技术项目经理', '测试代表',
+  '质量代表', '产品代表', '标准化代表', '其他', '项目KPI文件', '概设', 'Charter报告',
+  'PDCP报告', 'TDCP报告', 'EDCP报告',
 ]
 
 let browser
@@ -110,6 +131,46 @@ const assertNoText = async (page, text, scope = 'body') => {
   if (found) throw new Error(`不应显示：${text}`)
 }
 
+const assertCreateFieldLabelOrder = async (page, expectedLabels) => {
+  const actualLabels = await page.$$eval('.ant-modal [data-project-create-field]', elements => elements
+    .filter(element => {
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+    })
+    .map(element => (element.querySelector('.ant-form-item-label')?.textContent || '').replace(/\s+/g, ' ').trim()))
+  if (JSON.stringify(actualLabels) !== JSON.stringify(expectedLabels)) {
+    throw new Error(`新建字段 DOM 顺序错误：${JSON.stringify(actualLabels)}`)
+  }
+  if (new Set(actualLabels).size !== actualLabels.length) throw new Error(`新建字段重复：${JSON.stringify(actualLabels)}`)
+}
+
+const assertIpmSourceBeforeCreateFields = async page => {
+  const sourceIsFirst = await page.evaluate(() => {
+    const source = document.querySelector('.ant-modal [aria-label="IPM项目来源"]')
+    const firstField = document.querySelector('.ant-modal [data-project-create-field]')
+    return Boolean(source && firstField && (source.compareDocumentPosition(firstField) & Node.DOCUMENT_POSITION_FOLLOWING))
+  })
+  if (!sourceIsFirst) throw new Error('IPM 项目来源选择器未位于业务字段前')
+}
+
+const assertNoCreateFieldErrors = async (page, fieldKeys) => {
+  const invalid = await page.evaluate(keys => keys.filter(key => {
+    const item = document.querySelector(`.ant-modal [data-project-create-field="${CSS.escape(key)}"]`)
+    return Boolean(item?.querySelector('.ant-form-item-explain-error'))
+  }), fieldKeys)
+  if (invalid.length) throw new Error(`默认或只读字段不应误报必填：${invalid.join(',')}`)
+}
+
+const assertDisabledCreateFields = async (page, fieldKeys) => {
+  const enabled = await page.evaluate(keys => keys.filter(key => {
+    const item = document.querySelector(`.ant-modal [data-project-create-field="${CSS.escape(key)}"]`)
+    const control = item?.querySelector('input,textarea,button,[role="combobox"]')
+    return !control || !(control.disabled || control.getAttribute('aria-disabled') === 'true')
+  }), fieldKeys)
+  if (enabled.length) throw new Error(`来源快照未禁用：${enabled.join(',')}`)
+}
+
 const assertCollapsed = async (page, label, scope = 'body') => {
   await page.waitForFunction((expected, rootSelector) => {
     const root = document.querySelector(rootSelector)
@@ -173,7 +234,7 @@ const openMain = async (page, label) => {
 
 const formCombo = async (page, label) => {
   const handle = await page.evaluateHandle(expected => {
-    const item = Array.from(document.querySelectorAll('.ant-form-item')).find(candidate => (
+    const item = Array.from(document.querySelectorAll('.ant-modal .ant-form-item')).find(candidate => (
       (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith(expected)
     ))
     return item?.querySelector('input[role="combobox"]') || null
@@ -194,6 +255,12 @@ const openFormCombo = async (page, label) => {
 }
 
 const selectOption = async (page, text, { contains = false } = {}) => {
+  await page.waitForFunction((value, useContains) => Array.from(document.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)'))
+    .some(element => {
+      const rect = element.getBoundingClientRect()
+      const content = (element.textContent || '').trim()
+      return rect.width > 0 && rect.height > 0 && (useContains ? content.includes(value) : content === value)
+    }), { timeout: TIMEOUT }, text, contains)
   const clicked = await page.evaluate((value, useContains) => {
     const option = Array.from(document.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)'))
       .filter(element => {
@@ -236,6 +303,33 @@ const selectFormOption = async (page, label, option, options) => {
   await selectOption(page, option, options)
 }
 
+const selectFormYear = async (page, label, year) => {
+  const opened = await page.evaluate(expected => {
+    const item = Array.from(document.querySelectorAll('.ant-form-item')).find(candidate => (
+      (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith(expected)
+    ))
+    const input = item?.querySelector('.ant-picker input')
+    input?.click()
+    return Boolean(input)
+  }, label)
+  if (!opened) throw new Error(`找不到年份字段：${label}`)
+  await page.waitForSelector('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)', { visible: true })
+  await clickExact(page, '.ant-picker-dropdown:not(.ant-picker-dropdown-hidden) .ant-picker-cell-inner', year)
+}
+
+const configureMachineCreationEnums = async page => {
+  await clickButtonPrefix(page, '.pms-enum-type-list', '产品系列')
+  await page.$eval('[data-testid="enum-add-button"]', element => element.click())
+  await fillInput(page, 'input[aria-label="产品系列"]', 'NOTE 60')
+  await clickExact(page, '.ant-modal button', '新增')
+  await clickButtonPrefix(page, '.pms-enum-type-list', '芯片编码/芯片型号/芯片平台')
+  await page.$eval('[data-testid="enum-add-button"]', element => element.click())
+  await fillInput(page, 'input[aria-label="芯片编码"]', 'D8600')
+  await fillInput(page, 'input[aria-label="芯片型号"]', 'MT6899')
+  await fillInput(page, 'input[aria-label="芯片平台"]', 'MTK')
+  await clickExact(page, '.ant-modal button', '新增')
+}
+
 const selectExternalProject = async (page, bid) => {
   const input = await formCombo(page, '项目名')
   await input.focus()
@@ -249,10 +343,15 @@ const selectExternalProject = async (page, bid) => {
 const completeMachineProjectForm = async (page, { bid, versionLabel, version }) => {
   console.log(`    FORM source ${bid}`)
   await selectExternalProject(page, bid)
-  console.log('    FORM health')
-  await selectFormOption(page, '健康状态', '正常')
+  await assertIpmSourceBeforeCreateFields(page)
+  const expectedLabels = MACHINE_CREATE_LABELS.map((label, index) => index === 0 ? versionLabel : label)
+  await assertCreateFieldLabelOrder(page, expectedLabels.filter(label => !MACHINE_CONDITIONAL_LABELS.has(label)))
+  await assertDisabledCreateFields(page, MACHINE_READ_ONLY_FIELD_KEYS)
   console.log('    FORM development')
-  await selectFormOption(page, '开发模式', '自研')
+  await selectFormOption(page, '开发模式', 'ODC')
+  await assertCreateFieldLabelOrder(page, expectedLabels)
+  await selectFormOption(page, '是否二段式', '是')
+  await selectFormOption(page, '是否外研Mini版本', '否')
   console.log(`    FORM ${versionLabel}`)
   await selectFormOption(page, versionLabel, `tOS${version}`)
   console.log('    FORM first launch')
@@ -260,16 +359,13 @@ const completeMachineProjectForm = async (page, { bid, versionLabel, version }) 
   console.log('    FORM level')
   await selectFormOption(page, '软件项目等级', 'A')
   console.log('    FORM upgrade strategy')
-  await selectFormOption(page, '升维策略', '不维护')
+  await selectFormOption(page, '升级策略', '不维护')
   console.log('    FORM system')
   await selectFormOption(page, '系统类型', '64bit')
   console.log('    FORM kernel')
-  await selectFormOption(page, 'Kernel 版本', '6.1')
-  console.log('    FORM documents')
-  for (const label of ['整机 PD', 'PCBA 表', '出货国家表', '关键器件选型表']) {
-    console.log(`      DOC ${label}`)
-    await fillFormText(page, label, `https://example.com/${bid}/${encodeURIComponent(label)}`)
-  }
+  await selectFormOption(page, 'Kernel版本', '6.1')
+  console.log('    FORM chip')
+  await selectFormOption(page, '芯片编码', 'D8600', { contains: true })
   console.log('    FORM complete')
 }
 
@@ -421,13 +517,27 @@ const runScenario = async (name, { storage = {}, viewport = { width: 1440, heigh
   const context = await browser.createBrowserContext()
   const page = await context.newPage()
   const errors = []
+  const errorCounts = { page: 0, console: 0, request: 0, http: 0 }
   page.setDefaultTimeout(TIMEOUT)
   page.setDefaultNavigationTimeout(TIMEOUT)
-  page.on('pageerror', error => errors.push(`pageerror: ${error.message}`))
+  page.on('pageerror', error => {
+    errorCounts.page += 1
+    errors.push(`pageerror: ${error.message}`)
+  })
   page.on('console', message => {
     if (message.type() !== 'error') return
     if (allowedConsoleErrors.some(prefix => message.text().startsWith(prefix))) return
+    errorCounts.console += 1
     errors.push(`console.error: ${message.text()}`)
+  })
+  page.on('requestfailed', request => {
+    errorCounts.request += 1
+    errors.push(`requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText || ''}`)
+  })
+  page.on('response', response => {
+    if (response.status() < 400) return
+    errorCounts.http += 1
+    errors.push(`http.${response.status()}: ${response.request().method()} ${response.url()}`)
   })
   try {
     await page.setViewport(viewport)
@@ -438,7 +548,7 @@ const runScenario = async (name, { storage = {}, viewport = { width: 1440, heigh
     await exercise(page)
     if (errors.length) throw new Error(errors.join('\n'))
     results.push(name)
-    console.log(`PASS ${name}`)
+    console.log(`PASS ${name} errors=${JSON.stringify(errorCounts)}`)
   } catch (error) {
     const diagnostics = await page.evaluate(() => ({
       url: location.href,
@@ -451,37 +561,39 @@ const runScenario = async (name, { storage = {}, viewport = { width: 1440, heigh
 }
 
 try {
-  browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] })
+  browser = await puppeteer.launch({
+    headless: 'new',
+    executablePath: process.env.PMS_CHROME_EXECUTABLE || undefined,
+    args: ['--no-sandbox'],
+  })
 
   await runScenario('01 header order and workbench default todo', {}, async page => {
     const menuLabels = await page.$$eval('[role="menuitem"]', elements => elements
       .filter(element => { const rect = element.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 })
       .map(element => (element.textContent || '').trim()).filter(Boolean))
-    const expected = ['工作台', '项目列表', '项目视图', '人力资源管道', '配置中心']
-    if (JSON.stringify(menuLabels.slice(0, 5)) !== JSON.stringify(expected)) {
+    const expected = ['工作台', '项目列表', '联合项目空间', 'tOS路标', '人力资源管道', '配置中心']
+    if (JSON.stringify(menuLabels.slice(0, expected.length)) !== JSON.stringify(expected)) {
       throw new Error(`Header 顺序错误：${JSON.stringify(menuLabels)}`)
     }
-    const tabs = await page.$$eval('[role="tab"]', elements => elements
-      .filter(element => { const rect = element.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 })
-      .map(element => (element.textContent || '').trim()))
-    if (JSON.stringify(tabs) !== JSON.stringify(['待办中心', '工作跟踪'])) throw new Error(`工作台 Tab 错误：${JSON.stringify(tabs)}`)
-    await page.waitForSelector('[aria-label="分类待办中心"]', { visible: true })
-    const selected = await page.$eval('[role="tab"][aria-selected="true"]', element => (element.textContent || '').trim())
-    if (selected !== '待办中心') throw new Error(`默认 Tab 为 ${selected}`)
+    await page.waitForSelector('[aria-label="任务目录"]', { visible: true })
+    const directoryLabels = await page.$$eval('.pms-todo-directory__item', elements => elements.map(element => (
+      Array.from(element.querySelectorAll('span')).map(item => (item.textContent || '').trim()).find(text => ['计划', '转维'].includes(text)) || ''
+    ).trim()))
+    if (JSON.stringify(directoryLabels) !== JSON.stringify(['计划', '转维'])) throw new Error(`任务目录错误：${JSON.stringify(directoryLabels)}`)
+    const tabs = await page.$$eval('[aria-label="任务状态"] [role="tab"]', elements => elements.map(element => (
+      element.querySelector('span')?.textContent || ''
+    ).trim()))
+    if (JSON.stringify(tabs) !== JSON.stringify(['全部', '待处理', '已完成'])) throw new Error(`任务状态 Tab 错误：${JSON.stringify(tabs)}`)
+    const selected = await page.$eval('[aria-label="任务状态"] [role="tab"][aria-selected="true"] span', element => (element.textContent || '').trim())
+    if (selected !== '待处理') throw new Error(`默认任务状态为 ${selected}`)
   })
 
   await runScenario('02 todo categories counts and plan transfer navigation', {}, async page => {
-    for (const label of ['待办总数', '今日到期', '已逾期', '本周完成']) {
-      await page.waitForSelector(`[aria-label^="${label} "]`, { visible: true })
+    for (const prefix of ['计划，', '转维，']) {
+      await page.waitForSelector(`[aria-label^="${prefix}"]`, { visible: true })
     }
-    await clickExact(page, '.ant-segmented-item', '计划待办', '[aria-label="待办来源"]')
-    await assertText(page, '计划待办')
-    await clickAria(page, '打开待办 OP · 概念启动')
-    await assertText(page, '一级计划')
-
-    await page.goto(BASE_URL, { waitUntil: 'networkidle0' })
-    await clickExact(page, '.ant-segmented-item', '转维待办', '[aria-label="待办来源"]')
-    await clickAria(page, '打开待办 转维资料录入')
+    await page.$eval('[aria-label^="转维，"]', element => element.click())
+    await clickAria(page, '前往处理 转维资料录入')
     await assertText(page, '转维')
   })
 
@@ -494,79 +606,64 @@ try {
     if (!active) throw new Error('整机默认分类未激活')
     await clickAria(page, '列表视图')
     await assertText(page, '产品系列')
-    await assertText(page, '首销 tOS 版本')
+    await assertText(page, '首销tOS版本')
     const layout = await page.evaluate(() => {
       const category = document.querySelector('[aria-label="项目分类筛选"]')?.getBoundingClientRect()
       const actions = document.querySelector('.pms-project-list-category-actions')?.getBoundingClientRect()
-      const fixedHeaders = Array.from(document.querySelectorAll('.ant-table-thead th.ant-table-cell-fix-start, .ant-table-thead th.ant-table-cell-fix-left'))
+      const tableHeaders = Array.from(document.querySelectorAll('.ant-table-thead th'))
         .map(element => (element.textContent || '').trim())
-      return { categoryTop: category?.top, actionsTop: actions?.top, fixedHeaders }
+      return { categoryTop: category?.top, actionsTop: actions?.top, tableHeaders }
     })
     if (layout.categoryTop !== layout.actionsTop) throw new Error(`项目分类与操作区未同行：${JSON.stringify(layout)}`)
-    if (!layout.fixedHeaders.some(text => text.includes('产品系列')) || !layout.fixedHeaders.some(text => text.includes('项目名称'))) {
-      throw new Error(`整机固定列错误：${JSON.stringify(layout.fixedHeaders)}`)
+    if (!layout.tableHeaders.some(text => text.includes('产品系列')) || !layout.tableHeaders.some(text => text.includes('项目名'))) {
+      throw new Error(`整机列表列错误：${JSON.stringify(layout.tableHeaders)}`)
     }
-    const firstSeries = await page.$('.pms-project-series-toggle')
-    if (!firstSeries) throw new Error('整机列表没有产品系列聚合')
-    const beforeCollapse = await page.$$eval('.ant-table-tbody tr[data-row-key]', rows => rows.filter(row => row.getBoundingClientRect().height > 0).length)
-    await firstSeries.click()
-    await page.waitForFunction(before => (
-      Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(row => row.getBoundingClientRect().height > 0).length < before
-    ), {}, beforeCollapse)
-    await page.$eval('.pms-project-series-toggle', element => element.click())
   })
 
-  await runScenario('04 machine tos technical quick filters are linked', {}, async page => {
+  await runScenario('04 machine tos technical filters are category scoped', {}, async page => {
     await openMain(page, '项目列表')
-    await clickAria(page, '卡片视图')
-    for (const label of ['快捷筛选-首销 tOS 版本', '快捷筛选-芯片编码', '快捷筛选-品牌', '快捷筛选-产品系列', '快捷筛选-产品类型']) {
-      await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
-    }
-    console.log('  STEP apply machine brand quick filter in card view')
-    await openAriaCombo(page, '快捷筛选-品牌')
-    await selectOption(page, 'Infinix')
-    await page.keyboard.press('Escape')
-    await page.waitForFunction(() => {
-      const cards = Array.from(document.querySelectorAll('.pms-project-list-content .ant-card')).filter(element => element.getBoundingClientRect().height > 0)
-      return cards.length === 2 && cards.every(card => (card.textContent || '').includes('Infinix'))
-    })
-    console.log('  STEP switch to list and preserve the same filtered result')
-    await clickAria(page, '列表视图')
-    await page.waitForFunction(() => {
-      const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(element => element.getBoundingClientRect().height > 0)
-      return rows.length === 2 && rows.every(row => (row.textContent || '').includes('Infinix'))
-    })
-    console.log('  STEP verify quick-to-advanced mirror')
+    console.log('  STEP apply machine brand filter in list view')
     await clickAria(page, '筛选')
+    await openAriaCombo(page, '筛选字段')
+    await selectOption(page, '品牌')
+    await openAriaCombo(page, '品牌筛选值')
+    await selectOption(page, 'Infinix')
+    await clickAria(page, '关闭筛选')
     await page.waitForFunction(() => {
-      const control = document.querySelector('[aria-label="品牌筛选值"]')
-      const input = control?.matches('input') ? control : control?.querySelector('input')
-      const selector = control?.closest('.ant-select-selector') || control?.querySelector('.ant-select-selector')
-      return input?.value === 'Infinix'
-        || (selector?.textContent || '').includes('Infinix')
-        || (control?.parentElement?.parentElement?.textContent || '').includes('Infinix')
+      const text = document.querySelector('.ant-table-tbody')?.textContent || ''
+      return text.includes('Infinix') && !text.includes('TECNO')
     })
-    await clickExact(page, '.pms-floating-config-popover button', '取消')
 
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', 'tOS版本项目')
-    for (const label of ['快捷筛选-版本类型', '快捷筛选-tOS 版本']) await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
     console.log('  STEP apply tOS version-type filter and verify rows')
-    await openAriaCombo(page, '快捷筛选-版本类型')
+    await clickAria(page, '筛选')
+    await openAriaCombo(page, '筛选字段')
+    await selectOption(page, '版本类型')
+    await openAriaCombo(page, '版本类型筛选值')
     await selectOption(page, 'Full')
+    await clickAria(page, '关闭筛选')
     await page.waitForFunction(() => {
       const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(element => element.getBoundingClientRect().height > 0)
       return rows.length > 0 && rows.every(row => (row.textContent || '').includes('Full'))
     })
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
     await page.waitForSelector('[aria-label="技术项目类型快捷筛选"]', { visible: true })
-    for (const label of ['快捷筛选-项目名称', '快捷筛选-技术赛道', '快捷筛选-项目阶段']) await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
     await assertText(page, 'TDT项目名称')
     const hasChildHeader = await page.evaluate(() => Array.from(document.querySelectorAll('.ant-table-thead th')).some(element => (
       (element.textContent || '').includes('子任务名称')
     )))
     if (hasChildHeader) throw new Error('默认 TDT 类型仍同时显示子项目表')
     console.log('  STEP apply technical name filter and verify TDT result')
-    await fillInput(page, '[aria-label="快捷筛选-项目名称"]', 'AI-Engine')
+    await clickAria(page, '筛选')
+    await clickExact(page, '.pms-filter-add-button', '增加')
+    const technicalFieldInputs = await page.$$('[aria-label="筛选字段"]')
+    const technicalFieldInput = technicalFieldInputs.at(-1)
+    if (!technicalFieldInput) throw new Error('找不到新增技术项目筛选字段')
+    await technicalFieldInput.focus()
+    await page.keyboard.press('ArrowDown')
+    await selectOption(page, 'TDT项目名称')
+    await fillInput(page, '[aria-label="TDT项目名称筛选值"]', 'AI-Engine-V2')
+    await clickAria(page, '关闭筛选')
     await page.waitForFunction(() => {
       const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(element => element.getBoundingClientRect().height > 0)
       return rows.length === 1 && (rows[0].textContent || '').includes('AI-Engine-V2')
@@ -575,28 +672,26 @@ try {
 
   await runScenario('05 enum CRUD validation duplicate and historical snapshot', {}, async page => {
     await openMain(page, '配置中心')
-    await clickExact(page, '[role="tab"]', '枚举值配置')
-    await clickButtonPrefix(page, '.pms-enum-type-list', 'tOS版本（3位）')
-    await page.$eval('[data-enum-add-value]', element => element.click())
-    await fillInput(page, 'input[aria-label="枚举值"]', '19.4')
-    await clickAria(page, '确认枚举值')
-    await assertText(page, '格式不正确，请按当前枚举类型的格式输入')
-    await fillInput(page, 'input[aria-label="枚举值"]', '19.4.1')
-    await clickAria(page, '确认枚举值')
-    await page.waitForSelector('button[aria-label="编辑枚举值 19.4.1"]', { visible: true })
-    await page.$eval('[data-enum-add-value]', element => element.click())
-    await fillInput(page, 'input[aria-label="枚举值"]', '19.4.1')
-    await clickAria(page, '确认枚举值')
-    await assertText(page, '枚举值已存在')
-    await clickAria(page, '取消枚举值编辑')
-    await clickAria(page, '编辑枚举值 19.4.1')
-    await fillInput(page, 'input[aria-label="枚举值"]', '19.4.2')
-    await clickAria(page, '确认枚举值')
+    await clickExact(page, '.ant-segmented-item', '枚举值配置')
+    await configureMachineCreationEnums(page)
+    await clickButtonPrefix(page, '.pms-enum-type-list', '首销tOS版本')
+    await page.$eval('[data-testid="enum-add-button"]', element => element.click())
+    await fillInput(page, 'input[aria-label="首销tOS版本"]', '19.4.2')
+    await clickExact(page, '.ant-modal button', '新增')
+    await page.waitForSelector('button[aria-label="编辑配置值 tOS19.4.2"]', { visible: true })
+    await page.$eval('[data-testid="enum-add-button"]', element => element.click())
+    await fillInput(page, 'input[aria-label="首销tOS版本"]', '19.4.2')
+    await clickExact(page, '.ant-modal button', '新增')
+    await assertText(page, '配置值已存在')
+    await clickExact(page, '.ant-modal button', '取消')
+    await clickAria(page, '编辑配置值 tOS19.4.2')
+    await fillInput(page, 'input[aria-label="首销tOS版本"]', '19.4.3')
+    await clickExact(page, '.ant-modal button', '保存')
 
     console.log('  STEP save the newly configured enum through a real machine-project form')
     await openMain(page, '项目列表')
     await clickAria(page, '新增项目')
-    await completeMachineProjectForm(page, { bid: 'EXT-001', versionLabel: '首销 tOS 版本', version: '19.4.2' })
+    await completeMachineProjectForm(page, { bid: 'EXT-001', versionLabel: '首销tOS版本', version: '19.4.3' })
     await submitProjectCreate(page)
 
     console.log('  STEP delete enum through UI and reopen the saved business form')
@@ -604,12 +699,20 @@ try {
     await returnToProjectList(page)
     console.log('    HIST open config')
     await openMain(page, '配置中心')
-    await clickExact(page, '[role="tab"]', '枚举值配置')
-    await clickButtonPrefix(page, '.pms-enum-type-list', 'tOS版本（3位）')
+    await clickExact(page, '.ant-segmented-item', '枚举值配置')
+    await clickButtonPrefix(page, '.pms-enum-type-list', '首销tOS版本')
     console.log('    HIST delete enum')
-    await clickAria(page, '删除枚举值 19.4.2')
-    await clickExact(page, '.ant-popconfirm-buttons button', '删除')
-    await page.waitForFunction(() => !document.querySelector('button[aria-label="编辑枚举值 19.4.2"]'))
+    await clickAria(page, '删除配置值 tOS19.4.3')
+    const deletionConfirmed = await page.evaluate(() => {
+      const button = Array.from(document.querySelectorAll('button')).find(element => (
+        element.getBoundingClientRect().height > 0
+        && (element.textContent || '').replace(/\s/g, '') === '删除'
+      ))
+      button?.click()
+      return Boolean(button)
+    })
+    if (!deletionConfirmed) throw new Error('找不到枚举删除确认按钮')
+    await page.waitForFunction(() => !document.querySelector('button[aria-label="编辑配置值 tOS19.4.3"]'))
     console.log('    HIST reopen project')
     await openMain(page, '项目列表')
     await clickAria(page, '卡片视图')
@@ -618,14 +721,14 @@ try {
     console.log('    HIST open edit')
     await clickExact(page, 'button', '编辑')
     console.log('    HIST inspect disabled option')
-    await openFormCombo(page, '首销 tOS 版本')
+    await openFormCombo(page, '首销tOS版本')
     await page.waitForFunction(() => Array.from(document.querySelectorAll('.ant-select-item-option')).some(element => (
       element.getBoundingClientRect().height > 0
-      && (element.textContent || '').trim() === 'tOS19.4.2（已停用）'
+      && (element.textContent || '').trim() === 'tOS19.4.3（已停用）'
       && element.classList.contains('ant-select-item-option-disabled')
     )))
     const availableForNewChoice = await page.evaluate(() => Array.from(document.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)')).some(element => (
-      element.getBoundingClientRect().height > 0 && (element.textContent || '').includes('19.4.2')
+      element.getBoundingClientRect().height > 0 && (element.textContent || '').includes('19.4.3')
     )))
     if (availableForNewChoice) throw new Error('已删除枚举仍可作为新值选择')
   })
@@ -633,20 +736,21 @@ try {
   await runScenario('06 machine new and two legacy versions resolve maximum', {}, async page => {
     console.log('  STEP configure the three required versions through enum UI')
     await openMain(page, '配置中心')
-    await clickExact(page, '[role="tab"]', '枚举值配置')
-    await clickButtonPrefix(page, '.pms-enum-type-list', 'tOS版本（3位）')
+    await clickExact(page, '.ant-segmented-item', '枚举值配置')
+    await configureMachineCreationEnums(page)
+    await clickButtonPrefix(page, '.pms-enum-type-list', '首销tOS版本')
     for (const value of ['14.0.0', '15.0.0', '17.10.0']) {
-      await page.$eval('[data-enum-add-value]', element => element.click())
-      await fillInput(page, 'input[aria-label="枚举值"]', value)
-      await clickAria(page, '确认枚举值')
-      await page.waitForSelector(`button[aria-label="编辑枚举值 ${value}"]`, { visible: true })
+      await page.$eval('[data-testid="enum-add-button"]', element => element.click())
+      await fillInput(page, 'input[aria-label="首销tOS版本"]', value)
+      await clickExact(page, '.ant-modal button', '新增')
+      await page.waitForSelector(`button[aria-label="编辑配置值 tOS${value}"]`, { visible: true })
     }
 
     await openMain(page, '项目列表')
     for (const input of [
-      { bid: 'EXT-010', versionLabel: '首销 tOS 版本', version: '14.0.0' },
-      { bid: 'EXT-011', versionLabel: '当前 tOS 版本', version: '15.0.0' },
-      { bid: 'EXT-012', versionLabel: '当前 tOS 版本', version: '17.10.0' },
+      { bid: 'EXT-010', versionLabel: '首销tOS版本', version: '14.0.0' },
+      { bid: 'EXT-011', versionLabel: '当前tOS版本', version: '15.0.0' },
+      { bid: 'EXT-012', versionLabel: '当前tOS版本', version: '17.10.0' },
     ]) {
       console.log(`  STEP create ${input.bid} through project UI`)
       await clickAria(page, '新增项目')
@@ -670,7 +774,7 @@ try {
       throw new Error(`第二个老品版本错误：${JSON.stringify(byBid['EXT-012'])}`)
     }
 
-    console.log('  STEP reopen the new X6870 and verify first/current values in edit UI')
+    console.log('  STEP reopen the new X6870 and verify the editable first-sale snapshot')
     await clickAria(page, '卡片视图')
     await clickExact(page, '.ant-pagination-item', '2')
     await clickAria(page, '打开项目 EXT-010')
@@ -680,10 +784,8 @@ try {
         const item = Array.from(document.querySelectorAll('.ant-form-item')).find(candidate => (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim() === label)
         return item || null
       }
-      const first = itemFor('首销 tOS 版本')
-      const current = itemFor('当前 tOS 版本')
+      const first = itemFor('首销tOS版本')
       return (first?.textContent || '').includes('tOS14.0.0')
-        && ((current?.querySelector('input')?.value || '') === 'tOS17.10.0' || (current?.textContent || '').includes('tOS17.10.0'))
     })
   })
 
@@ -699,11 +801,9 @@ try {
     )))
     await selectOption(page, 'EXT-013', { contains: true })
     console.log('  STEP verify mapped fields and create validation')
-    for (const label of ['技术赛道', 'TMG 及技术领域', '子领域', '前置项目', '技术项目负责人', '技术项目经理', '测试代表', '质量代表', '产品代表', '标准化代表', '项目KPI文件', '概设', 'charter报告', 'PDCP报告', 'TDCP报告', 'EDCP报告']) {
-      await assertText(page, label, '.ant-modal')
-    }
-    await clickExact(page, '.ant-modal button', '创建')
-    await assertText(page, '请选择技术项目负责人')
+    await assertIpmSourceBeforeCreateFields(page)
+    await assertCreateFieldLabelOrder(page, TECHNICAL_CREATE_LABELS)
+    await assertDisabledCreateFields(page, ['secondaryCategory', 'technicalTrack', 'projectName', 'status'])
     await openFormCombo(page, 'TMG 及技术领域')
     await selectOption(page, '基础架构TMG')
     const subdomain = await formCombo(page, '子领域')
@@ -712,6 +812,12 @@ try {
       formItemText: input.closest('.ant-form-item')?.textContent || '',
     }))
     if (!subdomainValue.formItemText.includes('无') || !subdomainValue.disabled) throw new Error(`无子领域联动错误：${JSON.stringify(subdomainValue)}`)
+    await selectFormOption(page, '项目价值', '人无我有')
+    await selectFormYear(page, '项目年份', '2026')
+    await selectFormOption(page, '技术项目负责人', '张三')
+    await clickExact(page, '.ant-modal button', '创建')
+    await assertText(page, '请选择技术项目经理')
+    await assertNoCreateFieldErrors(page, ['secondaryCategory', 'technicalTrack', 'projectName', 'status'])
     await assertText(page, '链接', '.ant-modal')
     await assertText(page, '文件', '.ant-modal')
 
@@ -719,12 +825,12 @@ try {
     await openFormCombo(page, '前置项目')
     await selectOption(page, 'X6877-D8400_H991', { contains: true })
     for (const [label, person] of [
-      ['技术项目负责人', '张三'],
       ['技术项目经理', '李白'],
       ['测试代表', '王五'],
       ['质量代表', '赵六'],
       ['产品代表', '孙七'],
       ['标准化代表', '周八'],
+      ['其他', '杜甫'],
     ]) await selectFormOption(page, label, person)
     await fillInput(page, '[aria-label="项目KPI文件链接"]', 'https://example.com/technical/kpi')
     await submitProjectCreate(page)
@@ -737,7 +843,7 @@ try {
       throw new Error(`技术项目负责人未同步项目责任人：${JSON.stringify(created)}`)
     }
     const expectedTeam = {
-      technicalLead: '张三', technicalProjectManager: '李白', testRepresentative: '王五', qualityRepresentative: '赵六', productRepresentative: '孙七', standardizationRepresentative: '周八',
+      technicalLead: '张三', technicalProjectManager: '李白', testRepresentative: '王五', qualityRepresentative: '赵六', productRepresentative: '孙七', standardizationRepresentative: '周八', technicalOther: '杜甫',
     }
     for (const [key, value] of Object.entries(expectedTeam)) {
       if (created.fieldValues?.[key] !== value) throw new Error(`技术团队保存错误 ${key}：${JSON.stringify(created.fieldValues)}`)
@@ -773,24 +879,19 @@ try {
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
     await clickProjectByName(page, 'AI-Engine-V2')
     await page.waitForSelector('[aria-label="技术项目基础信息"]', { visible: true })
-    await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="tab"]')).some(element => (
-      (element.textContent || '').includes('多模态子项目') && (element.textContent || '').includes('待配置')
-    )))
-    console.log('  STEP configure the pending child through the real modal')
+    await page.waitForSelector('[aria-label="配置子任务 多模态子项目"]', { visible: true })
+    console.log('  STEP update the child through the real modal')
     await clickAria(page, '配置子任务 多模态子项目')
-    await assertText(page, '待配置', '.ant-modal')
+    await assertText(page, '已配置', '.ant-modal')
     await assertText(page, '核心价值', '.ant-modal')
     await assertText(page, '开发模式', '.ant-modal')
     await selectFormOption(page, '核心价值', '人无我有')
     await selectFormOption(page, '开发模式', '谷歌合作')
-    await selectFormOption(page, '首导tOS', '16.0')
+    await selectFormOption(page, '首导tOS', 'tOS16.0')
     await openFormCombo(page, '首导整机产品')
     await selectOption(page, 'X6877-D8400_H991')
     await clickExact(page, '.ant-modal button', '确认')
     await assertText(page, '子项目信息已保存')
-    await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="tab"]')).some(element => (
-      (element.textContent || '').includes('多模态子项目') && !(element.textContent || '').includes('待配置')
-    )))
     const savedConfiguration = await page.evaluate(() => {
       const envelope = JSON.parse(localStorage.getItem('pms-technical-projects') || '{}')
       return envelope?.state?.subprojects?.find(item => item.id === 'IPM-AI-002')?.configuration || null
@@ -814,7 +915,8 @@ try {
     await assertText(page, '计划已发布')
     await clickExact(page, '[role="tab"]', 'AI推理引擎子项目计划')
     await clickExact(page, 'button', '创建修订')
-    await assertText(page, '已创建 V1 修订')
+    await clickExact(page, '[role="menuitem"]', '创建正式版本')
+    await assertText(page, '已创建正式修订版本')
     await clickAria(page, '发布')
     await assertText(page, '计划已发布')
     await clickExact(page, '[role="tab"]', 'TDT项目计划')
@@ -841,8 +943,15 @@ try {
     await clickExact(page, '[role="menuitem"]', '基础信息')
     await clickExact(page, 'button', '编辑', '[aria-label="技术项目基础信息"]')
     await page.waitForSelector('.ant-modal', { visible: true })
+    console.log('    TECH fill required information')
     await selectFormOption(page, 'TMG 及技术领域', '系统应用')
+    console.log('    TECH selected TMG')
     await selectFormOption(page, '子领域', 'AIOS')
+    console.log('    TECH selected subdomain')
+    await selectFormOption(page, '项目价值', '人无我有')
+    console.log('    TECH selected value')
+    await selectFormYear(page, '项目年份', '2026')
+    console.log('    TECH selected year')
     for (const [label, person] of [
       ['技术项目负责人', '李四'],
       ['技术项目经理', '王五'],
@@ -850,12 +959,18 @@ try {
       ['质量代表', '孙七'],
       ['产品代表', '周八'],
       ['标准化代表', '杜甫'],
-    ]) await selectFormOption(page, label, person)
+      ['其他', '张三'],
+    ]) {
+      await selectFormOption(page, label, person)
+      console.log(`    TECH selected ${label}`)
+    }
+    console.log('    TECH save information')
     await clickExact(page, '.ant-modal button', '保存')
     await assertText(page, '项目信息已保存')
+    console.log('    TECH verify permission synchronization')
     await clickExact(page, '[role="menuitem"]', '权限配置')
     const expectedTechnicalRoles = {
-      技术项目负责人: ['李四'], 技术项目经理: ['王五'], 测试代表: ['赵六'], 质量代表: ['孙七'], 产品代表: ['周八'], 标准化代表: ['杜甫'],
+      技术项目负责人: ['李四'], 技术项目经理: ['王五'], 测试代表: ['赵六'], 质量代表: ['孙七'], 产品代表: ['周八'], 标准化代表: ['杜甫'], 其他: ['张三'],
     }
     for (const [role, members] of Object.entries(expectedTechnicalRoles)) {
       await page.waitForFunction((name, expected) => {
@@ -864,7 +979,8 @@ try {
         return JSON.stringify(actual) === JSON.stringify(expected)
       }, {}, role, members)
     }
-    await page.waitForFunction(() => document.querySelectorAll('.ant-table-tbody .ant-select-disabled').length === 6)
+    await page.waitForFunction(() => document.querySelectorAll('.ant-table-tbody .ant-select-disabled').length === 7)
+    console.log('    TECH permission synchronization complete')
     const technicalProject = await page.evaluate(() => {
       const envelope = JSON.parse(localStorage.getItem('pms-projects') || '{}')
       return envelope?.state?.projects?.find(project => project.id === '9') || null
@@ -943,25 +1059,32 @@ try {
     await clickProjectByName(page, 'AI-Engine-V2')
     await page.waitForSelector('[aria-label="技术项目基础信息"]', { visible: true })
 
-    for (const label of ['项目名称', '项目分类', '技术赛道', 'TMG及技术领域', '子领域', '项目阶段', '前置项目', '项目年份', '项目价值']) {
+    for (const label of ['项目名称', '项目分类', '技术赛道', 'TMG及技术领域', '子领域', '项目阶段', '项目年份', '项目价值']) {
       await assertText(page, label, '[aria-label="技术项目基础信息"]')
     }
     await assertText(page, 'TDT', '[aria-label="技术信息分类"]')
-    await assertText(page, 'TDT计划摘要', '[aria-label="技术项目基础信息"]')
+    await page.waitForSelector('[aria-label="TDT计划信息内容"]', { visible: true })
     await assertNoText(page, '核心价值', '[aria-label="技术信息内容"]')
-    await assertNoCollapseSection(page, '基础信息', '[aria-label="技术信息内容"]')
+    await assertNoCollapseSection(page, '基础信息', '.technical-information-plan')
     await assertCollapsed(page, '团队信息', '[aria-label="技术信息内容"]')
     await assertCollapsed(page, '交付物信息', '[aria-label="技术信息内容"]')
 
     await clickExact(page, '[role="tab"]', 'AI推理引擎子项目', '[aria-label="技术信息分类"]')
-    await assertText(page, 'AI推理引擎子项目计划摘要', '[aria-label="技术项目基础信息"]')
-    await assertCollapsed(page, '基础信息', '[aria-label="技术信息内容"]')
+    await page.waitForSelector('[aria-label="AI推理引擎子项目计划信息内容"]', { visible: true })
+    await assertCollapsed(page, '基础信息', '.technical-information-plan')
     await assertCollapsed(page, '团队信息', '[aria-label="技术信息内容"]')
     await assertCollapsed(page, '交付物信息', '[aria-label="技术信息内容"]')
-    await clickExact(page, '[role="button"]', '基础信息', '[aria-label="技术信息内容"]')
-    for (const label of ['核心价值', '开发模式', '首导tOS', '首导整机产品']) await assertText(page, label, '[aria-label="技术信息内容"]')
+    await page.evaluate(() => {
+      const root = document.querySelector('.technical-information-plan')
+      const control = Array.from(root?.querySelectorAll('button,[role="button"]') || [])
+        .find(element => (element.textContent || '').trim().startsWith('基础信息'))
+      if (!(control instanceof HTMLElement)) throw new Error('找不到子项目基础信息折叠区')
+      control.click()
+    })
+    await wait(160)
+    for (const label of ['核心价值', '开发模式', '首导tOS', '首导整机产品']) await assertText(page, label, '[aria-label="AI推理引擎子项目基础信息"]')
     await clickExact(page, '[role="tab"]', 'TDT', '[aria-label="技术信息分类"]')
-    await assertNoCollapseSection(page, '基础信息', '[aria-label="技术信息内容"]')
+    await assertNoCollapseSection(page, '基础信息', '.technical-information-plan')
   })
 
   await runScenario('14 technical plan shares the whole-machine workspace', {}, async page => {
@@ -971,19 +1094,12 @@ try {
     await clickExact(page, '[role="menuitem"]', '计划')
     await page.waitForSelector('[aria-label="技术项目计划"]', { visible: true })
 
-    for (const label of ['计划克隆', '发布', '取消修订', '筛选', '列设置', '全部展开', '全部收起', '版本对比', '导入', '导出', '分享计划']) {
+    for (const label of ['计划克隆', '发布', '取消修订', '筛选', '字段配置', '版本对比', '导出']) {
       await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
     }
     for (const label of ['竖版表格', '横版表格', '甘特图']) {
       await page.waitForSelector(`[aria-label="${label}"]`)
     }
-    await page.waitForFunction(() => Array.from(document.querySelectorAll('[aria-label^="新增二级任务 "]')).some(element => {
-      const rect = element.getBoundingClientRect()
-      const style = getComputedStyle(element)
-      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden' && !element.disabled
-    }))
-    await page.waitForSelector('.technical-plan-child-row', { visible: true })
-
     await clickAria(page, '横版表格')
     await assertCheckedAria(page, '横版表格')
     await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim() === 'TDT项目计划')
@@ -992,15 +1108,20 @@ try {
     await assertCheckedAria(page, '甘特图')
     await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim() === 'TDT项目计划')
     await page.waitForSelector('[aria-label="计划内容"] .gantt_container', { visible: true })
+    for (const label of ['全部展开', '全部收起']) await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
     await clickAria(page, '竖版表格')
     await assertCheckedAria(page, '竖版表格')
     await page.waitForSelector('[aria-label="计划内容"] .pms-table', { visible: true })
 
     await clickExact(page, '[role="tab"]', 'AI推理引擎子项目计划', '[aria-label="计划作用域"]')
+    await assertCheckedAria(page, '横版表格')
     await page.waitForSelector('[aria-label="创建修订"]', { visible: true })
     await clickAria(page, '创建修订')
-    await assertText(page, '已创建 V1 修订')
-    await page.waitForFunction(() => document.querySelectorAll('[aria-label="计划内容"] .ant-table-tbody tr').length > 0)
+    await clickExact(page, '[role="menuitem"]', '创建正式版本')
+    await assertText(page, '已创建正式修订版本')
+    console.log('    TECH plan child revision created')
+    await page.waitForSelector('[aria-label="计划内容"] .technical-horizontal-plan-table', { visible: true })
+    console.log('    TECH plan child horizontal rows visible')
     const childTaskButtonCount = await page.$$eval('[aria-label^="新增二级任务 "]', elements => elements.filter(element => {
       const rect = element.getBoundingClientRect()
       return rect.width > 0 && rect.height > 0
@@ -1012,7 +1133,7 @@ try {
         .some(version => (version.tasks || []).some(task => Boolean(task.parentId)))
     })
     if (childScopeHasNestedTask) throw new Error('子项目计划不应保存二级任务')
-    await clickAria(page, '横版表格')
+    console.log('    TECH plan child hierarchy verified')
     await assertCheckedAria(page, '横版表格')
     await page.waitForFunction(() => document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim() === 'AI推理引擎子项目计划')
     await page.waitForSelector('[aria-label="计划内容"] .technical-horizontal-plan-table', { visible: true })
