@@ -475,6 +475,11 @@ assert.match(
 )
 assert.match(createFields, /TECHNICAL_SOURCE_SNAPSHOT_KEYS\.has\(field\.key\)[\s\S]{0,160}<Input disabled/, 'project category, track, child name, and status stay disabled source snapshots')
 assert.match(modal, /fields=\{technicalCreateFields\}/, 'project modal forwards the technical create projection')
+assert.match(
+  modal,
+  /projectType: type[\s\S]{0,200}ipmStatus: entry\.ipmStatus[\s\S]{0,240}type === PROJECT_CATEGORY_TECH[\s\S]{0,160}mapIpmProjectStatus\(entry\.ipmStatus/,
+  'technical source selection must override the generic configured default with the mapped IPM status snapshot',
+)
 assert.equal((createFields.match(/<Form\.Item/g) || []).length, 1, 'technical create fields use one generic Form.Item renderer without duplicate test representatives')
 assert.match(createFields, /useSingleEnumOptions\(['"]core-value['"]/, 'project value consumes the shared core-value configuration')
 assert.match(createFields, /useTmgOptions|getTmgSubdomainState/, 'technical create/edit fields consume live TMG rows')

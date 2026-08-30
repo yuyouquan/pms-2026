@@ -40,6 +40,7 @@ import {
 import {
   buildInitialProjectStatusPatch,
   getProjectStatusEnumType,
+  mapIpmProjectStatus,
   resolveConfiguredProjectStatus,
 } from '@/lib/projectStatus'
 import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
@@ -492,17 +493,21 @@ export default function ProjectInfoModal({
     const sourceValues = fetchByBid(bid)
     const type = nextType || String(form.getFieldValue('type') || '')
     const configuredStatusValues = rowsByType[getProjectStatusEnumType(type)].map(row => row.value)
+    const initialStatusPatch = buildInitialProjectStatusPatch({
+      initialize: initializeStatus,
+      projectType: type,
+      configuredValues: configuredStatusValues,
+      ipmStatus: entry.ipmStatus || '',
+    })
+    const sourceStatusPatch = type === PROJECT_CATEGORY_TECH && initializeStatus && entry.ipmStatus
+      ? { status: mapIpmProjectStatus(entry.ipmStatus, type) }
+      : initialStatusPatch
     form.setFieldsValue({
       projectName: entry.name,
       marketName: sourceValues.marketName || '',
       brand: sourceValues.brand || '',
       productLine: sourceValues.productLine || '',
-      ...buildInitialProjectStatusPatch({
-        initialize: initializeStatus,
-        projectType: type,
-        configuredValues: configuredStatusValues,
-        ipmStatus: entry.ipmStatus || '',
-      }),
+      ...sourceStatusPatch,
       technicalTrack: entry.technicalTrack || '',
       ipmProjectType: entry.ipmProjectCategoryName,
       ...(type === PROJECT_CATEGORY_TECH ? { secondaryCategory: entry.ipmProjectCategoryName } : {}),
