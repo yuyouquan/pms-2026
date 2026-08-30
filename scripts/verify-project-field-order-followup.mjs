@@ -20,6 +20,7 @@ const targetProjectInformationSource = readSource(root, 'src/components/project-
 const projectInfoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
 const projectPlanInfoGridSource = readSource(root, 'src/components/project-info/ProjectPlanInfoGrid.tsx')
 const technicalInformationSource = readSource(root, 'src/components/technical-project/TechnicalProjectInformationView.tsx')
+const redesignBrowserSource = readSource(root, 'screenshots/verify-workbench-technical-project-redesign.mjs')
 
 const machineCreateKeys = [
   'firstSaleTosVersion', 'status', 'versionType', 'softwareProjectLevel',
@@ -459,6 +460,39 @@ for (const key of ['mainboardName', 'productType']) {
   assert.equal(reconciled.includes(key), false, `${key} must not be auto-added because it is default hidden`)
   assert.equal(machineSpaceByKey.has(key), true, `${key} must remain in the field picker projection`)
 }
+
+const scenario06Start = redesignBrowserSource.indexOf("runScenario('06 machine new and two legacy versions resolve maximum'")
+const scenario06End = redesignBrowserSource.indexOf("runScenario('07 TDT create validation mapping team and deliverables'", scenario06Start)
+assert.notEqual(scenario06Start, -1, 'browser scenario 06 must exist')
+assert.notEqual(scenario06End, -1, 'browser scenario 06 must end before scenario 07')
+const scenario06Source = redesignBrowserSource.slice(scenario06Start, scenario06End)
+assert.match(
+  scenario06Source,
+  /visibleFieldKeys\.push\('targetMarkets', 'launchDate', 'machineUx'\)/,
+  'browser migration must inject the real historical field keys',
+)
+assert.doesNotMatch(
+  scenario06Source,
+  /visibleFieldKeys\.push\([^\n]*'mainboardName'[^\n]*'productType'/,
+  'browser must not simulate optional-field selection through localStorage',
+)
+assert.match(
+  redesignBrowserSource,
+  /const setCurrentFieldPickerChecked = async \(page, label, expectedChecked = true\)/,
+  'browser must select optional fields through the real Drawer checkbox',
+)
+for (const label of ['主板名', '产品类型']) {
+  assert.match(
+    scenario06Source,
+    new RegExp(`await setCurrentFieldPickerChecked\\(page, '${label}'\\)`),
+    `browser must check ${label} through the field Drawer`,
+  )
+}
+assert.match(
+  scenario06Source,
+  /await clickCurrentFieldPickerButton\(page, '确定'\)[\s\S]*await page\.reload\(\{ waitUntil: 'networkidle0' \}\)[\s\S]*迁移后字段刷新持久化错误/,
+  'browser must confirm optional fields and verify their DOM order after refresh',
+)
 
 const mergedMachine = projectInfoValues.mergeProjectInfoValues({
   id: 'machine-new-fields',

@@ -203,6 +203,32 @@ const currentPickerState = async page => page.evaluate(() => {
   })
 })
 
+const setCurrentFieldPickerChecked = async (page, label, expectedChecked = true) => {
+  const result = await page.evaluate((expectedLabel, nextChecked) => {
+    const picker = Array.from(document.querySelectorAll('.pms-project-info-field-drawer .pms-project-info-picker')).at(-1)
+    const row = Array.from(picker?.querySelectorAll('.pms-project-info-picker-row') || []).find(candidate => {
+      const copy = candidate.querySelector('.pms-project-info-picker-label')
+      const text = Array.from(copy?.childNodes || []).find(node => node.nodeType === Node.TEXT_NODE)?.textContent?.trim() || ''
+      return text === expectedLabel
+    })
+    const input = row?.querySelector('input[type="checkbox"]')
+    if (!input) return { ok: false, reason: 'missing' }
+    if (input.disabled) return { ok: false, reason: 'disabled' }
+    if (input.checked !== nextChecked) input.click()
+    return { ok: true }
+  }, label, expectedChecked)
+  if (!result.ok) throw new Error(`字段设置无法切换 ${label}：${result.reason}`)
+  await page.waitForFunction((expectedLabel, nextChecked) => {
+    const picker = Array.from(document.querySelectorAll('.pms-project-info-field-drawer .pms-project-info-picker')).at(-1)
+    const row = Array.from(picker?.querySelectorAll('.pms-project-info-picker-row') || []).find(candidate => {
+      const copy = candidate.querySelector('.pms-project-info-picker-label')
+      const text = Array.from(copy?.childNodes || []).find(node => node.nodeType === Node.TEXT_NODE)?.textContent?.trim() || ''
+      return text === expectedLabel
+    })
+    return row?.querySelector('input[type="checkbox"]')?.checked === nextChecked
+  }, { timeout: TIMEOUT }, label, expectedChecked)
+}
+
 const clickCurrentFieldPickerButton = async (page, label) => {
   const clicked = await page.evaluate(expected => {
     const picker = Array.from(document.querySelectorAll('.pms-project-info-field-drawer .pms-project-info-picker')).at(-1)
@@ -1233,7 +1259,7 @@ try {
         '禁止生产时间': 'productionForbiddenDate', '保密级别': 'confidentialityLevel',
       }
       const visibleFieldKeys = validDefaultLabels.map(label => labelToKey[label]).filter(Boolean)
-      visibleFieldKeys.push('mainboardName', 'productType', 'targetMarket', 'launchTime', 'UX')
+      visibleFieldKeys.push('targetMarkets', 'launchDate', 'machineUx')
       localStorage.setItem(key, JSON.stringify({ visibleFieldKeys, schemaVersion: 2, updatedAt: '2026-08-31T00:00:00.000Z' }))
     }, preferenceKey, MACHINE_SPACE_BASIC_LABELS.slice(0, 14))
     await page.reload({ waitUntil: 'networkidle0' })
@@ -1246,13 +1272,13 @@ try {
     await assertVisibleLabelOrder(
       page,
       '.pms-project-info-display-label',
-      [...MACHINE_SPACE_BASIC_LABELS.slice(0, 14), '主板名', '产品类型'],
+      MACHINE_SPACE_BASIC_LABELS.slice(0, 14),
       '.pms-project-info-collapse--basic',
     )
     await openFieldVisibilityPicker(page, '.pms-project-info-collapse--basic')
     const migratedPicker = await currentPickerState(page)
-    for (const preservedLabel of ['主板名', '产品类型']) {
-      if (!migratedPicker.find(item => item.label === preservedLabel)?.checked) throw new Error(`迁移后未保留用户偏好：${preservedLabel}`)
+    for (const hiddenLabel of ['主板名', '产品类型']) {
+      if (migratedPicker.find(item => item.label === hiddenLabel)?.checked) throw new Error(`迁移不得伪造用户选择：${hiddenLabel}`)
     }
     for (const deletedLabel of ['目标市场', '上市时间', 'UX']) {
       if (migratedPicker.some(item => item.label === deletedLabel)) throw new Error(`迁移后仍暴露删除字段：${deletedLabel}`)
@@ -1260,9 +1286,53 @@ try {
     await clickCurrentFieldPickerButton(page, '确定')
     await wait(400)
     const migratedPreference = await page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), preferenceKey)
-    if (['targetMarket', 'launchTime', 'UX'].some(key => migratedPreference.visibleFieldKeys?.includes(key))) {
+    if (['targetMarkets', 'launchDate', 'machineUx'].some(key => migratedPreference.visibleFieldKeys?.includes(key))) {
       throw new Error(`迁移后持久化仍包含删除字段：${JSON.stringify(migratedPreference)}`)
     }
+    if (['mainboardName', 'productType'].some(key => migratedPreference.visibleFieldKeys?.includes(key))) {
+      throw new Error(`默认隐藏字段不应由迁移写入：${JSON.stringify(migratedPreference)}`)
+    }
+
+    console.log('  STEP select mainboard and product type through the real field Drawer')
+    await openFieldVisibilityPicker(page, '.pms-project-info-collapse--basic')
+    await setCurrentFieldPickerChecked(page, '主板名')
+    await setCurrentFieldPickerChecked(page, '产品类型')
+    await clickCurrentFieldPickerButton(page, '确定')
+    await assertVisibleLabelOrder(
+      page,
+      '.pms-project-info-display-label',
+      [...MACHINE_SPACE_BASIC_LABELS.slice(0, 14), '主板名', '产品类型'],
+      '.pms-project-info-collapse--basic',
+    )
+    const selectedPreference = await page.evaluate(key => JSON.parse(localStorage.getItem(key) || '{}'), preferenceKey)
+    if (!['mainboardName', 'productType'].every(key => selectedPreference.visibleFieldKeys?.includes(key))) {
+      throw new Error(`字段设置未持久化真实勾选：${JSON.stringify(selectedPreference)}`)
+    }
+
+    await page.reload({ waitUntil: 'networkidle0' })
+    await openMain(page, '项目列表')
+    await clickAria(page, '卡片视图')
+    await clickExact(page, '.ant-pagination-item', '2')
+    await clickAria(page, '打开项目 EXT-010')
+    await page.waitForSelector('[aria-label="项目核心字段"]', { visible: true })
+    await expandInformationSection(page, '基础信息', '.pms-project-info-collapse--basic')
+    const refreshedBasicLabels = [...MACHINE_SPACE_BASIC_LABELS.slice(0, 14), '主板名', '产品类型']
+    const actualRefreshedBasicLabels = await page.$$eval(
+      '.pms-project-info-collapse--basic .pms-project-info-display-label',
+      elements => elements.filter(element => element.getBoundingClientRect().height > 0).map(element => (element.textContent || '').trim()),
+    )
+    if (JSON.stringify(actualRefreshedBasicLabels) !== JSON.stringify(refreshedBasicLabels)) {
+      throw new Error(`迁移后字段刷新持久化错误：${JSON.stringify(actualRefreshedBasicLabels)}`)
+    }
+    await openFieldVisibilityPicker(page, '.pms-project-info-collapse--basic')
+    const refreshedPicker = await currentPickerState(page)
+    for (const selectedLabel of ['主板名', '产品类型']) {
+      if (!refreshedPicker.find(item => item.label === selectedLabel)?.checked) throw new Error(`刷新后未保留字段勾选：${selectedLabel}`)
+    }
+    for (const deletedLabel of ['目标市场', '上市时间', 'UX']) {
+      if (refreshedPicker.some(item => item.label === deletedLabel)) throw new Error(`刷新后字段设置仍暴露删除字段：${deletedLabel}`)
+    }
+    await closeFieldVisibilityPicker(page)
 
     await clickExact(page, 'button', '编辑')
     await page.waitForFunction(() => {
