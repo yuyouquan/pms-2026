@@ -233,7 +233,7 @@ const formCombo = async (page, label) => {
   return input
 }
 
-const controlledPopupId = async (page, input, label) => {
+const waitForControlledPopupCandidates = async (page, input, label) => {
   await page.waitForFunction(element => {
     const popupId = element?.getAttribute('aria-controls') || element?.getAttribute('aria-owns')
     const controlled = popupId ? document.getElementById(popupId) : null
@@ -246,13 +246,13 @@ const controlledPopupId = async (page, input, label) => {
   }, { timeout: TIMEOUT }, input)
   const popupId = await input.evaluate(element => element.getAttribute('aria-controls') || element.getAttribute('aria-owns'))
   if (!popupId) throw new Error(`下拉控件未声明受控弹层：${label}`)
-  return popupId
 }
 
 const openComboInput = async (page, input, label) => {
   await input.focus()
   await page.keyboard.press('ArrowDown')
-  return controlledPopupId(page, input, label)
+  await waitForControlledPopupCandidates(page, input, label)
+  return input
 }
 
 const openFormCombo = async (page, label) => {
@@ -260,35 +260,44 @@ const openFormCombo = async (page, label) => {
   return openComboInput(page, input, label)
 }
 
-const selectOption = async (page, popupId, text, { contains = false } = {}) => {
-  await page.waitForFunction((controlledId, value, useContains) => {
-    const controlled = document.getElementById(controlledId)
-    const popup = controlled?.closest('.ant-select-dropdown') || controlled
-    return Array.from(popup?.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)') || [])
-      .some(element => {
-        const rect = element.getBoundingClientRect()
-        const style = getComputedStyle(element)
-        const content = (element.textContent || '').trim()
-        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
-          && (useContains ? content.includes(value) : content === value)
-      })
-  }, { timeout: TIMEOUT }, popupId, text, contains)
-  const clicked = await page.evaluate((controlledId, value, useContains) => {
-    const controlled = document.getElementById(controlledId)
-    const popup = controlled?.closest('.ant-select-dropdown') || controlled
-    const option = Array.from(popup?.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)') || [])
-      .find(element => {
-        const rect = element.getBoundingClientRect()
-        const style = getComputedStyle(element)
-        const content = (element.textContent || '').trim()
-        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
-          && (useContains ? content.includes(value) : content === value)
-      })
-    if (!option) return false
-    option.click()
-    return true
-  }, popupId, text, contains)
-  if (!clicked) throw new Error(`受控弹层 ${popupId} 找不到下拉选项：${text}`)
+const selectOption = async (page, input, text, { contains = false } = {}) => {
+  await waitForControlledPopupCandidates(page, input, text)
+  try {
+    const selectedOption = await page.waitForFunction((targetInput, value, useContains) => {
+      const controlledId = targetInput?.getAttribute('aria-controls') || targetInput?.getAttribute('aria-owns')
+      const controlled = controlledId ? document.getElementById(controlledId) : null
+      const popup = controlled?.closest('.ant-select-dropdown') || controlled
+      const option = Array.from(popup?.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)') || [])
+        .find(element => {
+          const rect = element.getBoundingClientRect()
+          const style = getComputedStyle(element)
+          const content = (element.textContent || '').trim()
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+            && (useContains ? content.includes(value) : content === value)
+        })
+      if (!(option instanceof HTMLElement)) return false
+      option.click()
+      return true
+    }, { timeout: TIMEOUT, polling: 'raf' }, input, text, contains)
+    await selectedOption.dispose()
+  } catch (error) {
+    const candidateState = await input.evaluate(targetInput => {
+      const popupId = targetInput?.getAttribute('aria-controls') || targetInput?.getAttribute('aria-owns')
+      const controlled = popupId ? document.getElementById(popupId) : null
+      const popup = controlled?.closest('.ant-select-dropdown') || controlled
+      return {
+        popupId,
+        options: Array.from(popup?.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)') || [])
+          .filter(element => {
+            const rect = element.getBoundingClientRect()
+            const style = getComputedStyle(element)
+            return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+          })
+          .map(element => (element.textContent || '').trim()),
+      }
+    }).catch(() => ({ popupId: null, options: [] }))
+    throw new Error(`受控弹层找不到下拉选项 ${text}：${JSON.stringify(candidateState)}；${error instanceof Error ? error.message : String(error)}`)
+  }
   await wait(180)
 }
 
@@ -315,8 +324,8 @@ const fillFormText = async (page, label, value) => {
 }
 
 const selectFormOption = async (page, label, option, options) => {
-  const popupId = await openFormCombo(page, label)
-  await selectOption(page, popupId, option, options)
+  const input = await openFormCombo(page, label)
+  await selectOption(page, input, option, options)
 }
 
 const selectFormYear = async (page, label, year) => {
@@ -329,22 +338,27 @@ const selectFormYear = async (page, label, year) => {
   const inputElement = input.asElement()
   if (!inputElement) throw new Error(`找不到年份字段：${label}`)
   await inputElement.evaluate(element => element.click())
-  await page.waitForFunction(value => {
-    const dropdown = Array.from(document.querySelectorAll('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)'))
-      .find(element => element.getBoundingClientRect().height > 0)
-    return Array.from(dropdown?.querySelectorAll('.ant-picker-cell-inner') || [])
-      .some(element => (element.textContent || '').trim() === value && element.closest('.ant-picker-cell')?.getAttribute('aria-disabled') !== 'true')
-  }, { timeout: TIMEOUT }, year)
-  const selected = await page.evaluate(value => {
-    const dropdown = Array.from(document.querySelectorAll('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)'))
-      .find(element => element.getBoundingClientRect().height > 0)
-    const cell = Array.from(dropdown?.querySelectorAll('.ant-picker-cell-inner') || [])
-      .find(element => (element.textContent || '').trim() === value)
-    if (!(cell instanceof HTMLElement)) return false
-    cell.click()
+  const selectedYear = await page.waitForFunction((fieldInput, expectedYear) => {
+    if (!fieldInput?.isConnected) return false
+    const visibleDropdowns = Array.from(document.querySelectorAll('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)'))
+      .filter(element => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+      })
+    if (visibleDropdowns.length !== 1) return false
+    const exactCells = Array.from(visibleDropdowns[0].querySelectorAll('.ant-picker-cell-inner')).filter(element => {
+      const cell = element.closest('.ant-picker-cell')
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+        && (element.textContent || '').trim() === expectedYear
+        && cell?.getAttribute('aria-disabled') !== 'true'
+    })
+    if (exactCells.length !== 1 || !(exactCells[0] instanceof HTMLElement)) return false
+    exactCells[0].click()
     return true
-  }, year)
-  if (!selected) throw new Error(`当前年份面板找不到：${year}`)
+  }, { timeout: TIMEOUT, polling: 'raf' }, inputElement, year)
+  await selectedYear.dispose()
   await page.waitForFunction((expected, value) => {
     const item = Array.from(document.querySelectorAll('.ant-modal .ant-form-item')).find(candidate => (
       (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith(expected)
@@ -382,23 +396,8 @@ const configureMachineCreationEnums = async page => {
 }
 
 const selectExternalProject = async (page, bid) => {
-  const popupId = await openFormCombo(page, '项目名')
-  const candidateState = await page.evaluate((controlledId, expectedBid) => {
-    const controlled = document.getElementById(controlledId)
-    const popup = controlled?.closest('.ant-select-dropdown') || controlled
-    return {
-      options: Array.from(popup?.querySelectorAll('.ant-select-item-option') || [])
-        .filter(element => element.getBoundingClientRect().height > 0)
-        .map(element => (element.textContent || '').trim()),
-      existingBids: (JSON.parse(localStorage.getItem('pms-projects') || '{}')?.state?.projects || [])
-        .map(project => project.sourceBid).filter(Boolean),
-      expectedBid,
-    }
-  }, popupId, bid)
-  if (!candidateState.options.some(option => option.includes(bid))) {
-    throw new Error(`IPM候选缺少 ${bid}：${JSON.stringify(candidateState)}`)
-  }
-  await selectOption(page, popupId, bid, { contains: true })
+  const input = await openFormCombo(page, '项目名')
+  await selectOption(page, input, bid, { contains: true })
 }
 
 const completeMachineProjectForm = async (page, { bid, version }) => {
@@ -473,14 +472,14 @@ const openAriaCombo = async (page, label) => {
 }
 
 const selectAriaOption = async (page, label, optionText) => {
-  const popupId = await openAriaCombo(page, label)
-  await selectOption(page, popupId, optionText)
+  const input = await openAriaCombo(page, label)
+  await selectOption(page, input, optionText)
 }
 
 const chooseMultiSelectValues = async (page, label, values) => {
   for (const value of values) {
-    const popupId = await openFormCombo(page, label)
-    await selectOption(page, popupId, value)
+    const input = await openFormCombo(page, label)
+    await selectOption(page, input, value)
   }
 }
 
@@ -525,8 +524,8 @@ const replaceFormMultiValues = async (page, label, values) => {
         const value = values[index]
         const input = await element.$('input[role="combobox"]')
         if (!input) throw new Error(`多人字段没有下拉输入：${label}`)
-        const popupId = await openComboInput(page, input, label)
-        await selectOption(page, popupId, value)
+        await openComboInput(page, input, label)
+        await selectOption(page, input, value)
         const expectedValues = values.slice(0, index + 1)
         await waitForFormSelectionValues(page, element, expectedValues)
       }
@@ -566,8 +565,8 @@ const replacePermissionRoleMembers = async (page, roleName, members) => {
   for (const member of members) {
     const input = await row.$('input[role="combobox"]')
     if (!input) throw new Error(`权限角色没有成员下拉：${roleName}`)
-    const popupId = await openComboInput(page, input, roleName)
-    await selectOption(page, popupId, member)
+    await openComboInput(page, input, roleName)
+    await selectOption(page, input, member)
   }
   await wait(300)
 }
@@ -609,19 +608,25 @@ const clickProjectByName = async (page, projectName) => {
 
 const seedEnvelope = state => JSON.stringify({ state, version: 1 })
 
+const isColdCompileTransient = message => /^(?:Invalid or unexpected token|ChunkLoadError\b|Loading chunk .+ failed|Failed to fetch dynamically imported module)/i.test(message.trim())
+
 const prewarmBrowser = async browserInstance => {
   const context = await browserInstance.createBrowserContext()
   try {
     let latestError = null
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
       const page = await context.newPage()
       const pageErrors = []
+      let mainResponseFailed = false
       page.setDefaultTimeout(TIMEOUT)
       page.setDefaultNavigationTimeout(TIMEOUT)
       page.on('pageerror', error => pageErrors.push(error.message))
       try {
         const response = await page.goto(BASE_URL, { waitUntil: 'networkidle0' })
-        if (!response || response.status() >= 400) throw new Error(`HTTP ${response?.status() || '无响应'}`)
+        if (!response || response.status() >= 400) {
+          mainResponseFailed = true
+          throw new Error(`HTTP ${response?.status() || '无响应'}`)
+        }
         await page.waitForSelector('[role="menuitem"]', { visible: true })
         await page.waitForFunction(() => document.readyState === 'complete' && (document.body?.innerText || '').includes('工作台'))
         await wait(250)
@@ -629,8 +634,9 @@ const prewarmBrowser = async browserInstance => {
         console.log(`PASS prewarm health attempt=${attempt} (${BASE_URL})`)
         return
       } catch (error) {
+        if (mainResponseFailed || !pageErrors.length || !pageErrors.every(isColdCompileTransient)) throw error
         latestError = error
-        if (attempt < 3) console.log(`RETRY prewarm health attempt=${attempt}: ${error instanceof Error ? error.message : String(error)}`)
+        if (attempt < 2) console.log(`RETRY prewarm cold compile attempt=${attempt}: ${pageErrors.join('；')}`)
       } finally {
         await page.close()
       }
@@ -923,8 +929,8 @@ try {
     }, technicalFilterCount)
     const technicalFieldInput = technicalFieldHandle.asElement()
     if (!technicalFieldInput) throw new Error('找不到新增技术项目筛选字段')
-    const technicalPopupId = await openComboInput(page, technicalFieldInput, '新增技术项目筛选字段')
-    await selectOption(page, technicalPopupId, 'TDT项目名称')
+    await openComboInput(page, technicalFieldInput, '新增技术项目筛选字段')
+    await selectOption(page, technicalFieldInput, 'TDT项目名称')
     await fillInput(page, '[aria-label="TDT项目名称筛选值"]', 'AI-Engine-V2')
     await clickAria(page, '关闭筛选')
     await page.waitForFunction(() => {
@@ -985,31 +991,54 @@ try {
     console.log('    HIST open edit')
     await clickExact(page, 'button', '编辑')
     console.log('    HIST inspect disabled option')
-    await openFormCombo(page, '首销tOS版本')
-    await page.waitForFunction(() => Array.from(document.querySelectorAll('.ant-select-item-option')).some(element => (
-      element.getBoundingClientRect().height > 0
-      && (element.textContent || '').trim() === 'tOS19.4.3（已停用）'
-      && element.classList.contains('ant-select-item-option-disabled')
-    )))
-    const availableForNewChoice = await page.evaluate(() => Array.from(document.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)')).some(element => (
-      element.getBoundingClientRect().height > 0 && (element.textContent || '').includes('19.4.3')
-    )))
+    const historicalInput = await openFormCombo(page, '首销tOS版本')
+    await page.waitForFunction(targetInput => {
+      const popupId = targetInput?.getAttribute('aria-controls') || targetInput?.getAttribute('aria-owns')
+      const controlled = popupId ? document.getElementById(popupId) : null
+      const popup = controlled?.closest('.ant-select-dropdown') || controlled
+      return Array.from(popup?.querySelectorAll('.ant-select-item-option') || []).some(element => (
+        element.getBoundingClientRect().height > 0
+        && (element.textContent || '').trim() === 'tOS19.4.3（已停用）'
+        && element.classList.contains('ant-select-item-option-disabled')
+      ))
+    }, { timeout: TIMEOUT }, historicalInput)
+    const availableForNewChoice = await page.evaluate(targetInput => {
+      const popupId = targetInput?.getAttribute('aria-controls') || targetInput?.getAttribute('aria-owns')
+      const controlled = popupId ? document.getElementById(popupId) : null
+      const popup = controlled?.closest('.ant-select-dropdown') || controlled
+      return Array.from(popup?.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)') || []).some(element => (
+        element.getBoundingClientRect().height > 0 && (element.textContent || '').includes('19.4.3')
+      ))
+    }, historicalInput)
     if (availableForNewChoice) throw new Error('已删除枚举仍可作为新值选择')
   })
 
-  await runScenario('06 machine new and two legacy versions resolve maximum', {}, async page => {
-    console.log('  STEP configure the three required versions through enum UI')
-    await openMain(page, '配置中心')
-    await clickExact(page, '.ant-segmented-item', '枚举值配置')
-    await configureMachineCreationEnums(page)
-    await clickButtonPrefix(page, '.pms-enum-type-list', '首销tOS版本')
-    for (const value of ['14.0.0', '15.0.0', '17.10.0']) {
-      await page.$eval('[data-testid="enum-add-button"]', element => element.click())
-      await fillInput(page, 'input[aria-label="首销tOS版本"]', value)
-      await clickExact(page, '.ant-modal button', '新增')
-      await waitForPersistedEnumRow(page, 'first-sale-tos', 'value', value, `编辑配置值 tOS${value}`)
-    }
-
+  await runScenario('06 machine new and two legacy versions resolve maximum', {
+    storage: {
+      'pms-enum-values': JSON.stringify({
+        version: 2,
+        state: {
+          rowsByType: {
+            'first-sale-tos': [
+              { id: 'scenario-06-tos-14', value: '14.0.0' },
+              { id: 'scenario-06-tos-15', value: '15.0.0' },
+              { id: 'scenario-06-tos-17', value: '17.10.0' },
+            ],
+            'product-series': [{ id: 'scenario-06-series', value: 'NOTE 60' }],
+            'chip-mapping': [{ id: 'scenario-06-chip', chipCode: 'D8600', chipModel: 'MT6899', chipPlatform: 'MTK' }],
+          },
+        },
+      }),
+    },
+  }, async page => {
+    console.log('  STEP verify the scenario-owned enum seed before project creation')
+    await page.waitForFunction(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-enum-values') || '{}')
+      const rows = envelope?.state?.rowsByType || {}
+      return ['14.0.0', '15.0.0', '17.10.0'].every(value => rows['first-sale-tos']?.some(row => row.value === value))
+        && rows['product-series']?.some(row => row.value === 'NOTE 60')
+        && rows['chip-mapping']?.some(row => row.chipCode === 'D8600' && row.chipModel === 'MT6899' && row.chipPlatform === 'MTK')
+    })
     await openMain(page, '项目列表')
     for (const input of [
       { bid: 'EXT-010', version: '14.0.0' },
@@ -1067,8 +1096,8 @@ try {
     const sourceInput = await formCombo(page, '项目名')
     await sourceInput.focus()
     await page.keyboard.type('AIOS-Architecture')
-    const sourcePopupId = await controlledPopupId(page, sourceInput, '项目名')
-    await selectOption(page, sourcePopupId, 'EXT-013', { contains: true })
+    await waitForControlledPopupCandidates(page, sourceInput, '项目名')
+    await selectOption(page, sourceInput, 'EXT-013', { contains: true })
     console.log('  STEP verify mapped fields and create validation')
     await assertIpmSourceBeforeCreateFields(page)
     await assertCreateFieldLabelOrder(page, TECHNICAL_CREATE_LABELS)
