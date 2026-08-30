@@ -272,22 +272,27 @@ const clickCategory = async label => {
 }
 
 const chooseVisibleOption = async label => {
-  await waitForVisible('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-  const options = await page.$$(
-    '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option',
-  )
-  for (const option of options) {
-    const matches = await option.evaluate((element, value) => {
+  const optionSelector = '.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option'
+  await page.waitForFunction((selector, value) => (
+    Array.from(document.querySelectorAll(selector)).some(element => {
       const rect = element.getBoundingClientRect()
       return rect.width > 0
         && rect.height > 0
         && (element.textContent || '').trim() === value
-    }, label)
-    if (!matches) continue
-    await option.click()
-    return
-  }
-  throw new Error(`missing visible select option: ${label}`)
+    })
+  ), { timeout: STEP_TIMEOUT }, optionSelector, label)
+  const clicked = await page.evaluate((selector, value) => {
+    const option = Array.from(document.querySelectorAll(selector)).find(element => {
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0
+        && rect.height > 0
+        && (element.textContent || '').trim() === value
+    })
+    if (!(option instanceof HTMLElement)) return false
+    option.click()
+    return true
+  }, optionSelector, label)
+  if (!clicked) throw new Error(`visible select option disappeared before click: ${label}`)
 }
 
 const readProjectRowCount = async () => page.$$eval(
