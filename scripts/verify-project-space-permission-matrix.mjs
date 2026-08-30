@@ -6,6 +6,7 @@ const root = process.cwd()
 const permissionModuleFile = path.join(root, 'src/components/permission/PermissionModule.tsx')
 const permissionConstantsFile = path.join(root, 'src/constants/permissions.ts')
 const permissionStoreFile = path.join(root, 'src/stores/permission.ts')
+const projectManagerBrowserFile = path.join(root, 'screenshots/verify-project-manager-permission.mjs')
 
 const expectedRoles = [
   '系统管理员',
@@ -95,6 +96,7 @@ function extractRoleBlock(source, role) {
 const moduleSource = readRequiredFile(permissionModuleFile)
 const constantsSource = readRequiredFile(permissionConstantsFile)
 const storeSource = readRequiredFile(permissionStoreFile)
+const projectManagerBrowserSource = readRequiredFile(projectManagerBrowserFile)
 const permissionModule = loadTypeScriptModule(root, 'src/stores/permission.ts')
 
 assertIncludes(constantsSource, 'PROJECT_PERMISSION_GROUPS', 'project permission matrix config')
@@ -144,11 +146,17 @@ for (const permission of expectedByRole['项目经理']) {
 }
 
 for (const permission of ['basicInfo:编辑', 'plan:一级计划-编辑', 'projectPermission:manageRoles']) {
-  if (permissionModule.hasPermission('钱九', '2', permission)) {
+  if (permissionModule.hasPermission('钱九', '3', permission)) {
     fail(`钱九 must not receive ${permission} outside project 1`)
   }
   if (permissionModule.hasPermission('李四', '1', permission)) {
     fail(`李四 must remain a regular member without ${permission}`)
+  }
+  if (permissionModule.hasPermission('李四', '3', permission)) {
+    fail(`李四 must not receive ${permission} in inaccessible non-target project 3`)
+  }
+  if (!permissionModule.hasPermission('张三', '3', permission)) {
+    fail(`张三 global-administrator permission regressed in non-target project 3 for ${permission}`)
   }
 }
 
@@ -156,5 +164,18 @@ if (!permissionModule.hasPermission('李四', '1', 'basicInfo:查看')) fail('�
 for (const permission of ['roadmap:view', 'configCenter:planEdit', 'permissionCenter:manageRoles']) {
   if (permissionModule.hasGlobalPermission('钱九', permission)) fail(`钱九 must not receive global permission ${permission}`)
 }
+
+assertIncludes(projectManagerBrowserSource, 'const PERMISSION_MATRIX = [', 'project-manager browser coverage')
+for (const caseId of [
+  'zhang-target', 'zhang-non-target',
+  'qian-target', 'qian-non-target',
+  'li-target', 'li-non-target',
+]) {
+  assertIncludes(projectManagerBrowserSource, `id: '${caseId}'`, 'project-manager browser coverage')
+}
+assertIncludes(projectManagerBrowserSource, 'for (const testCase of PERMISSION_MATRIX)', 'project-manager browser coverage')
+assertIncludes(projectManagerBrowserSource, 'assertDeniedProject', 'project-manager browser inaccessible-project coverage')
+assertIncludes(projectManagerBrowserSource, 'errorCounts', 'project-manager browser raw error counters')
+if (/favicon\.ico/.test(projectManagerBrowserSource)) fail('project-manager browser must not whitelist favicon HTTP failures')
 
 console.log('Project-space permission matrix is aligned with the required table.')
