@@ -78,7 +78,7 @@ export const resolvePermissionProjectId = (projectId: string, parentProjectId?: 
 )
 
 export const PERMISSION_STORAGE_KEY = 'pms-project-permissions'
-export const PERMISSION_STORAGE_VERSION = 1
+export const PERMISSION_STORAGE_VERSION = 2
 
 // ─── Defaults shared by every project's initial role-permission slot ─
 
@@ -194,13 +194,18 @@ function buildDefaultRoles(): Role[] {
   return FIXED_ROLES.map(name => ({ name, members: [...(DEFAULT_ROLE_MEMBERS[name] || [])], isFixed: true }))
 }
 
-const withProjectSpecificMockMembers = (projectId: string, roles: Role[]): Role[] => (
-  projectId === '1'
-    ? roles.map(role => role.name === '项目经理'
-      ? { ...role, members: [...new Set([...role.members, '钱九'])] }
-      : role)
-    : roles
-)
+const withProjectSpecificMockMembers = (projectId: string, roles: Role[]): Role[] => {
+  if (projectId !== '1') return roles
+  let foundProjectManager = false
+  const next = roles.map(role => {
+    if (role.name !== '项目经理') return role
+    foundProjectManager = true
+    return { ...role, members: [...new Set([...role.members, '钱九'])] }
+  })
+  return foundProjectManager
+    ? next
+    : [...next, { name: '项目经理', members: ['钱九'], isFixed: true }]
+}
 
 function buildDefaultRolePermissions(): Record<string, Record<string, boolean>> {
   const init: Record<string, Record<string, boolean>> = {}
@@ -273,10 +278,14 @@ const sanitizeRolePermissionsByProject = (value: unknown): Record<string, Record
   }))
 }
 
-export function migratePermissionState(persistedState: unknown, _version: number): PersistedPermissionState {
+export function migratePermissionState(persistedState: unknown, version: number): PersistedPermissionState {
   if (!isRecord(persistedState)) return { rolesByProject: {}, rolePermissionsByProject: {} }
+  const rolesByProject = sanitizeRolesByProject(persistedState.rolesByProject)
+  if (version < 2 && rolesByProject['1']) {
+    rolesByProject['1'] = withProjectSpecificMockMembers('1', rolesByProject['1'])
+  }
   return {
-    rolesByProject: sanitizeRolesByProject(persistedState.rolesByProject),
+    rolesByProject,
     rolePermissionsByProject: sanitizeRolePermissionsByProject(persistedState.rolePermissionsByProject),
   }
 }

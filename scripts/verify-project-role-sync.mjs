@@ -114,6 +114,43 @@ const persisted = permissionModule.migratePermissionState({
 }, 1)
 assert.deepEqual(persisted.rolesByProject.persisted, [{ name: '自定义角色', members: ['张三'], isFixed: false }], 'persist migration keeps and sanitizes custom roles and members')
 assert.deepEqual(persisted.rolePermissionsByProject.persisted, { 自定义角色: { 'basicInfo:查看': true } }, 'persist migration keeps boolean role permissions')
+
+const legacyProjectOne = {
+  rolesByProject: {
+    '1': [
+      { name: '项目经理', members: ['张三', '赵六'], isFixed: true },
+      { name: '自定义项目角色', members: ['李四'], isFixed: false },
+    ],
+  },
+  rolePermissionsByProject: {
+    '1': {
+      项目经理: { 'basicInfo:编辑': true },
+      自定义项目角色: { 'basicInfo:查看': true },
+    },
+  },
+}
+const migratedProjectOne = permissionModule.migratePermissionState(legacyProjectOne, 1)
+assert.deepEqual(
+  migratedProjectOne.rolesByProject['1'].find(role => role.name === '项目经理')?.members,
+  ['张三', '赵六', '钱九'],
+  'the one-time legacy permission migration backfills 钱九 into project 1 manager members',
+)
+assert.deepEqual(
+  migratedProjectOne.rolesByProject['1'].find(role => role.name === '自定义项目角色'),
+  { name: '自定义项目角色', members: ['李四'], isFixed: false },
+  'the one-time legacy permission migration preserves custom roles',
+)
+assert.deepEqual(
+  migratedProjectOne.rolePermissionsByProject['1'],
+  legacyProjectOne.rolePermissionsByProject['1'],
+  'the one-time legacy permission migration preserves configured permissions',
+)
+const currentProjectOne = permissionModule.migratePermissionState(legacyProjectOne, permissionModule.PERMISSION_STORAGE_VERSION)
+assert.deepEqual(
+  currentProjectOne.rolesByProject['1'].find(role => role.name === '项目经理')?.members,
+  ['张三', '赵六'],
+  'current-version hydration does not repeatedly re-add a deliberately removed mock manager',
+)
 permissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
 permissionStore.getState().ensureProjectPermissions([technicalProject])
 assert.deepEqual(permissionStore.getState().rolesByProject['role-tech'].map(role => role.name), Object.keys(technicalMap), 'project hydration backfills fixed roles for a persisted technical project')
