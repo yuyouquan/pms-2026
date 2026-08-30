@@ -11,6 +11,7 @@ const projectInfoValues = loadTypeScriptModule(root, 'src/lib/projectInfoValues.
 const projectInfoRules = loadTypeScriptModule(root, 'src/lib/projectInfoRules.ts')
 const schemaSource = readSource(root, 'src/constants/projectInfoSchema.ts')
 const technicalSource = readSource(root, 'src/constants/technicalProject.ts')
+const modalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 
 const machineCreateKeys = [
   'firstSaleTosVersion', 'status', 'versionType', 'softwareProjectLevel',
@@ -217,16 +218,40 @@ assert.deepEqual(
   'technical create rules must expose the approved create projection',
 )
 
-const selfResearchMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
+const newMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
   firstSaleTosVersion: 'tOS17.0',
   status: '进行中',
   researchMode: '自研',
   developmentMode: '自研',
+  productType: '新品',
+  projectModel: 'Spark40',
+  mainboardName: 'SPARK40_MB',
+  androidVersion: 'Android 16',
+  productionForbiddenDate: '2026-12-01',
+  baselineName: 'Spark40-baseline',
   isTwoStage: '是',
 })
-assert.equal(selfResearchMachineSubmit.firstSaleTosVersion, 'tOS17.0')
-assert.equal(selfResearchMachineSubmit.status, '进行中')
-assert.equal(selfResearchMachineSubmit.isTwoStage, undefined, 'hidden conditional fields must not be submitted')
+assert.equal(newMachineSubmit.firstSaleTosVersion, 'tOS17.0', 'new-machine first-sale tOS must be stored')
+assert.equal(newMachineSubmit.status, undefined, 'project status must remain outside canonical infoValues')
+assert.equal(newMachineSubmit.isTwoStage, undefined, 'hidden conditional fields must not be submitted')
+for (const [key, value] of [
+  ['productType', '新品'],
+  ['projectModel', 'Spark40'],
+  ['mainboardName', 'SPARK40_MB'],
+  ['androidVersion', 'Android 16'],
+  ['productionForbiddenDate', '2026-12-01'],
+  ['baselineName', 'Spark40-baseline'],
+]) {
+  assert.equal(newMachineSubmit[key], value, `${key} source-derived storage value must be preserved`)
+}
+
+const legacyMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
+  firstSaleTosVersion: 'tOS16.0',
+  productType: '老品',
+  currentTosVersion: 'tOS16.3',
+})
+assert.equal(legacyMachineSubmit.firstSaleTosVersion, 'tOS16.0')
+assert.equal(legacyMachineSubmit.currentTosVersion, 'tOS16.3', 'legacy-machine current tOS must be stored')
 
 const externalResearchMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
   firstSaleTosVersion: 'tOS17.0',
@@ -235,6 +260,22 @@ const externalResearchMachineSubmit = projectInfoRules.getProjectInfoModalSubmit
 })
 assert.equal(externalResearchMachineSubmit.firstSaleTosVersion, 'tOS17.0')
 assert.equal(externalResearchMachineSubmit.isTwoStage, '是', 'visible conditional fields must be submitted')
+
+assert.match(
+  modalSource,
+  /showConfiguredProjectStatus && !isMachineProjectType\(projectType\)/,
+  'the universal project-status control must exclude machine projects',
+)
+assert.match(
+  modalSource,
+  /field\.key === 'status' \? \([\s\S]{0,500}?options=\{projectStatusOptions\}/,
+  'the machine status schema field must use the configured project-status options',
+)
+assert.equal(
+  (modalSource.match(/<Form\.Item label="项目状态" name="status"/g) || []).length,
+  1,
+  'the modal source must keep only one explicit universal status render path',
+)
 
 const technicalInfoTeamFields = schema.TECHNICAL_PROJECT_INFO_FIELDS.filter(field => field.group === 'team')
 assert.deepEqual(

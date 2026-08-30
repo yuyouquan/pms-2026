@@ -1046,7 +1046,7 @@ export default function ProjectInfoModal({
               <Select disabled options={secondaryCategoryOptions} />
             </Form.Item>
           )}
-          {showConfiguredProjectStatus && (
+          {showConfiguredProjectStatus && !isMachineProjectType(projectType) && (
             <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
               <Select
                 disabled={projectType === PROJECT_TYPE_TOS_VERSION}
@@ -1134,7 +1134,12 @@ export default function ProjectInfoModal({
                             ? [{ required: true, message: `请填写${field.label}` }]
                             : undefined}
                         >
-                          {field.key === 'chipCode' ? (
+                          {field.key === 'status' ? (
+                            <Select
+                              options={projectStatusOptions}
+                              placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
+                            />
+                          ) : field.key === 'chipCode' ? (
                             <Select
                               value={selectedChipOptionId}
                               options={chipOptions}

@@ -75,11 +75,16 @@ export const getProjectInfoModalGroups = (type: string) => {
   return getProjectInfoGroups(type).filter(group => visibleGroupKeys.has(group.key))
 }
 
+const MACHINE_PROJECT_MODAL_CREATE_ONLY_STORAGE_FIELDS = MACHINE_PROJECT_CREATE_FIELDS
+  .filter(field => field.key === 'firstSaleTosVersion')
+
 export const getProjectInfoModalSubmitValues = (
   type: string,
   values: ProjectInfoValues,
 ): ProjectInfoValues => (
-  getProjectInfoModalFields(type)
+  (isMachineProjectType(type)
+    ? [...MACHINE_PROJECT_MODAL_CREATE_ONLY_STORAGE_FIELDS, ...getProjectInfoFields(type)]
+    : getProjectInfoModalFields(type))
     .filter(field => !field.visibleWhen || field.visibleWhen(values))
     .reduce<ProjectInfoValues>((result, field) => {
       const value = values[field.key]
