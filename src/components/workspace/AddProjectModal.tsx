@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { message } from 'antd'
+import { App } from 'antd'
 import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
 import { EXTERNAL_PROJECT_POOL, type ExternalProjectEntry } from '@/data/externalProjectPool'
 import { useProjectStore } from '@/stores/project'
@@ -31,6 +31,7 @@ interface AddProjectModalProps {
 }
 
 export default function AddProjectModal({ open, onCancel }: AddProjectModalProps) {
+  const { message } = App.useApp()
   const {
     projects,
     currentLoginUser,

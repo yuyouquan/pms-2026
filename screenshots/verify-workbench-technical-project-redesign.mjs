@@ -15,10 +15,7 @@ const allowedConsoleErrors = [
   'Warning: [antd: Space] `direction` is deprecated.',
   'Warning: [antd: Divider] `type` is deprecated.',
   'Warning: [antd: Drawer] `width` is deprecated.',
-  'Warning: [antd: Modal] `maskClosable` is deprecated.',
-  'Warning: [antd: Modal] Static function can not consume context like dynamic theme.',
   'Warning: [antd: Descriptions] Sum of column `span` in a line not match `column` of Descriptions.',
-  'Warning: [antd: message] Static function can not consume context like dynamic theme.',
 ]
 const MACHINE_CREATE_LABELS = [
   '首销tOS版本', '项目状态', '版本类型', '软件项目等级', '是否首发项目', '产品系列',
@@ -255,19 +252,31 @@ const openFormCombo = async (page, label) => {
 }
 
 const selectOption = async (page, text, { contains = false } = {}) => {
-  await page.waitForFunction((value, useContains) => Array.from(document.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)'))
-    .some(element => {
-      const rect = element.getBoundingClientRect()
-      const content = (element.textContent || '').trim()
-      return rect.width > 0 && rect.height > 0 && (useContains ? content.includes(value) : content === value)
-    }), { timeout: TIMEOUT }, text, contains)
-  const clicked = await page.evaluate((value, useContains) => {
-    const option = Array.from(document.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)'))
+  await page.waitForFunction((value, useContains) => {
+    const dropdown = Array.from(document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden)'))
       .filter(element => {
         const rect = element.getBoundingClientRect()
-        const content = (element.textContent || '').trim()
-        return rect.width > 0 && rect.height > 0 && (useContains ? content.includes(value) : content === value)
+        const style = getComputedStyle(element)
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
       }).at(-1)
+    return Array.from(dropdown?.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)') || [])
+      .some(element => {
+        const content = (element.textContent || '').trim()
+        return useContains ? content.includes(value) : content === value
+      })
+  }, { timeout: TIMEOUT }, text, contains)
+  const clicked = await page.evaluate((value, useContains) => {
+    const dropdown = Array.from(document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden)'))
+      .filter(element => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+      }).at(-1)
+    const option = Array.from(dropdown?.querySelectorAll('.ant-select-item-option:not(.ant-select-item-option-disabled)') || [])
+      .find(element => {
+        const content = (element.textContent || '').trim()
+        return useContains ? content.includes(value) : content === value
+      })
     if (!option) return false
     option.click()
     return true
@@ -304,17 +313,50 @@ const selectFormOption = async (page, label, option, options) => {
 }
 
 const selectFormYear = async (page, label, year) => {
-  const opened = await page.evaluate(expected => {
-    const item = Array.from(document.querySelectorAll('.ant-form-item')).find(candidate => (
+  const input = await page.evaluateHandle(expected => {
+    const item = Array.from(document.querySelectorAll('.ant-modal .ant-form-item')).find(candidate => (
       (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith(expected)
     ))
-    const input = item?.querySelector('.ant-picker input')
-    input?.click()
-    return Boolean(input)
+    return item?.querySelector('.ant-picker input') || null
   }, label)
-  if (!opened) throw new Error(`找不到年份字段：${label}`)
-  await page.waitForSelector('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)', { visible: true })
-  await clickExact(page, '.ant-picker-dropdown:not(.ant-picker-dropdown-hidden) .ant-picker-cell-inner', year)
+  const inputElement = input.asElement()
+  if (!inputElement) throw new Error(`找不到年份字段：${label}`)
+  await inputElement.evaluate(element => element.click())
+  await page.waitForFunction(value => {
+    const dropdown = Array.from(document.querySelectorAll('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)'))
+      .find(element => element.getBoundingClientRect().height > 0)
+    return Array.from(dropdown?.querySelectorAll('.ant-picker-cell-inner') || [])
+      .some(element => (element.textContent || '').trim() === value && element.closest('.ant-picker-cell')?.getAttribute('aria-disabled') !== 'true')
+  }, { timeout: TIMEOUT }, year)
+  const selected = await page.evaluate(value => {
+    const dropdown = Array.from(document.querySelectorAll('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)'))
+      .find(element => element.getBoundingClientRect().height > 0)
+    const cell = Array.from(dropdown?.querySelectorAll('.ant-picker-cell-inner') || [])
+      .find(element => (element.textContent || '').trim() === value)
+    if (!(cell instanceof HTMLElement)) return false
+    cell.click()
+    return true
+  }, year)
+  if (!selected) throw new Error(`当前年份面板找不到：${year}`)
+  await page.waitForFunction((expected, value) => {
+    const item = Array.from(document.querySelectorAll('.ant-modal .ant-form-item')).find(candidate => (
+      (candidate.querySelector('.ant-form-item-label')?.textContent || '').trim().startsWith(expected)
+    ))
+    const current = item?.querySelector('.ant-picker input')?.value || ''
+    return current === value
+  }, { timeout: TIMEOUT }, label, year)
+}
+
+const waitForPersistedEnumRow = async (page, type, field, value, editLabel) => {
+  await page.waitForFunction(({ enumType, fieldKey, expectedValue, expectedLabel }) => {
+    let persisted = null
+    try { persisted = JSON.parse(localStorage.getItem('pms-enum-values') || 'null') } catch { return false }
+    const stored = persisted?.state?.rowsByType?.[enumType]?.some(row => row?.[fieldKey] === expectedValue)
+    const editButton = Array.from(document.querySelectorAll('button')).find(element => (
+      element.getAttribute('aria-label') === expectedLabel && element.getBoundingClientRect().height > 0
+    ))
+    return Boolean(stored && editButton)
+  }, { timeout: TIMEOUT }, { enumType: type, fieldKey: field, expectedValue: value, expectedLabel: editLabel })
 }
 
 const configureMachineCreationEnums = async page => {
@@ -322,12 +364,14 @@ const configureMachineCreationEnums = async page => {
   await page.$eval('[data-testid="enum-add-button"]', element => element.click())
   await fillInput(page, 'input[aria-label="产品系列"]', 'NOTE 60')
   await clickExact(page, '.ant-modal button', '新增')
+  await waitForPersistedEnumRow(page, 'product-series', 'value', 'NOTE 60', '编辑配置值 NOTE 60')
   await clickButtonPrefix(page, '.pms-enum-type-list', '芯片编码/芯片型号/芯片平台')
   await page.$eval('[data-testid="enum-add-button"]', element => element.click())
   await fillInput(page, 'input[aria-label="芯片编码"]', 'D8600')
   await fillInput(page, 'input[aria-label="芯片型号"]', 'MT6899')
   await fillInput(page, 'input[aria-label="芯片平台"]', 'MTK')
   await clickExact(page, '.ant-modal button', '新增')
+  await waitForPersistedEnumRow(page, 'chip-mapping', 'chipCode', 'D8600', '编辑配置值 D8600 / MT6899 / MTK')
 }
 
 const selectExternalProject = async (page, bid) => {
@@ -517,7 +561,7 @@ const runScenario = async (name, { storage = {}, viewport = { width: 1440, heigh
   const context = await browser.createBrowserContext()
   const page = await context.newPage()
   const errors = []
-  const errorCounts = { page: 0, console: 0, request: 0, http: 0 }
+  const errorCounts = { page: 0, console: 0, request: 0, http: 0, consoleRaw: 0, consoleIgnored: 0 }
   page.setDefaultTimeout(TIMEOUT)
   page.setDefaultNavigationTimeout(TIMEOUT)
   page.on('pageerror', error => {
@@ -526,9 +570,14 @@ const runScenario = async (name, { storage = {}, viewport = { width: 1440, heigh
   })
   page.on('console', message => {
     if (message.type() !== 'error') return
-    if (allowedConsoleErrors.some(prefix => message.text().startsWith(prefix))) return
+    errorCounts.consoleRaw += 1
+    if (allowedConsoleErrors.some(prefix => message.text().startsWith(prefix))) {
+      errorCounts.consoleIgnored += 1
+      return
+    }
     errorCounts.console += 1
-    errors.push(`console.error: ${message.text()}`)
+    const location = message.location()
+    errors.push(`console.error: ${message.text()} @ ${location.url || 'unknown'}:${location.lineNumber ?? 0}:${location.columnNumber ?? 0}`)
   })
   page.on('requestfailed', request => {
     errorCounts.request += 1
@@ -554,7 +603,8 @@ const runScenario = async (name, { storage = {}, viewport = { width: 1440, heigh
       url: location.href,
       text: (document.body?.innerText || '').slice(0, 2400),
     })).catch(() => ({ url: 'unavailable', text: 'unavailable' }))
-    throw new Error(`${name}: ${error instanceof Error ? error.message : String(error)}\nURL: ${diagnostics.url}\n${diagnostics.text}`)
+    const capturedErrors = errors.length ? `\ncaptured-errors:\n${errors.join('\n')}` : ''
+    throw new Error(`${name}: ${error instanceof Error ? error.message : String(error)}\nerrors=${JSON.stringify(errorCounts)}${capturedErrors}\nURL: ${diagnostics.url}\n${diagnostics.text}`)
   } finally {
     await context.close()
   }
@@ -564,7 +614,7 @@ try {
   browser = await puppeteer.launch({
     headless: 'new',
     executablePath: process.env.PMS_CHROME_EXECUTABLE || undefined,
-    args: ['--no-sandbox'],
+    args: ['--no-sandbox', '--disable-dev-shm-usage'],
   })
 
   await runScenario('01 header order and workbench default todo', {}, async page => {
@@ -586,18 +636,69 @@ try {
     if (JSON.stringify(tabs) !== JSON.stringify(['全部', '待处理', '已完成'])) throw new Error(`任务状态 Tab 错误：${JSON.stringify(tabs)}`)
     const selected = await page.$eval('[aria-label="任务状态"] [role="tab"][aria-selected="true"] span', element => (element.textContent || '').trim())
     if (selected !== '待处理') throw new Error(`默认任务状态为 ${selected}`)
+    const workbenchCounts = await page.evaluate(() => {
+      const parseDirectoryCount = prefix => {
+        const label = document.querySelector(`[aria-label^="${prefix}"]`)?.getAttribute('aria-label') || ''
+        return Number.parseInt(label.match(/(\d+) 条待处理/)?.[1] || '-1', 10)
+      }
+      const tabs = Object.fromEntries(Array.from(document.querySelectorAll('[aria-label="任务状态"] [role="tab"]')).map(element => {
+        const spans = Array.from(element.querySelectorAll('span')).map(span => (span.textContent || '').trim())
+        return [spans[0], Number.parseInt(spans[1] || '-1', 10)]
+      }))
+      const visibleRows = Array.from(document.querySelectorAll('.pms-todo-center__table .ant-table-tbody tr[data-row-key]'))
+        .filter(element => element.getBoundingClientRect().height > 0).length
+      return { plan: parseDirectoryCount('计划，'), transfer: parseDirectoryCount('转维，'), tabs, visibleRows }
+    })
+    if (workbenchCounts.plan < 0 || workbenchCounts.transfer < 0) throw new Error(`工作台目录统计无效：${JSON.stringify(workbenchCounts)}`)
+    if (workbenchCounts.tabs['待处理'] !== workbenchCounts.transfer || workbenchCounts.visibleRows !== workbenchCounts.transfer) {
+      throw new Error(`工作台状态统计与真实行不一致：${JSON.stringify(workbenchCounts)}`)
+    }
   })
 
-  await runScenario('02 todo categories counts and plan transfer navigation', {}, async page => {
+  await runScenario('02 todo categories counts and plan transfer navigation', {
+    storage: {
+      'pms-plan-store': JSON.stringify({
+        version: 10,
+        state: {
+          marketPlanData: {
+            OP: {
+              tasks: [{
+                id: 'browser-plan-todo', order: 1, taskName: 'OP 浏览器计划待办', status: '进行中', progress: 50,
+                responsible: '张三', planStartDate: '2026-08-01', planEndDate: '2026-09-15',
+              }],
+              level2Tasks: [],
+              createdLevel2Plans: [],
+            },
+          },
+        },
+      }),
+    },
+  }, async page => {
     for (const prefix of ['计划，', '转维，']) {
       await page.waitForSelector(`[aria-label^="${prefix}"]`, { visible: true })
     }
+    console.log('  STEP navigate through a persisted real plan task action')
+    await page.waitForFunction(() => {
+      const label = document.querySelector('[aria-label^="计划，"]')?.getAttribute('aria-label') || ''
+      return Number.parseInt(label.match(/(\d+) 条待处理/)?.[1] || '0', 10) > 0
+    })
+    await page.$eval('[aria-label^="计划，"]', element => element.click())
+    await page.waitForSelector('[aria-label^="前往处理 "]', { visible: true })
+    const planTaskLabel = await page.$eval('[aria-label^="前往处理 "]', element => element.getAttribute('aria-label') || '')
+    await clickAria(page, planTaskLabel)
+    await page.waitForFunction(() => (document.querySelector('.ant-menu-item-selected')?.textContent || '').trim() === '计划')
+    await page.waitForSelector('[aria-label="计划版本"]', { visible: true })
+
+    console.log('  STEP return to workbench and navigate through the real transfer action')
+    await clickExact(page, 'button', '返回工作台')
+    await page.waitForSelector('[aria-label="任务目录"]', { visible: true })
     await page.$eval('[aria-label^="转维，"]', element => element.click())
     await clickAria(page, '前往处理 转维资料录入')
     await assertText(page, '转维')
   })
 
   await runScenario('03 project list defaults to machine without all category', {}, async page => {
+    console.log('  STEP open machine project list and verify matrix columns')
     await openMain(page, '项目列表')
     const categoryLabels = await page.$$eval('[aria-label="项目分类筛选"] button', buttons => buttons.map(button => (button.textContent || '').trim().replace(/\s+\d+$/, '')))
     if (categoryLabels.includes('全部')) throw new Error('一级项目分类仍包含“全部”')
@@ -612,17 +713,35 @@ try {
       const actions = document.querySelector('.pms-project-list-category-actions')?.getBoundingClientRect()
       const tableHeaders = Array.from(document.querySelectorAll('.ant-table-thead th'))
         .map(element => (element.textContent || '').trim())
-      return { categoryTop: category?.top, actionsTop: actions?.top, tableHeaders }
+      const fixedHeaders = Array.from(document.querySelectorAll('.ant-table-thead th.ant-table-cell-fix-left, .ant-table-thead th.ant-table-cell-fix-start'))
+        .map(element => (element.textContent || '').trim())
+      return { categoryTop: category?.top, actionsTop: actions?.top, tableHeaders, fixedHeaders }
     })
     if (layout.categoryTop !== layout.actionsTop) throw new Error(`项目分类与操作区未同行：${JSON.stringify(layout)}`)
-    if (!layout.tableHeaders.some(text => text.includes('产品系列')) || !layout.tableHeaders.some(text => text.includes('项目名'))) {
+    const expectedLeadingColumns = ['品牌', '产品线', '产品系列', '项目数', '市场名', '项目名']
+    if (JSON.stringify(layout.tableHeaders.slice(0, expectedLeadingColumns.length)) !== JSON.stringify(expectedLeadingColumns)) {
       throw new Error(`整机列表列错误：${JSON.stringify(layout.tableHeaders)}`)
     }
+    if (layout.fixedHeaders.length !== 0) {
+      throw new Error(`当前整机矩阵已明确取消固定列，不应出现固定表头：${JSON.stringify(layout.fixedHeaders)}`)
+    }
+    await page.waitForSelector('[aria-label="收起产品系列 SPARK 40"]', { visible: true })
+    const beforeCollapse = await page.$$eval('.ant-table-tbody tr[data-row-key]', rows => rows.filter(row => row.getBoundingClientRect().height > 0).length)
+    console.log('  STEP collapse and expand the first product series')
+    await page.$eval('[aria-label="收起产品系列 SPARK 40"]', element => element.click())
+    await page.waitForFunction(before => (
+      Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(row => row.getBoundingClientRect().height > 0).length < before
+    ), {}, beforeCollapse)
+    await page.$eval('[aria-label="展开产品系列 SPARK 40"]', element => element.click())
+    await page.waitForFunction(before => (
+      Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(row => row.getBoundingClientRect().height > 0).length === before
+    ), {}, beforeCollapse)
   })
 
   await runScenario('04 machine tos technical filters are category scoped', {}, async page => {
     await openMain(page, '项目列表')
-    console.log('  STEP apply machine brand filter in list view')
+    await clickAria(page, '卡片视图')
+    console.log('  STEP apply the common machine brand filter in card view')
     await clickAria(page, '筛选')
     await openAriaCombo(page, '筛选字段')
     await selectOption(page, '品牌')
@@ -630,9 +749,24 @@ try {
     await selectOption(page, 'Infinix')
     await clickAria(page, '关闭筛选')
     await page.waitForFunction(() => {
-      const text = document.querySelector('.ant-table-tbody')?.textContent || ''
-      return text.includes('Infinix') && !text.includes('TECNO')
+      const cards = Array.from(document.querySelectorAll('.pms-project-list-content .ant-card')).filter(element => element.getBoundingClientRect().height > 0)
+      return cards.length > 0 && cards.every(card => (card.textContent || '').includes('Infinix'))
     })
+
+    console.log('  STEP switch card to list while preserving result and advanced-filter mirror')
+    await clickAria(page, '列表视图')
+    await page.waitForFunction(() => {
+      const rows = Array.from(document.querySelectorAll('.ant-table-tbody tr[data-row-key]')).filter(element => element.getBoundingClientRect().height > 0)
+      return rows.length > 0 && rows.every(row => (row.textContent || '').includes('Infinix'))
+    })
+    await clickAria(page, '筛选')
+    await page.waitForFunction(() => {
+      const root = document.querySelector('.pms-floating-config-popover')
+      const field = root?.querySelector('[aria-label="筛选字段"]')?.closest('.ant-select')?.textContent || ''
+      const value = root?.querySelector('[aria-label="品牌筛选值"]')?.closest('.ant-select')?.textContent || ''
+      return field.includes('品牌') && value.includes('Infinix')
+    })
+    await clickAria(page, '关闭筛选')
 
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', 'tOS版本项目')
     console.log('  STEP apply tOS version-type filter and verify rows')
@@ -678,7 +812,7 @@ try {
     await page.$eval('[data-testid="enum-add-button"]', element => element.click())
     await fillInput(page, 'input[aria-label="首销tOS版本"]', '19.4.2')
     await clickExact(page, '.ant-modal button', '新增')
-    await page.waitForSelector('button[aria-label="编辑配置值 tOS19.4.2"]', { visible: true })
+    await waitForPersistedEnumRow(page, 'first-sale-tos', 'value', '19.4.2', '编辑配置值 tOS19.4.2')
     await page.$eval('[data-testid="enum-add-button"]', element => element.click())
     await fillInput(page, 'input[aria-label="首销tOS版本"]', '19.4.2')
     await clickExact(page, '.ant-modal button', '新增')
@@ -687,6 +821,7 @@ try {
     await clickAria(page, '编辑配置值 tOS19.4.2')
     await fillInput(page, 'input[aria-label="首销tOS版本"]', '19.4.3')
     await clickExact(page, '.ant-modal button', '保存')
+    await waitForPersistedEnumRow(page, 'first-sale-tos', 'value', '19.4.3', '编辑配置值 tOS19.4.3')
 
     console.log('  STEP save the newly configured enum through a real machine-project form')
     await openMain(page, '项目列表')
@@ -743,7 +878,7 @@ try {
       await page.$eval('[data-testid="enum-add-button"]', element => element.click())
       await fillInput(page, 'input[aria-label="首销tOS版本"]', value)
       await clickExact(page, '.ant-modal button', '新增')
-      await page.waitForSelector(`button[aria-label="编辑配置值 tOS${value}"]`, { visible: true })
+      await waitForPersistedEnumRow(page, 'first-sale-tos', 'value', value, `编辑配置值 tOS${value}`)
     }
 
     await openMain(page, '项目列表')
@@ -774,7 +909,7 @@ try {
       throw new Error(`第二个老品版本错误：${JSON.stringify(byBid['EXT-012'])}`)
     }
 
-    console.log('  STEP reopen the new X6870 and verify the editable first-sale snapshot')
+    console.log('  STEP reopen the new X6870 and verify first-sale plus current-tOS edit snapshots')
     await clickAria(page, '卡片视图')
     await clickExact(page, '.ant-pagination-item', '2')
     await clickAria(page, '打开项目 EXT-010')
@@ -785,7 +920,10 @@ try {
         return item || null
       }
       const first = itemFor('首销tOS版本')
+      const current = itemFor('当前tOS版本')
+      const currentInput = current?.querySelector('input')
       return (first?.textContent || '').includes('tOS14.0.0')
+        && (currentInput?.value === 'tOS17.10.0' || (current?.textContent || '').includes('tOS17.10.0'))
     })
   })
 
@@ -804,6 +942,22 @@ try {
     await assertIpmSourceBeforeCreateFields(page)
     await assertCreateFieldLabelOrder(page, TECHNICAL_CREATE_LABELS)
     await assertDisabledCreateFields(page, ['secondaryCategory', 'technicalTrack', 'projectName', 'status'])
+    const sourceSnapshots = await page.evaluate(() => Object.fromEntries(
+      ['secondaryCategory', 'technicalTrack', 'projectName', 'status'].map(key => {
+        const item = document.querySelector(`.ant-modal [data-project-create-field="${key}"]`)
+        const control = item?.querySelector('input,textarea')
+        return [key, control?.value || '']
+      }),
+    ))
+    const expectedSourceSnapshots = {
+      secondaryCategory: '技术项目前置工作',
+      technicalTrack: 'AIOS',
+      projectName: 'AIOS-Architecture-Prestudy',
+      status: '待立项',
+    }
+    if (JSON.stringify(sourceSnapshots) !== JSON.stringify(expectedSourceSnapshots)) {
+      throw new Error(`技术来源快照回填错误：${JSON.stringify(sourceSnapshots)}`)
+    }
     await openFormCombo(page, 'TMG 及技术领域')
     await selectOption(page, '基础架构TMG')
     const subdomain = await formCombo(page, '子领域')
@@ -815,7 +969,13 @@ try {
     await selectFormOption(page, '项目价值', '人无我有')
     await selectFormYear(page, '项目年份', '2026')
     await selectFormOption(page, '技术项目负责人', '张三')
+    const managerBeforeValidation = await page.$eval('.ant-modal [data-project-create-field="technicalProjectManager"] input', input => input.value)
+    if (managerBeforeValidation) throw new Error(`技术项目经理校验前不应有值：${managerBeforeValidation}`)
     await clickExact(page, '.ant-modal button', '创建')
+    const managerValidationErrors = await page.$$eval('.ant-modal .ant-form-item-explain-error', elements => elements.map(element => (element.textContent || '').trim()))
+    if (JSON.stringify(managerValidationErrors) !== JSON.stringify(['请选择技术项目经理'])) {
+      throw new Error(`技术项目经理必填校验错误：${JSON.stringify(managerValidationErrors)}`)
+    }
     await assertText(page, '请选择技术项目经理')
     await assertNoCreateFieldErrors(page, ['secondaryCategory', 'technicalTrack', 'projectName', 'status'])
     await assertText(page, '链接', '.ant-modal')
@@ -875,14 +1035,29 @@ try {
   })
 
   await runScenario('08 IPM child config inactive and reactivation semantics', {}, async page => {
+    console.log('  STEP put the persisted active IPM child into a real pending-configuration state')
+    await page.waitForFunction(() => Boolean(localStorage.getItem('pms-technical-projects')))
+    const seededPendingChild = await page.evaluate(() => {
+      const envelope = JSON.parse(localStorage.getItem('pms-technical-projects') || '{}')
+      const child = envelope?.state?.subprojects?.find(item => item.id === 'IPM-AI-002')
+      if (!child) return false
+      child.configuration = { coreValue: '', developmentMode: '', firstTosVersion: '', firstMachineProjectId: '' }
+      localStorage.setItem('pms-technical-projects', JSON.stringify(envelope))
+      return true
+    })
+    if (!seededPendingChild) throw new Error('无法准备 IPM 子项目待配置持久态')
+    await page.reload({ waitUntil: 'domcontentloaded' })
     await openMain(page, '项目列表')
     await clickButtonPrefix(page, '[aria-label="项目分类筛选"]', '技术项目')
     await clickProjectByName(page, 'AI-Engine-V2')
     await page.waitForSelector('[aria-label="技术项目基础信息"]', { visible: true })
     await page.waitForSelector('[aria-label="配置子任务 多模态子项目"]', { visible: true })
-    console.log('  STEP update the child through the real modal')
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="tab"]')).some(element => (
+      (element.textContent || '').includes('多模态子项目') && (element.textContent || '').includes('待配置')
+    )))
+    console.log('  STEP configure the pending child through the real modal')
     await clickAria(page, '配置子任务 多模态子项目')
-    await assertText(page, '已配置', '.ant-modal')
+    await assertText(page, '待配置', '.ant-modal')
     await assertText(page, '核心价值', '.ant-modal')
     await assertText(page, '开发模式', '.ant-modal')
     await selectFormOption(page, '核心价值', '人无我有')
@@ -892,6 +1067,9 @@ try {
     await selectOption(page, 'X6877-D8400_H991')
     await clickExact(page, '.ant-modal button', '确认')
     await assertText(page, '子项目信息已保存')
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('[role="tab"]')).some(element => (
+      (element.textContent || '').includes('多模态子项目') && !(element.textContent || '').includes('待配置')
+    )))
     const savedConfiguration = await page.evaluate(() => {
       const envelope = JSON.parse(localStorage.getItem('pms-technical-projects') || '{}')
       return envelope?.state?.subprojects?.find(item => item.id === 'IPM-AI-002')?.configuration || null
@@ -1062,6 +1240,7 @@ try {
     for (const label of ['项目名称', '项目分类', '技术赛道', 'TMG及技术领域', '子领域', '项目阶段', '项目年份', '项目价值']) {
       await assertText(page, label, '[aria-label="技术项目基础信息"]')
     }
+    await assertNoText(page, '前置项目', '[aria-label="技术项目基础信息"]')
     await assertText(page, 'TDT', '[aria-label="技术信息分类"]')
     await page.waitForSelector('[aria-label="TDT计划信息内容"]', { visible: true })
     await assertNoText(page, '核心价值', '[aria-label="技术信息内容"]')
@@ -1097,6 +1276,16 @@ try {
     for (const label of ['计划克隆', '发布', '取消修订', '筛选', '字段配置', '版本对比', '导出']) {
       await page.waitForSelector(`[aria-label="${label}"]`, { visible: true })
     }
+    for (const removedEntry of ['导入', '分享计划']) {
+      const visibleEntryCount = await page.$$eval(`[aria-label="${removedEntry}"]`, elements => elements.filter(element => (
+        element.getBoundingClientRect().height > 0 && getComputedStyle(element).visibility !== 'hidden'
+      )).length)
+      if (visibleEntryCount !== 0) throw new Error(`技术计划当前规则不应显示${removedEntry}入口：${visibleEntryCount}`)
+    }
+    const tdtAddChildCount = await page.$$eval('[aria-label^="新增二级任务 "]', elements => elements.filter(element => (
+      element.getBoundingClientRect().height > 0 && getComputedStyle(element).visibility !== 'hidden'
+    )).length)
+    if (tdtAddChildCount !== 0) throw new Error(`当前 TDT 扁平维护结构不应显示新增二级任务：${tdtAddChildCount}`)
     for (const label of ['竖版表格', '横版表格', '甘特图']) {
       await page.waitForSelector(`[aria-label="${label}"]`)
     }
@@ -1112,6 +1301,11 @@ try {
     await clickAria(page, '竖版表格')
     await assertCheckedAria(page, '竖版表格')
     await page.waitForSelector('[aria-label="计划内容"] .pms-table', { visible: true })
+    await page.waitForSelector('[aria-label="计划内容"] .technical-plan-flat-row', { visible: true })
+    const legacyNestedRows = await page.$$eval('[aria-label="计划内容"] .technical-plan-child-row', elements => elements.filter(element => (
+      element.getBoundingClientRect().height > 0
+    )).length)
+    if (legacyNestedRows !== 0) throw new Error(`当前 TDT 扁平表不应渲染旧子行：${legacyNestedRows}`)
 
     await clickExact(page, '[role="tab"]', 'AI推理引擎子项目计划', '[aria-label="计划作用域"]')
     await assertCheckedAria(page, '横版表格')

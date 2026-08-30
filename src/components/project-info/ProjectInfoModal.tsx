@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
-import { Alert, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag, message } from 'antd'
+import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
 import TechnicalProjectCreateFields from '@/components/technical-project/TechnicalProjectCreateFields'
@@ -153,6 +153,7 @@ export default function ProjectInfoModal({
   onAfterCreate,
 }: ProjectInfoModalProps) {
   const [form] = Form.useForm<ProjectInfoFormState>()
+  const { message: messageApi, modal: modalApi } = App.useApp()
   const rowsByType = useEnumStore(state => state.rowsByType)
   const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
   const syncTechnicalTeamPermissionMembers = useProjectStore(state => state.syncTechnicalTeamPermissionMembers)
@@ -428,7 +429,7 @@ export default function ProjectInfoModal({
         draft = await draftRepository.get(session.ownerId)
       } catch {
         if (!isCurrentCreateDraftSession(session)) return
-        message.error('项目草稿读取失败')
+        messageApi.error('项目草稿读取失败')
         setDraftReadStatus('failed')
         return
       }
@@ -443,7 +444,7 @@ export default function ProjectInfoModal({
               : Promise.resolve()
           ))
         } catch {
-          if (isCurrentCreateDraftSession(session)) message.error('项目草稿清空失败')
+          if (isCurrentCreateDraftSession(session)) messageApi.error('项目草稿清空失败')
         }
         if (!isCurrentCreateDraftSession(session)) return
       } else if (draft) {
@@ -559,7 +560,7 @@ export default function ProjectInfoModal({
       : []
     setActiveGroups(activeGroupsRef.current)
     if (!classification) {
-      message.error('该 IPM 项目分类尚未配置映射，请联系管理员维护')
+      messageApi.error('该 IPM 项目分类尚未配置映射，请联系管理员维护')
     }
     lastAppliedSourceRef.current = `${bid}::${mappedType}`
     applySourceValues(bid, mappedType, true)
@@ -710,7 +711,7 @@ export default function ProjectInfoModal({
     draftSaveTimerRef.current = setTimeout(() => {
       draftSaveTimerRef.current = null
       void persistCreateDraft(session).catch(() => {
-        if (isCurrentCreateDraftSession(session)) message.error('项目草稿自动保存失败')
+        if (isCurrentCreateDraftSession(session)) messageApi.error('项目草稿自动保存失败')
       })
     }, PROJECT_CREATION_DRAFT_SAVE_DELAY_MS)
 
@@ -738,7 +739,7 @@ export default function ProjectInfoModal({
         await persistCreateDraft(session)
         if (isCurrentCreateDraftSession(session)) onCancel()
       } catch {
-        if (isCurrentCreateDraftSession(session)) message.error('项目草稿自动保存失败')
+        if (isCurrentCreateDraftSession(session)) messageApi.error('项目草稿自动保存失败')
       }
       return
     }
@@ -747,7 +748,7 @@ export default function ProjectInfoModal({
       onCancel()
       return
     }
-    Modal.confirm({
+    modalApi.confirm({
       title: '放弃本次填写？',
       content: '关闭后，本次未保存的内容将丢失。',
       okText: '放弃',
@@ -768,7 +769,7 @@ export default function ProjectInfoModal({
     } catch (error) {
       if (!isCurrentCreateDraftSession(session)) return
       setDraftReadStatus(previousReadStatus)
-      message.error('项目草稿清空失败')
+      messageApi.error('项目草稿清空失败')
       throw error
     }
     if (!isCurrentCreateDraftSession(session)) return
@@ -779,7 +780,7 @@ export default function ProjectInfoModal({
   const requestResetCreateDraft = () => {
     if (mode !== 'create' || !draftOwnerId || isDraftInteractionLocked) return
 
-    Modal.confirm({
+    modalApi.confirm({
       title: '重新填写？',
       content: '将清空当前已填写并自动保存的全部内容，此操作不可撤销。',
       okText: '确认清空',
@@ -815,7 +816,7 @@ export default function ProjectInfoModal({
     try {
     const enumState = useEnumStore.getState()
     if (!enumState.hasHydrated || enumState.hydrationError) {
-      message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
+      messageApi.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
       return
     }
     const selectedBid = String(form.getFieldValue('bid') || '')
@@ -831,7 +832,7 @@ export default function ProjectInfoModal({
         { name: 'type', value: undefined, errors: [mappingMessage] },
         { name: 'secondaryCategory', value: undefined, errors: [mappingMessage] },
       ])
-      message.error(mappingMessage)
+      messageApi.error(mappingMessage)
       return
     }
     let values: ProjectInfoFormState
@@ -864,7 +865,7 @@ export default function ProjectInfoModal({
         ? `IPM 映射状态“${submittedStatus}”不在当前配置中，请先维护项目状态配置`
         : '项目状态不在当前配置中，请重新选择'
       form.setFields([{ name: 'status', errors: [statusError] }])
-      message.error(statusError)
+      messageApi.error(statusError)
       return
     }
     const projectSecondaryCategory = normalizedProjectType === PROJECT_CATEGORY_MACHINE
@@ -873,7 +874,7 @@ export default function ProjectInfoModal({
         : String(values.secondaryCategory || '')
       : ''
     if (!normalizedProjectType || (normalizedProjectType === PROJECT_CATEGORY_MACHINE && !projectSecondaryCategory)) {
-      message.error(normalizedProjectType === PROJECT_CATEGORY_MACHINE ? '项目分类和项目二级分类均为必填项' : '项目分类为必填项')
+      messageApi.error(normalizedProjectType === PROJECT_CATEGORY_MACHINE ? '项目分类和项目二级分类均为必填项' : '项目分类为必填项')
       return
     }
     const infoValues = normalizedProjectType === PROJECT_CATEGORY_TECH
@@ -901,7 +902,7 @@ export default function ProjectInfoModal({
           : error instanceof Error ? error.message : 'technicalProject'
         const labels: Record<string, string> = { technicalLead: '技术项目负责人', tmg: 'TMG 及技术领域', subdomain: '子领域', preProjectId: '前置项目', projectYear: '项目年份', deliverable: '交付物' }
         const deliverableLabel = TECHNICAL_DELIVERABLE_FIELDS.find(item => item.key === field)?.label
-        message.error(`请检查${labels[field] || deliverableLabel || '技术项目信息'}`)
+        messageApi.error(`请检查${labels[field] || deliverableLabel || '技术项目信息'}`)
         if (field !== 'deliverable') {
           form.setFields([{ name: field, errors: [`请填写有效的${deliverableLabel || labels[field] || '字段值'}`] }])
           form.scrollToField(field, { block: 'center' })
@@ -913,7 +914,7 @@ export default function ProjectInfoModal({
       form.setFields([{ name: 'firstSaleTosVersion', errors: [machineFamilyError] }])
       setActiveGroups(previous => [...new Set([...previous, 'basic'])])
       setTimeout(() => form.scrollToField('firstSaleTosVersion', { block: 'center' }), 0)
-      message.error(machineFamilyError)
+      messageApi.error(machineFamilyError)
       return
     }
     const editableFieldKeys = new Set(editableFields.map(field => field.key))
@@ -931,13 +932,13 @@ export default function ProjectInfoModal({
       form.setFields(editableErrors.map(error => ({ name: error.fieldKey, errors: [error.message] })))
       setActiveGroups(previous => [...new Set([...previous, first.groupKey])])
       setTimeout(() => form.scrollToField(first.fieldKey, { block: 'center' }), 0)
-      message.error(first.message)
+      messageApi.error(first.message)
       return
     }
 
     const projectName = mode === 'edit' ? project?.name || '' : sourceEntry?.name || ''
     if (!projectName) {
-      message.error('未找到项目名称')
+      messageApi.error('未找到项目名称')
       return
     }
     cancelDraftSave()
@@ -970,7 +971,7 @@ export default function ProjectInfoModal({
         try {
           await clearSubmittedCreateDraft(submitSession)
         } catch {
-          message.error('项目草稿清空失败')
+          messageApi.error('项目草稿清空失败')
           draftClearFailed = true
         }
         if (!isCurrentCreateDraftSession(submitSession)) return

@@ -16,7 +16,7 @@
 import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
 import {
   Card, Tabs, Table, Button, Progress, Tag, Space, Row, Col, Badge,
-  Menu, message, notification, Select, Input, Popconfirm, Tooltip, Modal,
+  App, Menu, notification, Select, Input, Popconfirm, Tooltip, Modal,
   Checkbox, DatePicker, Form, Avatar, Empty, Slider, Alert, Statistic,
   Descriptions, Divider, Radio, Dropdown, Breadcrumb, Collapse,
   Typography, Pagination, Switch
@@ -743,7 +743,8 @@ function getInvalidTaskFields(tasks: any[]): Map<string, InvalidFields> {
 }
 
 export default function ProjectSpaceContainer() {
-  const [containerMessageApi, containerMessageContextHolder] = message.useMessage()
+  const { message: containerMessageApi } = App.useApp()
+  const message = containerMessageApi
   // ═══════ Store hooks ═══════
   const ui = useUiStore()
   const proj = useProjectStore()
@@ -5780,7 +5781,6 @@ export default function ProjectSpaceContainer() {
 
   return (
     <div className="pms-project-space pms-page-shell">
-      {containerMessageContextHolder}
       {/* Header */}
       <ProjectSpaceHeader navigateWithEditGuard={navigateWithEditGuard} />
 
