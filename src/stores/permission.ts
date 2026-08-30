@@ -194,6 +194,14 @@ function buildDefaultRoles(): Role[] {
   return FIXED_ROLES.map(name => ({ name, members: [...(DEFAULT_ROLE_MEMBERS[name] || [])], isFixed: true }))
 }
 
+const withProjectSpecificMockMembers = (projectId: string, roles: Role[]): Role[] => (
+  projectId === '1'
+    ? roles.map(role => role.name === '项目经理'
+      ? { ...role, members: [...new Set([...role.members, '钱九'])] }
+      : role)
+    : roles
+)
+
 function buildDefaultRolePermissions(): Record<string, Record<string, boolean>> {
   const init: Record<string, Record<string, boolean>> = {}
   FIXED_ROLES.forEach(r => {
@@ -319,13 +327,14 @@ function buildInitialPerProject(): {
   initialProjects.forEach(p => {
     const responsiblePersons = getProjectResponsiblePersons(p)
     const specialRoles = p.type === PROJECT_CATEGORY_TECH || p.type === PROJECT_TYPE_TOS_VERSION
-    rolesByProject[p.id] = specialRoles
+    const baseRoles = specialRoles
       ? mergeProjectRoles(p as unknown as RoleProject)
       : buildDefaultRoles().map(role => (
           role.name === '系统管理员'
             ? { ...role, members: responsiblePersons }
             : role
         ))
+    rolesByProject[p.id] = withProjectSpecificMockMembers(p.id, baseRoles)
     rolePermissionsByProject[p.id] = specialRoles
       ? buildPermissionsForRoles(rolesByProject[p.id])
       : buildDefaultRolePermissions()

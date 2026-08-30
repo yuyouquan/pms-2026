@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { hasCallExpression, loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
+const permissionConstants = loadTypeScriptModule(root, 'src/constants/permissions.ts')
 const permissionModule = loadTypeScriptModule(root, 'src/stores/permission.ts')
 const projectModule = loadTypeScriptModule(root, 'src/stores/project.ts')
 
@@ -46,6 +47,26 @@ assert.deepEqual(fixture, { teamMembers: ['A'], permissionMembers: ['A'], respon
 
 const projectStore = projectModule.useProjectStore
 const permissionStore = permissionModule.usePermissionStore
+const seededProjectRoles = permissionStore.getState().rolesByProject
+assert.equal(permissionConstants.ALL_USERS.includes('钱九'), true, '钱九 is available in the shared user selector')
+assert.equal(projectModule.INITIAL_PROJECT_MEMBER_MAP['1'].includes('钱九'), true, '钱九 can see the target project')
+assert.equal(
+  Object.entries(projectModule.INITIAL_PROJECT_MEMBER_MAP)
+    .filter(([projectId]) => projectId !== '1')
+    .some(([, members]) => members.includes('钱九')),
+  false,
+  '钱九 is not a member of any non-target project',
+)
+assert.equal(seededProjectRoles['1'].find(role => role.name === '项目经理')?.members.includes('钱九'), true, '钱九 is a target-project manager')
+assert.equal(
+  Object.entries(seededProjectRoles)
+    .filter(([projectId]) => projectId !== '1')
+    .some(([, roles]) => roles.some(role => role.members.includes('钱九'))),
+  false,
+  '钱九 is absent from every non-target project role',
+)
+assert.deepEqual(seededProjectRoles['3'].find(role => role.name === '项目经理')?.members, ['张三', '赵六'], 'the shared project-manager defaults are unchanged')
+assert.equal(permissionStore.getState().globalRoles.some(role => role.members.includes('钱九')), false, '钱九 has no global role')
 assert.equal(typeof permissionStore.getState().setRolesForProjectGuarded, 'function', 'role mutations expose a guarded store action')
 assert.equal(typeof permissionStore.getState().setRolePermissionsForProjectGuarded, 'function', 'permission mutations expose a guarded store action')
 assert.equal(typeof permissionStore.getState().ensureProjectPermissions, 'function', 'project hydration can backfill missing permission slots')

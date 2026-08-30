@@ -43,7 +43,7 @@ export const DEFAULT_LOGIN_USER = '张三'
 
 // Initial project-member assignment (mock seed; runtime value lives in store state below).
 export const INITIAL_PROJECT_MEMBER_MAP: Record<string, string[]> = {
-  '1': ['张三', '李四', '王五', '赵六', '李白'],
+  '1': ['张三', '李四', '王五', '赵六', '李白', '钱九'],
   '3': ['王五', '赵六', '孙七'],
   '2': ['张三', '李四', '王五', '赵六', '孙七'],
   '6': ['赵六', '李四', '王五'],

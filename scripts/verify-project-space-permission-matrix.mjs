@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
 const root = process.cwd()
 const permissionModuleFile = path.join(root, 'src/components/permission/PermissionModule.tsx')
@@ -94,6 +95,7 @@ function extractRoleBlock(source, role) {
 const moduleSource = readRequiredFile(permissionModuleFile)
 const constantsSource = readRequiredFile(permissionConstantsFile)
 const storeSource = readRequiredFile(permissionStoreFile)
+const permissionModule = loadTypeScriptModule(root, 'src/stores/permission.ts')
 
 assertIncludes(constantsSource, 'PROJECT_PERMISSION_GROUPS', 'project permission matrix config')
 for (const groupLabel of ['基础信息', '一级计划', '权限中心']) {
@@ -130,6 +132,29 @@ for (const [role, enabledKeys] of Object.entries(expectedByRole)) {
     if (shouldEnable && !hasKey) fail(`${role} should enable ${key}`)
     if (!shouldEnable && hasKey) fail(`${role} should not enable ${key}`)
   }
+}
+
+for (const permission of expectedByRole['项目经理']) {
+  if (!permissionModule.hasPermission('钱九', '1', permission)) {
+    fail(`钱九 should inherit target-project manager permission ${permission}`)
+  }
+  if (!permissionModule.hasPermission('张三', '1', permission)) {
+    fail(`张三 global-administrator permission regressed for ${permission}`)
+  }
+}
+
+for (const permission of ['basicInfo:编辑', 'plan:一级计划-编辑', 'projectPermission:manageRoles']) {
+  if (permissionModule.hasPermission('钱九', '2', permission)) {
+    fail(`钱九 must not receive ${permission} outside project 1`)
+  }
+  if (permissionModule.hasPermission('李四', '1', permission)) {
+    fail(`李四 must remain a regular member without ${permission}`)
+  }
+}
+
+if (!permissionModule.hasPermission('李四', '1', 'basicInfo:查看')) fail('李四 should retain regular-member basic read access')
+for (const permission of ['roadmap:view', 'configCenter:planEdit', 'permissionCenter:manageRoles']) {
+  if (permissionModule.hasGlobalPermission('钱九', permission)) fail(`钱九 must not receive global permission ${permission}`)
 }
 
 console.log('Project-space permission matrix is aligned with the required table.')
