@@ -184,6 +184,8 @@ import {
   canMaintainLevel1Plan,
   canMutateLevel1TaskStructure,
   deleteLevel1GovernedTask,
+  getNextMachineMrBusinessName,
+  getNextTosBusinessVersionName,
   getLevel1StructurePermissions,
   insertLevel1BusinessNode,
   isBusinessStage,
@@ -192,7 +194,6 @@ import {
   renumberLevel1Tasks,
   reorderLevel1BusinessNodes,
   validateLevel1ScheduleDates,
-  validateTosBusinessVersionName,
   parseTosProjectVersionPrefix,
   type Level1PlanTask,
 } from '@/lib/level1PlanRules'
@@ -279,9 +280,9 @@ type Level1StructureScopeToken = ProjectSpaceLevel1ScopeToken & {
 
 type Level1InsertionDialog = {
   kind: 'business' | 'stage' | 'child'
-  phase: 'confirm' | 'name'
   token: Level1StructureScopeToken
   taskName: string
+  error: string
 }
 
 type Level1ReorderDialog = {
@@ -3457,19 +3458,16 @@ export default function ProjectSpaceContainer() {
 
   const openLevel1Insertion = (kind: Level1InsertionDialog['kind'], parentStableId = '') => {
     const token = createLevel1StructureToken(parentStableId)
-    if (!token) return
-    const maximumMr = effectiveTasks.reduce((maximum: number, task: any) => {
-      const match = /^MR(\d+)$/.exec(task.taskName)
-      return match ? Math.max(maximum, Number(match[1])) : maximum
-    }, 3)
-    const tosPrefix = parseTosProjectVersionPrefix(selectedProject?.name || '')?.prefix
+    if (!token || !selectedProject) return
     setLevel1InsertionDialog({
       kind,
-      phase: kind === 'business' ? 'confirm' : 'name',
       token,
       taskName: kind === 'business'
-        ? isWholeMachineProject ? `MR${maximumMr + 1}` : tosPrefix ? `${tosPrefix}.005` : ''
+        ? isWholeMachineProject
+          ? getNextMachineMrBusinessName(effectiveTasks)
+          : getNextTosBusinessVersionName(selectedProject.name, effectiveTasks)
         : kind === 'stage' ? '新阶段' : '新子节点',
+      error: '',
     })
   }
 
@@ -3478,7 +3476,7 @@ export default function ProjectSpaceContainer() {
     if (!dialog) return
     const latest = getLatestLevel1MutationContext(dialog.token)
     if (!latest) {
-      setLevel1InsertionDialog(null)
+      setLevel1InsertionDialog(previous => previous ? { ...previous, error: '计划状态或操作范围已变化，请取消后重新操作' } : previous)
       void message.warning('计划状态或操作范围已变化，请重新操作')
       return
     }
@@ -3494,20 +3492,24 @@ export default function ProjectSpaceContainer() {
     })
     const canAdd = dialog.kind === 'stage' ? permissions.canAddStage : permissions.canAddChild
     if (!canAdd || (dialog.kind !== 'stage' && !parent)) {
-      setLevel1InsertionDialog(null)
+      setLevel1InsertionDialog(previous => previous ? { ...previous, error: '结构权限或父阶段已变化，请取消后重新操作' } : previous)
       void message.warning('结构权限或父阶段已变化，请重新操作')
-      return
-    }
-    if (dialog.phase === 'confirm') {
-      setLevel1InsertionDialog(previous => previous ? { ...previous, phase: 'name' } : previous)
       return
     }
     const taskName = dialog.taskName.trim()
     if (!taskName) {
+      setLevel1InsertionDialog(previous => previous ? { ...previous, error: '请输入节点名称' } : previous)
       void message.error('请输入节点名称')
       return
     }
     if (dialog.kind === 'business') {
+      const scheduleValidation = validateLevel1ScheduleDates(latest.tasks)
+      if (!scheduleValidation.valid) {
+        const error = '计划中已有日期顺序错误，请先修正后再新增业务节点'
+        setLevel1InsertionDialog(previous => previous ? { ...previous, error } : previous)
+        void message.error(error)
+        return
+      }
       const result = insertLevel1BusinessNode(latest.tasks, {
         projectType: latest.project.type,
         projectName: latest.project.name,
@@ -3516,6 +3518,7 @@ export default function ProjectSpaceContainer() {
         now: Date.now(),
       })
       if (!result.ok) {
+        setLevel1InsertionDialog(previous => previous ? { ...previous, error: result.message } : previous)
         void message.error(result.message)
         return
       }
@@ -3546,6 +3549,7 @@ export default function ProjectSpaceContainer() {
 
   const renderLevel1StructureActions = () => {
     if (!selectedProject || !isCurrentDraft || !isEditMode || followedTosLevel1ReadOnly) return null
+    const tosPrefix = parseTosProjectVersionPrefix(selectedProject.name)?.prefix || '项目版本'
     const addStagePermission = getLevel1StructurePermissions({
       projectType: selectedProject.type,
       isDraft: isCurrentDraft,
@@ -3563,15 +3567,23 @@ export default function ProjectSpaceContainer() {
           <Modal
             open
             title={level1InsertionDialog.kind === 'business'
-              ? level1InsertionDialog.phase === 'confirm'
-                ? isWholeMachineProject ? '是否添加 MR 里程碑？' : '是否添加 tOS 版本？'
-                : isWholeMachineProject ? '输入 MR 里程碑名称' : '输入 tOS 版本名称'
+              ? isWholeMachineProject ? '输入 MR 里程碑名称' : '输入 tOS 版本名称'
               : level1InsertionDialog.kind === 'stage' ? '确认添加一级阶段？' : '确认添加子节点？'}
-            okText={level1InsertionDialog.phase === 'confirm' ? '下一步' : '确认添加'}
+            okText="确认添加"
             cancelText="取消"
             onCancel={() => setLevel1InsertionDialog(null)}
             onOk={confirmLevel1Insertion}
           >
+            {level1InsertionDialog.kind === 'business' && (
+              <Alert
+                type="info"
+                showIcon
+                title={isWholeMachineProject
+                  ? '格式：MR+正整数，不允许前导0；示例：MR1、MR2。'
+                  : `格式：${tosPrefix}.XXX，XXX为三位数字，末位必须为0或5。`}
+                style={{ marginBottom: 12 }}
+              />
+            )}
             {level1InsertionDialog.kind === 'child' && (
               <Select
                 aria-label="子节点父阶段"
@@ -3585,21 +3597,26 @@ export default function ProjectSpaceContainer() {
                 style={{ width: '100%', marginBottom: 12 }}
               />
             )}
-            {level1InsertionDialog.phase === 'name' && (
+            <Space orientation="vertical" size={4} style={{ width: '100%' }}>
               <Input
                 aria-label="业务节点名称"
                 value={level1InsertionDialog.taskName}
                 placeholder={level1InsertionDialog.kind === 'business' && isTosVersionProject
                   ? `请输入 ${parseTosProjectVersionPrefix(selectedProject.name)?.prefix || '项目版本'}.XXX，尾号为0或5`
                   : '请输入节点名称'}
-                status={level1InsertionDialog.kind === 'business' && (
-                  isWholeMachineProject
-                    ? !/^MR\d+$/.test(level1InsertionDialog.taskName)
-                    : !validateTosBusinessVersionName(selectedProject.name, level1InsertionDialog.taskName).valid
-                ) ? 'error' : undefined}
-                onChange={event => setLevel1InsertionDialog(previous => previous ? { ...previous, taskName: event.target.value } : previous)}
+                status={level1InsertionDialog.error ? 'error' : undefined}
+                onChange={event => setLevel1InsertionDialog(previous => previous ? {
+                  ...previous,
+                  taskName: event.target.value,
+                  error: '',
+                } : previous)}
               />
-            )}
+              {level1InsertionDialog.error && (
+                <Typography.Text aria-label="业务节点名称错误" role="alert" type="danger">
+                  {level1InsertionDialog.error}
+                </Typography.Text>
+              )}
+            </Space>
           </Modal>
         )}
       </>

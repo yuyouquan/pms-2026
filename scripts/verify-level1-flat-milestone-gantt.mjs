@@ -1360,11 +1360,22 @@ for (const tokenField of ['projectId', 'scopeKind', 'scopeValue', 'versionId', '
   assert.match(projectSpaceSource, new RegExp(`${tokenField}[:;,]`), `structure token covers ${tokenField}`)
 }
 assert.match(projectSpaceSource, /getLatestLevel1MutationContext\(dialog\.token\)/, 'confirmation revalidates the full live structure token before mutation')
-assert.match(projectSpaceSource, /phase:\s*'confirm'/, 'business insertion starts with a confirmation-only phase')
-assert.match(projectSpaceSource, /是否添加 MR 里程碑？/, 'machine insertion first asks whether to add')
-assert.match(projectSpaceSource, /是否添加 tOS 版本？/, 'tOS insertion first asks whether to add')
-assert.match(projectSpaceSource, /输入 MR 里程碑名称/, 'machine insertion collects its name only in the second dialog')
-assert.match(projectSpaceSource, /输入 tOS 版本名称/, 'tOS insertion collects its name only in the second dialog')
+assert.match(browserSource, /page\.on\('requestfailed'/, 'browser acceptance records failed requests')
+assert.match(browserSource, /page\.on\('response'[\s\S]{0,180}response\.status\(\) >= 400/, 'browser acceptance records HTTP failures')
+assert.doesNotMatch(projectSpaceSource, /phase:\s*'confirm'\s*\|\s*'name'/, 'business insertion has no two-step dialog phase state')
+assert.doesNotMatch(projectSpaceSource, /是否添加 MR 里程碑|是否添加 tOS 版本|下一步/, 'business insertion has no confirmation-only first dialog')
+assert.match(projectSpaceSource, /输入 MR 里程碑名称/, 'machine insertion opens the name dialog immediately')
+assert.match(projectSpaceSource, /输入 tOS 版本名称/, 'tOS insertion opens the name dialog immediately')
+assert.match(projectSpaceSource, /getNextMachineMrBusinessName\(effectiveTasks\)/, 'every machine dialog opening derives its default from current effective tasks')
+assert.match(projectSpaceSource, /getNextTosBusinessVersionName\(selectedProject\.name, effectiveTasks\)/, 'every tOS dialog opening derives its default from the current project and effective tasks')
+assert.match(projectSpaceSource, /格式：MR\+正整数，不允许前导0；示例：MR1、MR2。/, 'machine name dialog displays the exact naming rule')
+assert.match(projectSpaceSource, /格式：\$\{tosPrefix\}\.XXX，XXX为三位数字，末位必须为0或5。/, 'tOS name dialog displays the exact current-prefix naming rule')
+assert.match(projectSpaceSource, /error:\s*string/, 'business insertion dialog owns a durable inline error')
+const level1InsertionOpenSource = projectSpaceSource.slice(
+  projectSpaceSource.indexOf('const openLevel1Insertion'),
+  projectSpaceSource.indexOf('const confirmLevel1Insertion'),
+)
+assert.doesNotMatch(level1InsertionOpenSource, /writeTasks|planStartDate|planEndDate|actualStartDate|actualEndDate/, 'opening the insertion dialog cannot mutate tasks or dates')
 const level1InsertionSource = projectSpaceSource.slice(
   projectSpaceSource.indexOf('const confirmLevel1Insertion'),
   projectSpaceSource.indexOf('const renderGanttChart'),
@@ -1373,6 +1384,10 @@ assert.ok(level1InsertionSource.startsWith('const confirmLevel1Insertion'), 'lev
 assert.doesNotMatch(level1InsertionSource, /Promise\.reject\(/, 'invalid level-one names never reject an AntD onOk promise')
 assert.match(level1InsertionSource, /if \(!taskName\)[\s\S]{0,180}message\.error\('请输入节点名称'\)[\s\S]{0,80}return/, 'an empty level-one name leaves the controlled dialog open')
 assert.match(level1InsertionSource, /if \(!result\.ok\)[\s\S]{0,180}message\.error\(result\.message\)[\s\S]{0,80}return/, 'invalid machine/tOS business names leave the controlled dialog open')
+assert.match(level1InsertionSource, /validateLevel1ScheduleDates\(latest\.tasks\)/, 'business insertion revalidates the live task date order before mutation')
+assert.match(level1InsertionSource, /status=\{level1InsertionDialog\.error \? 'error' : undefined\}/, 'a rejected name renders an explicit red input state')
+assert.match(level1InsertionSource, /error:\s*''/, 'typing a new value clears the previous inline error')
+assert.match(level1InsertionSource, /aria-label="业务节点名称错误"[\s\S]{0,80}role="alert"/, 'the rejected name has a clear inline error below the input')
 assert.match(level1InsertionSource, /onOk=\{confirmLevel1Insertion\}/, 'the insertion Modal delegates confirmation without an async rejection contract')
 assert.match(projectSpaceSource, /level1ReorderDialog/, 'tree reorder is held in controlled confirmation state')
 assert.match(projectSpaceSource, /确认调整节点顺序？/, 'tree reorder requires explicit confirmation')

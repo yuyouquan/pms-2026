@@ -576,6 +576,10 @@ const assertBusinessNameRejected = async (page, table, { dialogTitle, name, expe
     .some(node => node.getBoundingClientRect().width > 0 && node.textContent?.trim() === text), { timeout: TIMEOUT }, expectedMessage)
   assert.equal(await latestMessageText(page), expectedMessage, `${name} is rejected with the exact public validation message`)
   assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), name, `${name} rejection keeps the name dialog open`)
+  assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => (
+    node.classList.contains('ant-input-status-error') || Boolean(node.closest('.ant-input-status-error'))
+  )), true, `${name} rejection renders the business-name input in red`)
+  assert.equal(await page.$eval('[aria-label="业务节点名称错误"]', node => node.textContent?.trim()), expectedMessage, `${name} rejection displays the exact inline error below the input`)
   assert.equal(await countTreeTaskName(page, table, name), beforeCount, `${name} rejection does not write another tree row`)
 }
 const assertTosBusinessNameRejected = async (page, table, name, expectedMessage) => {
@@ -595,11 +599,26 @@ const renameBusinessNode = async (page, oldName, nextName) => {
 const openBusinessInsertion = async (page, projectKind, parentStage) => {
   await pressAriaButton(page, `添加业务节点 ${parentStage}`)
   const isTos = projectKind === 'tos'
-  const actionLabel = isTos ? '添加tOS版本' : '添加MR里程碑'
-  await page.waitForFunction(label => document.body.innerText.includes(label), { timeout: TIMEOUT }, actionLabel === '添加tOS版本' ? '是否添加 tOS 版本？' : '是否添加 MR 里程碑？')
+  const dialogTitle = isTos ? '输入 tOS 版本名称' : '输入 MR 里程碑名称'
+  await page.waitForFunction(title => [...document.querySelectorAll('[role="dialog"]')].some(dialog => {
+    const rect = dialog.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0
+      && dialog.querySelector('.ant-modal-title')?.textContent?.trim() === title
+  }), { timeout: TIMEOUT }, dialogTitle)
   assert.equal(await page.$('[aria-label="业务父阶段"]'), null, `${parentStage} row action fixes its parent without a selector`)
-  await clickDialogButton(page, actionLabel === '添加tOS版本' ? '是否添加 tOS 版本？' : '是否添加 MR 里程碑？', '下一步')
-  await page.waitForFunction(label => document.body.innerText.includes(label), { timeout: TIMEOUT }, actionLabel === '添加tOS版本' ? '输入 tOS 版本名称' : '输入 MR 里程碑名称')
+  const dialogState = await page.$eval('[role="dialog"]', (dialog, expectedTitle) => ({
+    title: dialog.querySelector('.ant-modal-title')?.textContent?.trim() || '',
+    buttons: [...dialog.querySelectorAll('button')].map(button => button.textContent?.trim() || ''),
+    text: dialog.textContent || '',
+    expectedTitle,
+  }), dialogTitle)
+  assert.equal(dialogState.title, dialogTitle, `${projectKind} business insertion opens the name dialog on the first modal`)
+  assert.ok(!dialogState.buttons.includes('下一步'), `${projectKind} business insertion has no first-step Next action`)
+  const defaultName = await page.$eval('[aria-label="业务节点名称"]', node => node.value)
+  const expectedRule = isTos
+    ? `格式：${defaultName.split('.').slice(0, -1).join('.')}.XXX，XXX为三位数字，末位必须为0或5。`
+    : '格式：MR+正整数，不允许前导0；示例：MR1、MR2。'
+  assert.ok(dialogState.text.includes(expectedRule), `${projectKind} business insertion displays its exact naming rule`)
 }
 const differenceDays = (start, end) => Math.round((new Date(`${end}T00:00:00Z`) - new Date(`${start}T00:00:00Z`)) / 86_400_000)
 const visibleMarketScopes = async page => page.$$eval('[role="button"][aria-label^="市场 "]', nodes => nodes
@@ -1272,7 +1291,7 @@ const reopenProjectInContext = async (page, errors, project, tab) => {
   return reopened
 }
 
-const assertNoErrors = errors => assert.deepEqual(errors, [], `browser errors:\n${errors.join('\n')}`)
+const assertNoErrors = errors => assert.deepEqual(errors, [], `browser console/page/request/HTTP errors:\n${errors.join('\n')}`)
 
 const attachPageChecks = (page, errors) => {
   PAGE_ERRORS.set(page, errors)
@@ -1282,6 +1301,10 @@ const attachPageChecks = (page, errors) => {
     if (!['error', 'warn'].includes(message.type())) return
     if (isAllowedConsoleMessage(message)) return
     errors.push(`${message.type()}: ${message.text()}`)
+  })
+  page.on('requestfailed', request => errors.push(`requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText || ''}`))
+  page.on('response', response => {
+    if (response.status() >= 400) errors.push(`http ${response.status()}: ${response.request().method()} ${response.url()}`)
   })
 }
 
@@ -1307,7 +1330,7 @@ const runCase = async (title, test) => {
       ]).finally(() => clearTimeout(watchdog))
       await wait(350)
       assertNoErrors(errors)
-      console.log(`PASS browser ${title}; console/page errors 0`)
+      console.log(`PASS browser ${title}; console/page/request/HTTP errors 0`)
     } finally {
       try {
         await context.close()
@@ -1441,14 +1464,24 @@ try {
 
     assert.equal(await page.$('button[aria-label="添加MR里程碑"]'), null, 'machine toolbar no longer exposes the legacy MR insertion action')
     const machineBusinessParent = '生命周期阶段'
+    const machineTableBeforeCancelledOpen = await textOf(page, table)
     await openBusinessInsertion(page, 'machine', machineBusinessParent)
-    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), 'MR4', 'machine name phase offers the next validated MR name')
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), 'MR1', 'the first machine name dialog proposes MR1')
+    await clickDialogButton(page, '输入 MR 里程碑名称', '取消')
+    await waitForDialogToClose(page, '输入 MR 里程碑名称')
+    assert.equal(await textOf(page, table), machineTableBeforeCancelledOpen, 'opening and cancelling the machine dialog does not mutate tasks or dates')
+    await openBusinessInsertion(page, 'machine', machineBusinessParent)
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), 'MR1', 'every machine dialog opening recalculates the next name from live tasks')
     await assertBusinessNameRejected(page, table, {
       dialogTitle: '输入 MR 里程碑名称',
-      name: 'MRX',
-      expectedMessage: '整机业务节点名称必须为 MR 加数字（例如 MR0、MR01 或 MR1）',
+      name: 'MR01',
+      expectedMessage: '格式：MR+正整数，不允许前导0；示例：MR1、MR2。',
     })
     await replaceAriaInputValue(page, '业务节点名称', 'MR4')
+    assert.equal(await page.$('[aria-label="业务节点名称错误"]'), null, 'changing the machine name clears the previous inline error')
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => (
+      node.classList.contains('ant-input-status-error') || Boolean(node.closest('.ant-input-status-error'))
+    )), false, 'changing the machine name clears the red input state')
     await clickButtonText(page, '确认添加')
     await page.waitForFunction(() => document.body.innerText.includes('MR4'), { timeout: TIMEOUT })
     await waitForDialogToClose(page, '输入 MR 里程碑名称')
@@ -2031,8 +2064,8 @@ try {
     ]) await editTreeDate(page, table, '16.1.0.115', field, value)
     assert.equal(await page.$('button[aria-label="添加tOS版本"]'), null, 'tOS toolbar no longer exposes the legacy business insertion action')
     await openBusinessInsertion(page, 'tos', '上市迭代阶段')
-    const tosBusinessName = await page.$eval('[aria-label="业务节点名称"]', node => node.value)
-    assert.equal(tosBusinessName, '16.1.0.005', 'tOS business version proposes the first legal project-prefix tail')
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), '16.1.0.120', 'tOS business version proposes the current legal maximum plus five')
+    const tosBusinessName = '16.1.0.005'
     const tosNameValidationMessage = '版本号必须符合 16.1.0.XXX，且尾号最后一位为0或5'
     await assertTosBusinessNameRejected(page, table, '16.2.0.005', tosNameValidationMessage)
     await assertTosBusinessNameRejected(page, table, '16.1.0.003', tosNameValidationMessage)
@@ -2043,6 +2076,7 @@ try {
     await page.waitForFunction((selector, taskName) => document.querySelector(selector)?.textContent?.includes(taskName), { timeout: TIMEOUT }, table, tosBusinessName)
     assert.ok(await page.$(`button[aria-label="删除节点 ${tosBusinessName}"]`), 'custom tOS business version has a delete affordance')
     await openBusinessInsertion(page, 'tos', '上市迭代阶段')
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), '16.1.0.120', 'every tOS dialog opening recalculates the next name from live valid same-prefix tasks')
     await replaceAriaInputValue(page, '业务节点名称', tosBusinessName)
     await assertTosBusinessNameRejected(page, table, tosBusinessName, '一级计划中已存在同名业务节点')
     await page.keyboard.press('Escape')
@@ -2197,6 +2231,7 @@ try {
     await selectView(page, '竖版表格')
     await ensureDraft(page)
     await openBusinessInsertion(page, 'tos', '上市迭代阶段')
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), '16.3.0.155', 'tOS16.3 proposes its current legal maximum plus five')
     const tos163Message = '版本号必须符合 16.3.0.XXX，且尾号最后一位为0或5'
     await assertTosBusinessNameRejected(page, table, '16.3.0.126', tos163Message)
     await replaceAriaInputValue(page, '业务节点名称', '16.3.0.125')
@@ -2228,6 +2263,7 @@ try {
     await selectView(page, '竖版表格')
     await ensureDraft(page)
     await openBusinessInsertion(page, 'tos', '上市迭代阶段')
+    assert.equal(await page.$eval('[aria-label="业务节点名称"]', node => node.value), '17.0.0.120', 'controlled tOS17.0 proposes its current legal maximum plus five')
     const tos170Message = '版本号必须符合 17.0.0.XXX，且尾号最后一位为0或5'
     await assertTosBusinessNameRejected(page, table, '16.3.0.126', tos170Message)
     await replaceAriaInputValue(page, '业务节点名称', '17.0.0.125')
