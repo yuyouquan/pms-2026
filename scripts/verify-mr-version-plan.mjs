@@ -544,6 +544,23 @@ assert.match(tosMrVersionPlanSource, /addTosVersionInstance/)
 assert.match(tosMrVersionPlanSource, /updateTosDate/)
 assert.match(tosMrVersionPlanSource, /if\s*\(!updated\)/)
 
+// tOS version search is display-only: filtering never narrows add candidates or write access.
+assert.match(tosMrVersionPlanSource, /const\s*\[versionQuery,\s*setVersionQuery\]\s*=\s*useState\(['"]['"]\)/)
+assert.match(
+  tosMrVersionPlanSource,
+  /const\s+visibleInstances\s*=\s*useMemo\([\s\S]*versionQuery\.trim\(\)\.toLocaleLowerCase\(\)[\s\S]*sortedInstances\.filter\([\s\S]*tosVersion\.toLocaleLowerCase\(\)\.includes\(query\)[\s\S]*:\s*sortedInstances[\s\S]*\[sortedInstances,\s*versionQuery\]/,
+)
+assert.match(tosMrVersionPlanSource, /usedVersions:\s*sortedInstances\.map\(/)
+assert.match(tosMrVersionPlanSource, /new Map\(sortedInstances\.map\(/)
+assert.match(tosMrVersionPlanSource, /visibleInstances\.forEach\(instance\s*=>/)
+assert.match(tosMrVersionPlanSource, /const rows:\s*MrPlanGridRow\[\]\s*=\s*visibleInstances\.map\(/)
+assert.match(tosMrVersionPlanSource, /<Input\.Search[\s\S]*allowClear[\s\S]*aria-label=['"]搜索tOS版本号['"][\s\S]*value=\{versionQuery\}[\s\S]*onChange=\{event\s*=>\s*setVersionQuery\(event\.target\.value\)\}/)
+assert.match(tosMrVersionPlanSource, /<Input\.Search[\s\S]*aria-label=['"]搜索tOS版本号['"][\s\S]*<Button[\s\S]*aria-label=['"]新增tOS版本号['"]/, '搜索输入必须位于新增按钮左侧')
+assert.match(tosMrVersionPlanSource, /description=\{versionQuery\.trim\(\)\s*\?\s*['"]未找到匹配的tOS版本号['"]\s*:\s*['"]暂无MR版本计划['"]\}/)
+assert.match(tosMrVersionPlanSource, /<MrPlanGrid[\s\S]*logicalRows=\{rows\}/)
+assert.doesNotMatch(tosMrVersionPlanSource, /useMrVersionPlanStore\([^\n]*versionQuery/)
+assert.doesNotMatch(tosMrVersionPlanSource, /localStorage[\s\S]*versionQuery|versionQuery[\s\S]*localStorage/)
+
 assert.match(mrPlanGridSource, /export interface MrPlanGridProps/)
 assert.match(mrPlanGridSource, /mode:\s*MrPlanViewMode/)
 assert.match(mrPlanGridSource, /editableCell:/)

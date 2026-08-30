@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Empty, Modal, Radio, Select, Space, Spin, Tag, Tooltip, message } from 'antd'
+import { Button, Card, Empty, Input, Modal, Radio, Select, Space, Spin, Tag, Tooltip, message } from 'antd'
 import { AppstoreOutlined, PlusOutlined, TableOutlined } from '@ant-design/icons'
 import type { ProjectItem } from '@/types/app'
 import type { TosTypeConfigRow, TosTypeVersionsState } from '@/lib/tosTypeRules'
@@ -65,6 +65,7 @@ export default function TosMrVersionPlan({
   const [hydrated, setHydrated] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [selectedVersion, setSelectedVersion] = useState<string>()
+  const [versionQuery, setVersionQuery] = useState('')
   const templateVersions = useMrVersionPlanStore(state => state.templateVersions)
   const instances = useMrVersionPlanStore(state => state.tosInstancesByProjectId[project.id] ?? [])
   const viewModeByScope = useMrVersionPlanStore(state => state.viewModeByScope)
@@ -91,6 +92,12 @@ export default function TosMrVersionPlan({
     () => [...instances].sort((left, right) => compareTosVersionNumbers(left.tosVersion, right.tosVersion)),
     [instances],
   )
+  const visibleInstances = useMemo(() => {
+    const query = versionQuery.trim().toLocaleLowerCase()
+    return query
+      ? sortedInstances.filter(instance => instance.tosVersion.toLocaleLowerCase().includes(query))
+      : sortedInstances
+  }, [sortedInstances, versionQuery])
   const candidates = useMemo(() => source ? selectTosMrVersionCandidates({
     versions: source.versions,
     getSnapshot: source.getSnapshot,
@@ -113,7 +120,7 @@ export default function TosMrVersionPlan({
   ])), [candidates, sortedInstances])
   const cellErrors = useMemo(() => {
     const result: Record<string, string[]> = {}
-    sortedInstances.forEach(instance => {
+    visibleInstances.forEach(instance => {
       const access = instanceAccessByVersion.get(instance.tosVersion)
       if (!access?.canEdit) {
         instance.activities
@@ -131,8 +138,8 @@ export default function TosMrVersionPlan({
       })
     })
     return result
-  }, [instanceAccessByVersion, sortedInstances])
-  const rows: MrPlanGridRow[] = sortedInstances.map(instance => ({
+  }, [instanceAccessByVersion, visibleInstances])
+  const rows: MrPlanGridRow[] = visibleInstances.map(instance => ({
     key: `${instance.projectId}::${instance.tosVersion}`,
     version: instance.tosVersion,
     activities: instance.activities,
@@ -184,6 +191,14 @@ export default function TosMrVersionPlan({
       {messageContextHolder}
       <div className="pms-mr-project-toolbar">
         <Space size={8}>
+          <Input.Search
+            allowClear
+            aria-label="搜索tOS版本号"
+            placeholder="搜索tOS版本号"
+            value={versionQuery}
+            onChange={event => setVersionQuery(event.target.value)}
+            style={{ width: 240 }}
+          />
           {permission.canEditTos && (
             <Tooltip title={noTemplate ? NO_TEMPLATE_MESSAGE : undefined}>
               <span>
@@ -223,7 +238,12 @@ export default function TosMrVersionPlan({
           cellErrors={cellErrors}
           onDateChange={(row, activity, value) => handleDateChange(row, activity.id, value)}
         />
-      ) : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无MR版本计划" />}
+      ) : (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={versionQuery.trim() ? '未找到匹配的tOS版本号' : '暂无MR版本计划'}
+        />
+      )}
 
       <Modal
         title="新增tOS版本号"

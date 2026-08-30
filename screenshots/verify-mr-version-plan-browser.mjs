@@ -147,8 +147,14 @@ page.setDefaultTimeout(TIMEOUT)
 await page.evaluateOnNewDocument(installDeterministicBrowserEnvironment, FIXED_BROWSER_NOW)
 
 const browserErrors = []
+const failedRequests = []
+const failedHttpResponses = []
 page.on('pageerror', error => browserErrors.push(`pageerror: ${error.message}`))
 page.on('console', message => { if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`) })
+page.on('requestfailed', request => failedRequests.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText ?? 'unknown error'}`))
+page.on('response', response => {
+  if (response.status() >= 400) failedHttpResponses.push(`${response.status()} ${response.request().method()} ${response.url()}`)
+})
 
 const pass = (step, label) => console.log(`${STEP_MARKERS[step - 1]} ${label}`)
 async function waitForStableEvidence() {
@@ -726,11 +732,45 @@ try {
   await clickVisibleText('计划')
   await clickVisibleText('三级计划-MR版本计划', '[role="tab"],button,span')
   await page.waitForSelector('.pms-mr-project-card', { visible: true })
+  const searchSelector = 'input[aria-label="搜索tOS版本号"]'
+  const searchStorageBefore = await page.evaluate(() => window.localStorage.getItem('pms-mr-version-plan-store'))
+  await page.waitForSelector(searchSelector, { visible: true })
+  await page.type(searchSelector, '145')
+  await page.waitForFunction(() => {
+    const versions = [...document.querySelectorAll('.pms-mr-plan-grid--vertical tbody tr[data-mr-tos-version]')]
+      .map(row => row.getAttribute('data-mr-tos-version'))
+    return versions.length > 0 && [...new Set(versions)].join(',') === '16.3.0.145'
+  })
+  assert.equal(await page.evaluate(() => window.localStorage.getItem('pms-mr-version-plan-store')), searchStorageBefore)
+  await clickVisibleText('横版', 'label,button,span')
+  await page.waitForSelector('[aria-label="MR版本计划横版表格"]', { visible: true })
+  assert.deepEqual(
+    await page.$$eval('.pms-mr-plan-grid--horizontal tbody tr[data-mr-tos-version]', rows => rows.map(row => row.getAttribute('data-mr-tos-version'))),
+    ['16.3.0.145'],
+  )
+  const searchCleared = await page.$eval(searchSelector, input => {
+    const clear = input.closest('.ant-input-search')?.querySelector('.ant-input-clear-icon')
+    if (!clear) return false
+    clear.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+    clear.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    clear.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    clear.click()
+    return true
+  })
+  assert.equal(searchCleared, true, '搜索框暴露 allowClear 操作')
+  await page.waitForFunction(() => {
+    const versions = [...document.querySelectorAll('.pms-mr-plan-grid--horizontal tbody tr[data-mr-tos-version]')]
+      .map(row => row.getAttribute('data-mr-tos-version'))
+    return [...new Set(versions)].sort().join(',') === '16.3.0.140,16.3.0.145'
+  })
+  assert.equal(await page.$eval(searchSelector, input => input.value), '')
+  assert.equal(Object.hasOwn((await readMrState()), 'versionQuery'), false)
   await page.click('button[aria-label="新增tOS版本号"]')
   await page.click('[aria-label="选择tOS版本号"]')
   await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { visible: true })
   const candidateState = await page.evaluate(() => [...document.querySelectorAll('.ant-select-item-option')].map(node => ({ text: node.textContent?.trim(), disabled: node.classList.contains('ant-select-item-option-disabled') })))
   assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.140') && item.disabled && item.text.includes('该tOS版本号已添加')))
+  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.145') && item.disabled && item.text.includes('该tOS版本号已添加')))
   assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.150') && item.disabled && item.text.includes('请先完善一级计划中的计划开始时间和计划完成时间')))
   await page.keyboard.press('Escape')
   await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { hidden: true })
@@ -745,6 +785,8 @@ try {
   await page.mouse.click(cancelBox.x, cancelBox.y)
   await page.waitForSelector('[role="dialog"]', { hidden: true })
   await wait(300)
+  await clickVisibleText('竖版', 'label,button,span')
+  await page.waitForSelector('[aria-label="MR版本计划竖版表格"]', { visible: true })
   pass(11, 'add-version modal explains used and incomplete candidates')
 
   await screenshot('tos-vertical.png')
@@ -891,6 +933,8 @@ try {
   pass(15, 'legacy standalone level-three UI and storage are absent')
 
   assert.deepEqual(browserErrors, [], `unexpected browser errors:\n${browserErrors.join('\n')}`)
+  assert.deepEqual(failedRequests, [], `unexpected failed requests:\n${failedRequests.join('\n')}`)
+  assert.deepEqual(failedHttpResponses, [], `unexpected HTTP error responses:\n${failedHttpResponses.join('\n')}`)
   validateScreenshotEvidence(OUTPUT)
   if (process.env.PMS_FORCE_FAILURE_AFTER_SCREENSHOTS === '1') {
     throw new Error('controlled MR acceptance failure after screenshot validation')
@@ -902,6 +946,8 @@ try {
 } catch (error) {
   console.error(error?.stack || error)
   if (browserErrors.length) console.error(`browser errors:\n${browserErrors.join('\n')}`)
+  if (failedRequests.length) console.error(`failed requests:\n${failedRequests.join('\n')}`)
+  if (failedHttpResponses.length) console.error(`HTTP error responses:\n${failedHttpResponses.join('\n')}`)
   if (fs.existsSync(OUTPUT) && fs.readdirSync(OUTPUT).length > 0) console.error(`MR screenshot evidence preserved after failure: ${OUTPUT}`)
   process.exitCode = 1
 } finally {
