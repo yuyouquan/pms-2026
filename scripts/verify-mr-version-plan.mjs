@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import ts from 'typescript'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
@@ -11,10 +12,8 @@ const templateMocksSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
 const task13PackageJson = JSON.parse(readSource(root, 'package.json'))
 const mrBrowserVerifierSource = readSource(root, 'screenshots/verify-mr-version-plan-browser.mjs')
 const planRules = loadTypeScriptModule(root, 'src/lib/mrVersionPlanRules.ts')
-const planRulesSource = readSource(root, 'src/lib/mrVersionPlanRules.ts')
 const aggregationRules = loadTypeScriptModule(root, 'src/lib/mrAggregationRules.ts')
 const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
-const dateRulesSource = readSource(root, 'src/lib/mrDateRules.ts')
 const adapter = loadTypeScriptModule(root, 'src/lib/mrPlanSourceAdapters.ts')
 const shanghaiBusinessDate = loadTypeScriptModule(root, 'src/lib/shanghaiBusinessDate.ts')
 const templateCompare = loadTypeScriptModule(root, 'src/lib/mrTemplateCompare.ts')
@@ -43,16 +42,110 @@ const templateCompatibility = loadTypeScriptModule(root, 'src/lib/projectTemplat
 const machineMrVersionPlanSource = readSource(root, 'src/components/plans/MachineMrVersionPlan.tsx')
 const NOW = '2026-08-29T08:00:00.000Z'
 
-// Comparison errors must use one required-boundary constructor. This prevents
-// either validator from hand-writing a comparison error without its date/type,
-// while malformed input keeps a deliberately boundary-free construction path.
-assert.match(planRulesSource, /export function makeMrBoundaryError\([\s\S]*date: string,[\s\S]*type: MrBoundaryType,[\s\S]*\): MrBoundaryError/)
-assert.doesNotMatch(planRulesSource, /makeMrBoundaryError\([\s\S]*boundary\?/)
-assert.equal([...planRulesSource.matchAll(/errors\.push\(makeMrBoundaryError\(/g)].length, 2)
-assert.equal([...dateRulesSource.matchAll(/errors\.push\(makeMrBoundaryError\(/g)].length, 10)
-assert.doesNotMatch(planRulesSource, /errors\.push\(\s*\{/)
-assert.doesNotMatch(dateRulesSource, /errors\.push\(makeError\(/)
-assert.match(dateRulesSource, /errors\.push\(makeMrFormatError\(/)
+const tsConfigPath = path.join(root, 'tsconfig.json')
+const tsConfigFile = ts.readConfigFile(tsConfigPath, ts.sys.readFile)
+assert.equal(tsConfigFile.error, undefined, 'MR AST contract must read tsconfig.json')
+const parsedTsConfig = ts.parseJsonConfigFileContent(tsConfigFile.config, ts.sys, root, { noEmit: true }, tsConfigPath)
+assert.equal(parsedTsConfig.errors.length, 0, 'MR AST contract must parse tsconfig.json')
+const mrRulePaths = [
+  path.join(root, 'src/lib/mrVersionPlanRules.ts'),
+  path.join(root, 'src/lib/mrDateRules.ts'),
+]
+const mrTypesPath = path.join(root, 'src/types/mrVersionPlan.ts')
+const mrAstProgram = ts.createProgram({
+  rootNames: [...mrRulePaths, mrTypesPath],
+  options: parsedTsConfig.options,
+})
+const mrAstChecker = mrAstProgram.getTypeChecker()
+const mrTypesSource = mrAstProgram.getSourceFile(mrTypesPath)
+assert.ok(mrTypesSource, 'MR AST contract must load mrVersionPlan types')
+const mrCellErrorDeclaration = mrTypesSource.statements.find(statement => (
+  ts.isInterfaceDeclaration(statement) && statement.name.text === 'MrCellError'
+))
+assert.ok(mrCellErrorDeclaration, 'MR AST contract must find MrCellError')
+const mrCellErrorType = mrAstChecker.getTypeAtLocation(mrCellErrorDeclaration.name)
+
+function unwrapTsExpression(expression) {
+  let current = expression
+  while (
+    ts.isParenthesizedExpression(current)
+    || ts.isAsExpression(current)
+    || ts.isTypeAssertionExpression(current)
+    || ts.isNonNullExpression(current)
+    || ts.isSatisfiesExpression(current)
+  ) current = current.expression
+  return current
+}
+
+function isMrCellErrorArray(type) {
+  const elementType = mrAstChecker.getIndexTypeOfType(type, ts.IndexKind.Number)
+  return Boolean(elementType && mrAstChecker.isTypeAssignableTo(elementType, mrCellErrorType))
+}
+
+function isInsideMrCellErrorValidator(node) {
+  let current = node.parent
+  while (current) {
+    if (ts.isFunctionLike(current)) {
+      const signature = mrAstChecker.getSignatureFromDeclaration(current)
+      if (signature && isMrCellErrorArray(mrAstChecker.getReturnTypeOfSignature(signature))) return true
+    }
+    current = current.parent
+  }
+  return false
+}
+
+function assertMrErrorPushContract(sourceFile) {
+  const allowedConstructors = new Set(['makeMrBoundaryError', 'makeMrFormatError'])
+  let inspectedPushes = 0
+  const visit = node => {
+    if (
+      ts.isCallExpression(node)
+      && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.name.text === 'push'
+      && isInsideMrCellErrorValidator(node)
+    ) {
+      const receiver = unwrapTsExpression(node.expression.expression)
+      if (isMrCellErrorArray(mrAstChecker.getTypeAtLocation(receiver))) {
+        inspectedPushes += 1
+        const { line, character } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+        const location = `${path.relative(root, sourceFile.fileName)}:${line + 1}:${character + 1}`
+        assert.equal(node.arguments.length, 1, `${location} MR error push must have exactly one argument`)
+        const argument = unwrapTsExpression(node.arguments[0])
+        const constructor = ts.isCallExpression(argument) ? unwrapTsExpression(argument.expression) : undefined
+        assert.ok(
+          constructor && ts.isIdentifier(constructor) && allowedConstructors.has(constructor.text),
+          `${location} MR error push must call makeMrBoundaryError or makeMrFormatError`,
+        )
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  assert.ok(inspectedPushes > 0, `${path.relative(root, sourceFile.fileName)} must expose an MR error push contract`)
+}
+
+function assertMrBoundaryHelperContract(sourceFile) {
+  const helper = sourceFile.statements.find(statement => (
+    ts.isFunctionDeclaration(statement) && statement.name?.text === 'makeMrBoundaryError'
+  ))
+  assert.ok(helper && ts.isFunctionDeclaration(helper), 'makeMrBoundaryError must be a function declaration')
+  assert.ok(helper.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword), 'makeMrBoundaryError must be exported')
+  assert.deepEqual(helper.parameters.map(parameter => parameter.name.getText(sourceFile)), ['base', 'message', 'date', 'type'])
+  assert.ok(helper.parameters.every(parameter => !parameter.questionToken && !parameter.initializer && !parameter.dotDotDotToken), 'makeMrBoundaryError parameters must be required')
+  assert.equal(helper.parameters[2].type?.getText(sourceFile), 'string')
+  assert.equal(helper.parameters[3].type?.getText(sourceFile), 'MrBoundaryType')
+  assert.equal(helper.type?.getText(sourceFile), 'MrBoundaryError')
+}
+
+// The previous 2/10 call-count checks were brittle under safe refactors and
+// could be padded with dead calls. The AST contract now checks every real push
+// into an MrCellError array inside an MrCellError[] validator, independent of
+// variable names or call-site count. Row-grouping copies are outside validators.
+const [planRulesAstSource, dateRulesAstSource] = mrRulePaths.map(filePath => mrAstProgram.getSourceFile(filePath))
+assert.ok(planRulesAstSource && dateRulesAstSource, 'MR AST contract must load both rule modules')
+assertMrBoundaryHelperContract(planRulesAstSource)
+assertMrErrorPushContract(planRulesAstSource)
+assertMrErrorPushContract(dateRulesAstSource)
 assert.deepEqual(planRules.makeMrBoundaryError(
   { rowKey: 'row', activityId: 'activity', activityName: '测试开始时间' },
   '测试开始时间不能早于下限',
