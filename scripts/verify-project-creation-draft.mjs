@@ -190,6 +190,15 @@ assert.match(
   /lastAppliedSourceRef\.current = `\$\{restoredBid\}::\$\{restoredType\}`/,
   'hydration must prevent source synchronization from overwriting restored draft values',
 )
+assert.match(
+  hydrateDraftBlock,
+  /status:\s*resolveProjectCreationDraftSourceStatus\(\{[\s\S]*projectType:\s*restoredType[\s\S]*draftStatus:\s*draft\.values\.status[\s\S]*sourceStatus:\s*restoredEntry\?\.ipmStatus[\s\S]*\}\)/,
+  'technical hydration must apply the current IPM source status before installing its source-ref guard',
+)
+assertOrdered(hydrateDraftBlock, [
+  'status: resolveProjectCreationDraftSourceStatus',
+  'lastAppliedSourceRef.current',
+], 'source status must be restored before source synchronization is suppressed')
 assert.match(readFailureBlock, /项目草稿读取失败/)
 assert.match(readFailureBlock, /setDraftReadStatus\('failed'\)/)
 assert.doesNotMatch(readFailureBlock, /setDraftReadStatus\('ready'\)|draftRepository\.(save|clear)/)

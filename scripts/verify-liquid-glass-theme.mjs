@@ -279,7 +279,7 @@ function groupedLegacyBrandFailures(root) {
 
 const ROADMAP_MATERIAL_EXPECTATIONS = {
   'src/components/roadmap/RoadmapView.tsx': [
-    { label: 'glass roadmap heading', pattern: /className=["'][^"']*pms-roadmap-view-header[^"']*pms-glass-surface[^"']*["']/ },
+    { label: 'accessible roadmap heading after the duplicate visual heading was removed', pattern: /<span\s+className=["']pms-visually-hidden["']>tOS路标<\/span>/ },
     { label: 'solid roadmap data card', pattern: /<Card\s+[\s\S]{0,180}className=["']pms-roadmap-view-card["'][\s\S]{0,180}rootClassName=["']pms-solid-surface["']/ },
   ],
   'src/components/roadmap/RoadmapToolbar.tsx': [
@@ -293,7 +293,7 @@ const ROADMAP_MATERIAL_EXPECTATIONS = {
     { label: 'glass version target summary', pattern: /className=["'][^"']*pms-roadmap-evolution-target[^"']*pms-glass-surface[^"']*["']/ },
   ],
   'src/components/roadmap/RoadmapTableView.tsx': [
-    { label: 'glass table controls', pattern: /className=["'][^"']*roadmap-table-controls[^"']*pms-toolbar[^"']*["']/ },
+    { label: 'roadmap table shell after version controls moved to the shared toolbar', pattern: /className=["']roadmap-table-shell["']/ },
     { label: 'glass target summary card', pattern: /className=["'][^"']*roadmap-target-card[^"']*pms-glass-surface[^"']*pms-interactive-surface[^"']*["']/ },
     { label: 'opaque roadmap table', pattern: /className=["'][^"']*pms-table[^"']*roadmap-table[^"']*pms-solid-surface[^"']*["']/ },
   ],
@@ -1303,9 +1303,10 @@ function verifyContract(root) {
 
   expectPatterns(failures, root, 'src/components/shared/PmsThemeProvider.tsx', [
     { label: "'use client'", pattern: /^'use client'$/m },
-    { label: 'ConfigProvider import', pattern: /^import\s*{\s*ConfigProvider\s*}\s*from\s*'antd'$/m },
+    { label: 'App and ConfigProvider import', pattern: /^import\s*{\s*App\s*,\s*ConfigProvider\s*}\s*from\s*'antd'$/m },
     { label: 'pmsTheme import', pattern: /^import\s*{\s*pmsTheme\s*}\s*from\s*'@\/theme\/pmsTheme'$/m },
     { label: 'ConfigProvider theme binding', pattern: /<ConfigProvider\s+theme=\{pmsTheme\}\s+button=\{\{\s*autoInsertSpace:\s*false\s*}}/ },
+    { label: 'persistent Ant Design App context', pattern: /<ConfigProvider[\s\S]*<App>\{children\}<\/App>[\s\S]*<\/ConfigProvider>/ },
   ])
 
   expectPatterns(failures, root, 'src/app/layout.tsx', [

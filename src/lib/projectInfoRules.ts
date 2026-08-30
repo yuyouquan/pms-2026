@@ -9,6 +9,7 @@ import {
 } from '@/constants/projectInfoSchema'
 import { isMachineProjectType, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { mapIpmProjectStatus } from '@/lib/projectStatus'
 export { deriveStartingRam } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
 
@@ -44,6 +45,59 @@ export const deriveProjectTosVersion = (
   projectName: string,
   existingValue = '',
 ): string => type === PROJECT_TYPE_TOS_VERSION ? projectName.trim() : existingValue
+
+interface ProjectHealthStatusInput {
+  mode: 'create' | 'edit'
+  projectType: string
+  submittedStatus?: unknown
+  originalStatus?: unknown
+}
+
+export const resolveProjectHealthStatus = ({
+  mode,
+  projectType,
+  submittedStatus,
+  originalStatus,
+}: ProjectHealthStatusInput): string => {
+  if (mode === 'create' && (isMachineProjectType(projectType) || projectType === PROJECT_CATEGORY_TECH)) return 'normal'
+  return String(submittedStatus || originalStatus || '').trim()
+}
+
+interface TechnicalProjectSecondaryCategoryInput {
+  mode: 'create' | 'edit'
+  sourceCategory?: unknown
+  displayedCategory?: unknown
+  originalCategory?: unknown
+}
+
+export const resolveTechnicalProjectSecondaryCategory = ({
+  mode,
+  sourceCategory,
+  displayedCategory,
+  originalCategory,
+}: TechnicalProjectSecondaryCategoryInput): string => (
+  mode === 'create'
+    ? String(sourceCategory || '').trim()
+    : String(originalCategory || displayedCategory || '').trim()
+)
+
+interface ProjectCreationDraftSourceStatusInput {
+  projectType: string
+  draftStatus?: unknown
+  sourceStatus?: unknown
+}
+
+export const resolveProjectCreationDraftSourceStatus = ({
+  projectType,
+  draftStatus,
+  sourceStatus,
+}: ProjectCreationDraftSourceStatusInput): string => {
+  const currentSourceStatus = String(sourceStatus || '').trim()
+  if (projectType === PROJECT_CATEGORY_TECH && currentSourceStatus) {
+    return mapIpmProjectStatus(currentSourceStatus, projectType)
+  }
+  return String(draftStatus || '').trim()
+}
 
 /**
  * tOS basic information is still part of the display/storage schema, but it is

@@ -31,6 +31,9 @@ import {
   getProjectInfoModalFields,
   getProjectInfoModalGroups,
   getProjectInfoModalSubmitValues,
+  resolveProjectCreationDraftSourceStatus,
+  resolveProjectHealthStatus,
+  resolveTechnicalProjectSecondaryCategory,
   validateProjectInfoValues,
 } from '@/lib/projectInfoRules'
 import {
@@ -114,6 +117,7 @@ export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
 
 const CREATE_FORM_DEFAULTS: ProjectInfoFormState = {
   responsiblePersons: [],
+  healthStatus: 'normal',
   status: '',
 }
 
@@ -462,6 +466,11 @@ export default function ProjectInfoModal({
             : restoredClassification?.pmsSecondaryCategory,
           projectName: restoredEntry?.name || draft.values.projectName,
           technicalTrack: restoredEntry?.technicalTrack || draft.values.technicalTrack,
+          status: resolveProjectCreationDraftSourceStatus({
+            projectType: restoredType,
+            draftStatus: draft.values.status,
+            sourceStatus: restoredEntry?.ipmStatus,
+          }),
         } as ProjectInfoFormState)
         lastAppliedSourceRef.current = `${restoredBid}::${restoredType}`
         const modalGroupKeys = new Set<string>(getProjectInfoModalGroups(restoredType).map(group => group.key))
@@ -872,6 +881,15 @@ export default function ProjectInfoModal({
       ? mode === 'create'
         ? ipmClassification?.pmsSecondaryCategory || ''
         : String(values.secondaryCategory || '')
+      : normalizedProjectType === PROJECT_CATEGORY_TECH
+        ? resolveTechnicalProjectSecondaryCategory({
+            mode,
+            sourceCategory: sourceEntry?.ipmProjectCategoryName,
+            displayedCategory: values.secondaryCategory,
+            originalCategory: project?.secondaryCategory
+              || project?.ipmProjectType
+              || project?.fieldValues?.ipmProjectType,
+          })
       : ''
     if (!normalizedProjectType || (normalizedProjectType === PROJECT_CATEGORY_MACHINE && !projectSecondaryCategory)) {
       messageApi.error(normalizedProjectType === PROJECT_CATEGORY_MACHINE ? '项目分类和项目二级分类均为必填项' : '项目分类为必填项')
@@ -952,7 +970,12 @@ export default function ProjectInfoModal({
           infoValues,
           Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
         ),
-        healthStatus: String(values.healthStatus || ''),
+        healthStatus: resolveProjectHealthStatus({
+          mode,
+          projectType: normalizedProjectType,
+          submittedStatus: values.healthStatus,
+          originalStatus: project?.healthStatus,
+        }),
         projectStatus: resolvedProjectStatus,
         infoValues,
         sourceEntry,

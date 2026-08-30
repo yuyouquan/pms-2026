@@ -468,4 +468,72 @@ assert.equal(technicalCreatePayload.technicalLead, '张三')
 assert.equal(technicalCreatePayload.technicalProjectManager, '李白')
 assert.equal(technicalCreatePayload.technicalOther, '协同丙', 'the new technical role must survive create/edit payload normalization')
 
+assert.equal(
+  projectInfoRules.resolveProjectHealthStatus({
+    mode: 'create',
+    projectType: '整机产品项目',
+    submittedStatus: 'risk',
+    originalStatus: 'warning',
+  }),
+  'normal',
+  'a hidden create-only health value must always persist the normal default',
+)
+assert.equal(
+  projectInfoRules.resolveProjectHealthStatus({
+    mode: 'edit',
+    projectType: '技术项目',
+    submittedStatus: '',
+    originalStatus: 'warning',
+  }),
+  'warning',
+  'editing must preserve the stored health value when the field is hidden',
+)
+assert.equal(
+  projectInfoRules.resolveProjectHealthStatus({
+    mode: 'create',
+    projectType: '能力建设项目',
+    submittedStatus: 'risk',
+  }),
+  'risk',
+  'project types that still render health status must preserve the submitted value',
+)
+assert.equal(
+  projectInfoRules.resolveTechnicalProjectSecondaryCategory({
+    mode: 'create',
+    sourceCategory: '技术项目前置工作',
+    displayedCategory: '旧分类',
+    originalCategory: '',
+  }),
+  '技术项目前置工作',
+  'technical create must persist the current IPM source category',
+)
+assert.equal(
+  projectInfoRules.resolveTechnicalProjectSecondaryCategory({
+    mode: 'edit',
+    sourceCategory: '',
+    displayedCategory: '',
+    originalCategory: '部门级-技术研发',
+  }),
+  '部门级-技术研发',
+  'technical edit must not clear the persisted IPM category',
+)
+assert.equal(
+  projectInfoRules.resolveProjectCreationDraftSourceStatus({
+    projectType: '技术项目',
+    draftStatus: '已取消',
+    sourceStatus: '筹备中',
+  }),
+  '待立项',
+  'technical draft hydration must replace stale status with the current mapped IPM status',
+)
+assert.equal(
+  projectInfoRules.resolveProjectCreationDraftSourceStatus({
+    projectType: '整机产品项目',
+    draftStatus: '进行中',
+    sourceStatus: '筹备中',
+  }),
+  '进行中',
+  'non-technical draft hydration must keep its draft status contract',
+)
+
 console.log('project field order follow-up contract passed')

@@ -38,7 +38,7 @@ export const EXTERNAL_PROJECT_POOL: ExternalProjectEntry[] = [
   { bid: 'EXT-010', name: 'X6870', spm: '李白', ipmProjectCategoryName: '整机产品-基线IPD' },
   { bid: 'EXT-011', name: 'X6870', spm: '李白', ipmProjectCategoryName: '手机整机产品-大版本升级' },
   { bid: 'EXT-012', name: 'X6870', spm: '李白', ipmProjectCategoryName: '手机整机产品-大版本升级' },
-  { bid: 'EXT-013', name: 'AIOS-Architecture-Prestudy', spm: '赵六', ipmProjectCategoryName: '技术项目前置工作', technicalTrack: 'AIOS' },
+  { bid: 'EXT-013', name: 'AIOS-Architecture-Prestudy', spm: '赵六', ipmProjectCategoryName: '技术项目前置工作', ipmStatus: '筹备中', technicalTrack: 'AIOS' },
 ]
 
 export interface FetchByBidResult {

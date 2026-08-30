@@ -3154,6 +3154,7 @@ export default function ProjectSpaceContainer() {
       type: payload.projectType,
       leader: payload.responsiblePersons[0] || '',
       responsiblePersons: payload.responsiblePersons,
+      secondaryCategory: payload.projectSecondaryCategory,
       tosVersion: deriveProjectTosVersion(
         payload.projectType,
         selectedProject.name,
@@ -3208,7 +3209,7 @@ export default function ProjectSpaceContainer() {
         ? synchronizeTechnicalProjectRecord(
             merged as unknown as Record<string, unknown>,
             payload.infoValues as Record<string, unknown>,
-            { ipmProjectType: String(selectedProject.ipmProjectType || '') },
+            { ipmProjectType: payload.projectSecondaryCategory || String(selectedProject.ipmProjectType || '') },
           ) as unknown as typeof merged
         : merged
     if (isMachineProjectType(selectedProject.type)) {

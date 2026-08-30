@@ -1066,6 +1066,11 @@ try {
     if (byBid['EXT-012']?.firstSaleTosVersionId !== '14.0.0' || byBid['EXT-012']?.currentTosVersionId !== '17.10.0') {
       throw new Error(`第二个老品版本错误：${JSON.stringify(byBid['EXT-012'])}`)
     }
+    for (const bid of ['EXT-010', 'EXT-011', 'EXT-012']) {
+      if (byBid[bid]?.healthStatus !== 'normal') {
+        throw new Error(`整机新建健康状态默认值错误 ${bid}：${JSON.stringify(byBid[bid])}`)
+      }
+    }
 
     console.log('  STEP reopen the new X6870 and verify the 34-field edit surface plus project-space current tOS')
     await clickAria(page, '卡片视图')
@@ -1089,15 +1094,28 @@ try {
     )))
   })
 
-  await runScenario('07 TDT create validation mapping team and deliverables', {}, async page => {
-    console.log('  STEP open predecessor-work technical source')
+  await runScenario('07 TDT create validation mapping team and deliverables', {
+    storage: {
+      [`pms:project-creation-draft:${encodeURIComponent('张三')}`]: JSON.stringify({
+        schemaVersion: 1,
+        ownerId: '张三',
+        values: {
+          bid: 'EXT-013',
+          type: '技术项目',
+          secondaryCategory: '旧分类',
+          projectName: '旧名称',
+          technicalTrack: '旧赛道',
+          status: '已取消',
+          healthStatus: 'risk',
+        },
+        activeGroups: [],
+        updatedAt: '2026-08-31T00:00:00.000Z',
+      }),
+    },
+  }, async page => {
+    console.log('  STEP restore predecessor-work source and replace stale read-only snapshots')
     await openMain(page, '项目列表')
     await clickAria(page, '新增项目')
-    const sourceInput = await formCombo(page, '项目名')
-    await sourceInput.focus()
-    await page.keyboard.type('AIOS-Architecture')
-    await waitForControlledPopupCandidates(page, sourceInput, '项目名')
-    await selectOption(page, sourceInput, 'EXT-013', { contains: true })
     console.log('  STEP verify mapped fields and create validation')
     await assertIpmSourceBeforeCreateFields(page)
     await assertCreateFieldLabelOrder(page, TECHNICAL_CREATE_LABELS)
@@ -1160,6 +1178,12 @@ try {
     if (!created || created.leader !== '张三' || JSON.stringify(created.responsiblePersons) !== JSON.stringify(['张三'])) {
       throw new Error(`技术项目负责人未同步项目责任人：${JSON.stringify(created)}`)
     }
+    if (created.secondaryCategory !== '技术项目前置工作') {
+      throw new Error(`技术项目分类未持久化：${JSON.stringify(created)}`)
+    }
+    if (created.healthStatus !== 'normal') {
+      throw new Error(`技术项目健康状态默认值错误：${JSON.stringify(created)}`)
+    }
     const expectedTeam = {
       technicalLead: '张三', technicalProjectManager: '李白', testRepresentative: '王五', qualityRepresentative: '赵六', productRepresentative: '孙七', standardizationRepresentative: '周八', technicalOther: '杜甫',
     }
@@ -1189,6 +1213,12 @@ try {
     }, created.id)
     if (edited?.fieldValues?.projectKpi?.kind !== 'file' || edited.fieldValues.projectKpi.name !== 'package.json') {
       throw new Error(`技术项目 KPI 文件切换未保存：${JSON.stringify(edited?.fieldValues?.projectKpi)}`)
+    }
+    if (edited.secondaryCategory !== '技术项目前置工作') {
+      throw new Error(`技术项目编辑后分类被清空：${JSON.stringify(edited)}`)
+    }
+    if (edited.healthStatus !== 'normal') {
+      throw new Error(`技术项目编辑后健康状态未保留：${JSON.stringify(edited)}`)
     }
   })
 
