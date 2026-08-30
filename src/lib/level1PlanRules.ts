@@ -273,9 +273,11 @@ export const getNextMachineMrBusinessName = (
 ) => {
   const maximum = tasks.reduce((result, task) => {
     const match = /^MR([1-9]\d*)$/.exec(task.taskName.trim())
-    return match ? Math.max(result, Number(match[1])) : result
-  }, 0)
-  return `MR${maximum + 1}`
+    if (!match) return result
+    const value = BigInt(match[1])
+    return value > result ? value : result
+  }, BigInt(0))
+  return `MR${maximum + BigInt(1)}`
 }
 
 export const getNextTosBusinessVersionName = (
@@ -290,7 +292,8 @@ export const getNextTosBusinessVersionName = (
     const suffix = value.startsWith(prefix) ? value.slice(prefix.length) : ''
     return /^\d{3}$/.test(suffix) ? Math.max(result, Number(suffix)) : result
   }, 95)
-  return `${parsed.prefix}.${String(maximum + 5).padStart(3, '0')}`
+  const next = maximum + 5
+  return next > 999 ? '' : `${parsed.prefix}.${String(next).padStart(3, '0')}`
 }
 
 export const validateTosBusinessVersionName = (projectName: string, taskName: string) => {

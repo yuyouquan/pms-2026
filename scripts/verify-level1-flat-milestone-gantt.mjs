@@ -159,6 +159,9 @@ assert.equal(level1Rules.getNextMachineMrBusinessName([
   { taskName: 'MR3' },
   { taskName: 'STR5' },
 ]), 'MR4', 'machine business names continue after the highest valid MR instead of filling gaps')
+assert.equal(level1Rules.getNextMachineMrBusinessName([
+  { taskName: 'MR9007199254740992' },
+]), 'MR9007199254740993', 'machine business names increment arbitrary-length valid MR numbers without precision loss')
 for (const name of ['MR1', 'MR2', 'MR10']) {
   assert.equal(level1Rules.validateMachineMrBusinessName(name).valid, true, `${name} is a valid machine MR business name`)
 }
@@ -177,6 +180,12 @@ assert.equal(level1Rules.getNextTosBusinessVersionName('tOS17.0', [
 assert.equal(level1Rules.getNextTosBusinessVersionName('tOS17.0', [
   { taskName: '17.0.0.101' },
 ]), '17.0.0.106', 'tOS default generation counts any same-prefix three-digit suffix before submit-time validation')
+assert.equal(level1Rules.getNextTosBusinessVersionName('tOS17.0', [
+  { taskName: '17.0.0.995' },
+]), '', 'tOS default generation returns empty instead of overflowing a valid three-digit suffix')
+assert.equal(level1Rules.getNextTosBusinessVersionName('tOS17.0', [
+  { taskName: '17.0.0.999' },
+]), '', 'tOS default generation returns empty when any counted three-digit suffix exhausts the range')
 
 const machineBusinessStage = {
   id: 'machine-launch', stableId: 'machine-stage-launch', order: 1, taskName: '上市阶段', source: 'template', nodeKind: 'stage',

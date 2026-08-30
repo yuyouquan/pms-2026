@@ -666,14 +666,18 @@ const sameNameAcrossMachineStages = rules.renameLevel1BusinessNode(collidingInse
 })
 assert.equal(sameNameAcrossMachineStages.ok, true, 'rename duplicate validation is scoped to siblings in the same stage')
 
-for (const validMrName of ['MR0', 'MR01']) {
+for (const invalidMrName of ['MR0', 'MR01']) {
   const result = rules.insertLevel1BusinessNode(machineBusinessInput, {
     projectType: '整机产品项目',
     parentStableId: 'machine-stage-launch',
-    taskName: validMrName,
+    taskName: invalidMrName,
     now: 2,
   })
-  assert.equal(result.ok, true, `whole-machine name ${validMrName} follows the exact MR plus digits rule`)
+  assert.deepEqual(
+    { ok: result.ok, code: result.code, message: result.message },
+    { ok: false, code: 'invalid-name', message: '格式：MR+正整数，不允许前导0；示例：MR1、MR2。' },
+    `whole-machine name ${invalidMrName} rejects zero and leading-zero MR numbers`,
+  )
 }
 
 for (const invalidMrName of ['mr1', 'MR 1', 'MR', '里程碑1']) {
