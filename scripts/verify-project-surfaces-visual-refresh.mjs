@@ -11,6 +11,34 @@ const technicalInformationSource = readSource(root, 'src/components/technical-pr
 const technicalSummarySource = readSource(root, 'src/components/technical-project/TechnicalPlanSummary.tsx')
 const technicalPlanSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const basicInfoPresentationPath = 'src/lib/projectBasicInfoPresentation.ts'
+const basicInfoPresentationSource = readSource(root, basicInfoPresentationPath)
+
+assert.notEqual(
+  basicInfoPresentationSource,
+  '',
+  'project basic-information summary presentation helper is missing',
+)
+const basicInfoPresentation = loadTypeScriptModule(root, basicInfoPresentationPath)
+assert.equal(
+  typeof basicInfoPresentation.shouldShowLatestPublishedLevel1Summary,
+  'function',
+  'project basic-information presentation must export shouldShowLatestPublishedLevel1Summary',
+)
+for (const projectType of ['整机-手机', '整机产品-手机', 'tOS版本项目']) {
+  assert.equal(
+    basicInfoPresentation.shouldShowLatestPublishedLevel1Summary(projectType),
+    false,
+    `${projectType} basic information must hide the latest-published L1 date summary`,
+  )
+}
+for (const projectType of ['技术项目', '能力建设项目']) {
+  assert.equal(
+    basicInfoPresentation.shouldShowLatestPublishedLevel1Summary(projectType),
+    true,
+    `${projectType} must retain its existing basic-information summary decision`,
+  )
+}
 
 const technicalCoreKeys = [
   'secondaryCategory', 'technicalTrack', 'tmg', 'subdomain', 'status', 'projectStage',
@@ -44,6 +72,11 @@ assert.equal(technicalCreateProjectName?.readOnly, true, 'technical create must 
 assert.match(createSource, /子项目名称/, 'technical create UI must retain the subproject-name surface')
 assert.match(technicalInformationSource, /visibleChildren\.map\(child => \(\{[\s\S]*?<span>\{child\.name\}<\/span>/, 'technical project-space tabs must retain subproject names')
 assert.equal(
+  technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS.length > 0,
+  true,
+  'technical subproject seed data must be non-empty',
+)
+assert.equal(
   technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS.every(item => typeof item.name === 'string' && item.name.length > 0),
   true,
   'technical subproject data must retain names after the aggregate core card is removed',
@@ -61,13 +94,18 @@ for (const [surfaceName, source] of [
   )
   assert.match(
     source,
-    /const\s+directMilestoneHeader\s*=\s*(?:projectionMode|mode)\s*===\s*['"]technical-subproject['"]/,
-    `${surfaceName} must declare a direct single-row header path for technical subprojects`,
+    /['"]technical-subproject['"]/,
+    `${surfaceName} must retain an explicit technical-subproject projection mode`,
   )
   assert.match(
     source,
-    /directMilestoneHeader\s*\?[\s\S]{0,2400}(?:currentProjection\.rows|milestoneTasks)\.map/,
-    `${surfaceName} direct header path must project the single-level milestones themselves`,
+    /data-technical-plan-header=['"]single-row['"]/,
+    `${surfaceName} must expose the observable single-row subproject header`,
+  )
+  assert.match(
+    source,
+    /data-technical-plan-header=['"]grouped['"]/,
+    `${surfaceName} must preserve an observable grouped-header path for standard plans`,
   )
 }
 
@@ -95,17 +133,36 @@ for (const [surfaceName, source] of [
   ['whole-machine basic-information market summary', wholeMachineBasicInfo],
   ['tOS basic-information type summary', tosBasicInfo],
 ]) {
-  assert.doesNotMatch(source, /renderLatestPublishedLevel1Summary\(/, `${surfaceName} must omit the four-date summary`)
-  for (const field of ['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate']) {
-    assert.doesNotMatch(source, new RegExp(`data-summary-field=[{]?['"]${field}`), `${surfaceName} must not render ${field}`)
-  }
+  assert.match(
+    source,
+    /shouldShowLatestPublishedLevel1Summary\([^)]*\)\s*(?:&&|\?)[\s\S]{0,500}renderLatestPublishedLevel1Summary\(/,
+    `${surfaceName} must guard the reusable date-summary renderer with the pure presentation decision`,
+  )
 }
 
-const planWorkspace = sliceBetween(
+const ganttColumnProjection = sliceBetween(
   projectSpaceSource,
-  'const renderProjectPlan = () =>',
-  '// ═══════ Sidebar menu items ═══════',
-  'project plan workspace',
+  'const ganttColumns = useMemo',
+  'const applyColumnSettings =',
+  'Gantt column projection',
+)
+const ganttRenderer = sliceBetween(
+  projectSpaceSource,
+  'const renderGanttChart = (customTasks?: any[]) =>',
+  '// ═══════ renderTaskTable ═══════',
+  'Gantt renderer',
+)
+const taskTableRenderer = sliceBetween(
+  projectSpaceSource,
+  'const renderTaskTable = (customTasks?: any[]) =>',
+  '// ═══════ renderHorizontalTable ═══════',
+  'task-table renderer',
+)
+const horizontalTableRenderer = sliceBetween(
+  projectSpaceSource,
+  'const renderHorizontalTable = (surface: Level1HorizontalSurface) =>',
+  '// ═══════ renderActionButtons ═══════',
+  'horizontal-table renderer',
 )
 for (const [field, label] of [
   ['planStartDate', '计划开始'],
@@ -113,10 +170,19 @@ for (const [field, label] of [
   ['actualStartDate', '实际开始'],
   ['actualEndDate', '实际完成'],
 ]) {
-  assert.match(projectSpaceSource, new RegExp(`(?:${label}[时间]*[\\s\\S]{0,180}${field}|${field}[\\s\\S]{0,180}${label}[时间]*)`), `plan views must retain the ${label} label and ${field} binding`)
+  assert.match(
+    taskTableRenderer,
+    new RegExp(`title:\\s*['"]${label}[时间]*['"][^\\n]{0,180}(?:dataIndex|key):\\s*['"]${field}['"]`),
+    `the actual task-table renderer must retain the ${label} ${field} column`,
+  )
 }
-assert.match(projectSpaceSource, /<DatePicker[\s\S]{0,420}planStartDate/, 'plan views must retain planned-date editing')
-assert.match(projectSpaceSource, /<ClickToEditDate[\s\S]{0,420}actualStartDate/, 'plan views must retain actual-date editing')
-assert.match(planWorkspace, /renderHorizontalTable|renderTaskTable|renderGanttChart/, 'project plan workspace must retain its date-capable plan renderers')
+assert.match(taskTableRenderer, /<DatePicker[\s\S]{0,420}planStartDate/, 'task-table renderer must retain planned-date editing')
+assert.match(taskTableRenderer, /<ClickToEditDate[\s\S]{0,420}actualStartDate/, 'task-table renderer must retain actual-date editing')
+assert.match(horizontalTableRenderer, /ClickToEditDate[\s\S]{0,260}planEndDate/, 'horizontal plan renderer must retain planned-completion editing')
+assert.match(horizontalTableRenderer, /ClickToEditDate[\s\S]{0,260}actualEndDate/, 'horizontal plan renderer must retain actual-completion editing')
+assert.match(ganttColumnProjection, /planStartDate:[\s\S]{0,160}label:\s*['"]计划开始['"]/, 'Gantt columns must retain planned-start dates')
+assert.match(ganttColumnProjection, /planEndDate:[\s\S]{0,160}label:\s*['"]计划完成['"]/, 'Gantt columns must retain planned-completion dates')
+assert.match(ganttRenderer, /<DHTMLXGantt[\s\S]{0,260}columns=\{ganttColumns\}/, 'Gantt renderer must consume the date-capable columns')
+assert.match(ganttRenderer, /onTaskDateChange=\{change =>/, 'Gantt renderer must retain date editing callbacks')
 
 console.log('project surfaces visual refresh contract passed')
