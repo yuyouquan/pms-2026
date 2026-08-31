@@ -144,7 +144,7 @@ export default function ProjectInformationFrame({
 }: ProjectInformationFrameProps) {
   return (
     <div
-      className={`pms-project-information-frame${embedded ? ' pms-project-information-frame--embedded' : ''}`}
+      className={`pms-project-information-frame pms-project-information-surface${embedded ? ' pms-project-information-frame--embedded' : ''}`}
       style={embedded ? undefined : { maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}
     >
       {!embedded && <ProjectInformationAnchorNav items={anchorItems} />}

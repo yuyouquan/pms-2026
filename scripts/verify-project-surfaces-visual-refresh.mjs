@@ -13,6 +13,59 @@ const technicalPlanSource = readSource(root, 'src/components/technical-project/T
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const basicInfoPresentationPath = 'src/lib/projectBasicInfoPresentation.ts'
 const basicInfoPresentationSource = readSource(root, basicInfoPresentationPath)
+const workspaceSource = readSource(root, 'src/components/workspace/WorkspaceModule.tsx')
+const projectSummarySource = readSource(root, 'src/components/project-summary/ProjectSummaryTable.tsx')
+const projectInfoModalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
+const projectInformationFrameSource = readSource(root, 'src/components/project-info/ProjectInformationFrame.tsx')
+const globalStylesSource = readSource(root, 'src/styles/globals.css')
+
+for (const [surfaceName, source, scopeClass] of [
+  ['project card view', workspaceSource, 'pms-project-card-surface'],
+  ['project summary table', projectSummarySource, 'pms-project-summary-surface'],
+  ['project add/edit modal', projectInfoModalSource, 'pms-project-info-modal-surface'],
+  ['project-space information', projectInformationFrameSource, 'pms-project-information-surface'],
+]) {
+  assert.match(
+    source,
+    new RegExp(`className=[\\s\\S]{0,220}${scopeClass}`),
+    `${surfaceName} must expose the stable ${scopeClass} visual scope`,
+  )
+  assert.match(
+    globalStylesSource,
+    new RegExp(`\\.${scopeClass}(?:[\\s\\n,{.:]|$)`),
+    `${surfaceName} visual scope must be styled centrally`,
+  )
+}
+
+for (const token of [
+  '--pms-project-surface',
+  '--pms-project-group-header',
+  '--pms-project-surface-border',
+  '--pms-project-surface-radius',
+  '--pms-project-surface-shadow',
+  '--pms-project-compact-space',
+  '--pms-project-hover',
+  '--pms-project-selected',
+  '--pms-project-focus-ring',
+  '--pms-project-transition',
+]) {
+  assert.match(
+    globalStylesSource,
+    new RegExp(`${token}\\s*:`),
+    `shared project-surface token ${token} must be defined`,
+  )
+}
+
+assert.match(
+  globalStylesSource,
+  /\.pms-project-(?:card|summary|info|information)[^,{]*:focus-visible[^{]*\{[\s\S]{0,240}(?:outline|box-shadow):\s*var\(--pms-project-focus-ring\)/,
+  'project surfaces must expose a visible shared focus-visible treatment',
+)
+assert.match(
+  globalStylesSource,
+  /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.pms-project-(?:card|summary|info|information)[\s\S]{0,600}?transition:\s*none\s*!important/,
+  'project surfaces must disable visual transitions when reduced motion is requested',
+)
 
 const technicalCoreKeys = [
   'secondaryCategory', 'technicalTrack', 'tmg', 'subdomain', 'status', 'projectStage',

@@ -1036,7 +1036,7 @@ export default function ProjectSummaryTable({
         </Typography.Text>
       )}
 
-      {showTable && <div className="pms-solid-surface pms-project-summary-table-shell">
+      {showTable && <div className="pms-solid-surface pms-project-summary-table-shell pms-project-summary-surface">
         <SortableProjectListHeaderContext
           items={sortableHeaderIds}
           canDrop={canDropHeaderUnit}

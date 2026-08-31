@@ -126,8 +126,8 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   }
 
   const fieldItem = (label: string, value: string | undefined) => value ? (
-    <div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-      <span style={{ color: '#bfbfbf' }}>{label}</span> <span style={{ color: '#4b5563', fontWeight: 500 }}>{value}</span>
+    <div className="pms-project-card-field">
+      <span className="pms-project-card-field-label">{label}</span> <span className="pms-project-card-field-value">{value}</span>
     </div>
   ) : null
 
@@ -138,14 +138,8 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       aria-disabled={!canOpen}
       aria-label={`打开项目 ${project.sourceBid || project.id}`}
       hoverable
-      className={`pms-card-hover pms-project-card pms-glass-surface pms-interactive-surface${canOpen ? '' : ' is-access-denied'}`}
-      style={{
-        borderRadius: 10,
-        height: '100%',
-        borderLeft: hovered ? '3px solid var(--pms-brand)' : '1px solid var(--pms-border)',
-        boxShadow: hovered ? 'var(--pms-shadow-glass)' : 'var(--pms-shadow-xs)',
-      }}
-      styles={{ body: { padding: 10, height: '100%', display: 'flex', flexDirection: 'column' as const } }}
+      className={`pms-card-hover pms-project-card pms-project-card-surface pms-glass-surface pms-interactive-surface${canOpen ? '' : ' is-access-denied'}`}
+      data-hovered={hovered || undefined}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={openProject}
@@ -157,30 +151,32 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       }}
     >
       {/* 头部: 项目名 + 状态 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: '#111827', letterSpacing: 0.2, marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div className="pms-project-card-header">
+        <div className="pms-project-card-identity">
+          <div className="pms-project-card-title">
             {project.name}
           </div>
           {isWholeMachine && project.marketName && (
-            <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>市场名: {project.marketName}</div>
+            <div className="pms-project-card-market">市场名: {project.marketName}</div>
           )}
           <Tag
+            className="pms-project-card-type"
             color="default"
             title={classificationLabel}
-            style={{ fontSize: 11, borderRadius: 3, margin: 0, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', background: typeColor.bg, color: typeColor.color, border: 'none' }}
+            style={{ background: typeColor.bg, color: typeColor.color }}
           >
             {classificationLabel}
           </Tag>
         </div>
         <Tag
+          className="pms-project-card-status"
           color={statusConf.tagColor}
-          style={{ margin: 0, borderRadius: 4, flexShrink: 0, ...(statusTagStyle[project.status] || {}) }}
+          style={statusTagStyle[project.status] || {}}
         >{project.status}</Tag>
       </div>
 
       {/* 中间: 类型差异化字段 */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+      <div className="pms-project-card-fields">
         {isWholeMachine && (
           <>
             {fieldItem('品牌', project.brand)}
@@ -192,9 +188,9 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 
       {/* 计划时间 - 软件产品/整机产品/技术项目显示 */}
       {!isCapability && (project.planStartDate || project.planEndDate) && (
-        <div style={{ display: 'flex', gap: 8, marginBottom: 6, fontSize: 12, color: '#9ca3af' }}>
+        <div className="pms-project-card-schedule">
           {project.planStartDate && (
-            <span><CalendarOutlined style={{ marginRight: 4, color: 'var(--pms-brand)' }} />{project.planStartDate}</span>
+            <span><CalendarOutlined className="pms-project-card-calendar" />{project.planStartDate}</span>
           )}
           {project.planEndDate && (
             <span>→ {project.planEndDate}</span>
@@ -203,12 +199,12 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       )}
 
       {/* 底部: 项目经理 + 更新时间 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-        <Space size={6}>
-          <Avatar size={20} style={{ background: 'var(--pms-gradient-brand)', fontSize: 10 }}>{project.spm[0]}</Avatar>
-          <span style={{ fontSize: 12, color: '#4b5563' }}>{project.spm}</span>
+      <div className="pms-project-card-footer">
+        <Space size={6} className="pms-project-card-owner">
+          <Avatar size={20} className="pms-project-card-avatar">{project.spm[0]}</Avatar>
+          <span>{project.spm}</span>
         </Space>
-        <span style={{ fontSize: 11, color: '#bfbfbf' }}>{project.updatedAt}</span>
+        <span className="pms-project-card-updated">{project.updatedAt}</span>
       </div>
     </Card>
   )
