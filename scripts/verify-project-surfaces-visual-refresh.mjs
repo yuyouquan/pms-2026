@@ -94,8 +94,13 @@ assert.doesNotMatch(projectCardSource, /\bhovered\b|data-hovered|onMouseEnter|on
 
 assert.match(
   globalStylesSource,
-  /\.pms-modal\.pms-project-info-modal-surface\s+\.ant-modal-content\s*\{(?=[^}]*display:\s*flex)(?=[^}]*flex-direction:\s*column)(?=[^}]*max-height:\s*calc\([^}]*dvh)(?=[^}]*background:\s*var\(--pms-project-surface\)\s*!important)(?=[^}]*backdrop-filter:\s*none\s*!important)(?=[^}]*border-radius:[^;}]+!important)[^}]*\}/,
+  /\.pms-modal\.pms-project-info-modal-surface\s+\.ant-modal-container\s*\{(?=[^}]*display:\s*flex)(?=[^}]*flex-direction:\s*column)(?=[^}]*max-height:\s*calc\([^}]*dvh)(?=[^}]*background:\s*var\(--pms-project-surface\)\s*!important)(?=[^}]*backdrop-filter:\s*none\s*!important)(?=[^}]*border-radius:[^;}]+!important)[^}]*\}/,
   'project add/edit modal must override the legacy glass modal with a bounded white flex surface',
+)
+assert.doesNotMatch(
+  globalStylesSource,
+  /(?:\.pms-modal)?\.pms-project-info-modal-surface\s+\.ant-modal-content(?:\s|:|\{)/,
+  'project add/edit modal visual layer must target the Ant Design 6 modal container instead of the nonexistent modal content node',
 )
 assert.match(
   globalStylesSource,
