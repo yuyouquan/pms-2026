@@ -962,7 +962,22 @@ try {
     priorPublished,
     priorPublishedAfter: priorPublishedAfterMutation,
   })
-  await clickVisibleText('发布')
+  const duplicateNames = afterDrag.version.activities
+    .map(activity => activity.activityName.trim())
+    .filter((name, index, names) => name && names.indexOf(name) !== index)
+  assert.ok(duplicateNames.includes('需求&修改点'), '浏览器现场确实存在待校验的重复活动名称')
+  const publishClicked = await page.evaluate(() => {
+    const visible = node => {
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'
+    }
+    const button = [...document.querySelectorAll('button')]
+      .find(node => visible(node) && !node.disabled && node.textContent?.trim() === '发布')
+    button?.click()
+    return Boolean(button)
+  })
+  assert.equal(publishClicked, true, '修订工具栏暴露可操作的发布按钮')
   await page.waitForSelector('[role="dialog"]', { visible: true })
   assert.match(await page.$eval('[role="dialog"]', node => node.innerText), /活动名称重复/)
   await page.keyboard.press('Escape')
