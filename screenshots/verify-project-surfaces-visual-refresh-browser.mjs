@@ -639,7 +639,34 @@ try {
     assert.deepEqual(technicalWorkspaceState.viewValues, ['vertical', 'horizontal', 'gantt'], `技术子项目计划必须保留竖版/横版/甘特图视图控制：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.horizontalChecked, true, `技术子项目计划默认横版视图必须可观察：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.planContent, true, `技术子项目计划内容区域必须存在：${JSON.stringify(technicalWorkspaceState)}`)
-    const workspacePlan = await page.$('[aria-label="计划内容"] table:has(thead tr[data-technical-plan-header="single-row"])')
+    const workspacePlanSelector = '[aria-label="计划内容"] table:has(thead tr[data-technical-plan-header="single-row"])'
+    const workspacePlanState = await page.$eval(workspacePlanSelector, table => {
+      const visible = element => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+      }
+      const headerRows = Array.from(table.querySelectorAll('thead tr')).filter(visible)
+      const headers = Array.from(headerRows[0]?.querySelectorAll('th') || []).map(cell => (cell.textContent || '').replace(/\s+/g, '').trim())
+      const rows = Array.from(table.querySelectorAll('tbody tr')).filter(visible).map(row => Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent || '').trim()))
+      return {
+        headerRows: headerRows.length,
+        marker: headerRows[0]?.getAttribute('data-technical-plan-header'),
+        grouped: table.querySelectorAll('thead tr[data-technical-plan-header="grouped"]').length,
+        headers,
+        rows,
+        text: table.textContent || '',
+      }
+    })
+    assert.equal(workspacePlanState.headerRows, 1, `技术子项目工作区必须恰好只有一行表头：${JSON.stringify(workspacePlanState)}`)
+    assert.equal(workspacePlanState.marker, 'single-row', `技术子项目工作区必须暴露 single-row 标记：${JSON.stringify(workspacePlanState)}`)
+    assert.equal(workspacePlanState.grouped, 0, '技术子项目工作区不得出现 grouped 表头')
+    assert.equal(workspacePlanState.text.includes('子项目计划'), false, '技术子项目工作区不得显示“子项目计划”分组')
+    assert.deepEqual(workspacePlanState.headers.slice(0, 2), ['版本', '开发周期'], `技术子项目工作区表头必须从版本/开发周期开始：${JSON.stringify(workspacePlanState.headers)}`)
+    assert.ok(workspacePlanState.rows.some(row => row[0] === 'V1'), `技术子项目工作区必须保留 V1 行：${JSON.stringify(workspacePlanState.rows)}`)
+    assert.ok(workspacePlanState.rows.some(row => row[0] === '实际'), `技术子项目工作区必须保留实际行：${JSON.stringify(workspacePlanState.rows)}`)
+    await assertHorizontalPlanDateBindings(page, workspacePlanSelector, '技术子项目工作区横版计划')
+    const workspacePlan = await page.$(workspacePlanSelector)
     assert.ok(workspacePlan, '技术子项目计划工作区必须显示单行横版表头')
     await workspacePlan.screenshot({ path: join(ARTIFACT_DIR, '02-technical-workspace-plan.png') })
   })
