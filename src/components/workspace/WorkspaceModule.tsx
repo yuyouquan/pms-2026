@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React from 'react'
 import {
   Card,
   Tag,
@@ -97,7 +97,6 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   canOpen = true,
   onOpenDenied,
 }) => {
-  const [hovered, setHovered] = useState(false)
   const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
   const isWholeMachine = isMachineProjectType(project.type)
   const classification = resolveProjectClassification(project.type, project.secondaryCategory)
@@ -138,10 +137,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       aria-disabled={!canOpen}
       aria-label={`打开项目 ${project.sourceBid || project.id}`}
       hoverable
-      className={`pms-card-hover pms-project-card pms-project-card-surface pms-glass-surface pms-interactive-surface${canOpen ? '' : ' is-access-denied'}`}
-      data-hovered={hovered || undefined}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      className={`pms-project-card pms-project-card-surface pms-glass-surface pms-interactive-surface${canOpen ? '' : ' is-access-denied'}`}
       onClick={openProject}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === ' ') {

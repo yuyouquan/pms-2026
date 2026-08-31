@@ -7204,8 +7204,7 @@ body,
   transition: border-color var(--pms-project-transition), box-shadow var(--pms-project-transition), background-color var(--pms-project-transition);
 }
 
-.pms-project-card-surface.ant-card:hover,
-.pms-project-card-surface.ant-card[data-hovered='true'] {
+.pms-project-card-surface.ant-card:hover {
   border-color: color-mix(in srgb, var(--pms-brand) 34%, var(--pms-project-surface-border));
   background: var(--pms-project-surface);
   box-shadow: 0 10px 26px rgb(76 59 148 / 12%);
@@ -7432,32 +7431,44 @@ body,
   margin: 10px 12px !important;
 }
 
-.pms-project-info-modal-surface .ant-modal-content {
-  border-color: var(--pms-project-surface-border);
-  border-radius: 14px;
-  background: var(--pms-project-surface);
+.pms-modal.pms-project-info-modal-surface .ant-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden !important;
+  border: 1px solid var(--pms-project-surface-border) !important;
+  border-radius: 14px !important;
+  background: var(--pms-project-surface) !important;
   box-shadow: var(--pms-shadow-modal);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-.pms-project-info-modal-surface .ant-modal-header,
-.pms-project-info-modal-surface .ant-modal-body,
-.pms-project-info-modal-surface .ant-modal-footer {
-  background: var(--pms-project-surface);
+.pms-modal.pms-project-info-modal-surface .ant-modal-content::before {
+  content: none;
 }
 
-.pms-project-info-modal-surface .ant-modal-header {
-  border-bottom-color: var(--pms-project-surface-border);
+.pms-modal.pms-project-info-modal-surface .ant-modal-header {
+  flex: none;
+  border-bottom-color: var(--pms-project-surface-border) !important;
+  border-radius: 14px 14px 0 0 !important;
+  background: var(--pms-project-surface) !important;
 }
 
-.pms-project-info-modal-surface .ant-modal-body {
+.pms-modal.pms-project-info-modal-surface .ant-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   padding: 18px 24px 8px;
+  background: var(--pms-project-surface) !important;
+  overscroll-behavior: contain;
 }
 
-.pms-project-info-modal-surface .ant-modal-footer {
-  position: sticky;
-  bottom: 0;
+.pms-modal.pms-project-info-modal-surface .ant-modal-footer {
+  flex: none;
   z-index: 2;
-  border-top-color: var(--pms-project-surface-border);
+  border-top-color: var(--pms-project-surface-border) !important;
+  background: var(--pms-project-surface) !important;
   box-shadow: 0 -6px 16px rgb(66 52 122 / 4%);
 }
 
