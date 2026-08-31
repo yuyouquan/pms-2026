@@ -437,6 +437,34 @@ async function clickVisibleText(text, selector = 'button,[role="tab"],[role="men
   await wait(350)
 }
 
+async function clickMrTemplatePublishButton() {
+  const result = await page.evaluate(() => {
+    const visible = node => {
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'
+    }
+    const buttons = [...document.querySelectorAll('.pms-mr-toolbar button')]
+      .filter(node => visible(node) && node.textContent?.trim() === '发布')
+    const button = buttons.length === 1 ? buttons[0] : undefined
+    if (!button || button.disabled) {
+      return {
+        box: null,
+        matches: buttons.length,
+        toolbarText: document.querySelector('.pms-mr-toolbar')?.textContent?.trim() ?? '',
+      }
+    }
+    button.click()
+    return {
+      activated: true,
+      matches: buttons.length,
+      toolbarText: '',
+    }
+  })
+  assert.equal(result.activated, true, `MR模板工具栏发布按钮必须唯一且可操作：${JSON.stringify(result)}`)
+  await wait(350)
+}
+
 async function clickButtonStarting(prefix) {
   const box = await page.evaluate(prefix => {
     const node = [...document.querySelectorAll('button')].find(item => {
@@ -793,6 +821,23 @@ try {
   pass(10, 'project link opens MR tab and focuses the requested version')
 
   assert.equal(await page.$('input[aria-label="16.3.0.140-OP-测试开始时间"]'), null)
+  const initialMainMarketCell = await page.$eval(
+    'tr[data-mr-tos-version="16.3.0.140"][data-mr-activity-id="mr-node-version-transfer"] td:nth-child(4)',
+    cell => ({
+      text: cell.textContent?.trim() ?? '',
+      inputCount: cell.querySelectorAll('input').length,
+      invalid: cell.classList.contains('pms-mr-invalid-cell'),
+      ariaLabel: cell.querySelector('.pms-mr-error-icon')?.getAttribute('aria-label') ?? '',
+    }),
+  )
+  assert.equal(initialMainMarketCell.inputCount, 0, '主市场日期保持只读')
+  assert.equal(initialMainMarketCell.invalid, true, '主市场同步联合空间业务错误')
+  assert.match(initialMainMarketCell.text, /2026-05-29/)
+  assert.match(initialMainMarketCell.ariaLabel, /同一1\+N转测类型的版本转测时间需保持一致（2026-05-30）/)
+  await assertErrorTooltip(
+    'tr[data-mr-tos-version="16.3.0.140"][data-mr-activity-id="mr-node-version-transfer"] td:nth-child(4) .pms-mr-error-icon',
+    '同一1+N转测类型的版本转测时间需保持一致（2026-05-30）',
+  )
   const initialMarketCells = await page.evaluate(() => {
     const inspect = ariaLabel => {
       const input = document.querySelector(`input[aria-label="${ariaLabel}"]`)
@@ -1056,25 +1101,14 @@ try {
     .map(activity => activity.activityName.trim())
     .filter((name, index, names) => name && names.indexOf(name) !== index)
   assert.ok(duplicateNames.includes('需求&修改点'), '浏览器现场确实存在待校验的重复活动名称')
-  const publishClicked = await page.evaluate(() => {
-    const visible = node => {
-      const rect = node.getBoundingClientRect()
-      const style = getComputedStyle(node)
-      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'
-    }
-    const button = [...document.querySelectorAll('button')]
-      .find(node => visible(node) && !node.disabled && node.textContent?.trim() === '发布')
-    button?.click()
-    return Boolean(button)
-  })
-  assert.equal(publishClicked, true, '修订工具栏暴露可操作的发布按钮')
+  await clickMrTemplatePublishButton()
   await page.waitForSelector('[role="dialog"]', { visible: true })
   assert.match(await page.$eval('[role="dialog"]', node => node.innerText), /活动名称重复/)
   await page.keyboard.press('Escape')
   await page.waitForSelector('[role="dialog"]', { hidden: true })
   const reorderedParentNumber = afterDrag.domRows.find(row => row.id === parentId)?.number
   await fillInput(`input[aria-label="活动名称-${reorderedParentNumber}"]`, 'MR验收收尾')
-  await clickVisibleText('发布')
+  await clickMrTemplatePublishButton()
   await page.waitForFunction(() => document.body.innerText.includes('V2 (已发布)'))
   const publishedState = await readMrState()
   const published = publishedState.templateVersions.find(version => version.versionNo === 'V2' && version.status === '已发布')
