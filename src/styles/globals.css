@@ -7454,6 +7454,9 @@ body,
 }
 
 .pms-project-info-modal-surface .ant-modal-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   border-top-color: var(--pms-project-surface-border);
   box-shadow: 0 -6px 16px rgb(66 52 122 / 4%);
 }
