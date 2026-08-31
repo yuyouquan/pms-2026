@@ -743,7 +743,7 @@ function getInvalidTaskFields(tasks: any[]): Map<string, InvalidFields> {
 }
 
 export default function ProjectSpaceContainer() {
-  const { message: containerMessageApi } = App.useApp()
+  const { message: containerMessageApi, modal: containerModalApi } = App.useApp()
   const message = containerMessageApi
   // ═══════ Store hooks ═══════
   const ui = useUiStore()
@@ -1769,7 +1769,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const confirmClonePlanSource = (source: PlanCloneSource) => {
-    Modal.confirm({
+    containerModalApi.confirm({
       title: '确认克隆计划',
       content: `确认将 ${source.label} 的计划信息克隆到当前修订版本？实际开始和实际完成时间不会被克隆。`,
       okText: '确认克隆',
@@ -3011,7 +3011,7 @@ export default function ProjectSpaceContainer() {
       return
     }
     if (!isCurrentDraft || !currentVersionData) return
-    Modal.confirm({
+    containerModalApi.confirm({
       title: '取消修订版本',
       content: `确认取消 ${currentVersionData.versionNo} 修订版本？取消后该版本将显示为已取消，可重新创建新的修订版本。`,
       okText: '确认取消',
@@ -3850,7 +3850,7 @@ export default function ProjectSpaceContainer() {
         const token = createLevel1StructureToken(parent?.stableId || parent?.id || '')
         if (!rawTask || !token) return
         let nextName = rawTask.taskName
-        Modal.confirm({
+        containerModalApi.confirm({
           title: '修改业务节点名称',
           content: (
             <Input
@@ -4122,7 +4122,7 @@ export default function ProjectSpaceContainer() {
     const addGovernedChild = (record: any) => {
       if (!canAddGovernedChild(record)) return
       let taskName = ''
-      Modal.confirm({
+      containerModalApi.confirm({
         title: '新增子活动',
         content: <Input autoFocus placeholder="请输入活动名称" onChange={event => { taskName = event.target.value }} />,
         okText: '确认', cancelText: '取消',

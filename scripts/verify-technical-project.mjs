@@ -560,7 +560,7 @@ const overlayInteraction = readSource(root, 'src/hooks/useOverlayInteraction.ts'
 assert.match(overlayInteraction, /tryBeginSubmit/, 'shared overlay helper provides a synchronous submission lock')
 assert.match(overlayInteraction, /restoreTriggerFocus/, 'shared overlay helper restores focus to its opener')
 const projectSpace = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
-assert.match(projectSpace, /const \{ message: containerMessageApi \} = App\.useApp\(\)/, 'project space consumes the persistent application message context')
+assert.match(projectSpace, /const \{ message: containerMessageApi, modal: containerModalApi \} = App\.useApp\(\)/, 'project space consumes the persistent application message and modal contexts')
 assert.match(projectSpace, /const message = containerMessageApi/, 'all project-space feedback resolves to its mounted message instance')
 assert.match(projectSpace, /<TechnicalProjectInformationView\b/, 'project space mounts the shared-frame technical information view')
 assert.doesNotMatch(projectSpace, /<TechnicalProjectOverview\b/, 'technical overview no longer duplicates information-page ownership')
