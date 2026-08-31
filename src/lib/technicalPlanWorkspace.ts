@@ -335,7 +335,7 @@ export function buildTechnicalHorizontalRows(
     versionNo: version.versionNo,
     status: version.status,
     cycleDays: sumTechnicalEstimatedDays(version.tasks),
-    endDatesByTaskId: Object.fromEntries(version.tasks.map(task => [task.id, task.planEndDate || ''])),
+    endDatesByTaskId: Object.fromEntries(version.tasks.map(task => [getTechnicalPlanRowKey(task), task.planEndDate || ''])),
   }))
   const currentVersion = versions.find(version => version.id === currentVersionId)
   return [
@@ -346,7 +346,7 @@ export function buildTechnicalHorizontalRows(
       versionNo: '实际',
       status: '',
       cycleDays: currentVersion ? cycleDays(currentVersion.tasks, 'actualStartDate', 'actualEndDate') : null,
-      endDatesByTaskId: Object.fromEntries((currentVersion?.tasks || []).map(task => [task.id, task.actualEndDate || ''])),
+      endDatesByTaskId: Object.fromEntries((currentVersion?.tasks || []).map(task => [getTechnicalPlanRowKey(task), task.actualEndDate || ''])),
     },
   ]
 }
