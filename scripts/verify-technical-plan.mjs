@@ -558,6 +558,19 @@ assert.match(technicalModuleSource, /if \(!updated\.ok\) \{ message\.error\('删
 assert.match(technicalModuleSource, /viewMode === 'gantt' && tab\?\.templateKind === 'tdt'/, 'expand and collapse controls only appear for hierarchical TDT gantt')
 assert.match(technicalModuleSource, /const filteredHierarchyTasks = useMemo\([\s\S]{0,260}filterTechnicalPlanGanttTasks/, 'all plan visualizations derive a single filtered task hierarchy')
 assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,120}tasks=\{filteredHierarchyTasks\}/, 'horizontal plan columns use the current filtered hierarchy')
+assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,180}templateKind=\{tab\?\.templateKind \|\| 'tdt'\}/, 'horizontal plan mode follows the active template kind instead of task depth')
+assert.match(technicalModuleSource, /function TechnicalHorizontalPlanTable\([\s\S]{0,240}templateKind[\s\S]{0,420}const mode = templateKind === 'subproject' \? 'technical-subproject' : 'standard'/, 'root-only TDT plans retain the grouped standard header mode')
+assert.match(technicalSummarySource, /const projectionMode = scope\.kind === 'subproject' \? 'technical-subproject' : 'standard'/, 'technical summary mode follows its canonical scope kind instead of task depth')
+for (const [surfaceName, source] of [
+  ['technical plan workspace horizontal view', technicalModuleSource],
+  ['technical basic-information summary', technicalSummarySource],
+]) {
+  assert.match(source, /Object\.fromEntries\([^\n]+map\([^\n]+\[getTechnicalPlanRowKey\([^)]*\),/, `${surfaceName} keys version dates by stable activity identity`)
+  assert.match(source, /endDatesByTaskId\[getTechnicalPlanRowKey\([^)]*\)\]/, `${surfaceName} reads version dates by stable activity identity`)
+  assert.match(source, /scope="col"/, `${surfaceName} identifies activity headers as columns`)
+  assert.match(source, /scope="colgroup"/, `${surfaceName} identifies grouped stage headers as column groups`)
+}
+assert.match(technicalSummarySource, /projectionMode === 'technical-subproject'[\s\S]{0,180}版本活动[\s\S]{0,180}版本阶段里程碑/, 'technical summary exposes an accurate single-level table label')
 assert.match(technicalModuleSource, /buildPlanHorizontalStageGroups\([\s\S]{0,120}filteredHierarchyTasks/, 'current horizontal export uses the same filtered hierarchy')
 assert.doesNotMatch(technicalModuleSource, /technicalDraft|isResponsibleForTechnicalPlanTasks|toggleCollapsedTask/, 'obsolete technical-plan state and helpers are removed')
 assert.match(readSource(root, 'src/stores/technicalPlan.ts'), /DEFAULT_COLUMNS[\s\S]{0,420}actualStartDate[\s\S]{0,120}actualEndDate[\s\S]{0,120}actualDays/, 'technical plan persisted defaults include actual-date columns')
@@ -688,6 +701,12 @@ const actualVersionRows = technicalWorkspace.buildTechnicalHorizontalRows([
   { ...publishedVersion, id: 'later', tasks: [{ ...imported[0], actualEndDate: '2026-02-09' }] },
 ], 'selected')
 assert.equal(actualVersionRows.at(-1).endDatesByTaskId.p1, '2026-01-09', 'horizontal actual row explicitly follows the selected version')
+const reorderedStableRows = technicalWorkspace.buildTechnicalHorizontalRows([
+  { ...publishedVersion, id: 'before-reorder', tasks: [{ ...imported[0], id: '1', stableId: 'activity-a', planEndDate: '2026-01-09' }] },
+  { ...publishedVersion, id: 'after-reorder', tasks: [{ ...imported[0], id: '2', stableId: 'activity-a', planEndDate: '2026-02-09' }] },
+], 'after-reorder')
+assert.equal(reorderedStableRows[0].endDatesByTaskId['activity-a'], '2026-01-09', 'historical horizontal dates remain aligned after visible IDs are renumbered')
+assert.equal(reorderedStableRows[1].endDatesByTaskId['activity-a'], '2026-02-09', 'current horizontal dates use the same stable activity identity after reorder')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectSpaceSourceFile = parseTsx(projectSpaceSource, 'ProjectSpaceContainer.tsx')
 assert.equal(importsComponent(projectSpaceSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'whole-machine project space imports the shared shell from its canonical module')

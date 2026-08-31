@@ -215,6 +215,49 @@ const readMrState = () => page.evaluate(() => {
   return raw ? JSON.parse(raw).state : null
 })
 
+async function inspectJointCell(rowSelector, activityId) {
+  return page.$eval(`${rowSelector} [data-mr-date-cell="true"][data-mr-activity-id="${activityId}"]`, cell => {
+    const icon = cell.querySelector('.pms-mr-cell-error-icon')
+    return {
+      invalid: cell.classList.contains('pms-mr-invalid-cell'),
+      iconCount: cell.querySelectorAll('.pms-mr-cell-error-icon').length,
+      inputCount: cell.querySelectorAll('input').length,
+      ariaLabel: icon?.getAttribute('aria-label') ?? '',
+      value: cell.querySelector('input')?.value ?? cell.textContent?.trim() ?? '',
+    }
+  })
+}
+
+async function assertErrorTooltip(iconSelector, expected) {
+  const icon = await page.$(iconSelector)
+  assert.ok(icon, `error icon exists: ${iconSelector}`)
+  await icon.evaluate(node => node.scrollIntoView({ block: 'center', inline: 'center' }))
+  await icon.hover()
+  await page.waitForFunction(text => [...document.querySelectorAll('.ant-tooltip')].some(node => {
+    const rect = node.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0 && node.textContent?.includes(text)
+  }), {}, expected)
+  const tooltipText = await page.$$eval('.ant-tooltip', (nodes, text) => nodes
+    .find(node => node.textContent?.includes(text))?.textContent ?? '', expected)
+  assert.match(tooltipText, new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  await page.mouse.move(1, 1)
+  await wait(250)
+}
+
+async function clearSelect(ariaLabel) {
+  const cleared = await page.$eval(`[aria-label="${ariaLabel}"]`, control => {
+    const clear = control.closest('.ant-select')?.querySelector('.ant-select-clear')
+    if (!clear) return false
+    clear.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
+    clear.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    clear.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    clear.click()
+    return true
+  })
+  assert.equal(cleared, true, `select exposes clear action: ${ariaLabel}`)
+  await wait(350)
+}
+
 async function assertNaMachineProjection(projectId, tosVersion) {
   const state = await readMrState()
   assert.deepEqual(state.machinePlansByKey[`${projectId}::${tosVersion}`].dates, {})
@@ -234,18 +277,6 @@ async function assertNaMachineProjection(projectId, tosVersion) {
   assert.equal(projection.cellCount, 10)
   assert.deepEqual(projection.values, Array(10).fill('/'))
   assert.equal(projection.editableDateInputs, 0)
-}
-
-async function setTosCollectionDateThroughProject(value) {
-  await openProjectFromList('tOS版本项目', 'tOS16.3', '张三,李白')
-  await clickVisibleText('计划')
-  await clickVisibleText('三级计划-MR版本计划', '[role="tab"],button,span')
-  await page.waitForSelector('input[aria-label="16.3.0.140-修改点收集开始时间-日期"]', { visible: true })
-  await fillDate('input[aria-label="16.3.0.140-修改点收集开始时间-日期"]', value)
-  assert.equal((await readMrState()).tosInstancesByProjectId['19'][0].dates['mr-node-change-collection'], value)
-  await clickButtonStarting('返回')
-  await openMainMenu('jointProjectSpace')
-  await page.waitForSelector('.pms-joint-mr-table', { visible: true })
 }
 
 async function assertJointStickyColumns() {
@@ -406,6 +437,34 @@ async function clickVisibleText(text, selector = 'button,[role="tab"],[role="men
   await wait(350)
 }
 
+async function clickMrTemplatePublishButton() {
+  const result = await page.evaluate(() => {
+    const visible = node => {
+      const rect = node.getBoundingClientRect()
+      const style = getComputedStyle(node)
+      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'
+    }
+    const buttons = [...document.querySelectorAll('.pms-mr-toolbar button')]
+      .filter(node => visible(node) && node.textContent?.trim() === '发布')
+    const button = buttons.length === 1 ? buttons[0] : undefined
+    if (!button || button.disabled) {
+      return {
+        box: null,
+        matches: buttons.length,
+        toolbarText: document.querySelector('.pms-mr-toolbar')?.textContent?.trim() ?? '',
+      }
+    }
+    button.click()
+    return {
+      activated: true,
+      matches: buttons.length,
+      toolbarText: '',
+    }
+  })
+  assert.equal(result.activated, true, `MR模板工具栏发布按钮必须唯一且可操作：${JSON.stringify(result)}`)
+  await wait(350)
+}
+
 async function clickButtonStarting(prefix) {
   const box = await page.evaluate(prefix => {
     const node = [...document.querySelectorAll('button')].find(item => {
@@ -544,6 +603,8 @@ async function fillInput(selector, value) {
 
 async function fillDate(selector, value) {
   await page.waitForSelector(selector, { visible: true })
+  await page.$eval(selector, input => input.scrollIntoView({ block: 'center', inline: 'center' }))
+  await wait(150)
   if (await page.$eval(selector, input => Boolean(input.value))) {
     const picker = await page.$eval(selector, input => {
       const host = input.closest('.ant-picker')
@@ -622,6 +683,8 @@ async function openProjectFromList(categoryPrefix, projectName, rowSuffix = '') 
   await page.waitForSelector('.pms-project-space', { visible: true })
 }
 
+let initialScenarioMatrixVerified = false
+
 try {
   await page.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: TIMEOUT })
   // Ant Design's menu is server-rendered before React attaches its event handlers.
@@ -641,7 +704,7 @@ try {
 
   const jointRows = await page.$$eval('.pms-joint-mr-table tbody tr.ant-table-row', rows => rows.map(row => ({ kind: row.dataset.mrRowKind, text: row.innerText, pickerCount: row.querySelectorAll('.ant-picker').length, selectCount: row.querySelectorAll('.ant-select').length })))
   assert.equal(jointRows[0].kind, 'tos-reference')
-  assert.ok(jointRows[0].text.includes('16.3.0.140') && jointRows[0].text.includes('tOS16.3'))
+  assert.ok(jointRows[0].text.includes('16.3.0.135') && jointRows[0].text.includes('tOS16.3'))
   assert.equal(jointRows[0].pickerCount, 0)
   assert.equal(jointRows[0].selectCount, 0)
   assert.ok(jointRows.findIndex(row => row.text.includes('X6855_H8917')) > 0)
@@ -652,21 +715,59 @@ try {
   await page.$eval('.pms-joint-mr-table .ant-table-body', body => { body.scrollLeft = 0 })
   await wait(200)
 
+  const tosRow = version => `tr[data-mr-row-kind="tos-reference"][data-mr-project-id="19"][data-mr-tos-version="${version}"]`
+  const machineRow = (projectId, version) => `tr[data-mr-row-kind="machine"][data-mr-project-id="${projectId}"][data-mr-tos-version="${version}"]`
+  const initialCells = {
+    tosNormal: await inspectJointCell(tosRow('16.3.0.135'), 'mr-node-change-collection'),
+    tosBoundaryStart: await inspectJointCell(tosRow('16.3.0.140'), 'mr-node-change-collection'),
+    tosBoundaryEnd: await inspectJointCell(tosRow('16.3.0.140'), 'mr-node-ota-deploy'),
+    tosBeforeStart: await inspectJointCell(tosRow('16.3.0.145'), 'mr-node-change-collection'),
+    tosAfterEnd: await inspectJointCell(tosRow('16.3.0.150'), 'mr-node-ota-deploy'),
+    jointCleanTypeOne: await inspectJointCell(machineRow('1', '16.3.0.145'), 'mr-node-version-transfer'),
+    jointSameType: await inspectJointCell(machineRow('1', '16.3.0.140'), 'mr-node-version-transfer'),
+    jointBaseline: await inspectJointCell(machineRow('3', '16.3.0.140'), 'mr-node-mp-intake-deadline'),
+    jointGap: await inspectJointCell(machineRow('3', '16.3.0.145'), 'mr-node-version-transfer'),
+    jointNextBoundary: await inspectJointCell(machineRow('3', '16.3.0.145'), 'mr-node-test-start'),
+  }
+  assert.equal(initialCells.tosNormal.invalid, false)
+  assert.equal(initialCells.tosBoundaryStart.invalid, false)
+  assert.equal(initialCells.tosBoundaryEnd.invalid, false)
+  assert.equal(initialCells.tosBeforeStart.invalid, true)
+  assert.equal(initialCells.tosAfterEnd.invalid, true)
+  assert.equal(initialCells.jointCleanTypeOne.invalid, false)
+  assert.equal(initialCells.jointSameType.invalid, true)
+  assert.equal(initialCells.jointBaseline.invalid, true)
+  assert.equal(initialCells.jointGap.invalid, true)
+  assert.equal(initialCells.jointNextBoundary.invalid, true)
+  assert.equal(initialCells.tosBeforeStart.inputCount, 0)
+  assert.equal(initialCells.jointGap.inputCount, 1)
+  assert.match(initialCells.tosBeforeStart.ariaLabel, /1条日期错误/)
+  assert.match(initialCells.jointGap.ariaLabel, /1条日期错误/)
+  await assertErrorTooltip(`${tosRow('16.3.0.145')} [data-mr-activity-id="mr-node-change-collection"] .pms-mr-cell-error-icon`, '计划开始时间（2026-06-16）')
+  await assertErrorTooltip(`${tosRow('16.3.0.150')} [data-mr-activity-id="mr-node-ota-deploy"] .pms-mr-cell-error-icon`, '计划完成时间（2026-08-15）')
+  await assertErrorTooltip(`${machineRow('3', '16.3.0.140')} [data-mr-activity-id="mr-node-mp-intake-deadline"] .pms-mr-cell-error-icon`, 'tOS项目时间（2026-05-20）')
+  await assertErrorTooltip(`${machineRow('3', '16.3.0.145')} [data-mr-activity-id="mr-node-version-transfer"] .pms-mr-cell-error-icon`, '至少1周（2026-06-29）')
+  await assertErrorTooltip(`${machineRow('3', '16.3.0.145')} [data-mr-activity-id="mr-node-test-start"] .pms-mr-cell-error-icon`, '测试开始时间（2026-07-23）')
+  await screenshot('joint-invalid.png')
+  initialScenarioMatrixVerified = true
+
   await fillInput('input[aria-label="项目名称"]', 'X6877-D8400_H991')
+  await chooseSelect('tOS版本号', '16.3.0.145')
   const filteredTexts = await page.$$eval('.pms-joint-mr-table tbody tr.ant-table-row', rows => rows.map(row => row.innerText))
   assert.ok(filteredTexts.some(text => text.includes('X6877-D8400_H991')))
   assert.ok(filteredTexts.every(text => text.includes('X6877-D8400_H991')))
   assert.equal(await page.$('.pms-joint-mr-table .pms-mr-cell-error-icon'), null)
   await screenshot('joint-valid.png')
+  await clearSelect('tOS版本号')
   await fillInput('input[aria-label="项目名称"]', '')
-  pass(4, 'filters reduce visible row set')
+  pass(4, 'initial MR scenario matrix is visible and filters isolate clean rows')
 
   await switchUser('王五')
   assert.equal(await page.$eval('[aria-label="1-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), false)
   assert.equal(await page.$eval('[aria-label="3-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), true)
-  await chooseSelect('1-16.3.0.140-1+N版本类型', '4', '1')
+  await chooseSelect('1-16.3.0.140-1+N版本类型', '4', '2')
   assert.equal((await readMrState()).machinePlansByKey['1::16.3.0.140'].transferType, '4')
-  await chooseSelect('1-16.3.0.140-1+N版本类型', '1', '4')
+  await chooseSelect('1-16.3.0.140-1+N版本类型', '2', '4')
   pass(5, 'machine SPM edits only the owned project')
 
   await switchUser('张三')
@@ -685,69 +786,10 @@ try {
   assert.equal((await readMrState()).machinePlansByKey['1::16.3.0.145'].dates['mr-node-change-collection'], '2026-06-16')
   pass(7, 'N/A clears dates and displays slashes')
 
-  await setTosCollectionDateThroughProject('2026-05-15')
-  const localizedErrors = await page.evaluate(() => {
-    const inspect = (rowSelector, activityId) => {
-      const row = document.querySelector(rowSelector)
-      const cell = row?.querySelector(`[data-mr-date-cell="true"][data-mr-activity-id="${activityId}"]`)
-      const icon = cell?.querySelector('.pms-mr-cell-error-icon')
-      const picker = cell?.querySelector('.ant-picker')
-      const content = cell?.querySelector('.pms-mr-invalid-cell-content > :first-child')
-      const cellStyle = cell ? getComputedStyle(cell) : null
-      const iconRect = icon?.getBoundingClientRect()
-      const contentRect = (picker || content)?.getBoundingClientRect()
-      return {
-        invalid: cell?.classList.contains('pms-mr-invalid-cell') ?? false,
-        iconCount: cell?.querySelectorAll('.pms-mr-cell-error-icon').length ?? 0,
-        inputCount: cell?.querySelectorAll('input').length ?? 0,
-        backgroundColor: cellStyle?.backgroundColor,
-        boxShadow: cellStyle?.boxShadow,
-        iconOnRight: Boolean(iconRect && contentRect && iconRect.left >= contentRect.right),
-        ariaLabel: icon?.getAttribute('aria-label'),
-      }
-    }
-    return {
-      tos: inspect('tr[data-mr-row-kind="tos-reference"][data-mr-project-id="19"][data-mr-tos-version="16.3.0.140"]', 'mr-node-change-collection'),
-      machine: inspect('tr[data-mr-row-kind="machine"][data-mr-project-id="3"][data-mr-tos-version="16.3.0.140"]', 'mr-node-mp-intake-deadline'),
-    }
-  })
-  assert.equal(localizedErrors.tos.invalid, true)
-  assert.equal(localizedErrors.machine.invalid, true)
-  assert.equal(localizedErrors.tos.iconCount, 1)
-  assert.equal(localizedErrors.machine.iconCount, 1)
-  assert.equal(localizedErrors.tos.inputCount, 0)
-  assert.equal(localizedErrors.machine.inputCount, 1)
-  assert.equal(localizedErrors.tos.backgroundColor, localizedErrors.machine.backgroundColor)
-  assert.equal(localizedErrors.tos.boxShadow, localizedErrors.machine.boxShadow)
-  assert.equal(localizedErrors.tos.iconOnRight, true)
-  assert.equal(localizedErrors.machine.iconOnRight, true)
-  assert.match(localizedErrors.tos.ariaLabel, /1条日期错误/)
-  const tosErrorIcon = await page.$('tr[data-mr-row-kind="tos-reference"][data-mr-project-id="19"][data-mr-tos-version="16.3.0.140"] [data-mr-activity-id="mr-node-change-collection"] .pms-mr-cell-error-icon')
-  assert.ok(tosErrorIcon)
-  await tosErrorIcon.hover()
-  await page.waitForFunction(() => [...document.querySelectorAll('.ant-tooltip')].some(node => {
-    const rect = node.getBoundingClientRect()
-    return rect.width > 0 && rect.height > 0 && node.textContent?.includes('修改点收集开始时间不能早于一级计划中的计划开始时间')
-  }))
-  assert.match(await page.$$eval('.ant-tooltip', nodes => nodes
-    .find(node => node.textContent?.includes('修改点收集开始时间不能早于一级计划中的计划开始时间'))?.textContent ?? ''), /修改点收集开始时间不能早于一级计划中的计划开始时间（2026-05-16）/)
-  await page.mouse.move(1, 1)
-  await wait(300)
-  await page.$eval('.pms-joint-mr-table .ant-table-body', body => { body.scrollLeft = 520 })
-  await wait(200)
-  const machineErrorIcon = await page.$('tr[data-mr-row-kind="machine"][data-mr-project-id="3"][data-mr-tos-version="16.3.0.140"] [data-mr-activity-id="mr-node-mp-intake-deadline"] .pms-mr-cell-error-icon')
-  assert.ok(machineErrorIcon)
-  await machineErrorIcon.hover()
-  await page.waitForFunction(() => [...document.querySelectorAll('.ant-tooltip')].some(node => {
-    const rect = node.getBoundingClientRect()
-    return rect.width > 0 && rect.height > 0 && node.textContent?.includes('整机产品项目的MP入库截止时间不得晚于tOS项目时间')
-  }))
-  assert.match(await page.$$eval('.ant-tooltip', nodes => nodes
-    .find(node => node.textContent?.includes('整机产品项目的MP入库截止时间不得晚于tOS项目时间'))?.textContent ?? ''), /整机产品项目的MP入库截止时间不得晚于tOS项目时间（2026-05-20）/)
+  assert.equal(initialScenarioMatrixVerified, true)
+  assert.equal((await readMrState()).tosInstancesByProjectId['19'][2].dates['mr-node-change-collection'], '2026-06-15')
   assert.equal((await readMrState()).machinePlansByKey['3::16.3.0.140'].dates['mr-node-mp-intake-deadline'], '2026-05-25')
-  await screenshot('joint-invalid.png')
-  await setTosCollectionDateThroughProject('2026-05-16')
-  pass(8, 'tOS and machine errors are localized with red exact tooltips')
+  pass(8, 'initial tOS and machine errors remain localized without test-manufactured dates')
 
   await clickVisibleText('停止发版')
   await chooseSelect('停止发版项目名称', 'X6877-D8400_H991')
@@ -779,6 +821,56 @@ try {
   pass(10, 'project link opens MR tab and focuses the requested version')
 
   assert.equal(await page.$('input[aria-label="16.3.0.140-OP-测试开始时间"]'), null)
+  const initialMainMarketCell = await page.$eval(
+    'tr[data-mr-tos-version="16.3.0.140"][data-mr-activity-id="mr-node-version-transfer"] td:nth-child(4)',
+    cell => ({
+      text: cell.textContent?.trim() ?? '',
+      inputCount: cell.querySelectorAll('input').length,
+      invalid: cell.classList.contains('pms-mr-invalid-cell'),
+      ariaLabel: cell.querySelector('.pms-mr-error-icon')?.getAttribute('aria-label') ?? '',
+    }),
+  )
+  assert.equal(initialMainMarketCell.inputCount, 0, '主市场日期保持只读')
+  assert.equal(initialMainMarketCell.invalid, true, '主市场同步联合空间业务错误')
+  assert.match(initialMainMarketCell.text, /2026-05-29/)
+  assert.match(initialMainMarketCell.ariaLabel, /同一1\+N转测类型的版本转测时间需保持一致（2026-05-30）/)
+  await assertErrorTooltip(
+    'tr[data-mr-tos-version="16.3.0.140"][data-mr-activity-id="mr-node-version-transfer"] td:nth-child(4) .pms-mr-error-icon',
+    '同一1+N转测类型的版本转测时间需保持一致（2026-05-30）',
+  )
+  const initialMarketCells = await page.evaluate(() => {
+    const inspect = ariaLabel => {
+      const input = document.querySelector(`input[aria-label="${ariaLabel}"]`)
+      const cell = input?.closest('td')
+      const icon = cell?.querySelector('.pms-mr-error-icon')
+      return {
+        exists: Boolean(input),
+        value: input?.value ?? '',
+        disabled: Boolean(input?.disabled),
+        invalid: cell?.classList.contains('pms-mr-invalid-cell') ?? false,
+        ariaLabel: icon?.getAttribute('aria-label') ?? '',
+      }
+    }
+    return {
+      normal: inspect('16.3.0.140-TR-测试开始时间'),
+      later: inspect('16.3.0.140-RU-评审时间'),
+      missingMain: inspect('16.3.0.140-TR-软件归档时间'),
+    }
+  })
+  assert.deepEqual(initialMarketCells.normal, {
+    exists: true, value: '2026-05-23', disabled: false, invalid: false, ariaLabel: '',
+  })
+  assert.equal(initialMarketCells.later.exists, true)
+  assert.equal(initialMarketCells.later.value, '2026-06-04')
+  assert.equal(initialMarketCells.later.invalid, true)
+  assert.match(initialMarketCells.later.ariaLabel, /主市场对应时间（2026-06-03）/)
+  assert.equal(initialMarketCells.missingMain.exists, true)
+  assert.equal(initialMarketCells.missingMain.value, '2026-06-12')
+  assert.equal(initialMarketCells.missingMain.disabled, true)
+  assert.equal(initialMarketCells.missingMain.invalid, true)
+  assert.match(initialMarketCells.missingMain.ariaLabel, /主市场对应时间未填写/)
+  await assertErrorTooltip('td:has(input[aria-label="16.3.0.140-RU-评审时间"]) .pms-mr-error-icon', '主市场对应时间（2026-06-03）')
+  await assertErrorTooltip('td:has(input[aria-label="16.3.0.140-TR-软件归档时间"]) .pms-mr-error-icon', '主市场对应时间未填写，当前市场不可填写')
   const trPicker = await page.$('input[aria-label="16.3.0.140-TR-修改点收集开始时间"]')
   assert.ok(trPicker)
   assert.equal(await trPicker.evaluate(node => node.disabled), false)
@@ -789,7 +881,7 @@ try {
   await page.waitForSelector('[aria-label="整机MR版本计划横版表格"]', { visible: true })
   assert.equal(await page.$eval('input[aria-label="16.3.0.140-TR-修改点收集开始时间"]', node => node.value), '2026-05-16')
   await screenshot('machine-horizontal.png')
-  pass(13, 'main market is read-only and non-main market edits within bounds')
+  pass(13, 'initial market normal, late, and missing-main scenarios render before edits')
 
   await clickButtonStarting('返回')
   await openProjectFromList('tOS版本项目', 'tOS16.3', '张三,李白')
@@ -825,7 +917,7 @@ try {
   await page.waitForFunction(() => {
     const versions = [...document.querySelectorAll('.pms-mr-plan-grid--horizontal tbody tr[data-mr-tos-version]')]
       .map(row => row.getAttribute('data-mr-tos-version'))
-    return [...new Set(versions)].sort().join(',') === '16.3.0.140,16.3.0.145'
+    return [...new Set(versions)].sort().join(',') === '16.3.0.135,16.3.0.140,16.3.0.145,16.3.0.150,16.3.0.155'
   })
   assert.equal(await page.$eval(searchSelector, input => input.value), '')
   assert.equal(Object.hasOwn((await readMrState()), 'versionQuery'), false)
@@ -833,9 +925,12 @@ try {
   await page.click('[aria-label="选择tOS版本号"]')
   await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { visible: true })
   const candidateState = await page.evaluate(() => [...document.querySelectorAll('.ant-select-item-option')].map(node => ({ text: node.textContent?.trim(), disabled: node.classList.contains('ant-select-item-option-disabled') })))
+  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.135') && item.disabled && item.text.includes('该tOS版本号已添加')))
   assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.140') && item.disabled && item.text.includes('该tOS版本号已添加')))
   assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.145') && item.disabled && item.text.includes('该tOS版本号已添加')))
-  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.150') && item.disabled && item.text.includes('请先完善一级计划中的计划开始时间和计划完成时间')))
+  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.150') && item.disabled && item.text.includes('该tOS版本号已添加')))
+  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.155') && item.disabled && item.text.includes('该tOS版本号已添加')))
+  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.160') && item.disabled && item.text.includes('请先完善一级计划中的计划开始时间和计划完成时间')))
   await page.keyboard.press('Escape')
   await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { hidden: true })
   await wait(200)
@@ -853,13 +948,53 @@ try {
   await page.waitForSelector('[aria-label="MR版本计划竖版表格"]', { visible: true })
   pass(11, 'add-version modal explains used and incomplete candidates')
 
+  const initialTosProjectCells = await page.evaluate(() => {
+    const inspect = ariaLabel => {
+      const input = document.querySelector(`input[aria-label="${ariaLabel}"]`)
+      const cell = input?.closest('td')
+      return {
+        exists: Boolean(input),
+        value: input?.value ?? '',
+        invalid: cell?.classList.contains('pms-mr-invalid-cell') ?? false,
+        errorAria: cell?.querySelector('.pms-mr-cell-error-icon')?.getAttribute('aria-label') ?? '',
+      }
+    }
+    return {
+      normal: inspect('16.3.0.135-修改点收集开始时间-日期'),
+      boundaryStart: inspect('16.3.0.140-修改点收集开始时间-日期'),
+      boundaryEnd: inspect('16.3.0.140-OTA开放验证&部署-日期'),
+      beforeStart: inspect('16.3.0.145-修改点收集开始时间-日期'),
+      afterEnd: inspect('16.3.0.150-OTA开放验证&部署-日期'),
+    }
+  })
+  assert.deepEqual(initialTosProjectCells.normal, {
+    exists: true, value: '2026-04-17', invalid: false, errorAria: '',
+  })
+  assert.deepEqual(initialTosProjectCells.boundaryStart, {
+    exists: true, value: '2026-05-16', invalid: false, errorAria: '',
+  })
+  assert.deepEqual(initialTosProjectCells.boundaryEnd, {
+    exists: true, value: '2026-06-15', invalid: false, errorAria: '',
+  })
+  assert.equal(initialTosProjectCells.beforeStart.value, '2026-06-15')
+  assert.equal(initialTosProjectCells.beforeStart.invalid, true)
+  assert.match(initialTosProjectCells.beforeStart.errorAria, /1条日期错误/)
+  assert.equal(initialTosProjectCells.afterEnd.value, '2026-08-16')
+  assert.equal(initialTosProjectCells.afterEnd.invalid, true)
+  assert.match(initialTosProjectCells.afterEnd.errorAria, /1条日期错误/)
+  await assertErrorTooltip('td:has(input[aria-label="16.3.0.145-修改点收集开始时间-日期"]) .pms-mr-cell-error-icon', '计划开始时间（2026-06-16）')
+  await assertErrorTooltip('td:has(input[aria-label="16.3.0.150-OTA开放验证&部署-日期"]) .pms-mr-cell-error-icon', '计划完成时间（2026-08-15）')
   await screenshot('tos-vertical.png')
   await fillDate('input[aria-label="16.3.0.140-测试开始时间-日期"]', '2026-05-24')
-  assert.equal((await readMrState()).tosInstancesByProjectId['19'][0].dates['mr-node-test-start'], '2026-05-24')
+  assert.equal((await readMrState()).tosInstancesByProjectId['19'].find(instance => instance.tosVersion === '16.3.0.140').dates['mr-node-test-start'], '2026-05-24')
+  await page.$eval('[aria-label="横版视图"]', control => control.scrollIntoView({ block: 'center', inline: 'center' }))
+  await wait(150)
   await clickVisibleText('横版', 'label,button,span')
   await page.waitForSelector('[aria-label="MR版本计划横版表格"]', { visible: true })
   assert.equal(await page.$eval('input[aria-label="16.3.0.140-测试开始时间-日期"]', node => node.value), '2026-05-24')
   await screenshot('tos-horizontal.png')
+  await page.$eval('[aria-label="竖版视图"]', control => control.scrollIntoView({ block: 'center', inline: 'center' }))
+  await wait(150)
   await clickVisibleText('竖版', 'label,button,span')
   await fillDate('input[aria-label="16.3.0.140-测试开始时间-日期"]', '2026-05-23')
   pass(12, 'tOS vertical and horizontal modes share dates')
@@ -966,25 +1101,14 @@ try {
     .map(activity => activity.activityName.trim())
     .filter((name, index, names) => name && names.indexOf(name) !== index)
   assert.ok(duplicateNames.includes('需求&修改点'), '浏览器现场确实存在待校验的重复活动名称')
-  const publishClicked = await page.evaluate(() => {
-    const visible = node => {
-      const rect = node.getBoundingClientRect()
-      const style = getComputedStyle(node)
-      return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'
-    }
-    const button = [...document.querySelectorAll('button')]
-      .find(node => visible(node) && !node.disabled && node.textContent?.trim() === '发布')
-    button?.click()
-    return Boolean(button)
-  })
-  assert.equal(publishClicked, true, '修订工具栏暴露可操作的发布按钮')
+  await clickMrTemplatePublishButton()
   await page.waitForSelector('[role="dialog"]', { visible: true })
   assert.match(await page.$eval('[role="dialog"]', node => node.innerText), /活动名称重复/)
   await page.keyboard.press('Escape')
   await page.waitForSelector('[role="dialog"]', { hidden: true })
   const reorderedParentNumber = afterDrag.domRows.find(row => row.id === parentId)?.number
   await fillInput(`input[aria-label="活动名称-${reorderedParentNumber}"]`, 'MR验收收尾')
-  await clickVisibleText('发布')
+  await clickMrTemplatePublishButton()
   await page.waitForFunction(() => document.body.innerText.includes('V2 (已发布)'))
   const publishedState = await readMrState()
   const published = publishedState.templateVersions.find(version => version.versionNo === 'V2' && version.status === '已发布')

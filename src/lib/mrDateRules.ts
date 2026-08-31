@@ -232,7 +232,7 @@ export function validateMachineMarketDate(input: MarketDateValidationInput): str
   if (!value) return [`${trim(input.activityName)}日期格式不正确`]
   const mainValue = normalizeMrBusinessDate(input.mainValue)
   if (!mainValue) return ['主市场对应时间未填写，当前市场不可填写']
-  return value > mainValue ? ['非主市场时间不得晚于主市场对应时间'] : []
+  return value > mainValue ? [`非主市场时间不得晚于主市场对应时间（${mainValue}）`] : []
 }
 
 export function clearDatesForNa(row: JointMachinePlan): JointMachinePlan {

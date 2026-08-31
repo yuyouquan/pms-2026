@@ -143,12 +143,11 @@ export default function TechnicalProjectInformationView({
   const technicalCoreAccentByKey: Record<string, string> = {
     secondaryCategory: '#14b8a6', technicalTrack: '#0891b2', tmg: '#7c3aed', subdomain: '#2563eb',
     status: '#f59e0b', projectStage: '#d97706', projectYear: '#059669', projectValue: '#475569',
-    preProjectId: '#0f766e', tdtAndSubprojectName: 'var(--pms-brand-strong)',
+    preProjectId: '#0f766e',
   }
   const technicalCoreValue = (key: string) => {
     if (key === 'projectStage') return stage
     if (key === 'preProjectId') return machineName(displayText(valueOf(project, key)) === '-' ? '' : displayText(valueOf(project, key)))
-    if (key === 'tdtAndSubprojectName') return [project.name, ...visibleChildren.map(child => child.name)].join('、')
     return displayText(valueOf(project, key))
   }
   const coreFields = TECHNICAL_PROJECT_SPACE_CORE_FIELDS.map(field => ({

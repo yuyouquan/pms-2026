@@ -6,7 +6,7 @@ import { CalendarOutlined, EditOutlined } from '@ant-design/icons'
 import { ClickToEditDate } from '@/components/shared/PlanHelpers'
 import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { selectVisibleTechnicalPlanVersions } from '@/lib/technicalPlanWorkspace'
+import { getTechnicalPlanRowKey, selectVisibleTechnicalPlanVersions } from '@/lib/technicalPlanWorkspace'
 import { getTechnicalPlanKey, useTechnicalPlanStore, type TechnicalPlanScope } from '@/stores/technicalPlan'
 import type { TechnicalTemplateTask } from '@/types/technicalPlan'
 
@@ -57,27 +57,21 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
   }
 
   const normalizedTasks = normalizeTasks(currentVersion.tasks)
-  const projectionMode = normalizedTasks.some(task => task.parentId) ? 'standard' : 'technical-subproject'
+  const projectionMode = scope.kind === 'subproject' ? 'technical-subproject' : 'standard'
   const currentProjection = projectLevel1Plan(normalizedTasks, { mode: projectionMode })
-  const groups = currentProjection.stageGroups.length > 0
-    ? currentProjection.stageGroups.map(group => ({ ...group, width: Math.max(1, group.milestones.length) }))
-    : [{
-        stage: {
-          ...currentProjection.rows[0],
-          id: 'technical-subproject',
-          taskName: '子项目计划',
-          estimatedDays: sumLevel1EstimatedDays(currentProjection.rows),
-        },
-        milestones: currentProjection.rows,
-        width: Math.max(1, currentProjection.rows.length),
-      }]
-  const columns = groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
+  const groups = currentProjection.stageGroups.map(group => ({
+    ...group,
+    width: Math.max(1, group.milestones.length),
+  }))
+  const columns = projectionMode === 'technical-subproject'
+    ? currentProjection.rows
+    : groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
   const versionRows = visibleVersions.map(version => {
     const projection = projectLevel1Plan(normalizeTasks(version.tasks), { mode: projectionMode })
     return {
       version,
       cycleDays: sumLevel1EstimatedDays(projection.rows),
-      endDatesByTaskId: Object.fromEntries(projection.rows.map(task => [task.id, task.planEndDate || ''])),
+      endDatesByTaskId: Object.fromEntries(projection.rows.map(task => [getTechnicalPlanRowKey(task), task.planEndDate || ''])),
     }
   })
   const actualStarts = currentProjection.rows.map(row => Date.parse(row.actualStartDate)).filter(Number.isFinite)
@@ -85,6 +79,9 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
   const actualCycleDays = actualStarts.length && actualEnds.length
     ? Math.max(0, Math.ceil((Math.max(...actualEnds) - Math.min(...actualStarts)) / 86_400_000))
     : null
+  const actualEndDatesByTaskId = Object.fromEntries(
+    currentProjection.rows.map(task => [getTechnicalPlanRowKey(task), task.actualEndDate || '']),
+  )
   const canEditPlanEnd = canEditPlan && currentVersion.status === '修订中'
   const canEditActualEnd = canEditPlan && (
     currentVersion.status === '修订中' || currentVersion.id === latestPublishedVersion?.id
@@ -100,39 +97,50 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
 
   return planCard(
     <div className="technical-plan-summary" role="region" aria-label={`${label}计划信息内容`} tabIndex={0}>
-      <table aria-label={`${label}版本阶段里程碑`}>
+      <table aria-label={projectionMode === 'technical-subproject' ? `${label}版本活动` : `${label}版本阶段里程碑`}>
         <thead>
-          <tr>
-            <th className="technical-plan-summary-sticky-version" rowSpan={2}>版本</th>
-            <th className="technical-plan-summary-sticky-cycle" rowSpan={2}>开发周期</th>
-            {groups.map((group, index) => {
-              const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
-              return (
-                <th
-                  key={group.stage.id}
-                  className="technical-plan-summary-stage"
-                  colSpan={group.width}
-                  style={{
-                    background: `${stageColor}10`,
-                    color: stageColor,
-                    borderBottom: `2px solid ${stageColor}`,
-                  }}
-                >
-                  <div className="technical-plan-summary-stage-content">
-                    <span>{group.stage.taskName}</span>
-                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-                      {group.stage.estimatedDays == null ? '-' : `${group.stage.estimatedDays}天`}
-                    </Tag>
-                  </div>
-                </th>
-              )
-            })}
-          </tr>
-          <tr>
-            {groups.flatMap(group => group.milestones.length
-              ? group.milestones.map(milestone => <th key={milestone.id}>{milestone.taskName}</th>)
-              : [<th key={group.stage.id}>-</th>])}
-          </tr>
+          {projectionMode === 'technical-subproject' ? (
+            <tr data-technical-plan-header="single-row">
+              <th scope="col" className="technical-plan-summary-sticky-version">版本</th>
+              <th scope="col" className="technical-plan-summary-sticky-cycle">开发周期</th>
+              {columns.map(column => <th key={getTechnicalPlanRowKey(column)} scope="col">{column.taskName}</th>)}
+            </tr>
+          ) : (
+            <>
+              <tr data-technical-plan-header="grouped">
+                <th scope="col" className="technical-plan-summary-sticky-version" rowSpan={2}>版本</th>
+                <th scope="col" className="technical-plan-summary-sticky-cycle" rowSpan={2}>开发周期</th>
+                {groups.map((group, index) => {
+                  const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
+                  return (
+                    <th
+                      key={getTechnicalPlanRowKey(group.stage)}
+                      scope="colgroup"
+                      className="technical-plan-summary-stage"
+                      colSpan={group.width}
+                      style={{
+                        background: `${stageColor}10`,
+                        color: stageColor,
+                        borderBottom: `2px solid ${stageColor}`,
+                      }}
+                    >
+                      <div className="technical-plan-summary-stage-content">
+                        <span>{group.stage.taskName}</span>
+                        <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                          {group.stage.estimatedDays == null ? '-' : `${group.stage.estimatedDays}天`}
+                        </Tag>
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+              <tr>
+                {groups.flatMap(group => group.milestones.length
+                  ? group.milestones.map(milestone => <th key={getTechnicalPlanRowKey(milestone)} scope="col">{milestone.taskName}</th>)
+                  : [<th key={getTechnicalPlanRowKey(group.stage)} scope="col">-</th>])}
+              </tr>
+            </>
+          )}
         </thead>
         <tbody>
           {versionRows.map(row => {
@@ -147,9 +155,9 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
                 </td>
                 <td className="technical-plan-summary-sticky-cycle">{displayCycle(row.cycleDays)}</td>
                 {columns.map(column => {
-                  const planEndDate = row.endDatesByTaskId[column.id]
+                  const planEndDate = row.endDatesByTaskId[getTechnicalPlanRowKey(column)]
                   return (
-                    <td key={column.id}>
+                    <td key={getTechnicalPlanRowKey(column)}>
                       {isCurrent && canEditPlanEnd
                         ? <ClickToEditDate align="center" value={planEndDate || ''} onChange={value => updateDate(column.id, 'planEndDate', value)} />
                         : planEndDate || '-'}
@@ -163,9 +171,9 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
             <td className="technical-plan-summary-sticky-version"><span className="technical-plan-summary-version">实际</span></td>
             <td className="technical-plan-summary-sticky-cycle">{displayCycle(actualCycleDays)}</td>
             {columns.map(column => {
-              const actualEndDate = currentProjection.rows.find(task => task.id === column.id)?.actualEndDate || ''
+              const actualEndDate = actualEndDatesByTaskId[getTechnicalPlanRowKey(column)] || ''
               return (
-                <td key={column.id}>
+                <td key={getTechnicalPlanRowKey(column)}>
                   {canEditActualEnd
                     ? <ClickToEditDate align="center" value={actualEndDate} onChange={value => updateDate(column.id, 'actualEndDate', value)} />
                     : actualEndDate || '-'}

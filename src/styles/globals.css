@@ -143,6 +143,18 @@
   --pms-table-head-height: 32px;
   --pms-table-row-height: 34px;
   --pms-density-gap: 6px;
+
+  /* Shared project-management surface layer */
+  --pms-project-surface: #fff;
+  --pms-project-group-header: #f5f3ff;
+  --pms-project-surface-border: #e4e0f2;
+  --pms-project-surface-radius: 10px;
+  --pms-project-surface-shadow: 0 5px 18px rgb(66 52 122 / 7%);
+  --pms-project-compact-space: 8px;
+  --pms-project-hover: #f8f7ff;
+  --pms-project-selected: #eeebff;
+  --pms-project-focus-ring: 2px solid color-mix(in srgb, var(--pms-brand-strong) 62%, transparent);
+  --pms-project-transition: 200ms ease;
 }
 
 /* PMS project space and plan workspace */
@@ -252,6 +264,61 @@
 .pms-technical-list-panel { min-width: 0; }
 .pms-table .ant-table-tbody > tr > td.pms-project-list-milestone-cell { background: #fff; }
 .pms-table .ant-table-tbody > tr > td.pms-project-list-overdue { color: #dc2626; font-weight: 600; }
+
+.pms-project-list-sortable-header {
+  cursor: grab;
+  touch-action: none;
+  transition: opacity 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.pms-project-list-sortable-header:hover {
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--pms-brand) 42%, transparent);
+}
+
+.pms-project-list-sortable-header:active {
+  cursor: grabbing;
+}
+
+.pms-project-list-sortable-header.is-dragging {
+  z-index: 5;
+  opacity: 0.58;
+  outline: 2px solid color-mix(in srgb, var(--pms-brand) 58%, transparent);
+  outline-offset: -2px;
+}
+
+.pms-project-list-sortable-header.is-unit-dragging {
+  opacity: 0.42;
+  outline: 2px dashed color-mix(in srgb, var(--pms-brand) 52%, transparent);
+  outline-offset: -2px;
+}
+
+.pms-project-list-drag-overlay {
+  min-width: 132px;
+  padding: 10px 18px;
+  border: 1px solid color-mix(in srgb, var(--pms-brand) 38%, #fff);
+  border-radius: 10px;
+  color: var(--pms-brand-strong);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--pms-brand) 20%, transparent);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.pms-project-list-sortable-header.is-locked {
+  cursor: default;
+  touch-action: auto;
+}
+
+.pms-project-list-sortable-header.is-locked:hover {
+  box-shadow: none;
+}
+
+.pms-project-list-sortable-header-content {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .pms-project-filter-chip,
@@ -7119,5 +7186,452 @@ body,
   .pms-joint-mr-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* ================================================================
+   Shared project surfaces — cards, summary table, modal and basic info
+   ================================================================ */
+
+.pms-project-card-surface.ant-card {
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--pms-project-surface-border);
+  border-radius: var(--pms-project-surface-radius);
+  background: var(--pms-project-surface);
+  box-shadow: var(--pms-project-surface-shadow);
+  cursor: pointer;
+  transition: border-color var(--pms-project-transition), box-shadow var(--pms-project-transition), background-color var(--pms-project-transition);
+}
+
+.pms-project-card-surface.ant-card:hover {
+  border-color: color-mix(in srgb, var(--pms-brand) 34%, var(--pms-project-surface-border));
+  background: var(--pms-project-surface);
+  box-shadow: 0 10px 26px rgb(76 59 148 / 12%);
+}
+
+.pms-project-card-surface:focus-visible {
+  outline: var(--pms-project-focus-ring);
+  outline-offset: 3px;
+}
+
+.pms-project-card-surface > .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+}
+
+.pms-project-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pms-project-compact-space);
+  margin-bottom: 8px;
+}
+
+.pms-project-card-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.pms-project-card-title,
+.pms-project-card-market {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-project-card-title {
+  margin-bottom: 3px;
+  color: var(--pms-text-primary);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.pms-project-card-market {
+  margin-bottom: 4px;
+  color: var(--pms-text-tertiary);
+  font-size: 12px;
+}
+
+.pms-project-card-type.ant-tag,
+.pms-project-card-status.ant-tag {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  border-radius: 999px;
+}
+
+.pms-project-card-type.ant-tag {
+  max-width: 100%;
+  padding-inline: 8px;
+}
+
+.pms-project-card-status.ant-tag {
+  flex: none;
+  padding-inline: 9px;
+  font-weight: 600;
+}
+
+.pms-project-card-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  min-height: 20px;
+  margin-bottom: 6px;
+}
+
+.pms-project-card-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.pms-project-card-field-label {
+  color: var(--pms-text-tertiary);
+}
+
+.pms-project-card-field-value {
+  overflow: hidden;
+  color: var(--pms-text-secondary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-project-card-schedule {
+  display: flex;
+  gap: var(--pms-project-compact-space);
+  margin-bottom: 8px;
+  color: var(--pms-text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pms-project-card-calendar {
+  margin-right: 4px;
+  color: var(--pms-brand-strong);
+}
+
+.pms-project-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pms-project-compact-space);
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--pms-project-surface-border) 70%, transparent);
+}
+
+.pms-project-card-owner {
+  min-width: 0;
+  color: var(--pms-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pms-project-card-avatar.ant-avatar {
+  flex: none;
+  color: #fff;
+  font-size: 10px;
+  background: var(--pms-gradient-brand);
+}
+
+.pms-project-card-updated {
+  flex: none;
+  color: var(--pms-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pms-project-card-surface.is-access-denied {
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.66;
+}
+
+.pms-project-summary-surface {
+  overflow: hidden;
+  border: 1px solid var(--pms-project-surface-border);
+  border-radius: var(--pms-project-surface-radius);
+  background: var(--pms-project-surface);
+  box-shadow: var(--pms-project-surface-shadow);
+}
+
+.pms-project-summary-surface .ant-table,
+.pms-project-summary-surface .ant-table-container {
+  background: var(--pms-project-surface);
+}
+
+.pms-project-summary-surface .ant-table-thead > tr > th {
+  height: var(--pms-table-head-height);
+  padding: 6px 10px !important;
+  color: #4b3d73;
+  font-size: var(--pms-font-size-compact);
+  font-weight: 650;
+  line-height: 18px;
+  border-color: var(--pms-project-surface-border) !important;
+  background: var(--pms-project-group-header) !important;
+}
+
+.pms-project-summary-surface .ant-table-tbody > tr > td {
+  min-height: var(--pms-table-row-height);
+  padding: 7px 10px !important;
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-font-size-compact);
+  border-color: color-mix(in srgb, var(--pms-project-surface-border) 72%, #fff) !important;
+  background: var(--pms-project-surface);
+  transition: background-color var(--pms-project-transition), color var(--pms-project-transition);
+}
+
+.pms-project-summary-surface .ant-table-tbody > tr:hover > td,
+.pms-project-summary-surface .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left,
+.pms-project-summary-surface .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.pms-project-summary-surface .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left-last,
+.pms-project-summary-surface .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start-shadow {
+  background: var(--pms-project-hover) !important;
+}
+
+.pms-project-summary-surface .pms-project-summary-row.is-selected > td,
+.pms-project-summary-surface .pms-project-summary-row.is-selected > td.ant-table-cell-fix-left,
+.pms-project-summary-surface .pms-project-summary-row.is-selected > td.ant-table-cell-fix-start,
+.pms-project-summary-surface .pms-project-summary-row.is-selected > td.ant-table-cell-fix-left-last,
+.pms-project-summary-surface .pms-project-summary-row.is-selected > td.ant-table-cell-fix-start-shadow {
+  background: var(--pms-project-selected) !important;
+}
+
+.pms-project-summary-surface .ant-table-thead .ant-table-cell-fix-left,
+.pms-project-summary-surface .ant-table-thead .ant-table-cell-fix-start,
+.pms-project-summary-surface .ant-table-thead .ant-table-cell-fix-left-last,
+.pms-project-summary-surface .ant-table-thead .ant-table-cell-fix-start-shadow {
+  background: var(--pms-project-group-header) !important;
+}
+
+.pms-project-summary-surface .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+.pms-project-summary-surface .ant-table-tbody > tr > td.ant-table-cell-fix-start,
+.pms-project-summary-surface .ant-table-tbody > tr > td.ant-table-cell-fix-left-last,
+.pms-project-summary-surface .ant-table-tbody > tr > td.ant-table-cell-fix-start-shadow {
+  background: var(--pms-project-surface) !important;
+}
+
+.pms-project-summary-surface :where(button, .ant-pagination-item, .ant-pagination-prev, .ant-pagination-next):focus-visible {
+  outline: var(--pms-project-focus-ring);
+  outline-offset: 2px;
+}
+
+.pms-project-summary-surface .ant-pagination {
+  margin: 10px 12px !important;
+}
+
+.pms-modal.pms-project-info-modal-surface .ant-modal-container {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden !important;
+  border: 1px solid var(--pms-project-surface-border) !important;
+  border-radius: 14px !important;
+  background: var(--pms-project-surface) !important;
+  box-shadow: var(--pms-shadow-modal);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.pms-modal.pms-project-info-modal-surface .ant-modal-container::before {
+  content: none;
+}
+
+.pms-modal.pms-project-info-modal-surface .ant-modal-header {
+  flex: none;
+  border-bottom-color: var(--pms-project-surface-border) !important;
+  border-radius: 14px 14px 0 0 !important;
+  background: var(--pms-project-surface) !important;
+}
+
+.pms-modal.pms-project-info-modal-surface .ant-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 24px 8px;
+  background: var(--pms-project-surface) !important;
+  overscroll-behavior: contain;
+}
+
+.pms-modal.pms-project-info-modal-surface .ant-modal-footer {
+  flex: none;
+  z-index: 2;
+  border-top-color: var(--pms-project-surface-border) !important;
+  background: var(--pms-project-surface) !important;
+  box-shadow: 0 -6px 16px rgb(66 52 122 / 4%);
+}
+
+.pms-project-info-modal-surface .pms-project-info-form-grid {
+  column-gap: 16px;
+}
+
+.pms-project-info-modal-surface .ant-form-item {
+  margin-bottom: 16px;
+}
+
+.pms-project-info-modal-surface .ant-form-item-label > label {
+  color: var(--pms-text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.pms-project-info-modal-surface .pms-project-info-form-groups > .ant-collapse-item {
+  border-color: var(--pms-project-surface-border) !important;
+  border-radius: var(--pms-project-surface-radius) !important;
+  background: var(--pms-project-surface);
+  box-shadow: var(--pms-shadow-xs);
+}
+
+.pms-project-info-modal-surface .pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header {
+  min-height: 44px;
+  padding: 10px 14px;
+  background: var(--pms-project-group-header);
+}
+
+.pms-project-info-modal-surface .pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header:hover {
+  background: var(--pms-project-hover);
+}
+
+.pms-project-info-modal-surface :where(button, input, textarea, .ant-select-selector, .ant-collapse-header):focus-visible {
+  outline: var(--pms-project-focus-ring);
+  outline-offset: 2px;
+}
+
+.pms-project-information-surface {
+  min-width: 0;
+}
+
+.pms-project-information-surface--legacy > .ant-card {
+  border-color: var(--pms-project-surface-border);
+  border-radius: var(--pms-project-surface-radius);
+  background: var(--pms-project-surface);
+  box-shadow: var(--pms-project-surface-shadow);
+}
+
+.pms-project-information-surface--legacy > .ant-card > .ant-card-head {
+  min-height: 50px;
+  background: var(--pms-project-group-header) !important;
+  border-bottom-color: var(--pms-project-surface-border) !important;
+}
+
+.pms-project-information-surface--legacy > .ant-card > .ant-card-head .ant-card-head-title,
+.pms-project-information-surface--legacy > .ant-card > .ant-card-head .ant-card-extra {
+  color: var(--pms-text-primary) !important;
+}
+
+.pms-project-information-surface--legacy > #section-header > .ant-card-head .ant-card-head-title * {
+  color: var(--pms-text-primary) !important;
+}
+
+.pms-project-information-surface--legacy > #section-header > .ant-card-head .ant-card-head-title .anticon {
+  color: var(--pms-brand-strong) !important;
+}
+
+.pms-project-information-surface--legacy > .ant-card > .ant-card-body {
+  background: var(--pms-project-surface);
+}
+
+.pms-project-information-surface--legacy .ant-descriptions-view,
+.pms-project-information-surface--legacy .ant-descriptions-row > th,
+.pms-project-information-surface--legacy .ant-descriptions-row > td {
+  border-color: var(--pms-project-surface-border) !important;
+}
+
+.pms-project-information-surface .pms-project-info-core-card,
+.pms-project-information-surface .pms-project-information-slot,
+.pms-project-information-surface .pms-project-info-collapse,
+.pms-project-information-surface .pms-project-info-plan-card {
+  border-color: var(--pms-project-surface-border);
+  border-radius: var(--pms-project-surface-radius);
+  background: var(--pms-project-surface);
+  box-shadow: var(--pms-project-surface-shadow);
+}
+
+.pms-project-information-surface .pms-project-info-core-card .ant-card-head,
+.pms-project-information-surface .pms-project-info-plan-card > .ant-card-head,
+.pms-project-information-surface .pms-project-info-collapse .ant-collapse-header {
+  background: var(--pms-project-group-header);
+  border-bottom-color: var(--pms-project-surface-border);
+}
+
+.pms-project-information-surface .pms-project-info-core-card .ant-card-head {
+  min-height: 50px;
+}
+
+.pms-project-information-surface .pms-project-info-core-card .ant-card-body {
+  padding: 12px;
+}
+
+.pms-project-information-surface .pms-project-info-core-title > .anticon {
+  color: var(--pms-brand-strong);
+  border: 1px solid var(--pms-brand-border);
+  background: #fff;
+  box-shadow: none;
+}
+
+.pms-project-information-surface .pms-project-info-core-name,
+.pms-project-information-surface .pms-project-info-group-title strong {
+  color: var(--pms-text-primary);
+}
+
+.pms-project-information-surface .pms-project-info-core-grid {
+  gap: var(--pms-project-compact-space);
+}
+
+.pms-project-information-surface .pms-project-info-core-item {
+  min-height: 64px;
+  padding: 9px 10px;
+  border-color: color-mix(in srgb, var(--pms-project-surface-border) 76%, #fff);
+  background: #fff;
+  box-shadow: none;
+}
+
+.pms-project-information-surface .pms-project-info-collapse .ant-collapse-header {
+  min-height: 52px;
+  padding: 8px 14px !important;
+}
+
+.pms-project-information-surface .pms-project-info-group-icon {
+  width: 32px;
+  height: 32px;
+  color: var(--pms-brand-strong);
+  border-color: var(--pms-brand-border);
+  background: #fff;
+}
+
+.pms-project-information-surface .pms-project-info-display-item {
+  min-height: 68px;
+  padding: 10px 12px;
+  border-color: color-mix(in srgb, var(--pms-project-surface-border) 76%, #fff);
+}
+
+.pms-project-information-surface :where(button, [tabindex='0'], .ant-collapse-header):focus-visible {
+  outline: var(--pms-project-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-project-card-surface,
+  .pms-project-card-surface *,
+  .pms-project-summary-surface,
+  .pms-project-summary-surface *,
+  .pms-project-info-modal-surface,
+  .pms-project-info-modal-surface *,
+  .pms-project-information-surface,
+  .pms-project-information-surface * {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition: none !important;
   }
 }

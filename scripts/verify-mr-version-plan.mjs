@@ -7,6 +7,7 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const templateRules = loadTypeScriptModule(root, 'src/lib/mrTemplateRules.ts')
 const templateMocks = loadTypeScriptModule(root, 'src/data/mrVersionPlanMocks.ts')
+assert.equal(typeof templateMocks.MR_MOCK_SCENARIOS, 'object', 'MR mock scenarios must expose a stable catalog')
 const level1PlanRules = loadTypeScriptModule(root, 'src/lib/level1PlanRules.ts')
 const templateMocksSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
 const task13PackageJson = JSON.parse(readSource(root, 'package.json'))
@@ -251,6 +252,9 @@ assert.match(machineMrVersionPlanSource, /getMainMarket/)
 assert.match(machineMrVersionPlanSource, /主市场对应时间未填写，当前市场不可填写/)
 assert.match(machineMrVersionPlanSource, /非主市场时间不得晚于主市场对应时间/)
 assert.match(machineMrVersionPlanSource, /validateMachineMarketDate/)
+assert.match(machineMrVersionPlanSource, /validateJointMachineRows/)
+assert.match(machineMrVersionPlanSource, /validateJointMachineRows\(\{\s*tosInstances[\s\S]*machinePlans/)
+assert.doesNotMatch(machineMrVersionPlanSource, /activity\.parentId\s*===\s*null\s*\|\|\s*market\s*===\s*mainMarket/)
 assert.match(machineMrVersionPlanSource, /marketOverridesByKey/)
 assert.match(machineMrVersionPlanSource, /resolveMrPermissions/)
 assert.match(machineMrVersionPlanSource, /machineProjectId:\s*project\.id/)
@@ -258,6 +262,7 @@ assert.match(machineMrVersionPlanSource, /updateMarketDate/)
 assert.match(machineMrVersionPlanSource, /machine::\$\{project\.id\}/)
 assert.match(machineMrVersionPlanSource, /data-mr-tos-version/)
 assert.match(machineMrVersionPlanSource, /data-mr-version/)
+assert.match(machineMrVersionPlanSource, /data-mr-activity-id/)
 assert.match(machineMrVersionPlanSource, /renderMachineMrErrorTrigger/)
 assert.match(machineMrVersionPlanSource, /tabIndex=\{0\}/)
 assert.match(machineMrVersionPlanSource, /aria-label=\{`\$\{version\.tosVersion\}-\$\{market\}-\$\{activity\.activityName\}-错误：\$\{errors\.join\(['"]；['"]\)\}`\}/)
@@ -1367,7 +1372,7 @@ assert.deepEqual(clearedNa.dates, {})
 assert.deepEqual(naSource.dates, { transfer: '2026-01-01' })
 assert.notStrictEqual(clearedNa, naSource)
 assert.deepEqual(dateRules.validateMachineMarketDate({ value: '2026-07-10', mainValue: '', activityId: 'test-start', activityName: '测试开始时间' }), ['主市场对应时间未填写，当前市场不可填写'])
-assert.deepEqual(dateRules.validateMachineMarketDate({ value: '2026-07-12', mainValue: '2026-07-11', activityId: 'test-start', activityName: '测试开始时间' }), ['非主市场时间不得晚于主市场对应时间'])
+assert.deepEqual(dateRules.validateMachineMarketDate({ value: '2026-07-12', mainValue: '2026-07-11', activityId: 'test-start', activityName: '测试开始时间' }), ['非主市场时间不得晚于主市场对应时间（2026-07-11）'])
 assert.deepEqual(dateRules.validateMachineMarketDate({ value: '', mainValue: '2026-07-11', activityId: 'test-start', activityName: '测试开始时间' }), [])
 assert.deepEqual(dateRules.validateMachineMarketDate({ value: 'bad', mainValue: '2026-07-11', activityId: 'test-start', activityName: '测试开始时间' }), ['测试开始时间日期格式不正确'])
 const grouped = dateRules.groupMrErrorsByRow([
@@ -1605,6 +1610,18 @@ assert.equal(mrStore.MR_VERSION_PLAN_STORAGE_KEY, 'pms-mr-version-plan-store')
 assert.equal(task13PackageJson.scripts['verify:mr-version-plan-browser'], 'node screenshots/verify-mr-version-plan-browser.mjs')
 assert.equal(typeof templateMocks.createInitialMrVersionPlanState, 'function')
 assert.equal(typeof templateMocks.createMrAcceptancePlanScopeSeed, 'function')
+assert.equal(typeof templateMocks.MR_MOCK_SCENARIOS, 'object', 'MR mock scenarios must expose a stable catalog')
+assert.deepEqual(templateMocks.MR_MOCK_SCENARIOS.tos, [
+  'normal', 'boundary-valid', 'before-plan-start', 'after-plan-end',
+])
+assert.deepEqual(templateMocks.MR_MOCK_SCENARIOS.joint, [
+  'normal-type-1', 'same-type-mismatch', 'one-week-gap', 'tos-baseline', 'next-version-boundary',
+])
+assert.deepEqual(templateMocks.MR_MOCK_SCENARIOS.market, [
+  'normal-follow', 'later-than-main', 'missing-main-boundary',
+])
+assert.equal(Object.isFrozen(templateMocks.MR_MOCK_SCENARIOS), true)
+assert.ok(Object.values(templateMocks.MR_MOCK_SCENARIOS).every(Object.isFrozen))
 const acceptanceStateA = templateMocks.createInitialMrVersionPlanState()
 const acceptanceStateB = templateMocks.createInitialMrVersionPlanState()
 assert.notEqual(acceptanceStateA, acceptanceStateB)
@@ -1615,25 +1632,135 @@ assert.notEqual(acceptanceStateA.marketOverridesByKey, acceptanceStateB.marketOv
 assert.deepEqual(acceptanceStateA, acceptanceStateB)
 assert.deepEqual(
   acceptanceStateA.tosInstancesByProjectId['19'].map(instance => instance.tosVersion),
-  ['16.3.0.140', '16.3.0.145'],
+  ['16.3.0.135', '16.3.0.140', '16.3.0.145', '16.3.0.150', '16.3.0.155'],
 )
 assert.ok(acceptanceStateA.tosInstancesByProjectId['19'].every(instance => (
   instance.activities.filter(activity => activity.parentId !== null).every(activity => /^\d{4}-\d{2}-\d{2}$/.test(instance.dates[activity.id]))
 )))
-assert.equal(acceptanceStateA.machinePlansByKey['1::16.3.0.140'].transferType, '1')
+assert.ok(Object.keys(acceptanceStateA.machinePlansByKey).length >= 5)
+assert.ok(Object.keys(acceptanceStateA.marketOverridesByKey).length >= 4)
+assert.equal(acceptanceStateA.machinePlansByKey['1::16.3.0.140'].transferType, '2')
 assert.equal(acceptanceStateA.machinePlansByKey['3::16.3.0.140'].transferType, '2')
 assert.equal(acceptanceStateA.machinePlansByKey['3::16.3.0.140'].dates['mr-node-mp-intake-deadline'], '2026-05-25')
 assert.equal(acceptanceStateA.marketOverridesByKey['1::16.3.0.140::TR'].dates['mr-node-test-start'], '2026-05-23')
-acceptanceStateA.tosInstancesByProjectId['19'][0].dates['mr-node-test-start'] = '2099-01-01'
-assert.equal(acceptanceStateB.tosInstancesByProjectId['19'][0].dates['mr-node-test-start'], '2026-05-23')
+assert.notStrictEqual(acceptanceStateA.tosInstancesByProjectId['19'][0], acceptanceStateB.tosInstancesByProjectId['19'][0])
+assert.notStrictEqual(acceptanceStateA.tosInstancesByProjectId['19'][0].activities, acceptanceStateB.tosInstancesByProjectId['19'][0].activities)
+assert.notStrictEqual(acceptanceStateA.tosInstancesByProjectId['19'][0].activities[0], acceptanceStateB.tosInstancesByProjectId['19'][0].activities[0])
+assert.notStrictEqual(acceptanceStateA.tosInstancesByProjectId['19'][0].dates, acceptanceStateB.tosInstancesByProjectId['19'][0].dates)
+assert.notStrictEqual(acceptanceStateA.machinePlansByKey['1::16.3.0.140'].dates, acceptanceStateB.machinePlansByKey['1::16.3.0.140'].dates)
+assert.notStrictEqual(acceptanceStateA.marketOverridesByKey['1::16.3.0.140::TR'].dates, acceptanceStateB.marketOverridesByKey['1::16.3.0.140::TR'].dates)
+Object.values(acceptanceStateA.tosInstancesByProjectId).flat().forEach(instance => {
+  Object.values(instance.dates).filter(Boolean).forEach(date => assert.equal(planRules.normalizeMrBusinessDate(date), date))
+})
+Object.values(acceptanceStateA.machinePlansByKey).forEach(plan => {
+  Object.values(plan.dates).filter(Boolean).forEach(date => assert.equal(planRules.normalizeMrBusinessDate(date), date))
+})
+Object.values(acceptanceStateA.marketOverridesByKey).forEach(override => {
+  Object.values(override.dates).filter(Boolean).forEach(date => assert.equal(planRules.normalizeMrBusinessDate(date), date))
+})
 
 const acceptancePlanScopeA = templateMocks.createMrAcceptancePlanScopeSeed()
 const acceptancePlanScopeB = templateMocks.createMrAcceptancePlanScopeSeed()
 assert.deepEqual(acceptancePlanScopeA, acceptancePlanScopeB)
 assert.notEqual(acceptancePlanScopeA.publishedSnapshots, acceptancePlanScopeB.publishedSnapshots)
+assert.notStrictEqual(
+  acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::v3::snapshot'],
+  acceptancePlanScopeB.publishedSnapshots['project::19::tos-type::Full::level1::v3::snapshot'],
+)
+assert.notStrictEqual(
+  acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::v3::snapshot'][0],
+  acceptancePlanScopeB.publishedSnapshots['project::19::tos-type::Full::level1::v3::snapshot'][0],
+)
 const machineAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::1::OP::level1::v3']
 const secondMachineAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::3::OP::level1::v3']
 const tosAcceptanceSnapshot = acceptancePlanScopeA.publishedSnapshots['project::19::tos-type::Full::level1::v3::snapshot']
+const tosBoundsByVersion = Object.fromEntries(tosAcceptanceSnapshot
+  .filter(task => task.nodeKind === 'business-period')
+  .map(task => [task.taskName, { planStartDate: task.planStartDate, planEndDate: task.planEndDate }]))
+const acceptanceTosByVersion = Object.fromEntries(
+  acceptanceStateA.tosInstancesByProjectId['19'].map(instance => [instance.tosVersion, instance]),
+)
+const acceptanceTosErrors = version => planRules.validateTosMrInstanceDates(
+  acceptanceTosByVersion[version],
+  tosBoundsByVersion[version],
+)
+assert.deepEqual(acceptanceTosErrors('16.3.0.135'), [])
+assert.deepEqual(acceptanceTosErrors('16.3.0.140'), [])
+assert.equal(acceptanceTosByVersion['16.3.0.140'].dates['mr-node-change-collection'], tosBoundsByVersion['16.3.0.140'].planStartDate)
+assert.equal(acceptanceTosByVersion['16.3.0.140'].dates['mr-node-ota-deploy'], tosBoundsByVersion['16.3.0.140'].planEndDate)
+assert.deepEqual(acceptanceTosErrors('16.3.0.145').map(error => ({
+  activityId: error.activityId,
+  message: error.message,
+  boundaryDate: error.boundaryDate,
+  boundaryType: error.boundaryType,
+})), [{
+  activityId: 'mr-node-change-collection',
+  message: '修改点收集开始时间不能早于一级计划中的计划开始时间（2026-06-16）',
+  boundaryDate: '2026-06-16',
+  boundaryType: 'minimum',
+}])
+assert.deepEqual(acceptanceTosErrors('16.3.0.150').map(error => ({
+  activityId: error.activityId,
+  message: error.message,
+  boundaryDate: error.boundaryDate,
+  boundaryType: error.boundaryType,
+})), [{
+  activityId: 'mr-node-ota-deploy',
+  message: 'OTA开放验证&部署不能晚于一级计划中的计划完成时间（2026-08-15）',
+  boundaryDate: '2026-08-15',
+  boundaryType: 'maximum',
+}])
+assert.deepEqual(acceptanceTosErrors('16.3.0.155'), [])
+
+const initialJointErrors = dateRules.validateJointMachineRows({
+  tosInstances: acceptanceStateA.tosInstancesByProjectId['19'],
+  machinePlans: Object.values(acceptanceStateA.machinePlansByKey),
+})
+const initialJointMessages = initialJointErrors.map(error => `${error.rowKey}:${error.message}`)
+assert.equal(initialJointErrors.some(error => error.rowKey === '1::16.3.0.145'), false, 'type-1 fixture must stay clean')
+assert.equal(initialJointErrors.some(error => error.rowKey === '3::16.3.0.150'), false, 'later numeric type fixture must stay clean')
+assert.ok(initialJointMessages.some(message => message.includes('同一1+N转测类型的版本转测时间需保持一致（')))
+assert.ok(initialJointMessages.some(message => message.includes('版本转测时间需晚于上一个1+N转测类型至少1周（2026-06-29）')))
+assert.ok(initialJointMessages.some(message => message.includes('整机产品项目的MP入库截止时间不得晚于tOS项目时间（2026-05-20）')))
+assert.ok(initialJointMessages.some(message => message.includes('测试开始时间不能超过下一个tOS版本的测试开始时间（2026-07-23）')))
+assert.ok(initialJointErrors.filter(error => error.boundaryDate).every(error => error.message.endsWith(`（${error.boundaryDate}）`)))
+
+const acceptanceMarketProjection = machineMarketRules.projectMachineMarketMrVersions({
+  projectId: '1',
+  plansByKey: acceptanceStateA.machinePlansByKey,
+  instancesByProjectId: acceptanceStateA.tosInstancesByProjectId,
+  marketRows: [
+    { id: 'market-op', market: 'OP', isMain: true, followsMain: false },
+    { id: 'market-tr', market: 'TR', isMain: false, followsMain: false },
+    { id: 'market-ru', market: 'RU', isMain: false, followsMain: false },
+  ],
+})
+const market140 = acceptanceMarketProjection.versions.find(version => version.tosVersion === '16.3.0.140')
+assert.ok(market140)
+const marketDateErrors = (market, activityId, activityName) => dateRules.validateMachineMarketDate({
+  value: machineMarketRules.getMachineMarketDate({
+    plan: market140.plan,
+    overridesByKey: acceptanceStateA.marketOverridesByKey,
+    market,
+    mainMarket: 'OP',
+    activityId,
+  }),
+  mainValue: machineMarketRules.getMachineMarketDate({
+    plan: market140.plan,
+    overridesByKey: acceptanceStateA.marketOverridesByKey,
+    market: 'OP',
+    mainMarket: 'OP',
+    activityId,
+  }),
+  activityId,
+  activityName,
+})
+assert.deepEqual(marketDateErrors('TR', 'mr-node-test-start', '测试开始时间'), [])
+assert.deepEqual(marketDateErrors('RU', 'mr-node-review', '评审时间'), ['非主市场时间不得晚于主市场对应时间（2026-06-03）'])
+assert.deepEqual(marketDateErrors('TR', 'mr-node-archive', '软件归档时间'), ['主市场对应时间未填写，当前市场不可填写'])
+
+acceptanceStateA.tosInstancesByProjectId['19'][0].dates['mr-node-test-start'] = '2099-01-01'
+assert.equal(acceptanceStateB.tosInstancesByProjectId['19'][0].dates['mr-node-test-start'], '2026-04-23')
 const taskTopology = tasks => tasks.map(task => ({
   stableId: task.stableId,
   parentStableId: task.parentId == null
@@ -1672,7 +1799,7 @@ assert.deepEqual(
 )
 assert.deepEqual(
   tosAcceptanceSnapshot.filter(task => /^16\.3\.0\./.test(task.taskName)).map(task => task.taskName),
-  ['16.3.0.140', '16.3.0.145', '16.3.0.150'],
+  ['16.3.0.135', '16.3.0.140', '16.3.0.145', '16.3.0.150', '16.3.0.155', '16.3.0.160'],
 )
 assert.deepEqual(
   tosAcceptanceSnapshot.filter(task => /^16\.3\.0\./.test(task.taskName)).map(task => ({
@@ -1682,9 +1809,12 @@ assert.deepEqual(
     planEndDate: task.planEndDate,
   })),
   [
+    { taskName: '16.3.0.135', parentName: '上市迭代阶段', planStartDate: '2026-04-16', planEndDate: '2026-05-15' },
     { taskName: '16.3.0.140', parentName: '上市迭代阶段', planStartDate: '2026-05-16', planEndDate: '2026-06-15' },
     { taskName: '16.3.0.145', parentName: '维护阶段', planStartDate: '2026-06-16', planEndDate: '2026-07-15' },
-    { taskName: '16.3.0.150', parentName: '维护阶段', planStartDate: '2026-07-16', planEndDate: '' },
+    { taskName: '16.3.0.150', parentName: '维护阶段', planStartDate: '2026-07-16', planEndDate: '2026-08-15' },
+    { taskName: '16.3.0.155', parentName: '维护阶段', planStartDate: '2026-08-16', planEndDate: '2026-09-15' },
+    { taskName: '16.3.0.160', parentName: '维护阶段', planStartDate: '2026-09-16', planEndDate: '' },
   ],
   'tOS MR candidates must retain their required business ranges, including the deliberately incomplete candidate',
 )
@@ -1694,7 +1824,7 @@ assert.ok(
   'seeded business nodes must not use a role label as a fake notification user identity',
 )
 assert.equal(
-  tosAcceptanceSnapshot.find(task => task.taskName === '16.3.0.150').planEndDate,
+  tosAcceptanceSnapshot.find(task => task.taskName === '16.3.0.160').planEndDate,
   '',
 )
 assert.equal(
@@ -1848,9 +1978,20 @@ assert.match(mrBrowserVerifierSource, /assert\.equal\(await page\.\$\(['"]\[data
 assert.match(mrBrowserVerifierSource, /错误提示/)
 assert.match(mrBrowserVerifierSource, /pms-mr-cell-error-icon/)
 assert.match(mrBrowserVerifierSource, /2026-05-16/)
+assert.match(mrBrowserVerifierSource, /2026-06-16/)
+assert.match(mrBrowserVerifierSource, /2026-08-15/)
+assert.match(mrBrowserVerifierSource, /2026-06-03/)
+assert.match(mrBrowserVerifierSource, /initialScenarioMatrixVerified/)
+assert.doesNotMatch(mrBrowserVerifierSource, /setTosCollectionDateThroughProject/)
+assert.doesNotMatch(mrBrowserVerifierSource, /fillDate\(['"]input\[aria-label=['"]16\.3\.0\.145-修改点收集开始时间-日期/)
+assert.doesNotMatch(mrBrowserVerifierSource, /fillDate\(['"]input\[aria-label=['"]16\.3\.0\.150-OTA开放验证&部署-日期/)
 assert.match(mrBrowserVerifierSource, /assert\.deepEqual\([^\n]*dates,\s*\{\}\)/)
 assert.match(mrBrowserVerifierSource, /assert\.equal\([^\n]*editableDateInputs[^\n]*,\s*0\)/)
 assert.match(mrBrowserVerifierSource, /assertTemplateRevisionMutation\([\s\S]*priorPublished/)
+assert.match(mrBrowserVerifierSource, /function clickMrTemplatePublishButton/,
+  'browser verification scopes template publishing to the MR revision toolbar')
+assert.doesNotMatch(mrBrowserVerifierSource, /clickVisibleText\(['"]发布['"]\)/,
+  'browser verification never resolves template publishing through a page-wide text search')
 assert.match(mrBrowserVerifierSource, /git\s+diff\s+--exit-code\s+--\s+screenshots\/mr-version-plan/)
 assert.doesNotMatch(mrBrowserVerifierSource, /failure\.png/)
 assert.match(jointPlanSource, /data-mr-row-key/)
@@ -2017,7 +2158,7 @@ assert.deepEqual(dateRules.validateMachineMarketDate({
   value: machineStore.getState().marketOverridesByKey['machine-c09::16.3.0.140::TR'].dates.transfer,
   mainValue: machineStore.getState().machinePlansByKey['machine-c09::16.3.0.140'].dates.transfer,
   activityId: 'transfer', activityName: '版本转测时间',
-}), ['非主市场时间不得晚于主市场对应时间'])
+}), ['非主市场时间不得晚于主市场对应时间（2026-07-01）'])
 assert.equal(machineStore.getState().updateMarketDate({
   projectId: 'machine-c09', tosVersion: '16.3.0.140', market: 'TR', mainMarket: 'OP', activityId: 'transfer', value: 'bad', mainValue: '2026-07-02',
 }, '张三', marketPermission), false)
