@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import puppeteer from 'puppeteer'
 
 const BASE_URL = process.env.BASE_URL || process.env.PMS_BASE_URL || 'http://127.0.0.1:3021'
 const TIMEOUT = 30_000
-const ARTIFACT_DIR = process.env.PMS_BROWSER_ARTIFACT_DIR || '/tmp/pms-project-surface-browser'
+const ARTIFACT_DIR = '/tmp/pms-project-surface-browser'
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const STORAGE_KEYS = [
   'pms-projects',
@@ -169,35 +169,113 @@ const assertLightSurface = async (page, selector, label) => {
 
 const assertNoClippingOrOverlap = async (page, selectors, label) => {
   const result = await page.evaluate(candidateSelectors => candidateSelectors.map(selector => {
-    const element = Array.from(document.querySelectorAll(selector)).find(candidate => {
+    const elements = Array.from(document.querySelectorAll(selector)).filter(candidate => {
       const rect = candidate.getBoundingClientRect()
-      return rect.width > 0 && rect.height > 0
+      const style = getComputedStyle(candidate)
+      return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
     })
-    if (!element) return { selector, missing: true }
-    const rect = element.getBoundingClientRect()
     return {
       selector,
-      rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height },
-      viewportWidth: innerWidth,
-      viewportHeight: innerHeight,
+      missing: elements.length === 0,
+      elements: elements.map((element, index) => {
+        const rect = element.getBoundingClientRect()
+        const style = getComputedStyle(element)
+        const hasMeaningfulContent = Boolean((element.textContent || '').replace(/\s+/g, ' ').trim() || element.querySelector('img,svg,input,button,select'))
+        const intentionalTableScroll = Boolean(element.closest('.ant-table-body, .ant-table-content'))
+        const intentionalEllipsis = style.textOverflow === 'ellipsis' && ['hidden', 'clip'].includes(style.overflowX)
+        const childOverflow = Array.from(element.children).flatMap(child => {
+          const childRect = child.getBoundingClientRect()
+          const childStyle = getComputedStyle(child)
+          if (childRect.width <= 0 || childRect.height <= 0 || childStyle.position === 'fixed') return []
+          const outside = childRect.left < rect.left - 1 || childRect.right > rect.right + 1
+            || childRect.top < rect.top - 1 || childRect.bottom > rect.bottom + 1
+          if (!outside || intentionalTableScroll) return []
+          return [{
+            tag: child.tagName,
+            className: typeof child.className === 'string' ? child.className : '',
+            rect: { left: childRect.left, right: childRect.right, top: childRect.top, bottom: childRect.bottom },
+          }]
+        })
+        return {
+          index,
+          rect: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height },
+          hasMeaningfulContent,
+          contentOverflow: element.scrollWidth > element.clientWidth + 1,
+          intentionalTableScroll,
+          intentionalEllipsis,
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+          childOverflow,
+        }
+      }),
     }
   }), selectors)
-  for (const item of result) {
-    assert.equal(item.missing, undefined, `${label} 缺少关键元素 ${item.selector}`)
-    assert.ok(item.rect.width > 0 && item.rect.height > 0, `${label} 元素被裁空：${JSON.stringify(item)}`)
-    assert.ok(item.rect.right > 0 && item.rect.left < item.viewportWidth, `${label} 元素超出水平视口：${JSON.stringify(item)}`)
-    assert.ok(item.rect.bottom > 0 && item.rect.top < item.viewportHeight, `${label} 元素超出垂直视口：${JSON.stringify(item)}`)
+  for (const group of result) {
+    assert.equal(group.missing, false, `${label} 缺少关键元素 ${group.selector}`)
+    for (const item of group.elements) {
+      assert.ok(item.rect.width > 0 && item.rect.height > 0, `${label} 元素被裁空：${JSON.stringify({ selector: group.selector, ...item })}`)
+      assert.ok(!item.hasMeaningfulContent || !item.contentOverflow || item.intentionalTableScroll || item.intentionalEllipsis,
+        `${label} 内容发生非预期水平裁切：${JSON.stringify({ selector: group.selector, ...item })}`)
+      assert.deepEqual(item.childOverflow, [], `${label} 子元素超出预期区域：${JSON.stringify({ selector: group.selector, ...item })}`)
+    }
   }
-  for (let index = 0; index < result.length; index += 1) {
-    for (let otherIndex = index + 1; otherIndex < result.length; otherIndex += 1) {
-      const left = result[index].rect
-      const right = result[otherIndex].rect
-      const overlapWidth = Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left))
-      const overlapHeight = Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top))
-      assert.equal(overlapWidth * overlapHeight, 0, `${label} 关键元素不得重叠：${JSON.stringify([result[index], result[otherIndex]])}`)
+  for (let groupIndex = 0; groupIndex < result.length; groupIndex += 1) {
+    for (let otherGroupIndex = groupIndex + 1; otherGroupIndex < result.length; otherGroupIndex += 1) {
+      for (const leftItem of result[groupIndex].elements) {
+        for (const rightItem of result[otherGroupIndex].elements) {
+          const left = leftItem.rect
+          const right = rightItem.rect
+          const overlapWidth = Math.max(0, Math.min(left.right, right.right) - Math.max(left.left, right.left))
+          const overlapHeight = Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top))
+          assert.equal(overlapWidth * overlapHeight, 0, `${label} 关键元素不得重叠：${JSON.stringify([
+            { selector: result[groupIndex].selector, ...leftItem },
+            { selector: result[otherGroupIndex].selector, ...rightItem },
+          ])}`)
+        }
+      }
     }
   }
 }
+
+const collectProjectHeaderMetadata = async page => page.evaluate(() => {
+  const visible = element => {
+    const rect = element.getBoundingClientRect()
+    const style = getComputedStyle(element)
+    return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+  }
+  const headers = Array.from(document.querySelectorAll('.pms-project-summary-table thead th[data-project-list-column-unit]')).filter(visible)
+  const rawVisibleUnitKeys = headers.map(header => header.getAttribute('data-project-list-column-unit'))
+  const rawVisibleHeaderIds = headers.map(header => header.getAttribute('data-project-list-header-id'))
+  const canonicalEntries = []
+  for (const header of headers) {
+    const unitKey = header.getAttribute('data-project-list-column-unit')
+    if (!unitKey || canonicalEntries.some(candidate => candidate.unitKey === unitKey)) continue
+    const unitHeaders = headers.filter(candidate => candidate.getAttribute('data-project-list-column-unit') === unitKey)
+    const canonical = unitHeaders.find(candidate => candidate.getAttribute('data-project-list-header-id')?.startsWith('group::'))
+      || unitHeaders.find(candidate => candidate.getAttribute('data-project-list-draggable') === 'true' || candidate.getAttribute('data-project-list-column-locked') === 'true')
+      || unitHeaders[0]
+    canonicalEntries.push({
+      unitKey,
+      headerId: canonical.getAttribute('data-project-list-header-id'),
+      draggable: canonical.getAttribute('data-project-list-draggable') === 'true',
+      locked: canonical.getAttribute('data-project-list-column-locked') === 'true',
+    })
+  }
+  return {
+    rawVisibleUnitKeys,
+    rawVisibleHeaderIds,
+    repeatedDomUnits: rawVisibleUnitKeys.filter((unit, index) => rawVisibleUnitKeys.indexOf(unit) !== index),
+    canonicalEntries,
+    canonicalUnitKeys: canonicalEntries.map(entry => entry.unitKey),
+    draggableUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
+    lockedUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
+    inconsistentUnits: [...new Set(rawVisibleUnitKeys.filter(Boolean))].filter(unit => {
+      const matches = headers.filter(header => header.getAttribute('data-project-list-column-unit') === unit)
+      return matches.some(header => header.getAttribute('data-project-list-draggable') === 'true')
+        && matches.some(header => header.getAttribute('data-project-list-column-locked') === 'true')
+    }),
+  }
+})
 
 const assertDateCells = async (page, selector, label, minimum = 2) => {
   const values = await page.$$eval(`${selector} td`, cells => cells.flatMap(cell => {
@@ -276,12 +354,14 @@ const runScenario = async (name, options, exercise) => {
   } catch (error) {
     await page.screenshot({ path: join(ARTIFACT_DIR, `${name}-failure.png`), fullPage: false }).catch(() => undefined)
     const diagnostics = await page.evaluate(() => ({ url: location.href, text: (document.body?.innerText || '').slice(0, 2600) })).catch(() => ({}))
-    throw new Error(`${name}: ${error instanceof Error ? error.message : String(error)}\nerrors=${JSON.stringify(applicationErrors)}\ndiagnostics=${JSON.stringify(diagnostics)}`)
+    const originalError = error instanceof Error ? error : new Error(String(error))
+    throw new Error(`${name}: ${originalError.stack || originalError.message}\nerrors=${JSON.stringify(applicationErrors)}\ndiagnostics=${JSON.stringify(diagnostics)}`, { cause: originalError })
   } finally {
     await context.close()
   }
 }
 
+await rm(ARTIFACT_DIR, { recursive: true, force: true })
 await mkdir(ARTIFACT_DIR, { recursive: true })
 
 try {
@@ -325,46 +405,23 @@ try {
     await page.waitForSelector('.pms-project-summary-table thead', { visible: true, timeout: TIMEOUT })
     await page.waitForSelector('[aria-label="筛选"]', { visible: true, timeout: TIMEOUT })
     await page.waitForSelector('.pms-project-list-pagination', { visible: true, timeout: TIMEOUT })
-    const tableState = await page.evaluate(() => {
+    const tableVisualState = await page.evaluate(() => {
       const visible = element => {
         const rect = element.getBoundingClientRect()
         const style = getComputedStyle(element)
         return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
       }
-      const headers = Array.from(document.querySelectorAll('.pms-project-summary-table thead th[data-project-list-column-unit]')).filter(visible)
       const fixedCells = Array.from(document.querySelectorAll('.pms-project-summary-table .ant-table-cell-fix-left, .pms-project-summary-table .ant-table-cell-fix-start')).filter(visible)
       const opaque = fixedCells.every(cell => {
         const color = getComputedStyle(cell).backgroundColor
         return color !== 'transparent' && !/rgba\([^)]*,\s*0(?:\.0+)?\)/.test(color)
       })
-      const rawVisibleUnitKeys = headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean)
-      const rawVisibleHeaderIds = headers.map(header => header.getAttribute('data-project-list-header-id'))
-      const canonicalHeaders = []
-      for (const header of headers) {
-        const unitKey = header.getAttribute('data-project-list-column-unit')
-        if (!unitKey || canonicalHeaders.some(candidate => candidate.unitKey === unitKey)) continue
-        const unitHeaders = headers.filter(candidate => candidate.getAttribute('data-project-list-column-unit') === unitKey)
-        const canonical = unitHeaders.find(candidate => candidate.getAttribute('data-project-list-header-id')?.startsWith('group::'))
-          || unitHeaders.find(candidate => candidate.getAttribute('data-project-list-draggable') === 'true' || candidate.getAttribute('data-project-list-column-locked') === 'true')
-          || unitHeaders[0]
-        if (canonical) canonicalHeaders.push({ unitKey })
-      }
       return {
         scope: Boolean(document.querySelector('.pms-project-summary-surface')),
-        rawVisibleUnitKeys,
-        rawVisibleHeaderIds,
-        repeatedDomUnits: rawVisibleUnitKeys.filter((unit, index) => rawVisibleUnitKeys.indexOf(unit) !== index),
-        canonicalUnitKeys: canonicalHeaders.map(header => header.unitKey),
-        draggableUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
-        lockedUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
-        inconsistentUnits: [...new Set(headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))].filter(unit => {
-          const matches = headers.filter(header => header.getAttribute('data-project-list-column-unit') === unit)
-          return matches.some(header => header.getAttribute('data-project-list-draggable') === 'true')
-            && matches.some(header => header.getAttribute('data-project-list-column-locked') === 'true')
-        }),
         fixedCount: fixedCells.length, opaque,
       }
     })
+    const tableState = { ...await collectProjectHeaderMetadata(page), ...tableVisualState }
     assert.equal(tableState.scope, true, '列表必须暴露 pms-project-summary-surface 语义范围')
     assert.ok(tableState.rawVisibleUnitKeys.length > 0 && tableState.rawVisibleUnitKeys.every(Boolean), `列表表头必须暴露列单元元数据：${JSON.stringify(tableState)}`)
     assert.deepEqual([...new Set(tableState.repeatedDomUnits)], ['milestone'], `只有分组/叶子表头允许在 DOM 中共享 milestone 单元：${JSON.stringify(tableState)}`)
@@ -390,38 +447,20 @@ try {
     }, { timeout: TIMEOUT, polling: 'raf' })
     const scrollState = await page.$eval('.pms-project-summary-table .ant-table-body', body => ({ scrollLeft: body.scrollLeft, scrollWidth: body.scrollWidth, clientWidth: body.clientWidth }))
     assert.ok(scrollState.scrollWidth > scrollState.clientWidth, `tOS 表格必须存在真实水平滚动范围：${JSON.stringify(scrollState)}`)
-    const fixedState = await page.evaluate(() => {
+    const fixedVisualState = await page.evaluate(() => {
       const visible = element => {
         const rect = element.getBoundingClientRect()
         const style = getComputedStyle(element)
         return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
       }
-      const headers = Array.from(document.querySelectorAll('.pms-project-summary-table thead th[data-project-list-column-unit]')).filter(visible)
       const fixedCells = Array.from(document.querySelectorAll('.pms-project-summary-table .ant-table-cell-fix-left, .pms-project-summary-table .ant-table-cell-fix-start')).filter(visible)
-      const rawVisibleUnitKeys = headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean)
-      const rawVisibleHeaderIds = headers.map(header => header.getAttribute('data-project-list-header-id'))
-      const canonicalHeaders = []
-      for (const header of headers) {
-        const unitKey = header.getAttribute('data-project-list-column-unit')
-        if (!unitKey || canonicalHeaders.some(candidate => candidate.unitKey === unitKey)) continue
-        const unitHeaders = headers.filter(candidate => candidate.getAttribute('data-project-list-column-unit') === unitKey)
-        const canonical = unitHeaders.find(candidate => candidate.getAttribute('data-project-list-header-id')?.startsWith('group::'))
-          || unitHeaders.find(candidate => candidate.getAttribute('data-project-list-draggable') === 'true' || candidate.getAttribute('data-project-list-column-locked') === 'true')
-          || unitHeaders[0]
-        if (canonical) canonicalHeaders.push({ unitKey })
-      }
       return {
         scrollLeft: document.querySelector('.pms-project-summary-table .ant-table-body')?.scrollLeft || 0,
-        rawVisibleUnitKeys,
-        rawVisibleHeaderIds,
-        repeatedDomUnits: rawVisibleUnitKeys.filter((unit, index) => rawVisibleUnitKeys.indexOf(unit) !== index),
-        canonicalUnitKeys: canonicalHeaders.map(header => header.unitKey),
-        lockedUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
-        draggableUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
         fixedCount: fixedCells.length,
         backgrounds: fixedCells.map(cell => getComputedStyle(cell).backgroundColor),
       }
     })
+    const fixedState = { ...await collectProjectHeaderMetadata(page), ...fixedVisualState }
     assert.ok(fixedState.scrollLeft > 0, `必须在水平滚动后检查固定单元格：${JSON.stringify(fixedState)}`)
     assert.deepEqual([...new Set(fixedState.repeatedDomUnits)], ['milestone'], `tOS 只有分组/叶子表头允许共享 milestone 单元：${JSON.stringify(fixedState)}`)
     assert.ok(fixedState.rawVisibleHeaderIds.every(Boolean), `tOS 每个可见表头必须有原始 header ID：${JSON.stringify(fixedState)}`)
@@ -481,6 +520,34 @@ try {
     assert.ok(fieldOrder.length >= 4, `选择 IPM 项目后必须显示新建字段：${JSON.stringify(fieldOrder)}`)
     assert.deepEqual(fieldOrder.slice(0, 4).map(field => field.label), ['项目分类', '技术赛道', '子项目名称', '项目状态'], `EXT-006/AI-Engine-V3 外部/IPM 流程起始字段顺序错误：${JSON.stringify(fieldOrder.slice(0, 6))}`)
     assert.ok(fieldOrder.every(field => field.key), `新建字段必须保留 data-project-create-field：${JSON.stringify(fieldOrder)}`)
+    const createControlState = await page.evaluate(() => Object.fromEntries([
+      'secondaryCategory', 'technicalTrack', 'projectName', 'status',
+    ].map(key => {
+      const wrapper = document.querySelector(`.ant-modal [data-project-create-field="${key}"]`)
+      const control = wrapper?.querySelector('input, select, [role="combobox"]')
+      const rect = control?.getBoundingClientRect()
+      const style = control ? getComputedStyle(control) : null
+      return [key, {
+        wrapper: Boolean(wrapper),
+        tag: control?.tagName || '',
+        role: control?.getAttribute('role') || '',
+        type: control instanceof HTMLInputElement ? control.type : '',
+        value: control instanceof HTMLInputElement || control instanceof HTMLSelectElement ? control.value : (control?.textContent || '').trim(),
+        disabled: control instanceof HTMLInputElement || control instanceof HTMLSelectElement ? control.disabled : control?.getAttribute('aria-disabled') === 'true',
+        readOnly: control instanceof HTMLInputElement ? control.readOnly : false,
+        visible: Boolean(rect && rect.width > 0 && rect.height > 0 && style?.display !== 'none' && style?.visibility !== 'hidden'),
+      }]
+    })))
+    for (const key of ['secondaryCategory', 'technicalTrack', 'projectName', 'status']) {
+      assert.equal(createControlState[key].wrapper, true, `${key} 必须位于对应 data-project-create-field 包装器：${JSON.stringify(createControlState)}`)
+      assert.equal(createControlState[key].visible, true, `${key} 必须有可见真实控件：${JSON.stringify(createControlState)}`)
+      assert.equal(createControlState[key].tag, 'INPUT', `${key} IPM 快照必须渲染为输入控件：${JSON.stringify(createControlState)}`)
+      assert.ok(createControlState[key].disabled || createControlState[key].readOnly, `${key} IPM 快照控件必须只读或禁用：${JSON.stringify(createControlState)}`)
+    }
+    assert.equal(createControlState.secondaryCategory.value, '研发级-基础研究-重点项目', `项目分类必须预填 IPM 来源值：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.technicalTrack.value, 'AIOS', `技术赛道必须预填非空 IPM 来源值：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.projectName.value, 'AI-Engine-V3', `子项目名称必须预填 IPM 来源值：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.status.value, '待立项', `项目状态必须保留配置初始化状态：${JSON.stringify(createControlState)}`)
     await page.screenshot({ path: join(ARTIFACT_DIR, '01-add-modal.png'), fullPage: false })
     await clickExact(page, '.ant-modal button', '取消')
     await page.waitForFunction(() => !Array.from(document.querySelectorAll('.pms-project-info-modal-surface')).some(element => {
