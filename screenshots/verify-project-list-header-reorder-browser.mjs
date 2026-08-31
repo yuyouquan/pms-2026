@@ -202,6 +202,22 @@ const assertKeyboardAnnouncement = async (selector, expectedLabel) => {
   await wait(120)
 }
 
+const keyboardDrop = async (selector, arrowKey) => {
+  const header = await headerForSelector(selector)
+  await header.evaluate(element => element.scrollIntoView({ block: 'nearest', inline: 'center' }))
+  await header.focus()
+  await page.keyboard.press('Space')
+  await wait(120)
+  await page.keyboard.press(arrowKey)
+  await wait(120)
+  await page.keyboard.press('Space')
+  await wait(220)
+  return page.$$eval(
+    '[id^="DndLiveRegion"]',
+    regions => regions.map(region => region.textContent ?? '').join(' '),
+  )
+}
+
 const assertRepresentativeListInteractions = async () => {
   const toggle = await page.$('.pms-machine-series-toggle')
   assert.ok(toggle, '整机列表保留产品系列层级控制')
@@ -398,10 +414,21 @@ try {
     '.pms-project-summary-table thead th[data-project-list-header-id^="leaf::"][data-project-list-column-unit="milestone"]',
     '里程碑',
   )
-  await assertKeyboardAnnouncement(
+  const beforeSuccessfulKeyboardDrop = await unitOrder()
+  const successfulKeyboardAnnouncement = await keyboardDrop(
     '.pms-project-summary-table thead th[data-project-list-column-unit="spm"]',
-    'SPM',
+    'ArrowRight',
   )
+  assert.notDeepEqual(await unitOrder(), beforeSuccessfulKeyboardDrop, '有效键盘放置必须更新顺序')
+  assert.match(successfulKeyboardAnnouncement, /已将SPM放到SPM部门（二级部门）附近/)
+
+  const beforeSameUnitKeyboardDrop = await unitOrder()
+  const sameUnitKeyboardAnnouncement = await keyboardDrop(
+    '.pms-project-summary-table thead th[data-project-list-header-id^="leaf::"][data-project-list-column-unit="milestone"]',
+    'ArrowRight',
+  )
+  assert.deepEqual(await unitOrder(), beforeSameUnitKeyboardDrop, '同一里程碑单元内键盘放置不得改变顺序')
+  assert.match(sameUnitKeyboardAnnouncement, /未移动里程碑：.*不可作为放置位置/)
 
   await openFieldSettings()
   await toggleMilestone(false)
@@ -423,6 +450,13 @@ try {
   const beforeFixedTargetDrop = await unitOrder()
   await dragHeaderToLockedUnit('status', 'tosVersion')
   assert.deepEqual(await unitOrder(), beforeFixedTargetDrop, '固定列区域不得成为非固定列的插入位置')
+  const beforeFixedKeyboardDrop = await unitOrder()
+  const fixedKeyboardAnnouncement = await keyboardDrop(
+    '.pms-project-summary-table thead th[data-project-list-column-unit="versionType"]',
+    'ArrowLeft',
+  )
+  assert.deepEqual(await unitOrder(), beforeFixedKeyboardDrop, '键盘放到固定列不得改变顺序')
+  assert.match(fixedKeyboardAnnouncement, /未移动版本类型：.*不可作为放置位置/)
 
   await clickCategory('技术项目')
   await page.waitForSelector('.pms-project-summary-table thead', { visible: true, timeout: TIMEOUT })

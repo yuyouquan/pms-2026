@@ -31,6 +31,7 @@ export interface SortableProjectListHeaderCellProps
 interface SortableProjectListHeaderContextProps {
   items: string[]
   children: ReactNode
+  canDrop: (activeUnitKey: string, overUnitKey: string) => boolean
   onDragEnd: (event: DragEndEvent) => void
 }
 
@@ -44,10 +45,14 @@ const ActiveProjectListHeaderUnitContext = createContext<string | null>(null)
 const getUnitLabel = (item: { data: { current?: Record<string, unknown> } } | null) => (
   String(item?.data.current?.unitLabel ?? item?.data.current?.unitKey ?? '字段')
 )
+const getUnitKey = (item: { data: { current?: Record<string, unknown> } } | null) => (
+  String(item?.data.current?.unitKey ?? '')
+)
 
 export function SortableProjectListHeaderContext({
   items,
   children,
+  canDrop,
   onDragEnd,
 }: SortableProjectListHeaderContextProps) {
   const [activeUnit, setActiveUnit] = useState<ActiveUnit | null>(null)
@@ -70,8 +75,9 @@ export function SortableProjectListHeaderContext({
             ? `${getUnitLabel(active)}当前位于${getUnitLabel(over)}附近`
             : `${getUnitLabel(active)}已离开可放置区域`,
           onDragEnd: ({ active, over }) => over
+            && canDrop(getUnitKey(active), getUnitKey(over))
             ? `已将${getUnitLabel(active)}放到${getUnitLabel(over)}附近`
-            : `${getUnitLabel(active)}未移动`,
+            : `未移动${getUnitLabel(active)}：${over ? getUnitLabel(over) : '当前位置'}不可作为放置位置`,
           onDragCancel: ({ active }) => `已取消拖动${getUnitLabel(active)}`,
         },
       }}

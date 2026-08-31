@@ -722,11 +722,19 @@ export default function ProjectSummaryTable({
     }
     return [`leaf::${String(column.key)}`]
   }), [columns])
+  const canDropHeaderUnit = useCallback(
+    (activeUnitKey: string, overUnitKey: string) => canDropProjectListUnit(
+      columnUnitDefinitions,
+      activeUnitKey,
+      overUnitKey,
+    ),
+    [columnUnitDefinitions],
+  )
   const handleHeaderDragEnd = useCallback(({ active, over }: DragEndEvent) => {
     if (!over) return
     const activeUnitKey = String(active.data.current?.unitKey ?? '')
     const overUnitKey = String(over.data.current?.unitKey ?? '')
-    if (!canDropProjectListUnit(columnUnitDefinitions, activeUnitKey, overUnitKey)) return
+    if (!canDropHeaderUnit(activeUnitKey, overUnitKey)) return
     applyColumnSettings({
       ...columnSettings,
       order: moveColumnSetting(
@@ -736,7 +744,7 @@ export default function ProjectSummaryTable({
         overUnitKey,
       ),
     })
-  }, [applyColumnSettings, columnSettings, columnUnitDefinitions])
+  }, [applyColumnSettings, canDropHeaderUnit, columnSettings, columnUnitDefinitions])
   const scrollWidth = visibleDefinitions.reduce((total, definition) => {
     const field = fieldDefinitions.find(candidate => candidate.key === definition.key)
     return total + (field?.width ?? 140)
@@ -1031,6 +1039,7 @@ export default function ProjectSummaryTable({
       {showTable && <div className="pms-solid-surface pms-project-summary-table-shell">
         <SortableProjectListHeaderContext
           items={sortableHeaderIds}
+          canDrop={canDropHeaderUnit}
           onDragEnd={handleHeaderDragEnd}
         >
         <Table<ProjectSummaryRow>
