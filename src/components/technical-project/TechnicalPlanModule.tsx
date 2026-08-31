@@ -101,22 +101,14 @@ function TechnicalHorizontalPlanTable({
 }) {
   const mode = tasks.some(task => task.parentId) ? 'standard' : 'technical-subproject'
   const currentProjection = projectLevel1Plan(tasks, { mode })
-  const groups = currentProjection.stageGroups.length > 0
-    ? currentProjection.stageGroups.map(group => ({ ...group, colSpan: Math.max(1, group.milestones.length) }))
-    : [{
-        stage: {
-          id: 'technical-subproject',
-          taskName: '子项目计划',
-          planStartDate: '',
-          planEndDate: '',
-          estimatedDays: sumLevel1EstimatedDays(currentProjection.rows),
-          manpowerPercent: null,
-        },
-        milestones: currentProjection.rows,
-        colSpan: Math.max(1, currentProjection.rows.length),
-      }]
+  const groups = currentProjection.stageGroups.map(group => ({
+    ...group,
+    colSpan: Math.max(1, group.milestones.length),
+  }))
   if (!tasks.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无横版计划数据" />
-  const milestoneTasks = groups.flatMap(group => group.milestones.length > 0 ? group.milestones : [group.stage])
+  const milestoneTasks = mode === 'technical-subproject'
+    ? currentProjection.rows
+    : groups.flatMap(group => group.milestones.length > 0 ? group.milestones : [group.stage])
   type TechnicalHorizontalRow = {
     id: string
     versionNo: string
@@ -184,34 +176,44 @@ function TechnicalHorizontalPlanTable({
         style={{ width: '100%', borderCollapse: 'collapse' }}
       >
         <thead>
-          <tr>
-            <th style={versionThStyle} rowSpan={2}>版本</th>
-            <th style={cycleThStyle} rowSpan={2}>开发周期</th>
-            {groups.map(({ stage, colSpan }, index) => {
-              const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
-              return (
-                <th
-                  key={stage.id}
-                  colSpan={colSpan}
-                  style={{ ...thStyle, background: `${stageColor}10`, color: stageColor, borderBottom: `2px solid ${stageColor}` }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
-                    <span>{stage.taskName}</span>
-                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-                      {stage.estimatedDays == null ? '-' : `${stage.estimatedDays}天`}
-                    </Tag>
-                  </div>
-                </th>
-              )
-            })}
-          </tr>
-          <tr>
-            {groups.flatMap(({ stage, milestones }) => (
-              milestones.length > 0
-                ? milestones.map(milestone => <th key={milestone.id} style={thStyle}>{milestone.taskName}</th>)
-                : [<th key={stage.id} style={{ ...thStyle, color: '#bfbfbf' }}>{stage.taskName}</th>]
-            ))}
-          </tr>
+          {mode === 'technical-subproject' ? (
+            <tr data-technical-plan-header="single-row">
+              <th style={versionThStyle}>版本</th>
+              <th style={cycleThStyle}>开发周期</th>
+              {milestoneTasks.map(task => <th key={task.id} style={thStyle}>{task.taskName}</th>)}
+            </tr>
+          ) : (
+            <>
+              <tr data-technical-plan-header="grouped">
+                <th style={versionThStyle} rowSpan={2}>版本</th>
+                <th style={cycleThStyle} rowSpan={2}>开发周期</th>
+                {groups.map(({ stage, colSpan }, index) => {
+                  const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
+                  return (
+                    <th
+                      key={stage.id}
+                      colSpan={colSpan}
+                      style={{ ...thStyle, background: `${stageColor}10`, color: stageColor, borderBottom: `2px solid ${stageColor}` }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
+                        <span>{stage.taskName}</span>
+                        <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                          {stage.estimatedDays == null ? '-' : `${stage.estimatedDays}天`}
+                        </Tag>
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+              <tr>
+                {groups.flatMap(({ stage, milestones }) => (
+                  milestones.length > 0
+                    ? milestones.map(milestone => <th key={milestone.id} style={thStyle}>{milestone.taskName}</th>)
+                    : [<th key={stage.id} style={{ ...thStyle, color: '#bfbfbf' }}>{stage.taskName}</th>]
+                ))}
+              </tr>
+            </>
+          )}
         </thead>
         <tbody>
           {rows.filter(row => row.rowType === 'version').map(row => {

@@ -14,32 +14,6 @@ const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContaine
 const basicInfoPresentationPath = 'src/lib/projectBasicInfoPresentation.ts'
 const basicInfoPresentationSource = readSource(root, basicInfoPresentationPath)
 
-assert.notEqual(
-  basicInfoPresentationSource,
-  '',
-  'project basic-information summary presentation helper is missing',
-)
-const basicInfoPresentation = loadTypeScriptModule(root, basicInfoPresentationPath)
-assert.equal(
-  typeof basicInfoPresentation.shouldShowLatestPublishedLevel1Summary,
-  'function',
-  'project basic-information presentation must export shouldShowLatestPublishedLevel1Summary',
-)
-for (const projectType of ['整机-手机', '整机产品-手机', 'tOS版本项目']) {
-  assert.equal(
-    basicInfoPresentation.shouldShowLatestPublishedLevel1Summary(projectType),
-    false,
-    `${projectType} basic information must hide the latest-published L1 date summary`,
-  )
-}
-for (const projectType of ['技术项目', '能力建设项目']) {
-  assert.equal(
-    basicInfoPresentation.shouldShowLatestPublishedLevel1Summary(projectType),
-    true,
-    `${projectType} must retain its existing basic-information summary decision`,
-  )
-}
-
 const technicalCoreKeys = [
   'secondaryCategory', 'technicalTrack', 'tmg', 'subdomain', 'status', 'projectStage',
   'projectYear', 'preProjectId', 'projectValue',
@@ -106,6 +80,32 @@ for (const [surfaceName, source] of [
     source,
     /data-technical-plan-header=['"]grouped['"]/,
     `${surfaceName} must preserve an observable grouped-header path for standard plans`,
+  )
+}
+
+assert.notEqual(
+  basicInfoPresentationSource,
+  '',
+  'project basic-information summary presentation helper is missing',
+)
+const basicInfoPresentation = loadTypeScriptModule(root, basicInfoPresentationPath)
+assert.equal(
+  typeof basicInfoPresentation.shouldShowLatestPublishedLevel1Summary,
+  'function',
+  'project basic-information presentation must export shouldShowLatestPublishedLevel1Summary',
+)
+for (const projectType of ['整机-手机', '整机产品-手机', 'tOS版本项目']) {
+  assert.equal(
+    basicInfoPresentation.shouldShowLatestPublishedLevel1Summary(projectType),
+    false,
+    `${projectType} basic information must hide the latest-published L1 date summary`,
+  )
+}
+for (const projectType of ['技术项目', '能力建设项目']) {
+  assert.equal(
+    basicInfoPresentation.shouldShowLatestPublishedLevel1Summary(projectType),
+    true,
+    `${projectType} must retain its existing basic-information summary decision`,
   )
 }
 

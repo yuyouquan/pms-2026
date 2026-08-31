@@ -59,19 +59,13 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
   const normalizedTasks = normalizeTasks(currentVersion.tasks)
   const projectionMode = normalizedTasks.some(task => task.parentId) ? 'standard' : 'technical-subproject'
   const currentProjection = projectLevel1Plan(normalizedTasks, { mode: projectionMode })
-  const groups = currentProjection.stageGroups.length > 0
-    ? currentProjection.stageGroups.map(group => ({ ...group, width: Math.max(1, group.milestones.length) }))
-    : [{
-        stage: {
-          ...currentProjection.rows[0],
-          id: 'technical-subproject',
-          taskName: '子项目计划',
-          estimatedDays: sumLevel1EstimatedDays(currentProjection.rows),
-        },
-        milestones: currentProjection.rows,
-        width: Math.max(1, currentProjection.rows.length),
-      }]
-  const columns = groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
+  const groups = currentProjection.stageGroups.map(group => ({
+    ...group,
+    width: Math.max(1, group.milestones.length),
+  }))
+  const columns = projectionMode === 'technical-subproject'
+    ? currentProjection.rows
+    : groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
   const versionRows = visibleVersions.map(version => {
     const projection = projectLevel1Plan(normalizeTasks(version.tasks), { mode: projectionMode })
     return {
@@ -102,37 +96,47 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
     <div className="technical-plan-summary" role="region" aria-label={`${label}计划信息内容`} tabIndex={0}>
       <table aria-label={`${label}版本阶段里程碑`}>
         <thead>
-          <tr>
-            <th className="technical-plan-summary-sticky-version" rowSpan={2}>版本</th>
-            <th className="technical-plan-summary-sticky-cycle" rowSpan={2}>开发周期</th>
-            {groups.map((group, index) => {
-              const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
-              return (
-                <th
-                  key={group.stage.id}
-                  className="technical-plan-summary-stage"
-                  colSpan={group.width}
-                  style={{
-                    background: `${stageColor}10`,
-                    color: stageColor,
-                    borderBottom: `2px solid ${stageColor}`,
-                  }}
-                >
-                  <div className="technical-plan-summary-stage-content">
-                    <span>{group.stage.taskName}</span>
-                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-                      {group.stage.estimatedDays == null ? '-' : `${group.stage.estimatedDays}天`}
-                    </Tag>
-                  </div>
-                </th>
-              )
-            })}
-          </tr>
-          <tr>
-            {groups.flatMap(group => group.milestones.length
-              ? group.milestones.map(milestone => <th key={milestone.id}>{milestone.taskName}</th>)
-              : [<th key={group.stage.id}>-</th>])}
-          </tr>
+          {projectionMode === 'technical-subproject' ? (
+            <tr data-technical-plan-header="single-row">
+              <th className="technical-plan-summary-sticky-version">版本</th>
+              <th className="technical-plan-summary-sticky-cycle">开发周期</th>
+              {columns.map(column => <th key={column.id}>{column.taskName}</th>)}
+            </tr>
+          ) : (
+            <>
+              <tr data-technical-plan-header="grouped">
+                <th className="technical-plan-summary-sticky-version" rowSpan={2}>版本</th>
+                <th className="technical-plan-summary-sticky-cycle" rowSpan={2}>开发周期</th>
+                {groups.map((group, index) => {
+                  const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
+                  return (
+                    <th
+                      key={group.stage.id}
+                      className="technical-plan-summary-stage"
+                      colSpan={group.width}
+                      style={{
+                        background: `${stageColor}10`,
+                        color: stageColor,
+                        borderBottom: `2px solid ${stageColor}`,
+                      }}
+                    >
+                      <div className="technical-plan-summary-stage-content">
+                        <span>{group.stage.taskName}</span>
+                        <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                          {group.stage.estimatedDays == null ? '-' : `${group.stage.estimatedDays}天`}
+                        </Tag>
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+              <tr>
+                {groups.flatMap(group => group.milestones.length
+                  ? group.milestones.map(milestone => <th key={milestone.id}>{milestone.taskName}</th>)
+                  : [<th key={group.stage.id}>-</th>])}
+              </tr>
+            </>
+          )}
         </thead>
         <tbody>
           {versionRows.map(row => {
