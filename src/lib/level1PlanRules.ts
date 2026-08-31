@@ -1027,7 +1027,7 @@ export const getLevel1StructurePermissions = (
     && input.task?.parentId === input.parent?.id
   if (input.isSuperAdmin) {
     return {
-      canAddStage: true,
+      canAddStage: false,
       canAddChild: true,
       canRename: Boolean(isBusinessActionTask),
       canDelete: true,

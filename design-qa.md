@@ -98,6 +98,48 @@ final result: passed
 
 ---
 
+# 项目列表飞书表格式列拖动 QA（2026-08-31）
+
+- Source visual truth: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-1166675d-167a-4d5e-9ad5-ab8249c22bfe.png`
+- Browser-rendered implementation: `screenshots/artifacts/project-list-feishu-drag-final.png`
+- Combined comparison: `screenshots/artifacts/project-list-feishu-drag-comparison.png`
+- Browser viewport: `1600 x 1000` CSS px, deviceScaleFactor 1.
+- Source: `684 x 1102` px; implementation table-shell capture: `1574 x 647` px.
+- Normalization: source proportionally scaled to `402 x 647`, followed by a 24 px separator and unchanged implementation; combined result `2000 x 647`.
+- State: 整机产品项目列表，整列表头正在拖向新的插入位置。
+
+## Full-view and focused comparison evidence
+
+实现采用参考图的交互模式，而不复制无关的表格行号和 A/B/C 列标。来源逻辑列贯穿内容区着色，可接受目标使用一条蓝色竖向指示线，释放后移动整个逻辑列。现有 PMS 字体、层级行、分页、边框和紫色表面体系保持不变。该表格外壳截图已经覆盖完整的来源列着色和贯穿式目标线，因此无需额外裁剪；自动浏览器检查同时验证了来源单元格、目标表头/内容边缘类和 `#3370ff` 的全高外壳指示线。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 保留 PMS/Ant Design 字体、字号、字重、截断和层级标签；拖动不导致文本重排。
+- Spacing and layout rhythm: 列宽、行高、合并单元格与分页不变；指示线为覆盖层，不占用布局宽度。
+- Colors and visual tokens: 使用飞书式蓝色 `#3370ff`，来源列采用低透明度蓝色，保证内容可读。
+- Image quality and assets: 未新增图片或近似图标；参考图仅作为交互视觉依据。
+- Copy and content: 字段、值、默认顺序、筛选和中文标签均不变；`里程碑` 仍为唯一整块名称。
+
+## Findings and comparison history
+
+1. 首版目标边缘由逐单元格边框组成，在密集表格中不够连续（P2）。
+2. 修复为根据目标表头几何位置生成全表格外壳蓝线，并保留单元格边缘作为辅助；同时增强来源列着色。
+3. Post-fix evidence: `screenshots/artifacts/project-list-feishu-drag-final.png`。浏览器验收确认普通列和 `里程碑` 整块拖动、字段配置双向联动、刷新持久化、固定目标拒绝、键盘操作和中文播报全部通过。
+4. 无剩余 P0/P1/P2 差异。参考图的行号和 A/B/C 表头属于电子表格外壳，不属于本次项目列表改造范围。
+
+## Primary interactions tested
+
+- 普通字段表头拖动；
+- 从阶段表头和叶子表头拖动整块 `里程碑`；
+- 字段配置与表头顺序双向联动及刷新持久化；
+- 固定列目标拒绝；
+- 键盘成功/失败播报及 Escape 取消；
+- 控制台、请求和页面错误收集。
+
+final result: passed
+
+---
+
 # 个人工作台目录任务表 QA（2026-08-13）
 
 - Source visual truth:

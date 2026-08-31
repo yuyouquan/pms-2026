@@ -287,9 +287,56 @@
 }
 
 .pms-project-list-sortable-header.is-unit-dragging {
-  opacity: 0.42;
-  outline: 2px dashed color-mix(in srgb, var(--pms-brand) 52%, transparent);
-  outline-offset: -2px;
+  color: #245bdb;
+  background: color-mix(in srgb, #3370ff 12%, #fff) !important;
+  box-shadow: inset 0 2px 0 #3370ff, inset 0 -2px 0 #3370ff;
+}
+
+.pms-project-list-sortable-header.is-drop-before {
+  border-left: 4px solid #3370ff !important;
+  box-shadow: inset 4px 0 0 #3370ff !important;
+}
+
+.pms-project-list-sortable-header.is-drop-after {
+  border-right: 4px solid #3370ff !important;
+  box-shadow: inset -4px 0 0 #3370ff !important;
+}
+
+.pms-project-summary-table-shell {
+  position: relative;
+}
+
+.pms-project-summary-table-shell[data-column-drop-active="true"]::after {
+  position: absolute;
+  z-index: 12;
+  top: 0;
+  bottom: 0;
+  left: var(--pms-project-list-drop-x);
+  width: 3px;
+  border-radius: 3px;
+  background: #3370ff;
+  box-shadow: 0 0 0 1px rgba(51, 112, 255, 0.14);
+  content: '';
+  pointer-events: none;
+  transform: translateX(-1px);
+}
+
+.pms-project-summary-table .ant-table-tbody > tr > td.pms-project-list-column-drag-source {
+  background: color-mix(in srgb, #3370ff 9%, #fff) !important;
+}
+
+.pms-project-summary-table .ant-table-tbody > tr:hover > td.pms-project-list-column-drag-source {
+  background: color-mix(in srgb, #3370ff 14%, #fff) !important;
+}
+
+.pms-project-summary-table .ant-table-tbody > tr > td.pms-project-list-column-drop-before {
+  border-left: 4px solid #3370ff !important;
+  box-shadow: inset 4px 0 0 #3370ff !important;
+}
+
+.pms-project-summary-table .ant-table-tbody > tr > td.pms-project-list-column-drop-after {
+  border-right: 4px solid #3370ff !important;
+  box-shadow: inset -4px 0 0 #3370ff !important;
 }
 
 .pms-project-list-drag-overlay {
@@ -4862,12 +4909,12 @@ body {
 
 .pms-project-info-display-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   background: #fff;
 }
 
 .pms-project-info-display-grid--technical-basic {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
 }
 
 .pms-project-info-display-item {
@@ -4901,9 +4948,32 @@ body {
 
 .pms-project-info-team-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   column-gap: 24px;
   padding: 4px 18px 12px;
+}
+
+.pms-project-info-legacy-grid .ant-descriptions-view {
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.pms-project-info-legacy-grid .ant-descriptions-item-label,
+.pms-project-info-legacy-grid .ant-descriptions-item-content {
+  min-width: 0;
+  padding: 10px 8px !important;
+  text-align: center;
+  word-break: break-word;
+}
+
+.pms-project-info-legacy-team-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.pms-project-info-legacy-team-grid > * {
+  min-width: 0;
 }
 
 .pms-project-info-team-role {
@@ -5129,13 +5199,33 @@ body {
   gap: 16px;
 }
 
+@media (max-width: 1279px) {
+  .pms-project-info-display-grid,
+  .pms-project-info-display-grid--technical-basic {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .pms-project-info-team-grid,
+  .pms-project-info-legacy-team-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 1100px) {
   .pms-project-info-core-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
 
-  .pms-project-info-team-grid {
+@media (max-width: 899px) {
+  .pms-project-info-display-grid,
+  .pms-project-info-display-grid--technical-basic {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pms-project-info-team-grid,
+  .pms-project-info-legacy-team-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -5146,6 +5236,13 @@ body {
 }
 
 @media (max-width: 640px) {
+  .pms-project-info-display-grid,
+  .pms-project-info-display-grid--technical-basic,
+  .pms-project-info-team-grid,
+  .pms-project-info-legacy-team-grid {
+    grid-template-columns: 1fr;
+  }
+
   .pms-project-info-core-card .ant-card-head-wrapper {
     align-items: flex-start;
     flex-wrap: wrap;
