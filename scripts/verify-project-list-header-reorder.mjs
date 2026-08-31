@@ -5,6 +5,8 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const columnOrder = loadTypeScriptModule(root, 'src/lib/projectListColumnOrder.ts')
 const tableSource = readSource(root, 'src/components/project-summary/ProjectSummaryTable.tsx')
+const headerSource = readSource(root, 'src/components/project-summary/SortableProjectListHeader.tsx')
+const globalStyles = readSource(root, 'src/styles/globals.css')
 
 const definitions = [
   { key: 'projectName', title: '项目名', defaultVisible: true, hideable: false, fixed: 'left', source: 'system' },
@@ -111,5 +113,21 @@ assert.match(
   /<SortableColumnSettings[\s\S]*definitions=\{columnUnitDefinitions\}[\s\S]*value=\{columnSettings\}/,
   'field configuration must consume the same canonical unit settings',
 )
+assert.match(headerSource, /DndContext/, 'sortable header must provide a drag context')
+assert.match(headerSource, /horizontalListSortingStrategy/, 'sortable header must constrain sorting horizontally')
+assert.match(
+  headerSource,
+  /useSensor\(PointerSensor,\s*\{[\s\S]*activationConstraint:\s*\{\s*distance:\s*6\s*\}/,
+  'sortable header must require six pixels of pointer movement',
+)
+assert.match(headerSource, /useSortable\(\{[\s\S]*disabled:\s*locked/, 'fixed headers must disable sorting')
+assert.match(headerSource, /data-project-list-column-unit=\{unitKey\}/, 'sortable header must expose its display unit')
+assert.match(tableSource, /const handleHeaderDragEnd[\s\S]*moveColumnSetting\(/, 'one handler must reorder ordinary and milestone headers')
+assert.match(tableSource, /active\.data\.current\?\.unitKey/, 'header drag must map leaf and grouped headers to their display unit')
+assert.match(tableSource, /components=\{\{[\s\S]*header:[\s\S]*SortableProjectListHeader/, 'Ant table must render the sortable header cell')
+assert.match(tableSource, /applyColumnSettings/, 'header and field settings must share one update function')
+assert.match(globalStyles, /\.pms-project-list-sortable-header\s*\{[\s\S]*cursor:\s*grab/, 'draggable headers need grab affordance')
+assert.match(globalStyles, /\.pms-project-list-sortable-header\.is-dragging/, 'dragging headers need visual feedback')
+assert.match(globalStyles, /\.pms-project-list-sortable-header\.is-locked/, 'fixed headers need a locked visual state')
 
 console.log('project list header reorder model contract passed')

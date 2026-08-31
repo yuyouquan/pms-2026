@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
   Button,
@@ -22,12 +22,18 @@ import {
   SettingOutlined,
 } from '@ant-design/icons'
 import type { ColumnType, ColumnsType } from 'antd/es/table'
+import type { DragEndEvent } from '@dnd-kit/core'
 import dayjs from 'dayjs'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
+import {
+  SortableProjectListHeader,
+  SortableProjectListHeaderContext,
+} from '@/components/project-summary/SortableProjectListHeader'
 import ActiveFilterConditions from '@/components/project-list/ActiveFilterConditions'
 import {
   getDefaultColumnSettings,
+  moveColumnSetting,
   orderVisibleDefinitions,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
@@ -272,6 +278,9 @@ export default function ProjectSummaryTable({
   const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(
     defaultColumnSettings,
   )
+  const applyColumnSettings = useCallback((nextSettings: SortableColumnSettingsValue<string>) => {
+    setColumnSettings(normalizeProjectListUnitSettings(columnUnitDefinitions, nextSettings))
+  }, [columnUnitDefinitions])
 
   const baseRows = useMemo(
     () => providedRows?.map(row => Object.fromEntries([
@@ -538,10 +547,14 @@ export default function ProjectSummaryTable({
           : undefined,
         onHeaderCell: () => {
           const headerCell = baseHeaderCell?.() ?? {}
+          const unitKey = field?.source === 'templateTask' ? 'milestone' : key
           return {
             ...headerCell,
             className: isProjectName ? 'pms-project-name-cell' : undefined,
             style: { ...headerCell.style, ...lockedWidth },
+            projectListColumnUnit: unitKey,
+            projectListHeaderId: `leaf::${key}`,
+            projectListColumnLocked: fixedColumnKeys.has(key),
           }
         },
         onCell: (record: ProjectSummaryRow) => {
@@ -682,12 +695,41 @@ export default function ProjectSummaryTable({
       result.push({
         key: segment.key,
         title: segment.group.label,
-        onHeaderCell: () => ({ style: { background: segment.group!.color } }),
+        onHeaderCell: () => ({
+          style: { background: segment.group!.color },
+          projectListColumnUnit: 'milestone',
+          projectListHeaderId: `group::${segment.key}`,
+          projectListColumnLocked: false,
+        }),
         children: segment.items.map(item => item.column),
       })
     })
     return result
   }, [fieldDefinitions, tableColumnByKey, visibleDefinitions])
+  const sortableHeaderIds = useMemo(() => columns.flatMap(column => {
+    if ('children' in column && Array.isArray(column.children)) {
+      return [
+        `group::${String(column.key)}`,
+        ...column.children.map(child => `leaf::${String(child.key)}`),
+      ]
+    }
+    return [`leaf::${String(column.key)}`]
+  }), [columns])
+  const handleHeaderDragEnd = useCallback(({ active, over }: DragEndEvent) => {
+    if (!over) return
+    const activeUnitKey = String(active.data.current?.unitKey ?? '')
+    const overUnitKey = String(over.data.current?.unitKey ?? '')
+    if (!activeUnitKey || !overUnitKey || activeUnitKey === overUnitKey) return
+    applyColumnSettings({
+      ...columnSettings,
+      order: moveColumnSetting(
+        columnUnitDefinitions,
+        columnSettings.order,
+        activeUnitKey,
+        overUnitKey,
+      ),
+    })
+  }, [applyColumnSettings, columnSettings, columnUnitDefinitions])
   const scrollWidth = visibleDefinitions.reduce((total, definition) => {
     const field = fieldDefinitions.find(candidate => candidate.key === definition.key)
     return total + (field?.width ?? 140)
@@ -897,9 +939,7 @@ export default function ProjectSummaryTable({
           minVisible={0}
           normalizeValue={value => normalizeProjectListUnitSettings(columnUnitDefinitions, value)}
           onCancel={() => setColumnOpen(false)}
-          onApply={nextSettings => {
-            setColumnSettings(nextSettings)
-          }}
+          onApply={applyColumnSettings}
         />
       )}
       {toolbarTrailingAction}
@@ -982,11 +1022,18 @@ export default function ProjectSummaryTable({
       )}
 
       {showTable && <div className="pms-solid-surface pms-project-summary-table-shell">
+        <SortableProjectListHeaderContext
+          items={sortableHeaderIds}
+          onDragEnd={handleHeaderDragEnd}
+        >
         <Table<ProjectSummaryRow>
           className="pms-table pms-project-summary-table"
           tableLayout="fixed"
           rowKey="key"
           columns={columns}
+          components={{
+            header: { cell: SortableProjectListHeader },
+          }}
           dataSource={displayedRows}
           rowClassName={row => [
             'pms-project-summary-row',
@@ -1021,6 +1068,7 @@ export default function ProjectSummaryTable({
             },
           })}
         />
+        </SortableProjectListHeaderContext>
         {tablePageSize && machineHierarchy && (
           <div className="pms-project-list-pagination">
             <Pagination
