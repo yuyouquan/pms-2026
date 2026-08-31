@@ -66,6 +66,11 @@ assert.match(
   /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.pms-project-(?:card|summary|info|information)[\s\S]{0,600}?transition:\s*none\s*!important/,
   'project surfaces must disable visual transitions when reduced motion is requested',
 )
+assert.match(
+  globalStylesSource,
+  /\.pms-project-info-modal-surface\s+\.ant-modal-footer\s*\{(?=[^}]*position:\s*sticky)(?=[^}]*bottom:\s*0(?:px)?\s*;)(?=[^}]*z-index:\s*[1-9]\d*\s*;)[^}]*\}/,
+  'project add/edit modal footer must remain a stable sticky bottom action area',
+)
 
 const technicalCoreKeys = [
   'secondaryCategory', 'technicalTrack', 'tmg', 'subdomain', 'status', 'projectStage',
