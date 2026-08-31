@@ -7512,6 +7512,42 @@ body,
   min-width: 0;
 }
 
+.pms-project-information-surface--legacy > .ant-card {
+  border-color: var(--pms-project-surface-border);
+  border-radius: var(--pms-project-surface-radius);
+  background: var(--pms-project-surface);
+  box-shadow: var(--pms-project-surface-shadow);
+}
+
+.pms-project-information-surface--legacy > .ant-card > .ant-card-head {
+  min-height: 50px;
+  background: var(--pms-project-group-header) !important;
+  border-bottom-color: var(--pms-project-surface-border) !important;
+}
+
+.pms-project-information-surface--legacy > .ant-card > .ant-card-head .ant-card-head-title,
+.pms-project-information-surface--legacy > .ant-card > .ant-card-head .ant-card-extra {
+  color: var(--pms-text-primary) !important;
+}
+
+.pms-project-information-surface--legacy > #section-header > .ant-card-head .ant-card-head-title * {
+  color: var(--pms-text-primary) !important;
+}
+
+.pms-project-information-surface--legacy > #section-header > .ant-card-head .ant-card-head-title .anticon {
+  color: var(--pms-brand-strong) !important;
+}
+
+.pms-project-information-surface--legacy > .ant-card > .ant-card-body {
+  background: var(--pms-project-surface);
+}
+
+.pms-project-information-surface--legacy .ant-descriptions-view,
+.pms-project-information-surface--legacy .ant-descriptions-row > th,
+.pms-project-information-surface--legacy .ant-descriptions-row > td {
+  border-color: var(--pms-project-surface-border) !important;
+}
+
 .pms-project-information-surface .pms-project-info-core-card,
 .pms-project-information-surface .pms-project-information-slot,
 .pms-project-information-surface .pms-project-info-collapse,

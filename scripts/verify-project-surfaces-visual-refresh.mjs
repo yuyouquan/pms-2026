@@ -37,6 +37,22 @@ for (const [surfaceName, source, scopeClass] of [
   )
 }
 
+assert.match(
+  projectSpaceSource,
+  /className=\{!isTargetProject \? ['"]pms-project-information-surface pms-project-information-surface--legacy['"] : undefined\}/,
+  'legacy project-space basic information, including capability projects, must expose the shared information visual scope',
+)
+assert.match(
+  globalStylesSource,
+  /\.pms-project-information-surface--legacy\s*>\s*\.ant-card\s*\{/,
+  'legacy project-space basic-information cards must receive the shared white/light-purple surface treatment',
+)
+assert.match(
+  globalStylesSource,
+  /\.pms-project-information-surface--legacy\s*>\s*#section-header[\s\S]{0,180}\.ant-card-head-title\s+\*\s*\{[^}]*color:\s*var\(--pms-text-primary\)\s*!important/,
+  'the legacy overview title must use readable dark text on the shared light-purple header',
+)
+
 for (const token of [
   '--pms-project-surface',
   '--pms-project-group-header',

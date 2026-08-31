@@ -609,10 +609,22 @@ try {
     await clickExact(page, '[role="menuitem"]', '计划', '[aria-label="项目空间导航"]')
     await page.waitForSelector('[aria-label="技术项目计划"]', { visible: true, timeout: TIMEOUT })
     await clickExact(page, '[role="tab"]', '分布式服务框架计划', '[aria-label="计划作用域"]')
+    await page.waitForFunction(() => {
+      const selected = (document.querySelector('[aria-label="计划作用域"] [role="tab"][aria-selected="true"]')?.textContent || '').includes('分布式服务框架')
+      const confirm = Array.from(document.querySelectorAll('.ant-modal button')).some(element => (
+        element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === '确认离开'
+      ))
+      return selected || confirm
+    }, { timeout: TIMEOUT })
     const leaveConfirmVisible = await page.evaluate(() => Array.from(document.querySelectorAll('.ant-modal button')).some(element => (
       element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === '确认离开'
     )))
-    if (leaveConfirmVisible) await clickExact(page, '.ant-modal button', '确认离开')
+    if (leaveConfirmVisible) {
+      await clickExact(page, '.ant-modal button', '确认离开')
+      await page.waitForFunction(() => !Array.from(document.querySelectorAll('.ant-modal button')).some(element => (
+        element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === '确认离开'
+      )), { timeout: TIMEOUT })
+    }
     await page.waitForFunction(() => (document.querySelector('[aria-label="计划作用域"] [role="tab"][aria-selected="true"]')?.textContent || '').includes('分布式服务框架'), { timeout: TIMEOUT })
     await page.waitForSelector('[aria-label="计划版本"]', { visible: true, timeout: TIMEOUT })
     const technicalWorkspaceState = await page.evaluate(() => ({
@@ -627,6 +639,9 @@ try {
     assert.deepEqual(technicalWorkspaceState.viewValues, ['vertical', 'horizontal', 'gantt'], `技术子项目计划必须保留竖版/横版/甘特图视图控制：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.horizontalChecked, true, `技术子项目计划默认横版视图必须可观察：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.planContent, true, `技术子项目计划内容区域必须存在：${JSON.stringify(technicalWorkspaceState)}`)
+    const workspacePlan = await page.$('[aria-label="计划内容"] table:has(thead tr[data-technical-plan-header="single-row"])')
+    assert.ok(workspacePlan, '技术子项目计划工作区必须显示单行横版表头')
+    await workspacePlan.screenshot({ path: join(ARTIFACT_DIR, '02-technical-workspace-plan.png') })
   })
 
   await runScenario('03-machine-tos', async page => {
@@ -686,8 +701,39 @@ try {
     }
   })
 
-  assert.equal(passed.length, 3, `预期 3 个场景，实际 ${passed.length}`)
-  console.log(`PASS project surfaces visual refresh browser acceptance ${passed.length}/3 (${BASE_URL})`)
+  await runScenario('04-capability-information', async page => {
+    await openMain(page, '项目列表')
+    await clickCategory(page, '整机产品项目')
+    await clickAria(page, '卡片视图')
+    await clickProjectCard(page, 'X6877-D8400_H991')
+    await clickExact(page, 'span', 'X6877-D8400_H991')
+    await page.waitForSelector('input[placeholder="搜索项目名称..."]', { visible: true, timeout: TIMEOUT })
+    await page.type('input[placeholder="搜索项目名称..."]', 'X6873_H972')
+    await clickExact(page, 'div', 'X6873_H972')
+    await page.waitForSelector('.pms-project-information-surface--legacy', { visible: true, timeout: TIMEOUT })
+    await assertLightSurface(page, '.pms-project-information-surface--legacy > .ant-card', '能力建设项目基础信息卡片')
+    const capabilityState = await page.$eval('.pms-project-information-surface--legacy', element => ({
+      text: (element.textContent || '').replace(/\s+/g, ' ').trim(),
+      cards: element.querySelectorAll(':scope > .ant-card').length,
+      descriptions: element.querySelectorAll('.ant-descriptions').length,
+      titleColor: getComputedStyle(Array.from(element.querySelectorAll('#section-header .ant-card-head-title *')).find(candidate => (
+        (candidate.textContent || '').trim() === 'X6873_H972'
+      )) || element).color,
+    }))
+    assert.ok(capabilityState.cards >= 2, `能力建设项目必须保留原有基础信息卡片结构：${JSON.stringify(capabilityState)}`)
+    assert.ok(capabilityState.descriptions >= 1, `能力建设项目必须保留字段明细：${JSON.stringify(capabilityState)}`)
+    for (const label of ['项目名称', '项目分类', '项目状态', '健康状态', '团队成员', '项目描述']) {
+      assert.ok(capabilityState.text.includes(label), `能力建设项目基础信息不得缺少“${label}”：${JSON.stringify(capabilityState)}`)
+    }
+    const titleRgb = capabilityState.titleColor.match(/[\d.]+/g)?.slice(0, 3).map(Number) || []
+    assert.equal(titleRgb.length, 3, `能力建设项目名称必须有可计算文字颜色：${JSON.stringify(capabilityState)}`)
+    assert.ok(titleRgb.every(channel => channel < 180), `能力建设项目名称必须在浅紫表头上保持深色可读：${JSON.stringify(capabilityState)}`)
+    const capabilitySurface = await page.$('.pms-project-information-surface--legacy')
+    await capabilitySurface.screenshot({ path: join(ARTIFACT_DIR, '04-capability-information.png') })
+  })
+
+  assert.equal(passed.length, 4, `预期 4 个场景，实际 ${passed.length}`)
+  console.log(`PASS project surfaces visual refresh browser acceptance ${passed.length}/4 (${BASE_URL})`)
   console.log(`Artifacts: ${ARTIFACT_DIR}`)
 } catch (error) {
   console.error(`FAIL project surfaces visual refresh browser acceptance\n${error.stack || error}`)

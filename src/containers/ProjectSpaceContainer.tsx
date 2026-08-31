@@ -4901,7 +4901,10 @@ export default function ProjectSpaceContainer() {
       }
     }
     return (
-      <div style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}>
+      <div
+        className={!isTargetProject ? 'pms-project-information-surface pms-project-information-surface--legacy' : undefined}
+        style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}
+      >
         {/* Anchor navigation */}
         <div style={{ position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150 }}>
           <div className="pms-glass-surface" style={{ padding: '16px 0 12px' }}>
