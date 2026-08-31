@@ -238,7 +238,8 @@ assert.match(sections, /pms-project-info-display-grid[\s\S]*visibleFields\.map/,
 assert.match(sections, /pms-project-info-team-role/, 'team sections must separate role names from member lists')
 assert.match(modal, /mode === 'create' \? field\.requiredOnCreate : field\.required/, 'create and edit must use their own required rules')
 assert.match(styles, /\.pms-project-info-form-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/, 'project forms must use four desktop columns')
-assert.match(styles, /\.pms-project-info-display-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)[\s\S]*background:\s*#fff/, 'basic and extended information must use five equal white columns')
+assert.match(styles, /\.pms-project-info-display-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(8, minmax\(0, 1fr\)\)[\s\S]*background:\s*#fff/, 'basic and extended information must use eight equal white desktop columns')
+assert.match(styles, /\.pms-project-info-team-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/, 'team information must use four equal desktop columns')
 assert.match(styles, /\.pms-project-info-display-item\s*\{[\s\S]*background:\s*#fff/, 'each information field cell must retain a white background')
 
 assert.match(dimensionMatrix, /pms-dimension-matrix/, 'shared dimension editing must use the common matrix surface')
