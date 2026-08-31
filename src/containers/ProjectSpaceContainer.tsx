@@ -5020,7 +5020,14 @@ export default function ProjectSpaceContainer() {
           )}
           {(isTech || isCapability) && (
             <div>
-              <Descriptions bordered size="small" column={4} labelStyle={descLabelStyle} contentStyle={descContentStyle}>
+              <Descriptions
+                className={isCapability ? 'pms-project-info-legacy-grid' : undefined}
+                bordered
+                size="small"
+                column={isCapability ? { xs: 1, sm: 2, lg: 4, xl: 8 } : 4}
+                labelStyle={descLabelStyle}
+                contentStyle={descContentStyle}
+              >
                 <Descriptions.Item label="项目名称">{p.name}</Descriptions.Item>
                 <Descriptions.Item label="项目分类">{p.type}</Descriptions.Item>
                 <Descriptions.Item label="项目状态">
@@ -5049,14 +5056,14 @@ export default function ProjectSpaceContainer() {
                 {basicInfoEditMode ? (
                   <Select size="small" mode="multiple" value={(ef.teamMembers || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf('teamMembers', v.join(','))} style={{ width: '100%' }} options={userChoices} />
                 ) : (
-                  <Space wrap>
+                  <div className={isCapability ? 'pms-project-info-legacy-team-grid' : undefined}>
                     {(p.teamMembers || p.spm || '').split(',').filter(Boolean).map((name: string, i: number) => (
                       <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #f3f4f6' }}>
                         <Avatar size={24} style={{ background: 'var(--pms-gradient-brand)', fontSize: 11 }}>{name.trim()[0]}</Avatar>
                         <span style={{ fontSize: 13 }}>{name.trim()}</span>
                       </div>
                     ))}
-                  </Space>
+                  </div>
                 )}
               </div>
               <div style={{ marginTop: 16 }}>
@@ -5292,7 +5299,7 @@ export default function ProjectSpaceContainer() {
     )
     const planWorkspacePrimaryScopeTabs = (
       <>
-        {isWholeMachineProject && planLevelTabs}
+        {(isWholeMachineProject || isTosVersionProject) && planLevelTabs}
         {showTosTypeTabs && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
@@ -5340,7 +5347,7 @@ export default function ProjectSpaceContainer() {
             </Row>
           </Card>
         )}
-        {!isWholeMachineProject && planLevelTabs}
+        {!isWholeMachineProject && !isTosVersionProject && planLevelTabs}
       </>
     )
     const planWorkspaceSecondaryScopeTabs = (

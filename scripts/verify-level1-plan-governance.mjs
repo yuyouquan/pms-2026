@@ -949,8 +949,8 @@ assert.deepEqual(
 )
 
 const denyAllStructure = { canAddStage: false, canAddChild: false, canRename: false, canDelete: false, canReorder: false }
-const allowAllStructure = { canAddStage: true, canAddChild: true, canRename: true, canDelete: true, canReorder: true }
-const adminNonBusinessStructure = { canAddStage: true, canAddChild: true, canRename: false, canDelete: true, canReorder: false }
+const adminBusinessStructure = { canAddStage: false, canAddChild: true, canRename: true, canDelete: true, canReorder: true }
+const adminNonBusinessStructure = { canAddStage: false, canAddChild: true, canRename: false, canDelete: true, canReorder: false }
 const customAdminStage = {
   ...machineInsert.parent,
   stableId: 'custom-admin-stage',
@@ -979,8 +979,8 @@ for (const [label, task, parent] of [
       task,
       parent,
     }),
-    { canAddStage: true, canAddChild: true, canRename: false, canDelete: true, canReorder: false },
-    `super administrators do not receive business rename/reorder actions for a ${label}`,
+    adminNonBusinessStructure,
+    `super administrators cannot add stages and do not receive business rename/reorder actions for a ${label}`,
   )
   const helperFixture = [...machineInsert.tasks, task]
   const helperSnapshot = structuredClone(helperFixture)
@@ -1009,8 +1009,8 @@ assert.deepEqual(
     task: machineInsert.task,
     parent: machineInsert.parent,
   }),
-  allowAllStructure,
-  'super administrators retain rename/reorder actions for a custom business-period',
+  adminBusinessStructure,
+  'super administrators retain child/business actions but cannot add a level-one stage',
 )
 assert.deepEqual(
   rules.getLevel1StructurePermissions({
@@ -1033,7 +1033,7 @@ assert.deepEqual(
     task: machineBusinessInput[0],
   }),
   adminNonBusinessStructure,
-  'super administrators retain stage add/delete without unsupported stage rename/reorder actions',
+  'super administrators retain child/delete actions without stage-add or unsupported stage rename/reorder actions',
 )
 assert.deepEqual(
   rules.getLevel1StructurePermissions({
@@ -1129,7 +1129,7 @@ assert.deepEqual(
     parent: machineInsert.parent,
   }),
   adminNonBusinessStructure,
-  'global super administrators retain add/delete but do not receive unsupported template business rename/reorder actions',
+  'global super administrators retain child/delete but not stage-add or unsupported template business rename/reorder actions',
 )
 assert.equal(typeof rules.deleteLevel1GovernedTask, 'function', 'governed deletion is exposed as an executable permission-checked handler helper')
 const templateBusinessTasks = [...machineInsert.tasks, { ...templateBusinessPeriod, id: '4.2', parentId: machineInsert.parent.id, order: 2 }]

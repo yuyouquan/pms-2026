@@ -13,6 +13,7 @@ import {
   buildTosLevel1Tasks,
   type Level1PlanTask,
 } from '@/lib/level1PlanRules'
+import { applyStopRelease } from '@/lib/mrAggregationRules'
 
 const defaultMrTemplateActivities: MrTemplateActivity[] = [
   { id: 'mr-stage-requirements', parentId: null, order: 0, activityName: '需求&修改点' },
@@ -38,8 +39,10 @@ export const DEFAULT_MR_TEMPLATE_ACTIVITIES: readonly Readonly<MrTemplateActivit
 
 export const MR_MOCK_SCENARIOS = Object.freeze({
   tos: Object.freeze(['normal', 'boundary-valid', 'before-plan-start', 'after-plan-end'] as const),
-  joint: Object.freeze(['normal-type-1', 'same-type-mismatch', 'one-week-gap', 'tos-baseline', 'next-version-boundary'] as const),
+  joint: Object.freeze(['normal-type-1', 'normal-type-2-plus', 'same-type-mismatch', 'one-week-gap', 'tos-baseline', 'mp-deadline', 'next-version-boundary'] as const),
   market: Object.freeze(['normal-follow', 'later-than-main', 'missing-main-boundary'] as const),
+  na: Object.freeze(['slash-dates', 'date-write-disabled'] as const),
+  stopped: Object.freeze(['history-visible', 'future-rows-removed'] as const),
 })
 
 export function createInitialMrTemplateVersions(): MrTemplateVersion[] {
@@ -117,7 +120,28 @@ const MR_ACCEPTANCE_DATES: Record<string, Record<string, string>> = {
     'mr-node-archive': '2026-09-05',
     'mr-node-ota-deploy': '2026-09-15',
   },
+  '16.3.0.160': {
+    'mr-node-change-collection': '2026-09-16',
+    'mr-node-change-lock': '2026-09-18',
+    'mr-node-mp-intake-start': '2026-09-19',
+    'mr-node-mp-intake-deadline': '2026-09-20',
+    'mr-node-version-transfer': '2026-09-22',
+    'mr-node-test-start': '2026-09-23',
+    'mr-node-test-complete': '2026-10-01',
+    'mr-node-review': '2026-10-03',
+    'mr-node-archive': '2026-10-05',
+    'mr-node-ota-deploy': '2026-10-15',
+  },
 }
+
+const MR_ACCEPTANCE_TOS_VERSIONS = Object.freeze([
+  '16.3.0.135',
+  '16.3.0.140',
+  '16.3.0.145',
+  '16.3.0.150',
+  '16.3.0.155',
+  '16.3.0.160',
+] as const)
 
 const cloneActivities = () => DEFAULT_MR_TEMPLATE_ACTIVITIES.map(activity => ({ ...activity }))
 const cloneDates = (dates: Readonly<Record<string, string>>) => ({ ...dates })
@@ -158,6 +182,14 @@ function withoutDate(dates: Readonly<Record<string, string>>, activityId: string
   return Object.fromEntries(Object.entries(dates).filter(([id]) => id !== activityId))
 }
 
+function shiftDates(dates: Readonly<Record<string, string>>, days: number): Record<string, string> {
+  return Object.fromEntries(Object.entries(dates).map(([activityId, value]) => {
+    const date = new Date(`${value}T00:00:00.000Z`)
+    date.setUTCDate(date.getUTCDate() + days)
+    return [activityId, date.toISOString().slice(0, 10)]
+  }))
+}
+
 function createMarketOverride(
   projectId: string,
   tosVersion: string,
@@ -181,8 +213,7 @@ export interface InitialMrVersionPlanStateSeed {
 /** Fresh, deterministic acceptance state; callers may mutate it without sharing references. */
 export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed {
   const templateVersions = createInitialMrTemplateVersions()
-  const tosInstances = ['16.3.0.135', '16.3.0.140', '16.3.0.145', '16.3.0.150', '16.3.0.155']
-    .map(createTosInstance)
+  const tosInstances = MR_ACCEPTANCE_TOS_VERSIONS.map(createTosInstance)
   const mismatchedTypeTwoA = createMachinePlan('1', '16.3.0.140', '2', {
     ...withoutDate(MR_ACCEPTANCE_DATES['16.3.0.140'], 'mr-node-archive'),
     'mr-node-version-transfer': '2026-05-29',
@@ -212,19 +243,61 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
     'mr-node-archive': '2026-08-12',
     'mr-node-ota-deploy': '2026-08-23',
   }, '赵六')
+
+  const rawPlans = [
+    createMachinePlan('14', '16.3.0.135', '1', MR_ACCEPTANCE_DATES['16.3.0.135'], '周敏'),
+    createMachinePlan('15', '16.3.0.135', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.135'], 7), '陈晨'),
+    createMachinePlan('16', '16.3.0.135', 'N/A', {}, '李白'),
+    mismatchedTypeTwoA,
+    mismatchedTypeTwoB,
+    createMachinePlan('7', '16.3.0.140', '1', MR_ACCEPTANCE_DATES['16.3.0.140'], '王五'),
+    createMachinePlan('14', '16.3.0.140', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.140'], 14), '周敏'),
+    createMachinePlan('15', '16.3.0.140', 'N/A', {}, '陈晨'),
+    createMachinePlan('16', '16.3.0.140', '1', MR_ACCEPTANCE_DATES['16.3.0.140'], '李白'),
+    cleanTypeOne,
+    shortGapAndNextBoundary,
+    createMachinePlan('7', '16.3.0.145', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.145'], 14), '王五'),
+    createMachinePlan('12', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '孙悦'),
+    createMachinePlan('15', '16.3.0.145', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.145'], 7), '陈晨'),
+    createMachinePlan('17', '16.3.0.145', 'N/A', {}, '李白'),
+    nextCleanTypeOne,
+    cleanTypeTwo,
+    createMachinePlan('12', '16.3.0.150', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 14), '孙悦'),
+    createMachinePlan('13', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '吴迪'),
+    createMachinePlan('16', '16.3.0.150', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 7), '李白'),
+    createMachinePlan('17', '16.3.0.150', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 14), '李白'),
+    createMachinePlan('1', '16.3.0.155', '1', MR_ACCEPTANCE_DATES['16.3.0.155'], '王五'),
+    createMachinePlan('3', '16.3.0.155', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 7), '赵六'),
+    createMachinePlan('13', '16.3.0.155', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 14), '吴迪'),
+    createMachinePlan('15', '16.3.0.155', '4', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 21), '陈晨'),
+    createMachinePlan('18', '16.3.0.155', 'N/A', {}, '赵六'),
+    createMachinePlan('1', '16.3.0.160', '1', MR_ACCEPTANCE_DATES['16.3.0.160'], '王五'),
+    createMachinePlan('3', '16.3.0.160', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.160'], 7), '赵六'),
+    // These four future rows prove that the same production stop rule removes forbidden releases.
+    createMachinePlan('7', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '王五'),
+    createMachinePlan('12', '16.3.0.155', '1', MR_ACCEPTANCE_DATES['16.3.0.155'], '孙悦'),
+    createMachinePlan('13', '16.3.0.160', '1', MR_ACCEPTANCE_DATES['16.3.0.160'], '吴迪'),
+    createMachinePlan('14', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '周敏'),
+  ]
+  const stopReleaseFixtures: MrStopReleaseRecord[] = [
+    { id: 'mr-stop-7', projectId: '7', projectName: 'X6890-D8500_H1001', stopDate: '2026-06-30', operator: '张三', operatedAt: '2026-08-29T09:10:00.000Z' },
+    { id: 'mr-stop-12', projectId: '12', projectName: 'CN5C-D8400_H992', stopDate: '2026-07-31', operator: '张三', operatedAt: '2026-08-29T09:20:00.000Z' },
+    { id: 'mr-stop-13', projectId: '13', projectName: 'CN5M-D8400_H993', stopDate: '2026-08-31', operator: '吴迪', operatedAt: '2026-08-29T09:30:00.000Z' },
+    { id: 'mr-stop-14', projectId: '14', projectName: 'CN6_H902', stopDate: '2026-05-31', operator: '周敏', operatedAt: '2026-08-29T09:40:00.000Z' },
+  ]
+  const rawPlansByKey = Object.fromEntries(rawPlans.map(plan => [`${plan.projectId}::${plan.tosVersion}`, plan]))
+  const stoppedState = stopReleaseFixtures.reduce((state, record) => applyStopRelease({
+    persistedPlans: state.persistedPlans,
+    tosInstances,
+    stopRecords: state.stopRecords,
+    record,
+  }), { persistedPlans: rawPlansByKey, stopRecords: [] as MrStopReleaseRecord[], removedPlanKeys: [] as string[] })
   return {
     templateVersions,
     currentTemplateVersionId: templateVersions[0].id,
     templateHistory: [],
     tosInstancesByProjectId: { '19': tosInstances },
-    machinePlansByKey: {
-      '1::16.3.0.140': mismatchedTypeTwoA,
-      '3::16.3.0.140': mismatchedTypeTwoB,
-      '1::16.3.0.145': cleanTypeOne,
-      '3::16.3.0.145': shortGapAndNextBoundary,
-      '1::16.3.0.150': nextCleanTypeOne,
-      '3::16.3.0.150': cleanTypeTwo,
-    },
+    machinePlansByKey: stoppedState.persistedPlans,
     marketOverridesByKey: {
       '1::16.3.0.140::TR': createMarketOverride('1', '16.3.0.140', 'TR', {
         'mr-node-test-start': '2026-05-23',
@@ -240,7 +313,7 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
         'mr-node-test-complete': '2026-06-30',
       }),
     },
-    stopReleaseRecords: [],
+    stopReleaseRecords: stoppedState.stopRecords,
     viewModeByScope: {},
   }
 }

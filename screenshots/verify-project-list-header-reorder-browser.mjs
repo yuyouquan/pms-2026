@@ -163,6 +163,18 @@ const dragMilestoneHeaderWithFeedback = async (sourceSelector, targetUnit) => {
       transformedMilestones: milestoneHeaders.filter(element => (
         element.style.transform && element.style.transform !== 'none'
       )).map(element => element.getAttribute('data-project-list-header-id')),
+      sourceBodyCellCount: document.querySelectorAll(
+        '.pms-project-summary-table tbody td.pms-project-list-column-drag-source',
+      ).length,
+      targetHeaderEdgeCount: document.querySelectorAll(
+        '.pms-project-summary-table thead th.is-drop-before, .pms-project-summary-table thead th.is-drop-after',
+      ).length,
+      targetBodyEdgeCount: document.querySelectorAll(
+        '.pms-project-summary-table tbody td.pms-project-list-column-drop-before, .pms-project-summary-table tbody td.pms-project-list-column-drop-after',
+      ).length,
+      shellDropIndicator: document.querySelector(
+        '.pms-project-summary-table-shell[data-column-drop-active="true"]',
+      )?.style.getPropertyValue('--pms-project-list-drop-x') ?? '',
     }
   })
   await page.mouse.up()
@@ -170,6 +182,10 @@ const dragMilestoneHeaderWithFeedback = async (sourceSelector, targetUnit) => {
   assert.equal(feedback.overlay, '里程碑', '拖动任一计划表头只显示一个里程碑区块浮层')
   assert.equal(feedback.placeholderCount, feedback.headerCount, '全部里程碑表头共享一个占位状态')
   assert.deepEqual(feedback.transformedMilestones, [], '里程碑内部表头不得分别位移')
+  assert.ok(feedback.sourceBodyCellCount > 0, '拖动里程碑时必须高亮整块来源列的内容单元格')
+  assert.equal(feedback.targetHeaderEdgeCount, 1, '飞书式目标位置只显示一条表头插入边')
+  assert.ok(feedback.targetBodyEdgeCount > 0, '飞书式目标插入边必须贯穿表格内容区')
+  assert.match(feedback.shellDropIndicator, /^\d+px$/, '目标位置必须生成贯穿表格外壳的连续插入线')
 }
 
 const dragHeader = async (sourceUnit, targetUnit) => {
