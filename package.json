@@ -10,6 +10,7 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs",
+    "verify:project-list-header-reorder": "node scripts/verify-project-list-header-reorder.mjs",
     "verify:project-summary": "node scripts/verify-project-summary.mjs",
     "verify:floating-panels": "node scripts/verify-floating-config-panels.mjs",
     "verify:workbench-list": "node scripts/verify-workbench-project-list.mjs",
