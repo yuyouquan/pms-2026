@@ -338,6 +338,7 @@ try {
         return color !== 'transparent' && !/rgba\([^)]*,\s*0(?:\.0+)?\)/.test(color)
       })
       const rawVisibleUnitKeys = headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean)
+      const rawVisibleHeaderIds = headers.map(header => header.getAttribute('data-project-list-header-id'))
       const canonicalHeaders = []
       for (const header of headers) {
         const unitKey = header.getAttribute('data-project-list-column-unit')
@@ -346,17 +347,14 @@ try {
         const canonical = unitHeaders.find(candidate => candidate.getAttribute('data-project-list-header-id')?.startsWith('group::'))
           || unitHeaders.find(candidate => candidate.getAttribute('data-project-list-draggable') === 'true' || candidate.getAttribute('data-project-list-column-locked') === 'true')
           || unitHeaders[0]
-        canonicalHeaders.push({
-          unitKey,
-          headerId: canonical.getAttribute('data-project-list-header-id'),
-        })
+        if (canonical) canonicalHeaders.push({ unitKey })
       }
       return {
         scope: Boolean(document.querySelector('.pms-project-summary-surface')),
         rawVisibleUnitKeys,
+        rawVisibleHeaderIds,
         repeatedDomUnits: rawVisibleUnitKeys.filter((unit, index) => rawVisibleUnitKeys.indexOf(unit) !== index),
         canonicalUnitKeys: canonicalHeaders.map(header => header.unitKey),
-        canonicalHeaderIds: canonicalHeaders.map(header => header.headerId),
         draggableUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
         lockedUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
         inconsistentUnits: [...new Set(headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))].filter(unit => {
@@ -370,9 +368,9 @@ try {
     assert.equal(tableState.scope, true, '列表必须暴露 pms-project-summary-surface 语义范围')
     assert.ok(tableState.rawVisibleUnitKeys.length > 0 && tableState.rawVisibleUnitKeys.every(Boolean), `列表表头必须暴露列单元元数据：${JSON.stringify(tableState)}`)
     assert.deepEqual([...new Set(tableState.repeatedDomUnits)], ['milestone'], `只有分组/叶子表头允许在 DOM 中共享 milestone 单元：${JSON.stringify(tableState)}`)
-    assert.ok(tableState.canonicalHeaderIds.every(Boolean), `每个规范拖动单元必须有 header ID：${JSON.stringify(tableState)}`)
+    assert.ok(tableState.rawVisibleHeaderIds.every(Boolean), `每个可见表头必须有原始 header ID：${JSON.stringify(tableState)}`)
+    assert.equal(new Set(tableState.rawVisibleHeaderIds).size, tableState.rawVisibleHeaderIds.length, `所有可见表头的原始 header ID 必须全局唯一：${JSON.stringify(tableState)}`)
     assert.equal(new Set(tableState.canonicalUnitKeys).size, tableState.canonicalUnitKeys.length, `规范拖动单元 key 必须唯一：${JSON.stringify(tableState)}`)
-    assert.equal(new Set(tableState.canonicalHeaderIds).size, tableState.canonicalHeaderIds.length, `规范拖动 header ID 必须唯一：${JSON.stringify(tableState)}`)
     assert.ok(tableState.draggableUnits.length > 0, `列表必须有可移动表头元数据：${JSON.stringify(tableState)}`)
     assert.deepEqual(tableState.lockedUnits, [], `整机矩阵已明确取消固定列：${JSON.stringify(tableState)}`)
     assert.deepEqual(tableState.inconsistentUnits, [], `同一逻辑单元不得同时锁定和可拖动：${JSON.stringify(tableState)}`)
@@ -401,6 +399,7 @@ try {
       const headers = Array.from(document.querySelectorAll('.pms-project-summary-table thead th[data-project-list-column-unit]')).filter(visible)
       const fixedCells = Array.from(document.querySelectorAll('.pms-project-summary-table .ant-table-cell-fix-left, .pms-project-summary-table .ant-table-cell-fix-start')).filter(visible)
       const rawVisibleUnitKeys = headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean)
+      const rawVisibleHeaderIds = headers.map(header => header.getAttribute('data-project-list-header-id'))
       const canonicalHeaders = []
       for (const header of headers) {
         const unitKey = header.getAttribute('data-project-list-column-unit')
@@ -409,17 +408,14 @@ try {
         const canonical = unitHeaders.find(candidate => candidate.getAttribute('data-project-list-header-id')?.startsWith('group::'))
           || unitHeaders.find(candidate => candidate.getAttribute('data-project-list-draggable') === 'true' || candidate.getAttribute('data-project-list-column-locked') === 'true')
           || unitHeaders[0]
-        canonicalHeaders.push({
-          unitKey,
-          headerId: canonical.getAttribute('data-project-list-header-id'),
-        })
+        if (canonical) canonicalHeaders.push({ unitKey })
       }
       return {
         scrollLeft: document.querySelector('.pms-project-summary-table .ant-table-body')?.scrollLeft || 0,
         rawVisibleUnitKeys,
+        rawVisibleHeaderIds,
         repeatedDomUnits: rawVisibleUnitKeys.filter((unit, index) => rawVisibleUnitKeys.indexOf(unit) !== index),
         canonicalUnitKeys: canonicalHeaders.map(header => header.unitKey),
-        canonicalHeaderIds: canonicalHeaders.map(header => header.headerId),
         lockedUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
         draggableUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
         fixedCount: fixedCells.length,
@@ -428,9 +424,9 @@ try {
     })
     assert.ok(fixedState.scrollLeft > 0, `必须在水平滚动后检查固定单元格：${JSON.stringify(fixedState)}`)
     assert.deepEqual([...new Set(fixedState.repeatedDomUnits)], ['milestone'], `tOS 只有分组/叶子表头允许共享 milestone 单元：${JSON.stringify(fixedState)}`)
-    assert.ok(fixedState.canonicalHeaderIds.every(Boolean), `tOS 每个规范拖动单元必须有 header ID：${JSON.stringify(fixedState)}`)
+    assert.ok(fixedState.rawVisibleHeaderIds.every(Boolean), `tOS 每个可见表头必须有原始 header ID：${JSON.stringify(fixedState)}`)
+    assert.equal(new Set(fixedState.rawVisibleHeaderIds).size, fixedState.rawVisibleHeaderIds.length, `tOS 所有可见表头的原始 header ID 必须全局唯一：${JSON.stringify(fixedState)}`)
     assert.equal(new Set(fixedState.canonicalUnitKeys).size, fixedState.canonicalUnitKeys.length, `tOS 规范拖动单元 key 必须唯一：${JSON.stringify(fixedState)}`)
-    assert.equal(new Set(fixedState.canonicalHeaderIds).size, fixedState.canonicalHeaderIds.length, `tOS 规范拖动 header ID 必须唯一：${JSON.stringify(fixedState)}`)
     assert.ok(fixedState.lockedUnits.length > 0, `tOS 列表必须有锁定表头元数据：${JSON.stringify(fixedState)}`)
     assert.ok(fixedState.draggableUnits.length > 0, `tOS 列表必须同时保留可移动表头：${JSON.stringify(fixedState)}`)
     assert.deepEqual(fixedState.lockedUnits.filter(unit => fixedState.draggableUnits.includes(unit)), [], `锁定与可拖动逻辑单元必须互斥：${JSON.stringify(fixedState)}`)
