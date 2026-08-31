@@ -36,6 +36,12 @@ export const DEFAULT_MR_TEMPLATE_ACTIVITIES: readonly Readonly<MrTemplateActivit
   defaultMrTemplateActivities.map(activity => Object.freeze(activity)),
 )
 
+export const MR_MOCK_SCENARIOS = Object.freeze({
+  tos: Object.freeze(['normal', 'boundary-valid', 'before-plan-start', 'after-plan-end'] as const),
+  joint: Object.freeze(['normal-type-1', 'same-type-mismatch', 'one-week-gap', 'tos-baseline', 'next-version-boundary'] as const),
+  market: Object.freeze(['normal-follow', 'later-than-main', 'missing-main-boundary'] as const),
+})
+
 export function createInitialMrTemplateVersions(): MrTemplateVersion[] {
   return [{
     id: 'mr-template-v1',
@@ -51,6 +57,18 @@ export function createInitialMrTemplateVersions(): MrTemplateVersion[] {
 const MR_ACCEPTANCE_CREATED_AT = '2026-08-29T00:00:00.000Z'
 
 const MR_ACCEPTANCE_DATES: Record<string, Record<string, string>> = {
+  '16.3.0.135': {
+    'mr-node-change-collection': '2026-04-17',
+    'mr-node-change-lock': '2026-04-18',
+    'mr-node-mp-intake-start': '2026-04-19',
+    'mr-node-mp-intake-deadline': '2026-04-20',
+    'mr-node-version-transfer': '2026-04-22',
+    'mr-node-test-start': '2026-04-23',
+    'mr-node-test-complete': '2026-05-01',
+    'mr-node-review': '2026-05-03',
+    'mr-node-archive': '2026-05-05',
+    'mr-node-ota-deploy': '2026-05-14',
+  },
   '16.3.0.140': {
     'mr-node-change-collection': '2026-05-16',
     'mr-node-change-lock': '2026-05-18',
@@ -64,7 +82,7 @@ const MR_ACCEPTANCE_DATES: Record<string, Record<string, string>> = {
     'mr-node-ota-deploy': '2026-06-15',
   },
   '16.3.0.145': {
-    'mr-node-change-collection': '2026-06-16',
+    'mr-node-change-collection': '2026-06-15',
     'mr-node-change-lock': '2026-06-18',
     'mr-node-mp-intake-start': '2026-06-19',
     'mr-node-mp-intake-deadline': '2026-06-20',
@@ -74,6 +92,30 @@ const MR_ACCEPTANCE_DATES: Record<string, Record<string, string>> = {
     'mr-node-review': '2026-07-03',
     'mr-node-archive': '2026-07-05',
     'mr-node-ota-deploy': '2026-07-15',
+  },
+  '16.3.0.150': {
+    'mr-node-change-collection': '2026-07-16',
+    'mr-node-change-lock': '2026-07-18',
+    'mr-node-mp-intake-start': '2026-07-19',
+    'mr-node-mp-intake-deadline': '2026-07-20',
+    'mr-node-version-transfer': '2026-07-22',
+    'mr-node-test-start': '2026-07-23',
+    'mr-node-test-complete': '2026-08-01',
+    'mr-node-review': '2026-08-03',
+    'mr-node-archive': '2026-08-05',
+    'mr-node-ota-deploy': '2026-08-16',
+  },
+  '16.3.0.155': {
+    'mr-node-change-collection': '2026-08-16',
+    'mr-node-change-lock': '2026-08-18',
+    'mr-node-mp-intake-start': '2026-08-19',
+    'mr-node-mp-intake-deadline': '2026-08-20',
+    'mr-node-version-transfer': '2026-08-22',
+    'mr-node-test-start': '2026-08-23',
+    'mr-node-test-complete': '2026-09-01',
+    'mr-node-review': '2026-09-03',
+    'mr-node-archive': '2026-09-05',
+    'mr-node-ota-deploy': '2026-09-15',
   },
 }
 
@@ -96,6 +138,7 @@ function createTosInstance(tosVersion: string): TosMrVersionInstance {
 
 function createMachinePlan(
   projectId: string,
+  tosVersion: string,
   transferType: JointMachinePlan['transferType'],
   dates: Readonly<Record<string, string>>,
   actor: string,
@@ -103,12 +146,25 @@ function createMachinePlan(
   return {
     projectId,
     tosProjectId: '19',
-    tosVersion: '16.3.0.140',
+    tosVersion,
     transferType,
     dates: cloneDates(dates),
     updatedBy: actor,
     updatedAt: MR_ACCEPTANCE_CREATED_AT,
   }
+}
+
+function withoutDate(dates: Readonly<Record<string, string>>, activityId: string): Record<string, string> {
+  return Object.fromEntries(Object.entries(dates).filter(([id]) => id !== activityId))
+}
+
+function createMarketOverride(
+  projectId: string,
+  tosVersion: string,
+  market: string,
+  dates: Readonly<Record<string, string>>,
+): MrMarketOverride {
+  return { projectId, tosVersion, market, mainMarket: 'OP', dates: cloneDates(dates) }
 }
 
 export interface InitialMrVersionPlanStateSeed {
@@ -125,17 +181,36 @@ export interface InitialMrVersionPlanStateSeed {
 /** Fresh, deterministic acceptance state; callers may mutate it without sharing references. */
 export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed {
   const templateVersions = createInitialMrTemplateVersions()
-  const tosInstances = ['16.3.0.140', '16.3.0.145'].map(createTosInstance)
-  const validTypeOne = createMachinePlan('1', '1', MR_ACCEPTANCE_DATES['16.3.0.140'], '王五')
-  const invalidTypeTwo = createMachinePlan('3', '2', {
+  const tosInstances = ['16.3.0.135', '16.3.0.140', '16.3.0.145', '16.3.0.150', '16.3.0.155']
+    .map(createTosInstance)
+  const mismatchedTypeTwoA = createMachinePlan('1', '16.3.0.140', '2', {
+    ...withoutDate(MR_ACCEPTANCE_DATES['16.3.0.140'], 'mr-node-archive'),
+    'mr-node-version-transfer': '2026-05-29',
+  }, '王五')
+  const mismatchedTypeTwoB = createMachinePlan('3', '16.3.0.140', '2', {
     ...MR_ACCEPTANCE_DATES['16.3.0.140'],
     'mr-node-mp-intake-deadline': '2026-05-25',
-    'mr-node-version-transfer': '2026-05-29',
-    'mr-node-test-start': '2026-05-30',
-    'mr-node-test-complete': '2026-06-08',
-    'mr-node-review': '2026-06-10',
-    'mr-node-archive': '2026-06-12',
-    'mr-node-ota-deploy': '2026-06-15',
+    'mr-node-version-transfer': '2026-05-30',
+  }, '赵六')
+  const cleanTypeOne = createMachinePlan('1', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '王五')
+  const shortGapAndNextBoundary = createMachinePlan('3', '16.3.0.145', '2', {
+    ...MR_ACCEPTANCE_DATES['16.3.0.145'],
+    'mr-node-version-transfer': '2026-06-28',
+    'mr-node-test-start': '2026-07-24',
+    'mr-node-test-complete': '2026-07-08',
+    'mr-node-review': '2026-07-10',
+    'mr-node-archive': '2026-07-12',
+    'mr-node-ota-deploy': '2026-07-22',
+  }, '赵六')
+  const nextCleanTypeOne = createMachinePlan('1', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '王五')
+  const cleanTypeTwo = createMachinePlan('3', '16.3.0.150', '2', {
+    ...MR_ACCEPTANCE_DATES['16.3.0.150'],
+    'mr-node-version-transfer': '2026-07-29',
+    'mr-node-test-start': '2026-07-30',
+    'mr-node-test-complete': '2026-08-08',
+    'mr-node-review': '2026-08-10',
+    'mr-node-archive': '2026-08-12',
+    'mr-node-ota-deploy': '2026-08-23',
   }, '赵六')
   return {
     templateVersions,
@@ -143,17 +218,27 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
     templateHistory: [],
     tosInstancesByProjectId: { '19': tosInstances },
     machinePlansByKey: {
-      '1::16.3.0.140': validTypeOne,
-      '3::16.3.0.140': invalidTypeTwo,
+      '1::16.3.0.140': mismatchedTypeTwoA,
+      '3::16.3.0.140': mismatchedTypeTwoB,
+      '1::16.3.0.145': cleanTypeOne,
+      '3::16.3.0.145': shortGapAndNextBoundary,
+      '1::16.3.0.150': nextCleanTypeOne,
+      '3::16.3.0.150': cleanTypeTwo,
     },
     marketOverridesByKey: {
-      '1::16.3.0.140::TR': {
-        projectId: '1',
-        tosVersion: '16.3.0.140',
-        market: 'TR',
-        mainMarket: 'OP',
-        dates: { 'mr-node-test-start': '2026-05-23' },
-      },
+      '1::16.3.0.140::TR': createMarketOverride('1', '16.3.0.140', 'TR', {
+        'mr-node-test-start': '2026-05-23',
+        'mr-node-archive': '2026-06-12',
+      }),
+      '1::16.3.0.140::RU': createMarketOverride('1', '16.3.0.140', 'RU', {
+        'mr-node-review': '2026-06-04',
+      }),
+      '1::16.3.0.145::TR': createMarketOverride('1', '16.3.0.145', 'TR', {
+        'mr-node-test-complete': '2026-07-01',
+      }),
+      '1::16.3.0.145::RU': createMarketOverride('1', '16.3.0.145', 'RU', {
+        'mr-node-test-complete': '2026-06-30',
+      }),
     },
     stopReleaseRecords: [],
     viewModeByScope: {},
@@ -236,9 +321,12 @@ const tosSnapshot = (dayOffset = 0): Level1PlanTask[] => {
   })
   return [
     ...tasks,
-    businessNode('tos-mr-140', launchStage, 0, '16.3.0.140', '2026-05-16', '2026-06-15'),
+    businessNode('tos-mr-135', launchStage, 0, '16.3.0.135', '2026-04-16', '2026-05-15'),
+    businessNode('tos-mr-140', launchStage, 1, '16.3.0.140', '2026-05-16', '2026-06-15'),
     businessNode('tos-mr-145', maintenanceStage, 0, '16.3.0.145', '2026-06-16', '2026-07-15'),
-    businessNode('tos-mr-150', maintenanceStage, 1, '16.3.0.150', '2026-07-16', ''),
+    businessNode('tos-mr-150', maintenanceStage, 1, '16.3.0.150', '2026-07-16', '2026-08-15'),
+    businessNode('tos-mr-155', maintenanceStage, 2, '16.3.0.155', '2026-08-16', '2026-09-15'),
+    businessNode('tos-mr-160', maintenanceStage, 3, '16.3.0.160', '2026-09-16', ''),
   ]
 }
 
