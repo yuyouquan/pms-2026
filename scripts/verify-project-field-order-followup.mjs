@@ -86,7 +86,7 @@ const technicalCreateRequiredKeys = [
 ]
 const technicalSpaceCoreKeys = [
   'secondaryCategory', 'technicalTrack', 'tmg', 'subdomain', 'status', 'projectStage',
-  'projectYear', 'projectValue', 'preProjectId', 'tdtAndSubprojectName',
+  'projectYear', 'preProjectId', 'projectValue',
 ]
 const technicalSpaceBasicKeys = [
   'coreValue', 'developmentMode', 'firstTosVersion', 'firstMachineProjectId',
@@ -138,7 +138,7 @@ assert.deepEqual(Array.from(technical.TECHNICAL_DELIVERABLE_FIELDS, field => fie
 assert.deepEqual(
   Array.from(schema.TECHNICAL_PROJECT_SPACE_FIELDS, field => field.key),
   technicalSpaceKeys,
-  'the actual technical project-space projection must follow the approved 28-field order',
+  'the actual technical project-space projection must follow the approved 27-field order',
 )
 assert.deepEqual(
   [
@@ -149,7 +149,7 @@ assert.deepEqual(
     ...technical.TECHNICAL_DELIVERABLE_FIELDS.map(field => field.key),
   ],
   technicalSpaceKeys,
-  'technical project space must be core 1-10 + plan 11 + basic 12-15 + team 16-22 + deliverables 23-28',
+  'technical project space must be core 1-9 + plan 10 + basic 11-14 + team 15-21 + deliverables 22-27',
 )
 
 const machineFieldsByKey = new Map(schema.MACHINE_PROJECT_INFO_FIELDS.map(field => [field.key, field]))
@@ -208,7 +208,7 @@ assert.equal(technicalCreateDefinitions.get('technicalOther')?.label, '其他')
 assert.equal(technical.TECHNICAL_TEAM_FIELDS.find(field => field.key === 'technicalProjectManager')?.required, true)
 assert.equal(technical.TECHNICAL_DELIVERABLE_FIELDS.find(field => field.key === 'charterReport')?.label, 'Charter报告')
 assert.equal(technicalSpaceTeamKeys.filter(key => key === 'testRepresentative').length, 1)
-assert.equal(technicalSpaceKeys.length, 28)
+assert.equal(technicalSpaceKeys.length, 27)
 assert.equal(schema.TECHNICAL_PROJECT_SPACE_FIELDS.every(field => field.defaultVisible), true)
 
 assert.deepEqual(
@@ -365,7 +365,7 @@ assert.match(
 assert.match(
   technicalInformationSource,
   /TECHNICAL_PROJECT_SPACE_CORE_FIELDS\.map\(field =>/,
-  'the technical core card must render the approved ten-field space projection',
+  'the technical core card must render the approved nine-field space projection',
 )
 assert.match(
   technicalInformationSource,
@@ -385,7 +385,7 @@ assert.match(
 assert.doesNotMatch(
   technicalInformationSource,
   /\.\.\.normalizedCustomRoles/,
-  'custom permission roles must not expand the strict 28-field technical information projection',
+  'custom permission roles must not expand the strict 27-field technical information projection',
 )
 
 const technicalInfoTeamFields = schema.TECHNICAL_PROJECT_INFO_FIELDS.filter(field => field.group === 'team')

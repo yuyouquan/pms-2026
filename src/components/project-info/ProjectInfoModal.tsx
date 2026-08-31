@@ -1096,7 +1096,7 @@ export default function ProjectInfoModal({
       cancelButtonProps={{ disabled: isDraftInteractionLocked }}
       okButtonProps={{ disabled: !enumReady || isCreateDraftInteractionBlocked || isIpmClassificationMissing }}
       destroyOnHidden
-      className="pms-modal pms-project-info-modal"
+      className="pms-modal pms-project-info-modal pms-project-info-modal-surface"
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
     >
       {!hasHydrated ? (

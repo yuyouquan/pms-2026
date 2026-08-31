@@ -86,6 +86,7 @@ type TechnicalPlanRow = Level1FlatMilestoneRow & TechnicalTemplateTask
 
 function TechnicalHorizontalPlanTable({
   tasks,
+  templateKind,
   versions,
   currentVersionId,
   canEditPlanEnd,
@@ -93,30 +94,23 @@ function TechnicalHorizontalPlanTable({
   onDateChange,
 }: {
   tasks: readonly TechnicalTemplateTask[]
+  templateKind: TechnicalTemplateKind
   versions: readonly { id: string; versionNo: string; status: string; tasks: TechnicalTemplateTask[] }[]
   currentVersionId: string
   canEditPlanEnd: boolean
   canEditActualEnd: boolean
   onDateChange: (taskId: string, field: 'planEndDate' | 'actualEndDate', value: string) => void
 }) {
-  const mode = tasks.some(task => task.parentId) ? 'standard' : 'technical-subproject'
+  const mode = templateKind === 'subproject' ? 'technical-subproject' : 'standard'
   const currentProjection = projectLevel1Plan(tasks, { mode })
-  const groups = currentProjection.stageGroups.length > 0
-    ? currentProjection.stageGroups.map(group => ({ ...group, colSpan: Math.max(1, group.milestones.length) }))
-    : [{
-        stage: {
-          id: 'technical-subproject',
-          taskName: '子项目计划',
-          planStartDate: '',
-          planEndDate: '',
-          estimatedDays: sumLevel1EstimatedDays(currentProjection.rows),
-          manpowerPercent: null,
-        },
-        milestones: currentProjection.rows,
-        colSpan: Math.max(1, currentProjection.rows.length),
-      }]
+  const groups = currentProjection.stageGroups.map(group => ({
+    ...group,
+    colSpan: Math.max(1, group.milestones.length),
+  }))
   if (!tasks.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无横版计划数据" />
-  const milestoneTasks = groups.flatMap(group => group.milestones.length > 0 ? group.milestones : [group.stage])
+  const milestoneTasks = mode === 'technical-subproject'
+    ? currentProjection.rows
+    : groups.flatMap(group => group.milestones.length > 0 ? group.milestones : [group.stage])
   type TechnicalHorizontalRow = {
     id: string
     versionNo: string
@@ -132,7 +126,7 @@ function TechnicalHorizontalPlanTable({
       versionNo: version.versionNo,
       status: version.status,
       rowType: 'version' as const,
-      endDatesByTaskId: Object.fromEntries(versionProjection.rows.map(row => [row.id, row.planEndDate || ''])),
+      endDatesByTaskId: Object.fromEntries(versionProjection.rows.map(row => [getTechnicalPlanRowKey(row), row.planEndDate || ''])),
       cycleDays: sumLevel1EstimatedDays(versionProjection.rows),
     }
   })
@@ -143,7 +137,7 @@ function TechnicalHorizontalPlanTable({
     versionNo: '实际',
     status: '',
     rowType: 'actual',
-    endDatesByTaskId: Object.fromEntries(currentProjection.rows.map(row => [row.id, row.actualEndDate || ''])),
+    endDatesByTaskId: Object.fromEntries(currentProjection.rows.map(row => [getTechnicalPlanRowKey(row), row.actualEndDate || ''])),
     cycleDays: actualStarts.length > 0 && actualEnds.length > 0
       ? Math.max(0, Math.ceil((Math.max(...actualEnds) - Math.min(...actualStarts)) / 86_400_000))
       : null,
@@ -184,34 +178,45 @@ function TechnicalHorizontalPlanTable({
         style={{ width: '100%', borderCollapse: 'collapse' }}
       >
         <thead>
-          <tr>
-            <th style={versionThStyle} rowSpan={2}>版本</th>
-            <th style={cycleThStyle} rowSpan={2}>开发周期</th>
-            {groups.map(({ stage, colSpan }, index) => {
-              const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
-              return (
-                <th
-                  key={stage.id}
-                  colSpan={colSpan}
-                  style={{ ...thStyle, background: `${stageColor}10`, color: stageColor, borderBottom: `2px solid ${stageColor}` }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
-                    <span>{stage.taskName}</span>
-                    <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
-                      {stage.estimatedDays == null ? '-' : `${stage.estimatedDays}天`}
-                    </Tag>
-                  </div>
-                </th>
-              )
-            })}
-          </tr>
-          <tr>
-            {groups.flatMap(({ stage, milestones }) => (
-              milestones.length > 0
-                ? milestones.map(milestone => <th key={milestone.id} style={thStyle}>{milestone.taskName}</th>)
-                : [<th key={stage.id} style={{ ...thStyle, color: '#bfbfbf' }}>{stage.taskName}</th>]
-            ))}
-          </tr>
+          {mode === 'technical-subproject' ? (
+            <tr data-technical-plan-header="single-row">
+              <th scope="col" style={versionThStyle}>版本</th>
+              <th scope="col" style={cycleThStyle}>开发周期</th>
+              {milestoneTasks.map(task => <th key={getTechnicalPlanRowKey(task)} scope="col" style={thStyle}>{task.taskName}</th>)}
+            </tr>
+          ) : (
+            <>
+              <tr data-technical-plan-header="grouped">
+                <th scope="col" style={versionThStyle} rowSpan={2}>版本</th>
+                <th scope="col" style={cycleThStyle} rowSpan={2}>开发周期</th>
+                {groups.map(({ stage, colSpan }, index) => {
+                  const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
+                  return (
+                    <th
+                      key={getTechnicalPlanRowKey(stage)}
+                      scope="colgroup"
+                      colSpan={colSpan}
+                      style={{ ...thStyle, background: `${stageColor}10`, color: stageColor, borderBottom: `2px solid ${stageColor}` }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
+                        <span>{stage.taskName}</span>
+                        <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                          {stage.estimatedDays == null ? '-' : `${stage.estimatedDays}天`}
+                        </Tag>
+                      </div>
+                    </th>
+                  )
+                })}
+              </tr>
+              <tr>
+                {groups.flatMap(({ stage, milestones }) => (
+                  milestones.length > 0
+                    ? milestones.map(milestone => <th key={getTechnicalPlanRowKey(milestone)} scope="col" style={thStyle}>{milestone.taskName}</th>)
+                    : [<th key={getTechnicalPlanRowKey(stage)} scope="col" style={{ ...thStyle, color: '#bfbfbf' }}>{stage.taskName}</th>]
+                ))}
+              </tr>
+            </>
+          )}
         </thead>
         <tbody>
           {rows.filter(row => row.rowType === 'version').map(row => {
@@ -236,9 +241,9 @@ function TechnicalHorizontalPlanTable({
                   <Tooltip title="所有一级活动的预估工期总和"><span>{row.cycleDays ?? '-'}</span></Tooltip>
                 </td>
                 {milestoneTasks.map(milestone => {
-                  const value = row.endDatesByTaskId[milestone.id] || ''
+                  const value = row.endDatesByTaskId[getTechnicalPlanRowKey(milestone)] || ''
                   return (
-                    <td key={milestone.id} style={tdStyle}>
+                    <td key={getTechnicalPlanRowKey(milestone)} style={tdStyle}>
                       {isCurrent && canEditPlanEnd
                         ? <ClickToEditDate align="center" value={value} onChange={nextValue => onDateChange(milestone.id, 'planEndDate', nextValue)} />
                         : value || '-'}
@@ -257,9 +262,9 @@ function TechnicalHorizontalPlanTable({
                 <Tooltip title="最早实际开始到最晚实际完成的天数"><span>{row.cycleDays ?? '-'}</span></Tooltip>
               </td>
               {milestoneTasks.map(milestone => {
-                const value = row.endDatesByTaskId[milestone.id] || ''
+                const value = row.endDatesByTaskId[getTechnicalPlanRowKey(milestone)] || ''
                 return (
-                  <td key={milestone.id} style={{ ...tdStyle, color: '#d48806' }}>
+                  <td key={getTechnicalPlanRowKey(milestone)} style={{ ...tdStyle, color: '#d48806' }}>
                     {canEditActualEnd
                       ? <ClickToEditDate align="center" value={value} onChange={nextValue => onDateChange(milestone.id, 'actualEndDate', nextValue)} />
                       : value || '-'}
@@ -691,7 +696,7 @@ export default function TechnicalPlanModule({
     const rows = buildTechnicalHorizontalRows(visibleVersions, currentVersion?.id || '').map(row => [
       row.versionNo,
       row.cycleDays == null ? '-' : `${row.cycleDays}天`,
-      ...milestoneTasks.map(task => row.endDatesByTaskId[task.id] || '-'),
+      ...milestoneTasks.map(task => row.endDatesByTaskId[getTechnicalPlanRowKey(task)] || '-'),
     ])
     exportMergedSheet(
       headerMatrix,
@@ -992,6 +997,7 @@ export default function TechnicalPlanModule({
         ) : viewMode === 'horizontal' ? (
           <TechnicalHorizontalPlanTable
             tasks={filteredHierarchyTasks}
+            templateKind={tab?.templateKind || 'tdt'}
             versions={visibleVersions}
             currentVersionId={currentVersion.id}
             canEditPlanEnd={isDraft && canEditTechnicalPlan}

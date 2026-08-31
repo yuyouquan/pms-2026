@@ -44,6 +44,9 @@ export interface SortableColumnSettingsProps<Key extends string> {
   defaultValue?: SortableColumnSettingsValue<Key>
   minVisible?: number
   applyLabel?: string
+  normalizeValue?: (
+    value?: Partial<SortableColumnSettingsValue<Key>> | readonly Key[] | null,
+  ) => SortableColumnSettingsValue<Key>
   onApply: (value: SortableColumnSettingsValue<Key>) => void
   onCancel: () => void
   getPopupContainer?: (triggerNode: HTMLElement) => HTMLElement
@@ -120,12 +123,16 @@ export function SortableColumnSettings<Key extends string>({
   value,
   defaultValue,
   minVisible = 1,
+  normalizeValue,
   onApply,
   onCancel,
   getPopupContainer,
 }: SortableColumnSettingsProps<Key>) {
+  const normalize = (
+    candidate?: Partial<SortableColumnSettingsValue<Key>> | readonly Key[] | null,
+  ) => normalizeValue?.(candidate) ?? normalizeColumnSettings(definitions, candidate)
   const [draft, setDraft] = useState<SortableColumnSettingsValue<Key>>(
-    () => normalizeColumnSettings(definitions, value),
+    () => normalize(value),
   )
   const [searchText, setSearchText] = useState('')
   const wasOpen = useRef(false)
@@ -139,18 +146,19 @@ export function SortableColumnSettings<Key extends string>({
 
   useEffect(() => {
     if (open && !wasOpen.current) {
-      setDraft(normalizeColumnSettings(definitions, value))
+      setDraft(normalize(value))
       setSearchText('')
     } else if (
       open
       && wasOpen.current
       && previousDefinitionSignature.current !== definitionSignature
     ) {
-      setDraft(current => normalizeColumnSettings(definitions, current))
+      if (normalizeValue) setDraft(current => normalizeValue(current))
+      else setDraft(current => normalizeColumnSettings(definitions, current))
     }
     wasOpen.current = open
     previousDefinitionSignature.current = definitionSignature
-  }, [definitionSignature, definitions, open, value])
+  }, [definitionSignature, definitions, normalizeValue, open, value])
 
   const definitionByKey = new Map(
     definitions.map(definition => [definition.key, definition] as const),
@@ -162,7 +170,7 @@ export function SortableColumnSettings<Key extends string>({
     .length
   const minimum = Math.max(0, minVisible)
   const commitDraft = (nextValue: SortableColumnSettingsValue<Key>) => {
-    const normalized = normalizeColumnSettings(definitions, nextValue)
+    const normalized = normalize(nextValue)
     setDraft(normalized)
     onApply(normalized)
   }
@@ -200,8 +208,7 @@ export function SortableColumnSettings<Key extends string>({
   }
 
   const handleReset = () => {
-    commitDraft(normalizeColumnSettings(
-      definitions,
+    commitDraft(normalize(
       defaultValue ?? getDefaultColumnSettings(definitions),
     ))
   }

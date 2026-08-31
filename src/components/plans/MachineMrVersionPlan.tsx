@@ -13,7 +13,7 @@ import {
   getMachineMarketDate,
   projectMachineMarketMrVersions,
 } from '@/lib/mrMachineMarketRules'
-import { validateMachineMarketDate } from '@/lib/mrDateRules'
+import { validateJointMachineRows, validateMachineMarketDate } from '@/lib/mrDateRules'
 import { numberMrTemplateActivities } from '@/lib/mrTemplateRules'
 import { projectTosMrHorizontalColumns, resolveMrPermissions } from '@/lib/mrVersionPlanRules'
 import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
@@ -107,6 +107,10 @@ export default function MachineMrVersionPlan({
   }), [machinePlansByKey, marketRows, project.id, tosInstancesByProjectId])
   const configuredMainMarket = getMainMarket(marketRows)
   const mainMarket = projection.mainMarket || configuredMainMarket
+  const jointErrors = useMemo(() => validateJointMachineRows({
+    tosInstances: Object.values(tosInstancesByProjectId).flatMap(instances => instances ?? []),
+    machinePlans: Object.values(machinePlansByKey),
+  }), [machinePlansByKey, tosInstancesByProjectId])
   const metadata = useMemo(() => projectMachineMrMetadata(project, marketRows), [marketRows, project])
   const permission = useMemo(() => resolveMrPermissions({
     context: 'machine-market',
@@ -124,7 +128,12 @@ export default function MachineMrVersionPlan({
     getMachineMarketDate({ plan: version.plan, overridesByKey: marketOverridesByKey, market, mainMarket, activityId })
   )
   const errorsFor = (version: MrMachineMarketProjection, market: string, activity: MrTemplateActivity) => {
-    if (activity.parentId === null || market === mainMarket) return []
+    if (activity.parentId === null) return []
+    if (market === mainMarket) {
+      return jointErrors
+        .filter(error => error.rowKey === version.key && error.activityId === activity.id)
+        .map(error => error.message)
+    }
     return validateMachineMarketDate({
       value: valueFor(version, market, activity.id),
       mainValue: valueFor(version, mainMarket, activity.id),
@@ -309,6 +318,7 @@ export default function MachineMrVersionPlan({
           onRow={row => ({
             'data-mr-tos-version': row.version.tosVersion,
             'data-mr-version': row.version.tosVersion,
+            'data-mr-activity-id': row.activity.id,
             tabIndex: -1,
           } as HTMLAttributes<HTMLTableRowElement>)}
         />

@@ -443,7 +443,7 @@ for (const title of ['基础信息', '团队信息', '交付物信息']) {
     && staticJsxAttributeText(jsxAttribute(node, 'title')) === title
   )), `${title} is carried by a live collapsible information section`)
 }
-assert.match(technicalInformationView, /TECHNICAL_PROJECT_SPACE_CORE_FIELDS\.map\(field =>/, 'technical core fields consume the exact ten-field project-space projection')
+assert.match(technicalInformationView, /TECHNICAL_PROJECT_SPACE_CORE_FIELDS\.map\(field =>/, 'technical core fields consume the exact nine-field project-space projection')
 assert.match(technicalInformationView, /TECHNICAL_PROJECT_SPACE_BASIC_FIELDS\.map\(field =>/, 'technical TDT basic fields consume the exact four-field project-space projection')
 assert.doesNotMatch(technicalInformationView, /\.\.\.normalizedCustomRoles/, 'custom permission roles do not expand the strict seven-field technical team projection')
 assert.match(technicalInformationView, /sessionStorage\.getItem\(['"]pms:technical-project-list-target-child['"]\)/, 'technical information consumes workbench child targeting')

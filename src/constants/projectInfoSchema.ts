@@ -315,14 +315,13 @@ export const TECHNICAL_PROJECT_SPACE_CORE_FIELDS: ProjectSurfaceFieldDefinition[
   { key: 'status', label: '项目状态', defaultVisible: true, hideable: false },
   { key: 'projectStage', label: '项目阶段', defaultVisible: true, hideable: false },
   { key: 'projectYear', label: '项目年份', defaultVisible: true, hideable: false },
-  { key: 'projectValue', label: '项目价值', defaultVisible: true, hideable: false },
   { key: 'preProjectId', label: '前置项目', defaultVisible: true, hideable: false },
-  { key: 'tdtAndSubprojectName', label: 'TDT和子项目名称', defaultVisible: true, hideable: false },
+  { key: 'projectValue', label: '项目价值', defaultVisible: true, hideable: false },
 ]
 
 export const TECHNICAL_PROJECT_SPACE_CORE_FIELD_KEYS = [
   'secondaryCategory', 'technicalTrack', 'tmg', 'subdomain', 'status', 'projectStage',
-  'projectYear', 'projectValue', 'preProjectId', 'tdtAndSubprojectName',
+  'projectYear', 'preProjectId', 'projectValue',
 ] as const
 
 export const TECHNICAL_PROJECT_SPACE_PLAN_FIELD_KEY = 'technicalPlan' as const

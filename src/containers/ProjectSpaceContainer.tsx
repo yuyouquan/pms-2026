@@ -41,6 +41,7 @@ import type { MenuProps } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable } from '@/lib/versionCompare'
 import { ensurePublishedComparisonSnapshots, resolveComparisonVersionTasks } from '@/lib/versionComparisonSnapshots'
+import { shouldShowLatestPublishedLevel1Summary } from '@/lib/projectBasicInfoPresentation'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
 import TosMrVersionPlan from '@/components/plans/TosMrVersionPlan'
@@ -4862,7 +4863,7 @@ export default function ProjectSpaceContainer() {
                         disabled={!canViewBasicInfo}
                       />
                     </div>
-                    {renderLatestPublishedLevel1Summary()}
+                    {shouldShowLatestPublishedLevel1Summary(p.type) && renderLatestPublishedLevel1Summary()}
                     <ProjectPlanInfoGrid
                       visibleFieldKeys={visiblePlanInfoFieldKeys}
                       buildOption={row.buildOption}
@@ -4900,7 +4901,10 @@ export default function ProjectSpaceContainer() {
       }
     }
     return (
-      <div style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}>
+      <div
+        className={!isTargetProject ? 'pms-project-information-surface pms-project-information-surface--legacy' : undefined}
+        style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}
+      >
         {/* Anchor navigation */}
         <div style={{ position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150 }}>
           <div className="pms-glass-surface" style={{ padding: '16px 0 12px' }}>
@@ -5165,7 +5169,7 @@ export default function ProjectSpaceContainer() {
     const displayedHealthLabel = p.healthStatus === 'normal' ? '健康' : p.healthStatus === 'warning' ? '关注' : p.healthStatus === 'risk' ? '风险' : '-'
     const planInfoContent = (
       <>
-        {isTosVersionProject && (
+        {isTosVersionProject && shouldShowLatestPublishedLevel1Summary(p.type) && (
           <>
             {renderLatestPublishedLevel1Summary()}
             <Divider style={{ margin: '16px 0' }} />
