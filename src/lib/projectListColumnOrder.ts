@@ -60,6 +60,17 @@ export function getProjectListUnitLeafKeys(
   return [...(units.find(unit => unit.key === unitKey)?.leafKeys ?? [])]
 }
 
+export function canDropProjectListUnit(
+  units: readonly ProjectListColumnUnitDefinition[],
+  activeUnitKey: string,
+  overUnitKey: string,
+): boolean {
+  if (!activeUnitKey || !overUnitKey || activeUnitKey === overUnitKey) return false
+  const activeUnit = units.find(unit => unit.key === activeUnitKey)
+  const overUnit = units.find(unit => unit.key === overUnitKey)
+  return Boolean(activeUnit && overUnit && activeUnit.fixed !== 'left' && overUnit.fixed !== 'left')
+}
+
 const getUnitKey = (
   units: readonly ProjectListColumnUnitDefinition[],
   requestedKey: string,

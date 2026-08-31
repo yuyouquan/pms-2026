@@ -106,6 +106,17 @@ const headerForUnit = async unit => {
   throw new Error(`找不到可拖动表头单元：${unit}`)
 }
 
+const headerForSelector = async selector => {
+  const handles = await page.$$(selector)
+  for (const handle of handles) {
+    if (await handle.evaluate(element => {
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    })) return handle
+  }
+  throw new Error(`找不到可见表头：${selector}`)
+}
+
 const dragElement = async (source, target) => {
   await source.evaluate(element => element.scrollIntoView({ block: 'nearest', inline: 'nearest' }))
   const sourceBox = await source.boundingBox()
@@ -121,10 +132,112 @@ const dragElement = async (source, target) => {
   await wait(420)
 }
 
+const dragMilestoneHeaderWithFeedback = async (sourceSelector, targetUnit) => {
+  const source = await headerForSelector(sourceSelector)
+  await source.evaluate(element => element.scrollIntoView({ block: 'nearest', inline: 'center' }))
+  await wait(120)
+  const target = await headerForUnit(targetUnit)
+  const sourceBox = await source.boundingBox()
+  const targetBox = await target.boundingBox()
+  if (!sourceBox || !targetBox) throw new Error('里程碑拖动目标不可见')
+  const from = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 }
+  const to = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + (to.x >= from.x ? 8 : -8), from.y, { steps: 3 })
+  await page.mouse.move(to.x, to.y, { steps: 18 })
+  await wait(180)
+  const feedback = await page.evaluate(() => {
+    const milestoneHeaders = Array.from(document.querySelectorAll(
+      '.pms-project-summary-table thead th[data-project-list-column-unit="milestone"]',
+    )).filter(element => {
+      const rect = element.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    })
+    return {
+      overlay: document.querySelector('.pms-project-list-drag-overlay')?.textContent?.trim() ?? '',
+      headerCount: milestoneHeaders.length,
+      placeholderCount: milestoneHeaders.filter(element => (
+        element.getAttribute('data-project-list-unit-placeholder') === 'true'
+      )).length,
+      transformedMilestones: milestoneHeaders.filter(element => (
+        element.style.transform && element.style.transform !== 'none'
+      )).map(element => element.getAttribute('data-project-list-header-id')),
+    }
+  })
+  await page.mouse.up()
+  await wait(420)
+  assert.equal(feedback.overlay, '里程碑', '拖动任一计划表头只显示一个里程碑区块浮层')
+  assert.equal(feedback.placeholderCount, feedback.headerCount, '全部里程碑表头共享一个占位状态')
+  assert.deepEqual(feedback.transformedMilestones, [], '里程碑内部表头不得分别位移')
+}
+
 const dragHeader = async (sourceUnit, targetUnit) => {
   const source = await headerForUnit(sourceUnit)
   const target = await headerForUnit(targetUnit)
   await dragElement(source, target)
+}
+
+const dragHeaderToLockedUnit = async (sourceUnit, targetUnit) => {
+  const source = await headerForUnit(sourceUnit)
+  const target = await headerForSelector(
+    `.pms-project-summary-table thead th[data-project-list-column-unit="${targetUnit}"]`,
+  )
+  await dragElement(source, target)
+}
+
+const assertKeyboardAnnouncement = async (selector, expectedLabel) => {
+  const header = await headerForSelector(selector)
+  await header.evaluate(element => element.scrollIntoView({ block: 'nearest', inline: 'center' }))
+  await header.focus()
+  await page.keyboard.press('Space')
+  await wait(180)
+  const announcement = await page.$$eval(
+    '[id^="DndLiveRegion"]',
+    regions => regions.map(region => region.textContent ?? '').join(' '),
+  )
+  assert.match(announcement, new RegExp(expectedLabel), '键盘拖动播报使用中文展示单元名称')
+  assert.doesNotMatch(announcement, /(?:leaf|group)::/, '键盘播报不得泄露技术拖动 ID')
+  await page.keyboard.press('Escape')
+  await wait(120)
+}
+
+const assertRepresentativeListInteractions = async () => {
+  const toggle = await page.$('.pms-machine-series-toggle')
+  assert.ok(toggle, '整机列表保留产品系列层级控制')
+  const beforeExpanded = await toggle.evaluate(element => element.getAttribute('aria-expanded'))
+  await toggle.click()
+  await wait(220)
+  assert.notEqual(
+    await toggle.evaluate(element => element.getAttribute('aria-expanded')),
+    beforeExpanded,
+    '产品系列层级可收起',
+  )
+  await toggle.click()
+  await wait(220)
+
+  const next = await page.$('.pms-project-list-pagination .ant-pagination-next button:not([disabled])')
+  assert.ok(next, '整机列表保留分页')
+  await next.click()
+  await wait(260)
+  assert.equal(
+    await page.$eval('.pms-project-list-pagination .ant-pagination-item-active', element => element.textContent?.trim()),
+    '2',
+    '分页可切换到第二页',
+  )
+  const previous = await page.$('.pms-project-list-pagination .ant-pagination-prev button')
+  await previous.click()
+  await wait(260)
+
+  await clickExact('button', '整机-手机', '[aria-label="项目二级分类快捷筛选"]')
+  assert.notEqual(
+    await page.evaluate(() => Array.from(
+      document.querySelectorAll('[aria-label="项目二级分类快捷筛选"] button'),
+    ).find(element => element.textContent?.trim() === '整机-手机')?.style.background),
+    'transparent',
+    '快捷筛选仍可激活',
+  )
+  await clickExact('button', '全部', '[aria-label="项目二级分类快捷筛选"]')
 }
 
 const openFieldSettings = async () => {
@@ -248,6 +361,7 @@ try {
   })
   await page.reload({ waitUntil: 'networkidle0', timeout: TIMEOUT })
   await ensureProjectList('整机产品项目')
+  await assertRepresentativeListInteractions()
 
   const beforeOrdinaryDrag = await unitOrder()
   await dragHeader('brand', 'productLine')
@@ -264,6 +378,30 @@ try {
   const afterFieldDrag = await unitOrder()
   assert.notDeepEqual(afterFieldDrag, afterOrdinaryDrag, '字段配置拖动必须改变表头顺序')
   await assertMilestoneLeavesContiguous()
+
+  const beforePhaseHeaderDrag = await unitOrder()
+  await dragMilestoneHeaderWithFeedback(
+    '.pms-project-summary-table thead th[data-project-list-header-id^="group::"]',
+    'spmDepartment',
+  )
+  assert.notDeepEqual(await unitOrder(), beforePhaseHeaderDrag, '阶段表头拖动必须移动整个里程碑区块')
+  await assertMilestoneLeavesContiguous()
+
+  const beforeLeafHeaderDrag = await unitOrder()
+  await dragMilestoneHeaderWithFeedback(
+    '.pms-project-summary-table thead th[data-project-list-header-id^="leaf::"][data-project-list-column-unit="milestone"]',
+    'spm',
+  )
+  assert.notDeepEqual(await unitOrder(), beforeLeafHeaderDrag, '子里程碑表头拖动必须移动整个里程碑区块')
+  await assertMilestoneLeavesContiguous()
+  await assertKeyboardAnnouncement(
+    '.pms-project-summary-table thead th[data-project-list-header-id^="leaf::"][data-project-list-column-unit="milestone"]',
+    '里程碑',
+  )
+  await assertKeyboardAnnouncement(
+    '.pms-project-summary-table thead th[data-project-list-column-unit="spm"]',
+    'SPM',
+  )
 
   await openFieldSettings()
   await toggleMilestone(false)
@@ -282,6 +420,9 @@ try {
   await page.waitForSelector('.pms-project-summary-table thead', { visible: true, timeout: TIMEOUT })
   await assertFixedUnit('tosVersion')
   assert.ok(await milestoneHeaderCount() > 0, 'tOS 列表必须保持里程碑表头')
+  const beforeFixedTargetDrop = await unitOrder()
+  await dragHeaderToLockedUnit('status', 'tosVersion')
+  assert.deepEqual(await unitOrder(), beforeFixedTargetDrop, '固定列区域不得成为非固定列的插入位置')
 
   await clickCategory('技术项目')
   await page.waitForSelector('.pms-project-summary-table thead', { visible: true, timeout: TIMEOUT })

@@ -88,6 +88,22 @@ assert.deepEqual(
   'fixed units remain before reorderable units',
 )
 
+assert.equal(
+  typeof columnOrder.canDropProjectListUnit,
+  'function',
+  'project-list unit model must expose fixed-target rejection',
+)
+assert.equal(
+  columnOrder.canDropProjectListUnit(units, 'status', 'projectName'),
+  false,
+  'fixed units must not be valid drop targets for non-fixed units',
+)
+assert.equal(
+  columnOrder.canDropProjectListUnit(units, 'status', 'brand'),
+  true,
+  'ordinary non-fixed units remain valid drop targets',
+)
+
 assert.match(
   tableSource,
   /const leafColumnDefinitions = useMemo/,
@@ -120,10 +136,18 @@ assert.match(
   /useSensor\(PointerSensor,\s*\{[\s\S]*activationConstraint:\s*\{\s*distance:\s*6\s*\}/,
   'sortable header must require six pixels of pointer movement',
 )
-assert.match(headerSource, /useSortable\(\{[\s\S]*disabled:\s*locked/, 'fixed headers must disable sorting')
+assert.match(headerSource, /disabled:\s*unitKey\s*\?\s*\{\s*draggable:\s*locked/, 'fixed headers must disable dragging')
 assert.match(headerSource, /data-project-list-column-unit=\{unitKey\}/, 'sortable header must expose its display unit')
+assert.match(headerSource, /DragOverlay/, 'sortable header must render one drag overlay for the active display unit')
+assert.match(headerSource, /activeUnitKey/, 'sortable header context must track the active display unit')
+assert.match(headerSource, /is-unit-dragging/, 'every header in the active milestone unit must share one placeholder state')
+assert.match(headerSource, /droppable:\s*false/, 'locked headers must stay measurable as explicit rejected drop targets')
+assert.match(headerSource, /aria-label=\{!locked\s*&&\s*unitKey\s*\?\s*`拖动\$\{unitLabel\}调整列顺序`/, 'header drag handles need Chinese unit labels')
+assert.match(headerSource, /已开始拖动\$\{getUnitLabel\(active\)\}/, 'keyboard announcements need Chinese unit labels')
+assert.doesNotMatch(headerSource, /Draggable item/, 'header announcements must not expose technical drag ids')
 assert.match(tableSource, /const handleHeaderDragEnd[\s\S]*moveColumnSetting\(/, 'one handler must reorder ordinary and milestone headers')
 assert.match(tableSource, /active\.data\.current\?\.unitKey/, 'header drag must map leaf and grouped headers to their display unit')
+assert.match(tableSource, /canDropProjectListUnit\([\s\S]*activeUnitKey,[\s\S]*overUnitKey/, 'header drag must reject fixed drop targets through the shared unit model')
 assert.match(tableSource, /components=\{\{[\s\S]*header:[\s\S]*SortableProjectListHeader/, 'Ant table must render the sortable header cell')
 assert.match(tableSource, /applyColumnSettings/, 'header and field settings must share one update function')
 assert.match(globalStyles, /\.pms-project-list-sortable-header\s*\{[\s\S]*cursor:\s*grab/, 'draggable headers need grab affordance')

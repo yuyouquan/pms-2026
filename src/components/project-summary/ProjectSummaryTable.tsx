@@ -38,6 +38,7 @@ import {
 } from '@/lib/columnSettings'
 import {
   buildProjectListColumnUnits,
+  canDropProjectListUnit,
   expandProjectListUnitSettings,
   normalizeProjectListUnitSettings,
   type ProjectListLeafColumnDefinition,
@@ -557,6 +558,7 @@ export default function ProjectSummaryTable({
             className: isProjectName ? 'pms-project-name-cell' : undefined,
             style: { ...headerCell.style, ...lockedWidth },
             projectListColumnUnit: unitKey,
+            projectListColumnLabel: unitKey === 'milestone' ? '里程碑' : String(field?.title ?? key),
             projectListHeaderId: `leaf::${key}`,
             projectListColumnLocked: fixedColumnKeys.has(key),
           }
@@ -702,6 +704,7 @@ export default function ProjectSummaryTable({
         onHeaderCell: () => ({
           style: { background: segment.group!.color },
           projectListColumnUnit: 'milestone',
+          projectListColumnLabel: '里程碑',
           projectListHeaderId: `group::${segment.key}`,
           projectListColumnLocked: false,
         }),
@@ -723,7 +726,7 @@ export default function ProjectSummaryTable({
     if (!over) return
     const activeUnitKey = String(active.data.current?.unitKey ?? '')
     const overUnitKey = String(over.data.current?.unitKey ?? '')
-    if (!activeUnitKey || !overUnitKey || activeUnitKey === overUnitKey) return
+    if (!canDropProjectListUnit(columnUnitDefinitions, activeUnitKey, overUnitKey)) return
     applyColumnSettings({
       ...columnSettings,
       order: moveColumnSetting(
