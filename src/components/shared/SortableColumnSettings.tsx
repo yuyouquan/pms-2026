@@ -153,7 +153,8 @@ export function SortableColumnSettings<Key extends string>({
       && wasOpen.current
       && previousDefinitionSignature.current !== definitionSignature
     ) {
-      setDraft(current => normalize(current))
+      if (normalizeValue) setDraft(current => normalizeValue(current))
+      else setDraft(current => normalizeColumnSettings(definitions, current))
     }
     wasOpen.current = open
     previousDefinitionSignature.current = definitionSignature
