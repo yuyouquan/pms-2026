@@ -56,20 +56,61 @@ for (const token of [
   )
 }
 
+const projectSurfaceScopeClasses = [
+  'pms-project-card-surface',
+  'pms-project-summary-surface',
+  'pms-project-info-modal-surface',
+  'pms-project-information-surface',
+]
+for (const scopeClass of projectSurfaceScopeClasses) {
+  assert.match(
+    globalStylesSource,
+    new RegExp(`\\.${scopeClass}[^\\{]*:focus-visible[^\\{]*\\{[^}]{0,240}(?:outline|box-shadow):\\s*var\\(--pms-project-focus-ring\\)`),
+    `${scopeClass} must expose its own visible shared focus-visible treatment`,
+  )
+}
+
+const projectSurfaceReducedMotion = globalStylesSource.slice(
+  globalStylesSource.lastIndexOf('@media (prefers-reduced-motion: reduce)'),
+)
+for (const scopeClass of projectSurfaceScopeClasses) {
+  assert.match(
+    projectSurfaceReducedMotion,
+    new RegExp(`\\.${scopeClass}(?:\\s+\\*)?(?:,|\\s*\\{)`),
+    `${scopeClass} must be explicitly covered by the shared reduced-motion override`,
+  )
+}
+assert.match(
+  projectSurfaceReducedMotion,
+  /transition:\s*none\s*!important/,
+  'shared project surfaces must disable transitions when reduced motion is requested',
+)
+
+const projectCardStart = workspaceSource.indexOf('export const ProjectCard')
+const projectCardEnd = workspaceSource.indexOf('// ========== TodoList', projectCardStart)
+const projectCardSource = workspaceSource.slice(projectCardStart, projectCardEnd)
+assert.doesNotMatch(projectCardSource, /pms-card-hover/, 'project cards must not retain the legacy important hover class')
+assert.doesNotMatch(projectCardSource, /\bhovered\b|data-hovered|onMouseEnter|onMouseLeave/, 'project cards must rely on the shared CSS hover state without React hover bookkeeping')
+
 assert.match(
   globalStylesSource,
-  /\.pms-project-(?:card|summary|info|information)[^,{]*:focus-visible[^{]*\{[\s\S]{0,240}(?:outline|box-shadow):\s*var\(--pms-project-focus-ring\)/,
-  'project surfaces must expose a visible shared focus-visible treatment',
+  /\.pms-modal\.pms-project-info-modal-surface\s+\.ant-modal-content\s*\{(?=[^}]*display:\s*flex)(?=[^}]*flex-direction:\s*column)(?=[^}]*max-height:\s*calc\([^}]*dvh)(?=[^}]*background:\s*var\(--pms-project-surface\)\s*!important)(?=[^}]*backdrop-filter:\s*none\s*!important)(?=[^}]*border-radius:[^;}]+!important)[^}]*\}/,
+  'project add/edit modal must override the legacy glass modal with a bounded white flex surface',
 )
 assert.match(
   globalStylesSource,
-  /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?\.pms-project-(?:card|summary|info|information)[\s\S]{0,600}?transition:\s*none\s*!important/,
-  'project surfaces must disable visual transitions when reduced motion is requested',
+  /\.pms-modal\.pms-project-info-modal-surface\s+\.ant-modal-body\s*\{(?=[^}]*flex:\s*1)(?=[^}]*min-height:\s*0)(?=[^}]*overflow-y:\s*auto)(?=[^}]*background:\s*var\(--pms-project-surface\)\s*!important)[^}]*\}/,
+  'project add/edit modal body must own the bounded scrolling region',
 )
 assert.match(
   globalStylesSource,
-  /\.pms-project-info-modal-surface\s+\.ant-modal-footer\s*\{(?=[^}]*position:\s*sticky)(?=[^}]*bottom:\s*0(?:px)?\s*;)(?=[^}]*z-index:\s*[1-9]\d*\s*;)[^}]*\}/,
-  'project add/edit modal footer must remain a stable sticky bottom action area',
+  /\.pms-modal\.pms-project-info-modal-surface\s+\.ant-modal-footer\s*\{(?=[^}]*flex:\s*none)(?=[^}]*z-index:\s*[1-9]\d*)(?=[^}]*background:\s*var\(--pms-project-surface\)\s*!important)[^}]*\}/,
+  'project add/edit modal footer must remain visible as a non-scrolling flex action area',
+)
+assert.doesNotMatch(
+  globalStylesSource,
+  /\.pms-project-info-modal-surface\s+\.ant-modal-footer\s*\{[^}]*(?:position:\s*sticky|bottom:\s*0(?:px)?)/,
+  'project add/edit modal footer must not claim ineffective sticky positioning',
 )
 
 const technicalCoreKeys = [
