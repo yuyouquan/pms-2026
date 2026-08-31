@@ -7431,7 +7431,7 @@ body,
   margin: 10px 12px !important;
 }
 
-.pms-modal.pms-project-info-modal-surface .ant-modal-content {
+.pms-modal.pms-project-info-modal-surface .ant-modal-container {
   display: flex;
   flex-direction: column;
   max-height: calc(100dvh - 48px);
@@ -7444,7 +7444,7 @@ body,
   -webkit-backdrop-filter: none !important;
 }
 
-.pms-modal.pms-project-info-modal-surface .ant-modal-content::before {
+.pms-modal.pms-project-info-modal-surface .ant-modal-container::before {
   content: none;
 }
 
