@@ -34,7 +34,6 @@ import ActiveFilterConditions from '@/components/project-list/ActiveFilterCondit
 import {
   getDefaultColumnSettings,
   moveColumnSetting,
-  orderVisibleDefinitions,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
 import {
@@ -509,7 +508,12 @@ export default function ProjectSummaryTable({
       columnUnitDefinitions,
       columnSettings,
     )
-    const ordered = orderVisibleDefinitions(leafColumnDefinitions, leafColumnSettings)
+    const leafByKey = new Map(leafColumnDefinitions.map(definition => [definition.key, definition]))
+    const visibleLeafKeys = new Set(leafColumnSettings.visible)
+    const ordered = leafColumnSettings.order
+      .filter(key => visibleLeafKeys.has(key))
+      .map(key => leafByKey.get(key))
+      .filter((definition): definition is ProjectListLeafColumnDefinition => Boolean(definition))
     const byKey = new Map(ordered.map(definition => [definition.key, definition]))
     return [
       ...fixedColumnOrder.flatMap(key => byKey.get(key) ? [byKey.get(key)!] : []),
