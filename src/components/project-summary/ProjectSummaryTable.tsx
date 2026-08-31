@@ -28,11 +28,15 @@ import { SortableColumnSettings } from '@/components/shared/SortableColumnSettin
 import ActiveFilterConditions from '@/components/project-list/ActiveFilterConditions'
 import {
   getDefaultColumnSettings,
-  normalizeColumnSettings,
   orderVisibleDefinitions,
-  type SortableColumnDefinition,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
+import {
+  buildProjectListColumnUnits,
+  expandProjectListUnitSettings,
+  normalizeProjectListUnitSettings,
+  type ProjectListLeafColumnDefinition,
+} from '@/lib/projectListColumnOrder'
 import {
   ENUM_FILTER_OPERATORS,
   MULTI_ENUM_FILTER_OPERATORS,
@@ -244,10 +248,11 @@ export default function ProjectSummaryTable({
   )
   const fixedColumnKeys = useMemo(() => new Set(fixedColumnOrder), [fixedColumnOrder])
 
-  const columnDefinitions = useMemo<SortableColumnDefinition<string>[]>(() => (
+  const leafColumnDefinitions = useMemo<ProjectListLeafColumnDefinition[]>(() => (
     fieldDefinitions.map(definition => ({
       key: definition.key,
       title: definition.title,
+      source: definition.source,
       defaultVisible: definition.defaultVisible,
       hideable: definition.hideable,
       fixed: fixedColumnKeys.has(definition.key) ? 'left' : undefined,
@@ -255,9 +260,14 @@ export default function ProjectSummaryTable({
     }))
   ), [fieldDefinitions, fixedColumnKeys])
 
+  const columnUnitDefinitions = useMemo(
+    () => buildProjectListColumnUnits(leafColumnDefinitions),
+    [leafColumnDefinitions],
+  )
+
   const defaultColumnSettings = useMemo(
-    () => getDefaultColumnSettings(columnDefinitions),
-    [columnDefinitions],
+    () => getDefaultColumnSettings(columnUnitDefinitions),
+    [columnUnitDefinitions],
   )
   const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(
     defaultColumnSettings,
@@ -337,12 +347,13 @@ export default function ProjectSummaryTable({
   filterFieldDefinitionsRef.current = filterFieldDefinitions
   const storageKey = `pms:project-summary:${storageNamespace}:${projectType}`
   const definitionSignature = useMemo(
-    () => JSON.stringify(columnDefinitions.map(definition => [
+    () => JSON.stringify(columnUnitDefinitions.map(definition => [
       definition.key,
       definition.defaultVisible,
       definition.hideable !== false,
+      definition.leafKeys,
     ])),
-    [columnDefinitions],
+    [columnUnitDefinitions],
   )
   const filterDefinitionSignature = useMemo(
     () => JSON.stringify(filterFieldDefinitions.map(definition => [
@@ -368,8 +379,8 @@ export default function ProjectSummaryTable({
         stored.filters,
         filterFieldDefinitionsRef.current,
       )
-      storedColumns = normalizeColumnSettings(
-        columnDefinitions,
+      storedColumns = normalizeProjectListUnitSettings(
+        columnUnitDefinitions,
         getStoredColumns(stored.columns),
       )
     } catch {
@@ -380,7 +391,7 @@ export default function ProjectSummaryTable({
     setColumnSettings(storedColumns)
     setHydratedKey(hydrationKey)
   }, [
-    columnDefinitions,
+    columnUnitDefinitions,
     defaultColumnSettings,
     filterDefinitionSignature,
     hydrationKey,
@@ -393,13 +404,13 @@ export default function ProjectSummaryTable({
     try {
       window.localStorage.setItem(storageKey, JSON.stringify({
         filters,
-        columns: normalizeColumnSettings(columnDefinitions, columnSettings),
+        columns: normalizeProjectListUnitSettings(columnUnitDefinitions, columnSettings),
       } satisfies StoredProjectSummaryPreferences))
     } catch {
       // Preference persistence must never block the table.
     }
   }, [
-    columnDefinitions,
+    columnUnitDefinitions,
     columnSettings,
     filters,
     hydratedKey,
@@ -485,13 +496,17 @@ export default function ProjectSummaryTable({
   }, [displayedRows, selectedRowKey])
 
   const visibleDefinitions = useMemo(() => {
-    const ordered = orderVisibleDefinitions(columnDefinitions, columnSettings)
+    const leafColumnSettings = expandProjectListUnitSettings(
+      columnUnitDefinitions,
+      columnSettings,
+    )
+    const ordered = orderVisibleDefinitions(leafColumnDefinitions, leafColumnSettings)
     const byKey = new Map(ordered.map(definition => [definition.key, definition]))
     return [
       ...fixedColumnOrder.flatMap(key => byKey.get(key) ? [byKey.get(key)!] : []),
       ...ordered.filter(definition => !fixedColumnKeys.has(definition.key)),
     ]
-  }, [columnDefinitions, columnSettings, fixedColumnKeys, fixedColumnOrder])
+  }, [columnSettings, columnUnitDefinitions, fixedColumnKeys, fixedColumnOrder, leafColumnDefinitions])
   const tableColumnByKey = useMemo(
     () => new Map<string, ColumnType<ProjectSummaryRow>>(buildProjectSummaryColumns(fieldDefinitions).map(column => {
       const key = String(column.key)
@@ -876,9 +891,11 @@ export default function ProjectSummaryTable({
               >字段配置</Button>
             </Tooltip>
           )}
-          definitions={columnDefinitions}
+          definitions={columnUnitDefinitions}
           value={columnSettings}
           defaultValue={defaultColumnSettings}
+          minVisible={0}
+          normalizeValue={value => normalizeProjectListUnitSettings(columnUnitDefinitions, value)}
           onCancel={() => setColumnOpen(false)}
           onApply={nextSettings => {
             setColumnSettings(nextSettings)

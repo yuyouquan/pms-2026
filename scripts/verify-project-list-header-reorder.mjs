@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
-import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
+import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
 const columnOrder = loadTypeScriptModule(root, 'src/lib/projectListColumnOrder.ts')
+const tableSource = readSource(root, 'src/components/project-summary/ProjectSummaryTable.tsx')
 
 const definitions = [
   { key: 'projectName', title: '项目名', defaultVisible: true, hideable: false, fixed: 'left', source: 'system' },
@@ -83,6 +84,32 @@ assert.deepEqual(
   fixedNormalized.order,
   ['projectName', 'status', 'milestone', 'brand'],
   'fixed units remain before reorderable units',
+)
+
+assert.match(
+  tableSource,
+  /const leafColumnDefinitions = useMemo/,
+  'project summary table must distinguish leaf definitions from display units',
+)
+assert.match(
+  tableSource,
+  /const columnUnitDefinitions = useMemo[\s\S]*buildProjectListColumnUnits\(leafColumnDefinitions\)/,
+  'project summary table must build atomic display units',
+)
+assert.match(
+  tableSource,
+  /normalizeProjectListUnitSettings\(\s*columnUnitDefinitions/,
+  'stored preferences must migrate through the unit normalizer',
+)
+assert.match(
+  tableSource,
+  /expandProjectListUnitSettings\(\s*columnUnitDefinitions,\s*columnSettings/,
+  'table rendering must expand the canonical unit settings',
+)
+assert.match(
+  tableSource,
+  /<SortableColumnSettings[\s\S]*definitions=\{columnUnitDefinitions\}[\s\S]*value=\{columnSettings\}/,
+  'field configuration must consume the same canonical unit settings',
 )
 
 console.log('project list header reorder model contract passed')

@@ -26,19 +26,21 @@ export function buildProjectListColumnUnits(
   definitions: readonly ProjectListLeafColumnDefinition[],
 ): ProjectListColumnUnitDefinition[] {
   const milestoneLeaves = definitions.filter(definition => definition.source === 'templateTask')
+  const units: ProjectListColumnUnitDefinition[] = []
   let milestoneAdded = false
 
-  return definitions.flatMap(definition => {
+  definitions.forEach(definition => {
     if (definition.source !== 'templateTask') {
-      return [{
+      units.push({
         ...definition,
         leafKeys: [definition.key],
         kind: 'field' as const,
-      }]
+      })
+      return
     }
-    if (milestoneAdded) return []
+    if (milestoneAdded) return
     milestoneAdded = true
-    return [{
+    units.push({
       key: PROJECT_LIST_MILESTONE_UNIT_KEY,
       title: '里程碑',
       accessibilityLabel: '里程碑',
@@ -46,8 +48,9 @@ export function buildProjectListColumnUnits(
       hideable: true,
       leafKeys: milestoneLeaves.map(leaf => leaf.key),
       kind: 'milestone' as const,
-    }]
+    })
   })
+  return units
 }
 
 export function getProjectListUnitLeafKeys(
