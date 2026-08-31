@@ -20,6 +20,38 @@ const TECHNICAL_CORE_LABELS = [
   '项目分类', '技术赛道', 'TMG及技术领域', '子领域', '项目状态', '项目阶段',
   '项目年份', '前置项目', '项目价值',
 ]
+const technicalTask = (id, taskName, planStartDate, planEndDate, actualStartDate, actualEndDate) => ({
+  id, stableId: taskName, source: 'template', role: '技术项目负责人', order: Number(id), taskName,
+  responsible: '技术项目负责人', predecessor: '', planStartDate, planEndDate, estimatedDays: 20,
+  actualStartDate, actualEndDate, actualDays: 18, status: '已完成', progress: 100, defaultRoadmap: true,
+})
+const TECHNICAL_PLAN_STORAGE_SEED = JSON.stringify({
+  version: 8,
+  state: {
+    plansByKey: {
+      'mock-tech-aios-v3:tdt': {
+        planKey: 'mock-tech-aios-v3:tdt', templateKind: 'tdt', currentVersionId: 'tech-mock-tech-aios-v3-v1',
+        columnSettings: { order: [], visible: [] }, collapsedRows: [],
+        versions: [{
+          id: 'tech-mock-tech-aios-v3-v1', versionNo: 'V1', templateType: 'tdt', status: '已发布', publishedAt: '2026-02-01T00:00:00Z',
+          tasks: [technicalTask('1', '规划启动', '2026-01-15', '2026-02-10', '2026-01-16', '2026-02-08')],
+        }],
+      },
+      'mock-tech-aios-v3:subproject:IPM-AIOS-001': {
+        planKey: 'mock-tech-aios-v3:subproject:IPM-AIOS-001', templateKind: 'subproject', currentVersionId: 'tech-ipm-aios-001-v1',
+        columnSettings: { order: [], visible: [] }, collapsedRows: [],
+        versions: [{
+          id: 'tech-ipm-aios-001-v1', versionNo: 'V1', templateType: 'subproject', status: '已发布', publishedAt: '2026-02-02T00:00:00Z',
+          tasks: [
+            technicalTask('1', '第1版转测', '2026-01-15', '2026-03-15', '2026-01-18', '2026-03-12'),
+            technicalTask('2', '第2版转测', '2026-03-16', '2026-06-01', '2026-03-18', '2026-05-29'),
+            technicalTask('3', 'TDR3', '2026-06-02', '2026-08-31', '2026-06-05', '2026-08-28'),
+          ],
+        }],
+      },
+    },
+  },
+})
 
 let browser
 const passed = []
@@ -167,22 +199,33 @@ const assertNoClippingOrOverlap = async (page, selectors, label) => {
   }
 }
 
-const assertDateCells = async (page, selector, label) => {
+const assertDateCells = async (page, selector, label, minimum = 2) => {
   const values = await page.$$eval(`${selector} td`, cells => cells.flatMap(cell => {
     const text = (cell.textContent || '').trim()
     return /^\d{4}-\d{2}-\d{2}$/.test(text) ? [text] : []
   }))
-  assert.ok(values.length > 0 && values.every(value => DATE_PATTERN.test(value)), `${label} 必须保留日期单元格：${JSON.stringify(values)}`)
+  assert.ok(values.length >= minimum && values.every(value => DATE_PATTERN.test(value)), `${label} 必须保留至少 ${minimum} 个日期单元格：${JSON.stringify(values)}`)
 }
 
-const installStorageReset = async page => {
-  await page.evaluateOnNewDocument(keys => {
+const assertHorizontalPlanDateBindings = async (page, selector, label) => {
+  const rows = await page.$$eval(`${selector} tbody tr`, elements => elements.filter(element => element.getBoundingClientRect().height > 0).map(row => (
+    Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent || '').trim())
+  )))
+  const planned = rows.find(row => /^V\d+/.test(row[0] || '') && row.filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)).length >= 2)
+  const actual = rows.find(row => row[0] === '实际' && row.filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)).length >= 2)
+  assert.ok(planned, `${label} 必须显示版本绑定的计划日期：${JSON.stringify(rows)}`)
+  assert.ok(actual, `${label} 必须显示“实际”行绑定的实际日期：${JSON.stringify(rows)}`)
+}
+
+const installStorageReset = async (page, storage = {}) => {
+  await page.evaluateOnNewDocument((keys, values) => {
     for (const key of keys) localStorage.removeItem(key)
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith('pms:project-summary:') || key.startsWith('pms:project-creation-draft:')) localStorage.removeItem(key)
     }
     sessionStorage.removeItem('pms:technical-project-list-target-child')
-  }, STORAGE_KEYS)
+    for (const [key, value] of Object.entries(values)) localStorage.setItem(key, value)
+  }, STORAGE_KEYS, storage)
 }
 
 const prewarm = async () => {
@@ -199,7 +242,11 @@ const prewarm = async () => {
   }
 }
 
-const runScenario = async (name, exercise) => {
+const runScenario = async (name, options, exercise) => {
+  if (typeof options === 'function') {
+    exercise = options
+    options = {}
+  }
   console.log(`RUN ${name}`)
   const context = await browser.createBrowserContext()
   const page = await context.newPage()
@@ -217,7 +264,7 @@ const runScenario = async (name, exercise) => {
     if (response.status() >= 400) applicationErrors.push(`[http.${response.status()}] ${response.request().method()} ${response.url()}`)
   })
   await page.setViewport({ width: 1600, height: 1000, deviceScaleFactor: 1 })
-  await installStorageReset(page)
+  await installStorageReset(page, options.storage)
   try {
     const response = await page.goto(BASE_URL, { waitUntil: 'networkidle0', timeout: TIMEOUT })
     assert.ok(response && response.status() < 400, `主文档 HTTP ${response?.status() || '无响应'}`)
@@ -261,6 +308,15 @@ try {
     assert.ok(cards.length > 0, '卡片视图必须显示项目卡片')
     assert.ok(cards.every(card => card.role === 'button' && card.label?.startsWith('打开项目 ')), `项目卡片必须暴露可访问打开按钮：${JSON.stringify(cards)}`)
     assert.ok(cards.some(card => card.title === 'X6877-D8400_H991'), '卡片视图缺少代表整机项目 X6877-D8400_H991')
+    const representativeCardStatus = await page.evaluate(() => {
+      const card = Array.from(document.querySelectorAll('.pms-project-card')).find(element => (
+        (element.querySelector('.pms-project-card-title')?.textContent || '').trim() === 'X6877-D8400_H991'
+      ))
+      const status = card?.querySelector('.pms-project-card-status')
+      const rect = status?.getBoundingClientRect()
+      return { text: (status?.textContent || '').trim(), visible: Boolean(rect && rect.width > 0 && rect.height > 0) }
+    })
+    assert.deepEqual(representativeCardStatus, { text: '在研', visible: true }, `代表项目状态必须保持可见：${JSON.stringify(representativeCardStatus)}`)
     await assertLightSurface(page, '.pms-project-card-surface', '项目卡片')
     await assertNoClippingOrOverlap(page, ['.pms-project-card-header', '.pms-project-card-footer'], '项目卡片')
     await page.screenshot({ path: join(ARTIFACT_DIR, '01-card-view.png'), fullPage: false })
@@ -283,22 +339,39 @@ try {
       })
       return {
         scope: Boolean(document.querySelector('.pms-project-summary-surface')),
-        units: headers.map(header => header.getAttribute('data-project-list-column-unit')),
-        movable: headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').length,
-        locked: headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').length,
+        units: [...new Set(headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
+        draggableUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
+        lockedUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
+        inconsistentUnits: [...new Set(headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))].filter(unit => {
+          const matches = headers.filter(header => header.getAttribute('data-project-list-column-unit') === unit)
+          return matches.some(header => header.getAttribute('data-project-list-draggable') === 'true')
+            && matches.some(header => header.getAttribute('data-project-list-column-locked') === 'true')
+        }),
         fixedCount: fixedCells.length, opaque,
       }
     })
     assert.equal(tableState.scope, true, '列表必须暴露 pms-project-summary-surface 语义范围')
     assert.ok(tableState.units.length > 0 && tableState.units.every(Boolean), `列表表头必须暴露列单元元数据：${JSON.stringify(tableState)}`)
-    assert.ok(tableState.movable > 0, `列表必须有可移动表头元数据：${JSON.stringify(tableState)}`)
-    assert.equal(tableState.locked, 0, `整机矩阵已明确取消固定列：${JSON.stringify(tableState)}`)
+    assert.equal(new Set(tableState.units).size, tableState.units.length, `逻辑拖动单元 key 必须唯一：${JSON.stringify(tableState)}`)
+    assert.ok(tableState.draggableUnits.length > 0, `列表必须有可移动表头元数据：${JSON.stringify(tableState)}`)
+    assert.deepEqual(tableState.lockedUnits, [], `整机矩阵已明确取消固定列：${JSON.stringify(tableState)}`)
+    assert.deepEqual(tableState.inconsistentUnits, [], `同一逻辑单元不得同时锁定和可拖动：${JSON.stringify(tableState)}`)
     assert.equal(tableState.fixedCount, 0, `整机矩阵不得残留固定单元格：${JSON.stringify(tableState)}`)
     await assertLightSurface(page, '.pms-project-summary-surface', '项目列表表格')
     await assertNoClippingOrOverlap(page, ['.pms-project-list-filter-grid', '.pms-project-summary-table thead'], '项目列表')
 
+    await page.setViewport({ width: 1100, height: 900, deviceScaleFactor: 1 })
     await clickCategory(page, 'tOS版本项目')
-    await page.waitForSelector('.pms-project-summary-table thead', { visible: true, timeout: TIMEOUT })
+    await page.waitForSelector('.pms-project-summary-table thead th[data-project-list-column-unit="tosVersion"]', { visible: true, timeout: TIMEOUT })
+    console.log('  STEP tOS table rendered; scroll fixed columns')
+    await page.waitForFunction(() => {
+      const body = document.querySelector('.pms-project-summary-table .ant-table-body')
+      if (!body || body.scrollWidth <= body.clientWidth) return false
+      body.scrollLeft = body.scrollWidth - body.clientWidth
+      return body.scrollLeft > 0
+    }, { timeout: TIMEOUT, polling: 'raf' })
+    const scrollState = await page.$eval('.pms-project-summary-table .ant-table-body', body => ({ scrollLeft: body.scrollLeft, scrollWidth: body.scrollWidth, clientWidth: body.clientWidth }))
+    assert.ok(scrollState.scrollWidth > scrollState.clientWidth, `tOS 表格必须存在真实水平滚动范围：${JSON.stringify(scrollState)}`)
     const fixedState = await page.evaluate(() => {
       const visible = element => {
         const rect = element.getBoundingClientRect()
@@ -308,18 +381,26 @@ try {
       const headers = Array.from(document.querySelectorAll('.pms-project-summary-table thead th[data-project-list-column-unit]')).filter(visible)
       const fixedCells = Array.from(document.querySelectorAll('.pms-project-summary-table .ant-table-cell-fix-left, .pms-project-summary-table .ant-table-cell-fix-start')).filter(visible)
       return {
-        locked: headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').map(header => header.getAttribute('data-project-list-column-unit')),
-        movable: headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').length,
+        scrollLeft: document.querySelector('.pms-project-summary-table .ant-table-body')?.scrollLeft || 0,
+        units: [...new Set(headers.map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
+        lockedUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-column-locked') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
+        draggableUnits: [...new Set(headers.filter(header => header.getAttribute('data-project-list-draggable') === 'true').map(header => header.getAttribute('data-project-list-column-unit')).filter(Boolean))],
         fixedCount: fixedCells.length,
         backgrounds: fixedCells.map(cell => getComputedStyle(cell).backgroundColor),
       }
     })
-    assert.ok(fixedState.locked.length > 0, `tOS 列表必须有锁定表头元数据：${JSON.stringify(fixedState)}`)
-    assert.ok(fixedState.movable > 0, `tOS 列表必须同时保留可移动表头：${JSON.stringify(fixedState)}`)
+    assert.ok(fixedState.scrollLeft > 0, `必须在水平滚动后检查固定单元格：${JSON.stringify(fixedState)}`)
+    assert.equal(new Set(fixedState.units).size, fixedState.units.length, `tOS 逻辑拖动单元 key 必须唯一：${JSON.stringify(fixedState)}`)
+    assert.ok(fixedState.lockedUnits.length > 0, `tOS 列表必须有锁定表头元数据：${JSON.stringify(fixedState)}`)
+    assert.ok(fixedState.draggableUnits.length > 0, `tOS 列表必须同时保留可移动表头：${JSON.stringify(fixedState)}`)
+    assert.deepEqual(fixedState.lockedUnits.filter(unit => fixedState.draggableUnits.includes(unit)), [], `锁定与可拖动逻辑单元必须互斥：${JSON.stringify(fixedState)}`)
     assert.ok(fixedState.fixedCount > 0, `tOS 列表必须渲染固定单元格：${JSON.stringify(fixedState)}`)
     assert.ok(fixedState.backgrounds.every(color => color !== 'transparent' && !/rgba\([^)]*,\s*0(?:\.0+)?\)/.test(color)), `固定单元格必须为不透明表面：${JSON.stringify(fixedState)}`)
+    console.log(`  STEP fixed columns sampled after scrollLeft=${fixedState.scrollLeft}`)
 
+    await page.setViewport({ width: 1600, height: 1000, deviceScaleFactor: 1 })
     await clickCategory(page, '整机产品项目')
+    console.log('  STEP returned to machine category; open create modal')
     await clickAria(page, '新增项目')
     await page.waitForSelector('.pms-project-info-modal-surface .ant-modal-container', { visible: true, timeout: TIMEOUT })
     const modalState = await page.$eval('.pms-project-info-modal-surface', root => {
@@ -373,7 +454,7 @@ try {
     }), { timeout: TIMEOUT })
   })
 
-  await runScenario('02-technical', async page => {
+  await runScenario('02-technical', { storage: { 'pms-technical-plans': TECHNICAL_PLAN_STORAGE_SEED } }, async page => {
     await openMain(page, '项目列表')
     await clickCategory(page, '技术项目')
     await clickAria(page, '卡片视图')
@@ -418,9 +499,31 @@ try {
     assert.match(versionRow[1], /^\d+(?:天)?$/, `技术子项目开发周期必须为数值：${JSON.stringify(versionRow)}`)
     assert.ok(versionRow.slice(2).some(value => DATE_PATTERN.test(value)), `技术子项目 V1 必须显示日期：${JSON.stringify(versionRow)}`)
     assert.ok(actualRow, `技术子项目必须显示实际行：${JSON.stringify(planState.rows)}`)
+    assert.ok(actualRow.slice(2).filter(value => DATE_PATTERN.test(value)).length >= 2, `技术子项目实际行必须显示已播种的实际日期：${JSON.stringify(actualRow)}`)
     await assertNoClippingOrOverlap(page, ['[aria-label="技术信息分类"]', 'table[aria-label="分布式服务框架版本活动"] thead'], '技术项目信息')
     const planElement = await page.$('table[aria-label="分布式服务框架版本活动"]')
     await planElement.screenshot({ path: join(ARTIFACT_DIR, '02-technical-child-plan.png') })
+    await clickExact(page, '[role="menuitem"]', '计划', '[aria-label="项目空间导航"]')
+    await page.waitForSelector('[aria-label="技术项目计划"]', { visible: true, timeout: TIMEOUT })
+    await clickExact(page, '[role="tab"]', '分布式服务框架计划', '[aria-label="计划作用域"]')
+    const leaveConfirmVisible = await page.evaluate(() => Array.from(document.querySelectorAll('.ant-modal button')).some(element => (
+      element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === '确认离开'
+    )))
+    if (leaveConfirmVisible) await clickExact(page, '.ant-modal button', '确认离开')
+    await page.waitForFunction(() => (document.querySelector('[aria-label="计划作用域"] [role="tab"][aria-selected="true"]')?.textContent || '').includes('分布式服务框架'), { timeout: TIMEOUT })
+    await page.waitForSelector('[aria-label="计划版本"]', { visible: true, timeout: TIMEOUT })
+    const technicalWorkspaceState = await page.evaluate(() => ({
+      version: (document.querySelector('[aria-label="计划版本"]')?.closest('.ant-select')?.textContent || '').trim(),
+      createRevisionVisible: Boolean(Array.from(document.querySelectorAll('button[aria-label="创建修订"]')).find(element => element.getBoundingClientRect().height > 0)),
+      viewValues: Array.from(document.querySelectorAll('[aria-label="计划视图"] input[type="radio"]')).map(element => element.getAttribute('value')),
+      horizontalChecked: Boolean(document.querySelector('[aria-label="计划视图"] input[value="horizontal"]:checked')),
+      planContent: Boolean(document.querySelector('[aria-label="计划内容"]')),
+    }))
+    assert.equal(technicalWorkspaceState.version, 'V1', `技术子项目计划必须保留已发布版本状态：${JSON.stringify(technicalWorkspaceState)}`)
+    assert.equal(technicalWorkspaceState.createRevisionVisible, true, `技术子项目计划必须保留创建修订入口：${JSON.stringify(technicalWorkspaceState)}`)
+    assert.deepEqual(technicalWorkspaceState.viewValues, ['vertical', 'horizontal', 'gantt'], `技术子项目计划必须保留竖版/横版/甘特图视图控制：${JSON.stringify(technicalWorkspaceState)}`)
+    assert.equal(technicalWorkspaceState.horizontalChecked, true, `技术子项目计划默认横版视图必须可观察：${JSON.stringify(technicalWorkspaceState)}`)
+    assert.equal(technicalWorkspaceState.planContent, true, `技术子项目计划内容区域必须存在：${JSON.stringify(technicalWorkspaceState)}`)
   })
 
   await runScenario('03-machine-tos', async page => {
@@ -440,16 +543,32 @@ try {
       await clickCategory(page, sample.category)
       await clickAria(page, '卡片视图')
       await clickProjectCard(page, sample.name)
-      const summaryState = await page.$eval('#section-plan', section => ({
-        summaryFields: Array.from(section.querySelectorAll('[data-summary-field]')).map(element => element.getAttribute('data-summary-field')),
-        summaryLabels: Array.from(section.querySelectorAll('[data-summary-field]')).map(element => (element.textContent || '').replace(/\s+/g, ' ').trim()),
-      }))
+      const summaryState = await page.$eval('#section-plan', section => {
+        const visible = element => {
+          const rect = element.getBoundingClientRect()
+          const style = getComputedStyle(element)
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden'
+        }
+        const summaryRegions = Array.from(section.querySelectorAll('[aria-label="一级计划最新发布摘要"]')).filter(visible)
+        const exactSummaryLabelsOutsidePlanTables = Array.from(section.querySelectorAll('*')).filter(element => {
+          if (!visible(element) || element.closest('table[aria-label="一级计划横版"]')) return false
+          const ownText = Array.from(element.childNodes).filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent || '').join('').trim()
+          return ['计划开始', '计划完成', '实际开始', '实际完成'].includes(ownText)
+        }).map(element => (element.textContent || '').trim())
+        return {
+          summaryRegionCount: summaryRegions.length,
+          summaryRegionText: summaryRegions.map(element => (element.textContent || '').replace(/\s+/g, ' ').trim()),
+          summaryFields: Array.from(section.querySelectorAll('[data-summary-field]')).filter(visible).map(element => element.getAttribute('data-summary-field')),
+          exactSummaryLabelsOutsidePlanTables,
+        }
+      })
+      assert.equal(summaryState.summaryRegionCount, 0, `${sample.name} 基础信息不得渲染一级计划最新发布摘要区域：${JSON.stringify(summaryState)}`)
       assert.deepEqual(summaryState.summaryFields, [], `${sample.name} 基础信息不得显示最新发布四项摘要：${JSON.stringify(summaryState)}`)
-      for (const label of ['计划开始', '计划完成', '实际开始', '实际完成']) {
-        assert.equal(summaryState.summaryLabels.some(text => text.includes(label)), false, `${sample.name} 基础信息不得显示摘要标签 ${label}`)
-      }
+      assert.deepEqual(summaryState.summaryRegionText, [], `${sample.name} 最新发布摘要区域不得残留日期摘要文本：${JSON.stringify(summaryState)}`)
+      assert.deepEqual(summaryState.exactSummaryLabelsOutsidePlanTables, [], `${sample.name} 基础信息计划区不得残留四项摘要标签：${JSON.stringify(summaryState)}`)
       await page.waitForSelector('#section-plan table[aria-label="一级计划横版"]', { visible: true, timeout: TIMEOUT })
-      await assertDateCells(page, '#section-plan table[aria-label="一级计划横版"]', `${sample.name} 基础信息横版计划`)
+      await assertDateCells(page, '#section-plan table[aria-label="一级计划横版"]', `${sample.name} 基础信息横版计划`, 4)
+      await assertHorizontalPlanDateBindings(page, '#section-plan table[aria-label="一级计划横版"]', `${sample.name} 基础信息横版计划`)
       await assertNoClippingOrOverlap(page, ['#section-plan .ant-card-head', '#section-plan table[aria-label="一级计划横版"] thead'], `${sample.name} 基础信息计划`)
       const planSection = await page.$('#section-plan')
       await planSection.screenshot({ path: join(ARTIFACT_DIR, `03-${sample.category === '整机产品项目' ? 'machine' : 'tos'}-basic-plan.png`) })
@@ -457,7 +576,8 @@ try {
       await clickExact(page, '[role="menuitem"]', '计划', '[aria-label="项目空间导航"]')
       await page.waitForSelector('[aria-label="计划版本"]', { visible: true, timeout: TIMEOUT })
       await page.waitForSelector('table[aria-label="一级计划横版"]', { visible: true, timeout: TIMEOUT })
-      await assertDateCells(page, 'table[aria-label="一级计划横版"]', `${sample.name} 项目空间计划内容`)
+      await assertDateCells(page, 'table[aria-label="一级计划横版"]', `${sample.name} 项目空间计划内容`, 4)
+      await assertHorizontalPlanDateBindings(page, 'table[aria-label="一级计划横版"]', `${sample.name} 项目空间计划内容`)
       const planTable = await page.$('table[aria-label="一级计划横版"]')
       await planTable.screenshot({ path: join(ARTIFACT_DIR, `03-${sample.category === '整机产品项目' ? 'machine' : 'tos'}-workspace-plan.png`) })
     }
