@@ -152,6 +152,47 @@
   git commit -m "test: verify MR mocks and information grids in browser"
   ```
 
+## Task 4A: Align tOS Plan Switch Order and Disable Root-Stage Creation
+
+**Files:**
+
+- Modify: `scripts/verify-mr-mock-and-info-grid.mjs`
+- Modify: `src/containers/ProjectSpaceContainer.tsx`
+- Modify: `src/lib/level1PlanRules.ts`
+- Modify: `scripts/verify-level1-plan-governance.mjs`
+- Test: `scripts/verify-mr-mock-and-info-grid.mjs`
+- Test: `scripts/verify-level1-plan-governance.mjs`
+
+- [ ] **Step 1: Add failing ordering and permission assertions**
+
+  Assert that `planLevelTabs` precedes the tOS `showTosTypeTabs` block, that the type block is still level-1-only, and that a draft super administrator receives `canAddStage: false` for machine/tOS level-one plans.
+
+- [ ] **Step 2: Run both verifiers and confirm failure**
+
+  ```bash
+  node scripts/verify-mr-mock-and-info-grid.mjs
+  node scripts/verify-level1-plan-governance.mjs
+  ```
+
+  Expected: FAIL on the old tOS ordering and old administrator `canAddStage: true` assertions.
+
+- [ ] **Step 3: Move tOS plan tabs above type selection**
+
+  Render `planLevelTabs` first for both machine and tOS projects; render type selection immediately after it only when `projectPlanLevel === 'level1'`. Preserve the non-machine/non-tOS fallback placement.
+
+- [ ] **Step 4: Deny root-stage creation in the governed level-one rule**
+
+  Return `canAddStage: false` for super administrators while preserving their existing add-child/delete and approved business-node rename/reorder capabilities. Update exact governance expectations without weakening published/SPM/ordinary-user assertions.
+
+- [ ] **Step 5: Run focused verification and commit**
+
+  ```bash
+  node scripts/verify-mr-mock-and-info-grid.mjs
+  node scripts/verify-level1-plan-governance.mjs
+  git add src/containers/ProjectSpaceContainer.tsx src/lib/level1PlanRules.ts scripts/verify-mr-mock-and-info-grid.mjs scripts/verify-level1-plan-governance.mjs
+  git commit -m "fix: align tOS plan scope and stage permissions"
+  ```
+
 ## Task 5: Full Regression and Independent Review
 
 **Files:**

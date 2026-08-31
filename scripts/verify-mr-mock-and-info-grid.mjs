@@ -5,6 +5,7 @@ const root = projectRoot(import.meta.url)
 const mocks = loadTypeScriptModule(root, 'src/data/mrVersionPlanMocks.ts')
 const dateRules = loadTypeScriptModule(root, 'src/lib/mrDateRules.ts')
 const aggregationRules = loadTypeScriptModule(root, 'src/lib/mrAggregationRules.ts')
+const level1Rules = loadTypeScriptModule(root, 'src/lib/level1PlanRules.ts')
 const styles = readSource(root, 'src/styles/globals.css')
 const projectSpace = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 
@@ -62,5 +63,26 @@ assert.match(styles, /@media\s*\(max-width:\s*899px\)[\s\S]*?\.pms-project-info-
 assert.match(styles, /@media\s*\(max-width:\s*640px\)[\s\S]*?\.pms-project-info-display-grid[\s\S]*?grid-template-columns:\s*1fr/, 'phones must use one ordinary field per row')
 assert.match(projectSpace, /pms-project-info-legacy-grid/, 'capability-project basic information must opt into the responsive legacy grid')
 assert.match(projectSpace, /pms-project-info-legacy-team-grid/, 'capability-project team information must opt into the responsive legacy team grid')
+
+const primaryScopeStart = projectSpace.indexOf('const planWorkspacePrimaryScopeTabs')
+const primaryScopeEnd = projectSpace.indexOf('const planWorkspaceSecondaryScopeTabs', primaryScopeStart)
+const primaryScopeSource = projectSpace.slice(primaryScopeStart, primaryScopeEnd)
+assert.ok(primaryScopeStart >= 0 && primaryScopeEnd > primaryScopeStart, 'plan primary-scope rendering must remain discoverable')
+assert.ok(primaryScopeSource.includes('(isWholeMachineProject || isTosVersionProject) && planLevelTabs'), 'machine and tOS projects must share the top plan-level tab placement')
+assert.ok(
+  primaryScopeSource.indexOf('(isWholeMachineProject || isTosVersionProject) && planLevelTabs')
+    < primaryScopeSource.indexOf('showTosTypeTabs &&'),
+  'machine and tOS plan-level tabs must render before market/type scope selectors',
+)
+assert.match(projectSpace, /const showTosTypeTabs = selectedProject\?\.type === PROJECT_TYPE_TOS_VERSION[\s\S]{0,140}projectPlanLevel === 'level1'/, 'tOS type selector must remain exclusive to the level-one plan')
+
+const adminStructure = level1Rules.getLevel1StructurePermissions({
+  projectType: '整机产品项目',
+  isDraft: true,
+  isSuperAdmin: true,
+  isSpm: false,
+})
+assert.equal(adminStructure.canAddStage, false, 'super administrators must not add level-one stages')
+assert.equal(adminStructure.canAddChild, true, 'the stage restriction must not remove administrator child-node maintenance')
 
 console.log(`MR mock and information grid verification passed (${versions.length} tOS versions, ${plans.length} visible machine rows, ${errors.length} dynamic errors)`)

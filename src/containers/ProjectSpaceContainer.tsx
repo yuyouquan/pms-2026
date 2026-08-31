@@ -5299,7 +5299,7 @@ export default function ProjectSpaceContainer() {
     )
     const planWorkspacePrimaryScopeTabs = (
       <>
-        {isWholeMachineProject && planLevelTabs}
+        {(isWholeMachineProject || isTosVersionProject) && planLevelTabs}
         {showTosTypeTabs && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
@@ -5347,7 +5347,7 @@ export default function ProjectSpaceContainer() {
             </Row>
           </Card>
         )}
-        {!isWholeMachineProject && planLevelTabs}
+        {!isWholeMachineProject && !isTosVersionProject && planLevelTabs}
       </>
     )
     const planWorkspaceSecondaryScopeTabs = (
