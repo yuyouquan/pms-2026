@@ -193,6 +193,37 @@
   git commit -m "fix: align tOS plan scope and stage permissions"
   ```
 
+## Task 4B: Add Feishu-style whole-column drag feedback
+
+**Files:**
+
+- Modify: `src/components/project-summary/SortableProjectListHeader.tsx`
+- Modify: `src/components/project-summary/ProjectSummaryTable.tsx`
+- Modify: `src/styles/globals.css`
+- Modify: `scripts/verify-project-list-header-reorder.mjs`
+- Modify: `screenshots/verify-project-list-header-reorder-browser.mjs`
+
+- [x] **Step 1: Add failing contract assertions**
+
+  Require live drag-over state, explicit before/after placement, full source-column tint, and body-wide insertion-edge classes.
+
+- [x] **Step 2: Share drag state between header and body cells**
+
+  Track active logical unit, accepted target header, and insertion edge. Keep locked columns rejected and keep `里程碑` atomic.
+
+- [x] **Step 3: Apply Feishu-style visual feedback**
+
+  Tint every source-unit body cell and render a brand-blue insertion edge across the target header and table body without changing field definitions or persistence.
+
+- [ ] **Step 4: Run model and browser acceptance**
+
+  ```bash
+  node scripts/verify-project-list-header-reorder.mjs
+  BASE_URL=http://127.0.0.1:3004 node screenshots/verify-project-list-header-reorder-browser.mjs
+  ```
+
+  Expected: ordinary fields and `里程碑` move as logical units, field settings stay linked, and live drag feedback is visible.
+
 ## Task 5: Full Regression and Independent Review
 
 **Files:**
@@ -223,7 +254,7 @@
 
 - [ ] **Step 3: Review scope**
 
-  Confirm no field order, visibility, permissions, validation formula, create form, project-list drag, or unrelated surface changed.
+  Confirm no default field order, visibility, permissions, validation formula, create form, or unrelated surface changed. Confirm project-list drag keeps the existing atomic ordering contract while adding Feishu-style feedback.
 
 - [ ] **Step 4: Commit any review-only fixes**
 

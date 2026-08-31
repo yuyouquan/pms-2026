@@ -29,6 +29,7 @@ import { SortableColumnSettings } from '@/components/shared/SortableColumnSettin
 import {
   SortableProjectListHeader,
   SortableProjectListHeaderContext,
+  type ProjectListColumnDragState,
 } from '@/components/project-summary/SortableProjectListHeader'
 import ActiveFilterConditions from '@/components/project-list/ActiveFilterConditions'
 import {
@@ -278,6 +279,7 @@ export default function ProjectSummaryTable({
   const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(
     defaultColumnSettings,
   )
+  const [headerDragState, setHeaderDragState] = useState<ProjectListColumnDragState | null>(null)
   const applyColumnSettings = useCallback((nextSettings: SortableColumnSettingsValue<string>) => {
     setColumnSettings(normalizeProjectListUnitSettings(columnUnitDefinitions, nextSettings))
   }, [columnUnitDefinitions])
@@ -521,6 +523,32 @@ export default function ProjectSummaryTable({
       ...ordered.filter(definition => !fixedColumnKeys.has(definition.key)),
     ]
   }, [columnSettings, columnUnitDefinitions, fixedColumnKeys, fixedColumnOrder, leafColumnDefinitions])
+  const getProjectListCellDragClass = useCallback((leafKey: string) => {
+    if (!headerDragState) return ''
+    const owner = columnUnitDefinitions.find(unit => unit.leafKeys.includes(leafKey))
+    const classes: string[] = []
+    if (owner?.key === headerDragState.activeUnitKey) {
+      classes.push('pms-project-list-column-drag-source')
+    }
+    if (owner?.key !== headerDragState.overUnitKey || !headerDragState.dropEdge) {
+      return classes.join(' ')
+    }
+    const visibleOwnerLeaves = owner.leafKeys.filter(key => (
+      visibleDefinitions.some(definition => definition.key === key)
+    ))
+    const explicitTargetLeaf = headerDragState.overHeaderId?.startsWith('leaf::')
+      ? headerDragState.overHeaderId.slice('leaf::'.length)
+      : null
+    const targetLeaf = explicitTargetLeaf && visibleOwnerLeaves.includes(explicitTargetLeaf)
+      ? explicitTargetLeaf
+      : headerDragState.dropEdge === 'before'
+        ? visibleOwnerLeaves[0]
+        : visibleOwnerLeaves.at(-1)
+    if (leafKey === targetLeaf) {
+      classes.push(`pms-project-list-column-drop-${headerDragState.dropEdge}`)
+    }
+    return classes.join(' ')
+  }, [columnUnitDefinitions, headerDragState, visibleDefinitions])
   const tableColumnByKey = useMemo(
     () => new Map<string, ColumnType<ProjectSummaryRow>>(buildProjectSummaryColumns(fieldDefinitions).map(column => {
       const key = String(column.key)
@@ -567,9 +595,15 @@ export default function ProjectSummaryTable({
           const cell = baseCell?.(record) ?? {}
           return {
             ...cell,
-            className: [cell.className, isProjectName ? 'pms-project-name-cell' : '']
+            className: [
+              cell.className,
+              isProjectName ? 'pms-project-name-cell' : '',
+              getProjectListCellDragClass(key),
+            ]
               .filter(Boolean)
               .join(' '),
+            'data-project-list-column-unit': field?.source === 'templateTask' ? 'milestone' : key,
+            'data-project-list-column-leaf': key,
             style: lockedWidth,
           }
         },
@@ -683,7 +717,7 @@ export default function ProjectSummaryTable({
         },
       }] as const
     })),
-    [collapsedGroups, fieldDefinitions, fixedColumnKeys, groupBy, machineHierarchy],
+    [collapsedGroups, fieldDefinitions, fixedColumnKeys, getProjectListCellDragClass, groupBy, machineHierarchy],
   )
   const columns = useMemo<ColumnsType<ProjectSummaryRow>>(() => {
     const result: ColumnsType<ProjectSummaryRow> = []
@@ -1039,8 +1073,10 @@ export default function ProjectSummaryTable({
       {showTable && <div className="pms-solid-surface pms-project-summary-table-shell pms-project-summary-surface">
         <SortableProjectListHeaderContext
           items={sortableHeaderIds}
+          unitOrder={columnSettings.order}
           canDrop={canDropHeaderUnit}
           onDragEnd={handleHeaderDragEnd}
+          onDragStateChange={setHeaderDragState}
         >
         <Table<ProjectSummaryRow>
           className="pms-table pms-project-summary-table"
