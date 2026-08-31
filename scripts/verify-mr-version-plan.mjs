@@ -1615,11 +1615,13 @@ assert.deepEqual(templateMocks.MR_MOCK_SCENARIOS.tos, [
   'normal', 'boundary-valid', 'before-plan-start', 'after-plan-end',
 ])
 assert.deepEqual(templateMocks.MR_MOCK_SCENARIOS.joint, [
-  'normal-type-1', 'same-type-mismatch', 'one-week-gap', 'tos-baseline', 'next-version-boundary',
+  'normal-type-1', 'normal-type-2-plus', 'same-type-mismatch', 'one-week-gap', 'tos-baseline', 'mp-deadline', 'next-version-boundary',
 ])
 assert.deepEqual(templateMocks.MR_MOCK_SCENARIOS.market, [
   'normal-follow', 'later-than-main', 'missing-main-boundary',
 ])
+assert.deepEqual(templateMocks.MR_MOCK_SCENARIOS.na, ['slash-dates', 'date-write-disabled'])
+assert.deepEqual(templateMocks.MR_MOCK_SCENARIOS.stopped, ['history-visible', 'future-rows-removed'])
 assert.equal(Object.isFrozen(templateMocks.MR_MOCK_SCENARIOS), true)
 assert.ok(Object.values(templateMocks.MR_MOCK_SCENARIOS).every(Object.isFrozen))
 const acceptanceStateA = templateMocks.createInitialMrVersionPlanState()
@@ -1632,12 +1634,14 @@ assert.notEqual(acceptanceStateA.marketOverridesByKey, acceptanceStateB.marketOv
 assert.deepEqual(acceptanceStateA, acceptanceStateB)
 assert.deepEqual(
   acceptanceStateA.tosInstancesByProjectId['19'].map(instance => instance.tosVersion),
-  ['16.3.0.135', '16.3.0.140', '16.3.0.145', '16.3.0.150', '16.3.0.155'],
+  ['16.3.0.135', '16.3.0.140', '16.3.0.145', '16.3.0.150', '16.3.0.155', '16.3.0.160'],
 )
 assert.ok(acceptanceStateA.tosInstancesByProjectId['19'].every(instance => (
   instance.activities.filter(activity => activity.parentId !== null).every(activity => /^\d{4}-\d{2}-\d{2}$/.test(instance.dates[activity.id]))
 )))
-assert.ok(Object.keys(acceptanceStateA.machinePlansByKey).length >= 5)
+assert.equal(Object.keys(acceptanceStateA.machinePlansByKey).length, 28)
+assert.equal(acceptanceStateA.stopReleaseRecords.length, 4)
+assert.equal(Object.values(acceptanceStateA.machinePlansByKey).filter(plan => plan.transferType === 'N/A').length, 4)
 assert.ok(Object.keys(acceptanceStateA.marketOverridesByKey).length >= 4)
 assert.equal(acceptanceStateA.machinePlansByKey['1::16.3.0.140'].transferType, '2')
 assert.equal(acceptanceStateA.machinePlansByKey['3::16.3.0.140'].transferType, '2')
