@@ -1837,22 +1837,31 @@ assert.equal(
 )
 assert.deepEqual(
   acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'].map(version => version.versionNo),
-  ['V1', 'V2', 'V3'],
-  'MR eligibility seed must retain published machine plan history instead of collapsing the level-one surface to one row',
+  ['V1', 'V2', 'V3', 'V4'],
+  'MR eligibility seed must retain published machine plan history and one editable revision for workbench acceptance',
+)
+assert.deepEqual(
+  acceptancePlanScopeA.marketVersionsByKey['project::15::OP::level1::versions'].map(version => version.versionNo),
+  ['V1', 'V2', 'V3', 'V4'],
+  'N/A joint-plan acceptance projects must have a real published level-one scope so their mock rows remain visible',
+)
+assert.ok(
+  acceptancePlanScopeA.publishedSnapshots['project::15::OP::level1::v3'],
+  'N/A joint-plan acceptance projects must have a latest-published snapshot for automatic aggregation eligibility',
 )
 assert.deepEqual(
   acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'].map(version => version.versionNo),
-  ['V1', 'V2', 'V3'],
-  'MR eligibility seed must retain published tOS plan history for revision and name-rule flows',
+  ['V1', 'V2', 'V3', 'V4'],
+  'MR eligibility seed must retain published tOS plan history and one editable revision for workbench acceptance',
 )
 assert.deepEqual(
   acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'].map(version => version.id),
-  ['v1', 'v2', 'v3'],
+  ['v1', 'v2', 'v3', 'v4'],
   'acceptance history ids must align with the plan compare store defaults instead of leaving a blank comparison target',
 )
 assert.deepEqual(
   acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'].map(version => version.id),
-  ['v1', 'v2', 'v3'],
+  ['v1', 'v2', 'v3', 'v4'],
   'tOS acceptance history uses the same scoped compare-compatible version ids',
 )
 const acceptanceVersionScopes = [
@@ -2008,7 +2017,39 @@ for (const screenshot of [
   'joint-invalid.png', 'stop-record.png', 'machine-vertical.png', 'machine-horizontal.png',
 ]) assert.match(mrBrowserVerifierSource, new RegExp(screenshot.replace('.', '\\.')))
 assert.match(mrBrowserVerifierSource, /PASS MR version plan browser verification/)
-assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 1)
+assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 3)
+
+const legacyEmptyMrState = mrStore.migrateMrVersionPlanState({
+  templateVersions: templateMocks.createInitialMrTemplateVersions(),
+  currentTemplateVersionId: 'mr-template-v1',
+  templateHistory: [],
+  tosInstancesByProjectId: {},
+  machinePlansByKey: {},
+  marketOverridesByKey: {},
+  stopReleaseRecords: [],
+  viewModeByScope: { retained: 'horizontal' },
+}, 1)
+assert.equal(
+  Object.values(legacyEmptyMrState.tosInstancesByProjectId).flat().length,
+  6,
+  'V1 browser storage migrates in the visible tOS acceptance rows',
+)
+assert.equal(
+  Object.keys(legacyEmptyMrState.machinePlansByKey).length,
+  28,
+  'V1 browser storage migrates in normal, abnormal and N/A machine rows',
+)
+assert.equal(legacyEmptyMrState.stopReleaseRecords.length, 4, 'V1 browser storage migrates stopped-release fixtures')
+assert.equal(legacyEmptyMrState.viewModeByScope.retained, 'horizontal', 'V1 migration preserves user display preferences')
+const legacyV2MissingAcceptanceRows = mrStore.migrateMrVersionPlanState({
+  ...legacyEmptyMrState,
+  machinePlansByKey: Object.fromEntries(Object.entries(legacyEmptyMrState.machinePlansByKey).filter(([, plan]) => plan.transferType !== 'N/A')),
+}, 2)
+assert.equal(
+  Object.values(legacyV2MissingAcceptanceRows.machinePlansByKey).filter(plan => plan.transferType === 'N/A').length,
+  4,
+  'V2 browser storage backfills missing N/A acceptance rows after the plan-source eligibility migration',
+)
 const allFalsePermission = planRules.resolveMrPermissions({ currentUser: '普通用户', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '', context: 'config' })
 const adminPermission = planRules.resolveMrPermissions({ currentUser: '管理员', globalAdminUsers: ['管理员'], tosManagerUsers: [], machineSpm: '', context: 'config' })
 const tosManagerPermission = planRules.resolveMrPermissions({ currentUser: '李白', globalAdminUsers: [], tosManagerUsers: ['李白'], machineSpm: '', tosProjectId: 'tos-project-16.3', context: 'tos' })
@@ -2331,7 +2372,7 @@ await mrStore.rehydrateMrVersionPlanStore(hydrationStore)
 assert.equal(hydrationStore.getState().viewModeByScope.hydrated, 'horizontal')
 assert.equal(hydrationStore.getState().viewModeByScope.bad, undefined)
 assert.equal(hydrationStorage.getItem('pms-level3-plan-store'), null)
-assert.equal(hydrationStore.persist.getOptions().version, 1)
+assert.equal(hydrationStore.persist.getOptions().version, 3)
 const selectedVersionHydrationStorage = createMemoryStorage()
 selectedVersionHydrationStorage.setItem(mrStore.MR_VERSION_PLAN_STORAGE_KEY, JSON.stringify({
   state: mrStore.migrateMrVersionPlanState({ templateVersions: historicalSelectionVersions, currentTemplateVersionId: 'published-v1' }, 0),
@@ -2454,7 +2495,7 @@ legacyPlanFixture.publishedSnapshots['project::tos::tos-type::Full::level3::v1::
 legacyPlanFixture.publishedSnapshots['project::machine::level3::level1::v1'] = [{ id: 'literal-level3-market' }]
 legacyPlanFixture.publishedSnapshots['project::level3::level1::v1'] = [{ id: 'literal-level3-project' }]
 const planStore = loadTypeScriptModule(root, 'src/stores/plan.ts')
-assert.equal(planStore.PLAN_STORE_VERSION, 10)
+assert.equal(planStore.PLAN_STORE_VERSION, 13)
 const migratedPlanFixture = planStore.migratePlanStoreState(structuredClone(legacyPlanFixture), 9)
 assert.equal('level3TemplateTasksByType' in migratedPlanFixture, false)
 assert.equal('level3ScopesByKey' in migratedPlanFixture, false)
@@ -2477,10 +2518,13 @@ assert.deepEqual(migratedPlanFixture.columnSettingsByView['project-market-table'
 assert.ok(migratedPlanFixture.columnSettingsByView['config-level1-table'])
 assert.ok(migratedPlanFixture.columnSettingsByView['config-level2-table'])
 assert.deepEqual(migratedPlanFixture.marketPlanData.OP, legacyPlanFixture.marketPlanData.OP)
-assert.deepEqual(migratedPlanFixture.marketVersionsByKey, legacyPlanFixture.marketVersionsByKey)
-assert.deepEqual(migratedPlanFixture.marketCurrentVersionByKey, legacyPlanFixture.marketCurrentVersionByKey)
+assert.deepEqual(migratedPlanFixture.marketVersionsByKey['project::machine::OP::level1::versions'], legacyPlanFixture.marketVersionsByKey['project::machine::OP::level1::versions'])
+assert.equal(migratedPlanFixture.marketVersionsByKey['project::1::OP::level1::versions'].at(-1).status, '修订中')
+assert.equal(migratedPlanFixture.marketCurrentVersionByKey['project::machine::OP::level1::current'], 'market-v1')
+assert.equal(migratedPlanFixture.marketCurrentVersionByKey['project::1::OP::level1::versions'], 'v4')
 assert.deepEqual(migratedPlanFixture.tosTypePlanDataByProjectId, legacyPlanFixture.tosTypePlanDataByProjectId)
-assert.deepEqual(migratedPlanFixture.tosTypeVersionsByKey, legacyPlanFixture.tosTypeVersionsByKey)
+assert.deepEqual(migratedPlanFixture.tosTypeVersionsByKey['project::tos::tos-type::Full::level1::versions'], legacyPlanFixture.tosTypeVersionsByKey['project::tos::tos-type::Full::level1::versions'])
+assert.equal(migratedPlanFixture.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'].at(-1).status, '修订中')
 assert.deepEqual(migratedPlanFixture.tosTypeCurrentVersionByKey, legacyPlanFixture.tosTypeCurrentVersionByKey)
 assert.deepEqual(migratedPlanFixture.configTemplateVersionScopes['config-template::整机产品项目::level1'], legacyPlanFixture.configTemplateVersionScopes['config-template::整机产品项目::level1'])
 assert.deepEqual(migratedPlanFixture.configTemplateCompareScopes['config-template::整机产品项目::level1'], legacyPlanFixture.configTemplateCompareScopes['config-template::整机产品项目::level1'])

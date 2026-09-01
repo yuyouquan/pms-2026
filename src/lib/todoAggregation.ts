@@ -110,6 +110,7 @@ export interface PlanTodoSource {
   tasks: readonly PlanTodoTaskLike[]
   versions: readonly PlanVersionLike[]
   currentVersionId: string
+  assignees?: readonly string[]
 }
 
 interface BuildPlanTodoCandidatesInput {
@@ -152,10 +153,13 @@ export function resolveVisiblePlanVersion(
   return preferred?.id || latestPublished?.id || visibleVersions[0]?.id || ''
 }
 
-function resolvePlanTodoStatus(task: PlanTodoTaskLike): TodoStatus {
-  if (task.status === '已完成' || Number(task.progress) >= 100) return 'completed'
-  return 'pending'
-}
+const firstDate = (values: Array<string | undefined>): string => (
+  values.filter((value): value is string => Boolean(value)).sort()[0] || ''
+)
+
+const lastDate = (values: Array<string | undefined>): string | undefined => (
+  values.filter((value): value is string => Boolean(value)).sort().at(-1)
+)
 
 export function buildPlanTodoCandidates({
   projects,
@@ -177,26 +181,35 @@ export function buildPlanTodoCandidates({
       ? source.dimension.value
       : source.dimension?.kind === 'tos' ? `tOS ${source.dimension.value}` : ''
     const context = [dimensionLabel, `${version.versionNo} (${version.status})`].filter(Boolean).join(' · ')
-    return source.tasks.map((task, index): PlanTodoCandidate => {
-      const status = resolvePlanTodoStatus(task)
-      const taskId = String(task.id || index + 1)
-      const taskTitle = task.taskName || '未命名计划任务'
-      const dimensionPrefix = source.dimension?.value ? `${source.dimension.value} · ` : ''
+    const tasksByAssignee = new Map<string, PlanTodoTaskLike[]>()
+    source.tasks.forEach(task => {
+      const assignee = task.responsible?.trim() || ''
+      if (!assignee) return
+      tasksByAssignee.set(assignee, [...(tasksByAssignee.get(assignee) || []), task])
+    })
+    source.assignees?.forEach(value => {
+      const assignee = value.trim()
+      if (assignee && !tasksByAssignee.has(assignee)) tasksByAssignee.set(assignee, [...source.tasks])
+    })
+    const status: TodoStatus = version.status === '已发布' ? 'completed' : 'pending'
+    const planLabel = source.planName || (source.planLevel === 'level1' ? '一级计划' : source.planKey)
+    const dimensionPrefix = source.dimension?.value ? `${source.dimension.value} · ` : ''
+    return [...tasksByAssignee.entries()].map(([assignee, assignedTasks]): PlanTodoCandidate => {
       return {
-        id: `plan:${project.id}:${source.dimension?.kind || 'generic'}:${source.dimension?.value || 'default'}:${source.planLevel}:${source.planKey}:${taskId}`,
+        id: `plan:${project.id}:${source.dimension?.kind || 'generic'}:${source.dimension?.value || 'default'}:${source.planLevel}:${source.planKey}:${versionId}:${assignee}`,
         projectId: project.id,
         projectName: project.name,
-        assignee: task.responsible || '',
-        dueDate: task.planEndDate || '',
-        generatedAt: task.generatedAt,
+        assignee,
+        dueDate: firstDate(assignedTasks.map(task => task.planEndDate)),
+        generatedAt: firstDate(assignedTasks.map(task => task.generatedAt)),
         completed: status === 'completed',
-        completedAt: task.actualEndDate || undefined,
+        completedAt: status === 'completed' ? lastDate(assignedTasks.map(task => task.actualEndDate)) : undefined,
         status,
-        title: `${dimensionPrefix}${taskTitle}`,
+        title: `${dimensionPrefix}${planLabel} ${version.versionNo}`,
         planLevel: source.planLevel,
         planKey: source.planKey,
         versionId,
-        sourceLabel: source.planName || (source.planLevel === 'level1' ? '一级计划' : source.planKey),
+        sourceLabel: planLabel,
         context,
         ...(source.dimension?.kind === 'market'
           ? { market: source.dimension.value, marketKey: source.dimension.versionKey }

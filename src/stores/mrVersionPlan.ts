@@ -32,7 +32,7 @@ import type {
 } from '@/types/mrVersionPlan'
 
 export const MR_VERSION_PLAN_STORAGE_KEY = 'pms-mr-version-plan-store'
-export const MR_VERSION_PLAN_STORE_VERSION = 1
+export const MR_VERSION_PLAN_STORE_VERSION = 3
 const LEGACY_LEVEL3_STORAGE_KEY = 'pms-level3-plan-store'
 const TRANSFER_TYPES = new Set<MrTransferType>(['N/A', '1', '2', '3', '4', '5', '6', '7', '8'])
 const TEMPLATE_ACTIONS = new Set<MrTemplateChangeLog['action']>([
@@ -374,7 +374,7 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
   const tosInstancesByProjectId = sanitizeTosInstances(persistedState.tosInstancesByProjectId)
   const tosChildIds = buildTosChildIds(tosInstancesByProjectId)
   const machinePlansByKey = sanitizeMachinePlans(persistedState.machinePlansByKey, tosChildIds)
-  return {
+  const migrated: MrVersionPlanState = {
     templateVersions: safeTemplateVersions.map(cloneTemplateVersion),
     currentTemplateVersionId,
     templateHistory: sanitizeTemplateHistory(persistedState.templateHistory),
@@ -383,6 +383,53 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
     marketOverridesByKey: sanitizeMarketOverrides(persistedState.marketOverridesByKey, machinePlansByKey, tosChildIds),
     stopReleaseRecords: sanitizeStopRecords(persistedState.stopReleaseRecords),
     viewModeByScope: sanitizeViewModes(persistedState.viewModeByScope),
+  }
+  if (_fromVersion !== 1 && _fromVersion !== 2) return migrated
+
+  const mergedTosInstancesByProjectId = Object.fromEntries(
+    [...new Set([
+      ...Object.keys(fallback.tosInstancesByProjectId),
+      ...Object.keys(migrated.tosInstancesByProjectId),
+    ])].map(projectId => {
+      const byVersion = new Map<string, TosMrVersionInstance>()
+      for (const instance of fallback.tosInstancesByProjectId[projectId] ?? []) {
+        byVersion.set(instance.tosVersion, instance)
+      }
+      for (const instance of migrated.tosInstancesByProjectId[projectId] ?? []) {
+        byVersion.set(instance.tosVersion, instance)
+      }
+      return [projectId, [...byVersion.values()]]
+    }),
+  )
+  const mergedStopRecords = [...new Map([
+    ...fallback.stopReleaseRecords.map(record => [record.projectId, record] as const),
+    ...migrated.stopReleaseRecords.map(record => [record.projectId, record] as const),
+  ]).values()]
+  const mergedPlansBeforeStops = {
+    ...cloneMachinePlans(fallback.machinePlansByKey),
+    ...cloneMachinePlans(migrated.machinePlansByKey),
+  }
+  const stopped = mergedStopRecords.reduce((state, record) => applyStopRelease({
+    persistedPlans: state.persistedPlans,
+    tosInstances: Object.values(mergedTosInstancesByProjectId).flat(),
+    stopRecords: state.stopRecords,
+    record,
+  }), {
+    persistedPlans: mergedPlansBeforeStops,
+    stopRecords: [] as MrStopReleaseRecord[],
+    removedPlanKeys: [] as string[],
+  })
+  const mergedMarketOverrides = Object.fromEntries(Object.entries({
+    ...fallback.marketOverridesByKey,
+    ...migrated.marketOverridesByKey,
+  }).filter(([, override]) => Boolean(stopped.persistedPlans[`${override.projectId}::${override.tosVersion}`])))
+
+  return {
+    ...migrated,
+    tosInstancesByProjectId: mergedTosInstancesByProjectId,
+    machinePlansByKey: stopped.persistedPlans,
+    marketOverridesByKey: mergedMarketOverrides,
+    stopReleaseRecords: stopped.stopRecords,
   }
 }
 

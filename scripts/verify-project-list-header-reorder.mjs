@@ -145,6 +145,16 @@ assert.match(headerSource, /dropEdge:\s*'before'\s*\|\s*'after'/, 'column draggi
 assert.match(headerSource, /onDragStateChange/, 'table body and header must share one live drag state')
 assert.match(headerSource, /--pms-project-list-drop-x/, 'live target geometry must drive one continuous table insertion line')
 assert.match(headerSource, /is-unit-dragging/, 'every header in the active milestone unit must share one placeholder state')
+assert.match(
+  headerSource,
+  /const holdHeaderPosition = Boolean\(activeUnitKey\)/,
+  'all header cells must stay in their original positions while a drag is active',
+)
+assert.match(
+  headerSource,
+  /transform:\s*holdHeaderPosition\s*\?\s*undefined/,
+  'dnd transforms must be suppressed until the pointer is released',
+)
 assert.match(headerSource, /droppable:\s*false/, 'locked headers must stay measurable as explicit rejected drop targets')
 assert.match(headerSource, /aria-label=\{!locked\s*&&\s*unitKey\s*\?\s*`拖动\$\{unitLabel\}调整列顺序`/, 'header drag handles need Chinese unit labels')
 assert.match(headerSource, /已开始拖动\$\{getUnitLabel\(active\)\}/, 'keyboard announcements need Chinese unit labels')
@@ -168,5 +178,15 @@ assert.match(globalStyles, /\.pms-project-list-column-drag-source/, 'Feishu-styl
 assert.match(globalStyles, /\.pms-project-list-column-drop-before/, 'Feishu-style dragging must draw a full-height before edge')
 assert.match(globalStyles, /\.pms-project-list-column-drop-after/, 'Feishu-style dragging must draw a full-height after edge')
 assert.match(globalStyles, /data-column-drop-active="true"\]\:\:after/, 'Feishu-style insertion line must span the complete table shell')
+assert.match(
+  globalStyles,
+  /data-column-drop-active="true"\]\:\:after\s*\{[\s\S]*?width:\s*2px;/,
+  'the continuous insertion line must use the approved thin two-pixel width',
+)
+assert.doesNotMatch(
+  globalStyles,
+  /pms-project-list-column-drop-(?:before|after)[\s\S]{0,180}(?:border-(?:left|right)|box-shadow):[^;]*4px/,
+  'header and body drop edges must not render four-pixel bars',
+)
 
 console.log('project list header reorder model contract passed')

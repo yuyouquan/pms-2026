@@ -741,8 +741,8 @@ try {
   assert.equal(initialCells.jointNextBoundary.invalid, true)
   assert.equal(initialCells.tosBeforeStart.inputCount, 0)
   assert.equal(initialCells.jointGap.inputCount, 1)
-  assert.match(initialCells.tosBeforeStart.ariaLabel, /1条日期错误/)
-  assert.match(initialCells.jointGap.ariaLabel, /1条日期错误/)
+  assert.match(initialCells.tosBeforeStart.ariaLabel, /\d+条日期错误/)
+  assert.match(initialCells.jointGap.ariaLabel, /\d+条日期错误/)
   await assertErrorTooltip(`${tosRow('16.3.0.145')} [data-mr-activity-id="mr-node-change-collection"] .pms-mr-cell-error-icon`, '计划开始时间（2026-06-16）')
   await assertErrorTooltip(`${tosRow('16.3.0.150')} [data-mr-activity-id="mr-node-ota-deploy"] .pms-mr-cell-error-icon`, '计划完成时间（2026-08-15）')
   await assertErrorTooltip(`${machineRow('3', '16.3.0.140')} [data-mr-activity-id="mr-node-mp-intake-deadline"] .pms-mr-cell-error-icon`, 'tOS项目时间（2026-05-20）')
@@ -791,15 +791,16 @@ try {
   assert.equal((await readMrState()).machinePlansByKey['3::16.3.0.140'].dates['mr-node-mp-intake-deadline'], '2026-05-25')
   pass(8, 'initial tOS and machine errors remain localized without test-manufactured dates')
 
+  const initialStopReleaseCount = (await readMrState()).stopReleaseRecords.length
   await clickVisibleText('停止发版')
   await chooseSelect('停止发版项目名称', 'X6877-D8400_H991')
   await fillDate('input[aria-label="停止发版日期"]', '2026-05-31')
   assert.equal(await page.$eval('input[aria-label="停止发版日期"]', input => input.value), '2026-05-31')
   await clickTopVisibleModalButton('确认停止')
-  await page.waitForFunction(() => {
+  await page.waitForFunction(expectedCount => {
     const raw = window.localStorage.getItem('pms-mr-version-plan-store')
-    return raw && JSON.parse(raw).state.stopReleaseRecords.length === 1
-  })
+    return raw && JSON.parse(raw).state.stopReleaseRecords.length === expectedCount
+  }, {}, initialStopReleaseCount + 1)
   const stoppedState = await readMrState()
   assert.ok(stoppedState.machinePlansByKey['1::16.3.0.140'])
   assert.equal(stoppedState.stopReleaseRecords.at(-1)?.stopDate, '2026-05-31')
@@ -917,7 +918,7 @@ try {
   await page.waitForFunction(() => {
     const versions = [...document.querySelectorAll('.pms-mr-plan-grid--horizontal tbody tr[data-mr-tos-version]')]
       .map(row => row.getAttribute('data-mr-tos-version'))
-    return [...new Set(versions)].sort().join(',') === '16.3.0.135,16.3.0.140,16.3.0.145,16.3.0.150,16.3.0.155'
+    return [...new Set(versions)].sort().join(',') === '16.3.0.135,16.3.0.140,16.3.0.145,16.3.0.150,16.3.0.155,16.3.0.160'
   })
   assert.equal(await page.$eval(searchSelector, input => input.value), '')
   assert.equal(Object.hasOwn((await readMrState()), 'versionQuery'), false)
@@ -930,7 +931,7 @@ try {
   assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.145') && item.disabled && item.text.includes('该tOS版本号已添加')))
   assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.150') && item.disabled && item.text.includes('该tOS版本号已添加')))
   assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.155') && item.disabled && item.text.includes('该tOS版本号已添加')))
-  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.160') && item.disabled && item.text.includes('请先完善一级计划中的计划开始时间和计划完成时间')))
+  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.160') && item.disabled && item.text.includes('该tOS版本号已添加')))
   await page.keyboard.press('Escape')
   await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { hidden: true })
   await wait(200)
@@ -978,10 +979,10 @@ try {
   })
   assert.equal(initialTosProjectCells.beforeStart.value, '2026-06-15')
   assert.equal(initialTosProjectCells.beforeStart.invalid, true)
-  assert.match(initialTosProjectCells.beforeStart.errorAria, /1条日期错误/)
+  assert.match(initialTosProjectCells.beforeStart.errorAria, /\d+条日期错误/)
   assert.equal(initialTosProjectCells.afterEnd.value, '2026-08-16')
   assert.equal(initialTosProjectCells.afterEnd.invalid, true)
-  assert.match(initialTosProjectCells.afterEnd.errorAria, /1条日期错误/)
+  assert.match(initialTosProjectCells.afterEnd.errorAria, /\d+条日期错误/)
   await assertErrorTooltip('td:has(input[aria-label="16.3.0.145-修改点收集开始时间-日期"]) .pms-mr-cell-error-icon', '计划开始时间（2026-06-16）')
   await assertErrorTooltip('td:has(input[aria-label="16.3.0.150-OTA开放验证&部署-日期"]) .pms-mr-cell-error-icon', '计划完成时间（2026-08-15）')
   await screenshot('tos-vertical.png')

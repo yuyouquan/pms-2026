@@ -11,6 +11,18 @@ export interface GovernedLevel1ActualTask extends Level1PlanTask {
   [key: string]: unknown
 }
 
+export const shouldAutoEnablePlanEditMode = (input: {
+  activeModule: string
+  projectSpaceModule: string
+  isCurrentDraft: boolean
+  followedReadOnly: boolean
+}): boolean => (
+  input.activeModule === 'projectSpace'
+  && input.projectSpaceModule === 'plan'
+  && input.isCurrentDraft
+  && !input.followedReadOnly
+)
+
 export interface GovernedLevel1ActualTarget<Task extends GovernedLevel1ActualTask> {
   key: string
   tasks: readonly Task[]
