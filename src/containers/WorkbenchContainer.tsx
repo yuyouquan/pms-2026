@@ -32,6 +32,15 @@ import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION } from '@/constants/proj
 
 type WorkbenchProject = ReturnType<typeof useProjectStore.getState>['projects'][number]
 
+const getPlanNotificationUsers = (project: WorkbenchProject | undefined): string[] => {
+  if (!project) return []
+  return [...new Set([
+    ...(Array.isArray(project.responsiblePersons) ? project.responsiblePersons : []),
+    project.spm,
+    project.leader,
+  ].filter((value): value is string => typeof value === 'string' && Boolean(value.trim())))]
+}
+
 function adaptPlanTasks(
   projects: WorkbenchProject[],
   marketConfigsByProjectId: ReturnType<typeof useProjectStore.getState>['marketConfigsByProjectId'],
@@ -79,10 +88,10 @@ function adaptPlanTasks(
   explicitGenericTasks.forEach((projectTasks, projectId) => {
     const project = projectById.get(projectId)
     if (!project || isMachineProjectType(project.type) || project.type === PROJECT_TYPE_TOS_VERSION) return
-    sources.push({ projectId, planLevel: 'level1', planKey: 'level1', planName: '一级计划', tasks: projectTasks, versions, currentVersionId: currentVersion })
+    sources.push({ projectId, planLevel: 'level1', planKey: 'level1', planName: '一级计划', tasks: projectTasks, versions, currentVersionId: currentVersion, assignees: getPlanNotificationUsers(project) })
   })
   if (legacyOwner && !isMachineProjectType(legacyOwner.type) && legacyOwner.type !== PROJECT_TYPE_TOS_VERSION && legacyGenericTasks.length) {
-    sources.push({ projectId: legacyOwner.id, planLevel: 'level1', planKey: 'level1', planName: '一级计划', tasks: legacyGenericTasks, versions, currentVersionId: currentVersion })
+    sources.push({ projectId: legacyOwner.id, planLevel: 'level1', planKey: 'level1', planName: '一级计划', tasks: legacyGenericTasks, versions, currentVersionId: currentVersion, assignees: getPlanNotificationUsers(legacyOwner) })
   }
 
   if (legacyOwner && isMachineProjectType(legacyOwner.type)) {
@@ -97,6 +106,7 @@ function adaptPlanTasks(
         planName: '一级计划',
         dimension: { kind: 'market', value: market, versionKey: getMarketPlanVersionKey(legacyOwner.id, market) },
         tasks: data.tasks,
+        assignees: getPlanNotificationUsers(legacyOwner),
         versions: scopedVersions,
         currentVersionId: getMarketCurrentVersion(marketCurrentVersionByKey, legacyOwner.id, market, scopedVersions, currentVersion),
       })
@@ -114,7 +124,7 @@ function adaptPlanTasks(
     group.tasks.push(task)
     level2Groups.set(key, group)
   })
-  level2Groups.forEach(group => sources.push({ ...group, planLevel: 'level2', versions, currentVersionId: currentVersion }))
+  level2Groups.forEach(group => sources.push({ ...group, planLevel: 'level2', versions, currentVersionId: currentVersion, assignees: getPlanNotificationUsers(projectById.get(group.projectId)) }))
 
   Object.entries(tosTypePlanDataByProjectId).forEach(([projectId, dataByType]) => {
     const project = projectById.get(projectId)
@@ -128,6 +138,7 @@ function adaptPlanTasks(
         planName: '一级计划',
         dimension: { kind: 'tos', value: tosType, versionKey: getTosTypeVersionKey(projectId, tosType, 'level1') },
         tasks: data.level1Tasks,
+        assignees: getPlanNotificationUsers(project),
         versions: level1Versions,
         currentVersionId: getTosTypeCurrentVersion(tosTypeCurrentVersionByKey, projectId, tosType, 'level1', level1Versions, currentVersion),
       })
@@ -145,6 +156,7 @@ function adaptPlanTasks(
           planName: data.level2PlanMeta[planKey]?.planName || data.createdLevel2Plans.find(plan => plan.id === planKey)?.name || planKey,
           dimension: { kind: 'tos', value: tosType, versionKey: getTosTypeVersionKey(projectId, tosType, 'level2') },
           tasks: planTasks,
+          assignees: getPlanNotificationUsers(project),
           versions: scopedVersions,
           currentVersionId: getTosTypeCurrentVersion(tosTypeCurrentVersionByKey, projectId, tosType, 'level2', scopedVersions, currentVersion),
         })

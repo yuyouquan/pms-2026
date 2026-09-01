@@ -94,17 +94,61 @@ const indexedCandidates = todos.buildPlanTodoCandidates({
 assert.deepEqual(
   indexedCandidates.map(candidate => `${candidate.projectId}:${candidate.planLevel}:${candidate.market || candidate.tosType || 'generic'}:${candidate.title}`),
   [
-    'generic-a:level1:generic:通用任务',
-    'market-a:level1:OP:OP · 市场 A 任务',
-    'market-b:level1:TR:TR · 市场 B 任务',
-    'tos-a:level1:Full:Full · Full 任务',
-    'generic-a:level2:generic:版本评审',
+    'generic-a:level1:generic:一级计划 V4',
+    'market-a:level1:OP:OP · 一级计划 V3',
+    'market-b:level1:TR:TR · 一级计划 V4',
+    'tos-a:level1:Full:Full · 一级计划 V3',
+    'generic-a:level2:generic:FR版本火车计划 V3',
   ],
   'explicit generic, market, tOS, and L2 sources stay bound to their own projects',
+)
+assert.deepEqual(
+  indexedCandidates.map(candidate => candidate.status),
+  ['pending', 'completed', 'pending', 'completed', 'completed'],
+  'revision plans are pending while published plans are completed regardless of child task status',
 )
 assert.equal(indexedCandidates[1].context, 'OP · V3 (已发布)')
 assert.equal(indexedCandidates[3].context, 'tOS Full · V3 (已发布)')
 assert.equal(indexedCandidates[4].sourceLabel, 'FR版本火车计划')
+
+const groupedRevisionCandidates = todos.buildPlanTodoCandidates({
+  projects: [{ id: 'grouped', name: '聚合项目' }],
+  sources: [{
+    projectId: 'grouped',
+    planLevel: 'level1',
+    planKey: 'level1',
+    planName: '一级计划',
+    versions,
+    currentVersionId: 'v4',
+    tasks: [
+      { id: 'a', taskName: '活动 A', responsible: '张三', planEndDate: '2026-09-02' },
+      { id: 'b', taskName: '活动 B', responsible: '张三', planEndDate: '2026-09-03' },
+      { id: 'c', taskName: '活动 C', responsible: '李四', planEndDate: '2026-09-04' },
+    ],
+  }],
+})
+assert.equal(groupedRevisionCandidates.length, 2, 'one revision plan creates at most one todo per responsible user')
+assert.equal(groupedRevisionCandidates.filter(candidate => candidate.assignee === '张三').length, 1)
+assert.equal(groupedRevisionCandidates.find(candidate => candidate.assignee === '张三')?.dueDate, '2026-09-02')
+
+const managerFallbackCandidate = todos.buildPlanTodoCandidates({
+  projects: [{ id: 'manager-owned', name: '负责人项目' }],
+  sources: [{
+    projectId: 'manager-owned',
+    planLevel: 'level1',
+    planKey: 'level1',
+    planName: '一级计划',
+    assignees: ['张三'],
+    versions,
+    currentVersionId: 'v4',
+    tasks: [{ id: 'unassigned', taskName: '未分配活动', responsible: '' }],
+  }],
+})
+assert.deepEqual(
+  managerFallbackCandidate.map(candidate => [candidate.assignee, candidate.status]),
+  [['张三', 'pending']],
+  'project plan managers receive one plan-level revision todo even when child tasks have no assignee',
+)
 
 const accessFiltered = todos.filterTodoCandidatesByAccess({
   currentUser: '李四',
@@ -231,7 +275,7 @@ const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContaine
 const uiStoreSource = readSource(root, 'src/stores/ui.ts')
 const todayHookSource = readSource(root, 'src/hooks/useLocalToday.ts')
 const browserSource = readSource(root, 'screenshots/verify-workbench-summary-floating-panels.mjs')
-for (const label of ['任务目录', '计划', '转维', '全部', '待处理', '已完成', '搜索待办', '项目筛选', '生成时间', '清空筛选', '前往处理']) {
+for (const label of ['任务目录', '计划', '转维', '全部', '待处理', '已完成', '搜索待办', '项目筛选', '生成时间', '清空筛选', '前往处理', '查看详情']) {
   assert.match(todoCenterSource, new RegExp(label), `todo center missing visible or accessible contract: ${label}`)
 }
 assert.doesNotMatch(todoCenterSource, /转维护/, 'workbench directory uses the canonical 转维 label')
@@ -259,6 +303,7 @@ assert.doesNotMatch(aggregationSource, /new Date\(\)/, 'todo aggregation must no
 assert.match(aggregationSource, /TRANSFER_TO_PMS_USER_MAP|mapTransferOwnerToPmsUser/, 'transfer ownership must use the explicit mock identity bridge')
 assert.match(aggregationSource, /application\.applicantId/, 'entry ownership must start from the authoritative transfer applicant identity')
 assert.doesNotMatch(workbenchSource, /linkedProject\?\.leader/, 'entry ownership must never fall back to the project leader')
+assert.match(workbenchSource, /assignees:\s*getPlanNotificationUsers\(/, 'workbench plan sources must explicitly provide project-level notification recipients')
 assert.doesNotMatch(workbenchSource, /projects\.find\(item => Array\.isArray\(item\.markets\)/, 'plan candidates must never guess the first market project')
 assert.doesNotMatch(workbenchSource, /\.find\(meta => typeof meta\?\.projectName/, 'plan candidates must never guess ownership from the first metadata row')
 assert.match(uiStoreSource, /planNavigationIntent/, 'todo navigation requires a typed one-shot intent')
@@ -273,8 +318,8 @@ assert.match(todoCenterSource, /error\?:\s*string/, 'todo center exposes a conte
 assert.match(todoCenterSource, /onRetry\?:\s*\(\)\s*=>\s*void/, 'todo error offers a recovery action')
 assert.match(todoCenterSource, /<Skeleton\b/, 'todo loading state reserves the final table footprint')
 assert.match(todoCenterSource, /role="alert"/, 'todo load errors are announced')
-assert.doesNotMatch(todoCenterSource, /查看详情/, 'completed tasks do not expose an operation')
-assert.match(todoCenterSource, /if \(record\.status === ['"]completed['"]\) return null/, 'completed task operation cells remain empty')
+assert.match(todoCenterSource, /record\.status === ['"]completed['"]\s*\?\s*['"]查看详情['"]\s*:\s*['"]前往处理['"]/, 'completed plan rows expose 查看详情 while pending rows expose 前往处理')
+assert.match(todoCenterSource, /onClick=\{\(\) => onOpenTodo\(record\)\}/, 'both todo actions use the same version-aware navigation callback')
 assert.match(todayHookSource, /setTimeout/, 'local today hook schedules the next midnight refresh')
 assert.match(todayHookSource, /clearTimeout/, 'local today hook cleans up its midnight timer')
 assert.match(browserSource, /unexpectedBrowserErrors/, 'browser verification must retain unexpected errors')
@@ -303,8 +348,8 @@ for (const currentContract of [
 }
 assert.match(browserSource, /setViewport\(\{\s*width:\s*700/, 'browser verification must cover the current narrow todo layout below 760px')
 assert.match(browserSource, /gridColumnStart/, 'browser verification must prove the search filter spans both narrow columns')
-assert.doesNotMatch(browserSource, /OP · 概念启动|plan todo restores/, 'browser verification must not fabricate plan todos after L1 responsibility removal')
-assert.match(browserSource, /await clickTodoSource\(['"]计划待办['"]\)[\s\S]{0,240}await waitForTodoCount\(0\)/, 'browser verification must cover the real empty plan directory')
+assert.doesNotMatch(browserSource, /OP · 概念启动/, 'browser verification must not split one plan into per-activity todo rows')
+assert.match(browserSource, /await clickTodoSource\(['"]计划待办['"]\)[\s\S]{0,240}await waitForTodoCount\(1\)/, 'browser verification must cover the single aggregated revision-plan todo')
 assert.doesNotMatch(browserSource, /['"]首销 tOS 版本['"]/, 'project-list browser expectations must use the current matrix label')
 assert.match(browserSource, /['"]首销tOS版本['"]/, 'project-list browser verification must cover the current first-sale tOS label')
 for (const matrixControl of ['项目二级分类快捷筛选', '状态快捷筛选']) {
@@ -318,7 +363,8 @@ assert.doesNotMatch(browserSource, /pms-floating-config-panel\[aria-label=\\?['"
 assert.match(browserSource, /pms-floating-config-panel\[aria-label=\\?['"]字段配置/, 'browser verification must assert the current column panel label')
 assert.doesNotMatch(browserSource, /waitForPanelFirstControlFocus/, 'browser verification must not depend on obsolete popup autofocus timing')
 assert.match(browserSource, /clickAria\(['"]筛选字段['"]\)/, 'browser verification must open the filter-field select through its accessible control')
-assert.doesNotMatch(browserSource, /V4 \(修订中\)/, 'workbench browser must not expect a draft absent from the current acceptance seed')
+assert.match(browserSource, /V4 \(修订中\)/, 'workbench browser must verify the revision-plan todo backed by the acceptance seed')
+assert.match(browserSource, /TR · 一级计划 V3[\s\S]{0,80}查看详情/, 'workbench browser must open published plans through the completed detail action')
 assert.doesNotMatch(browserSource, /__reactProps\$|waitForReactControl/, 'browser verification must not depend on React private properties')
 assert.match(browserSource, /waitForEditableInput/, 'browser verification must wait on public editable-input state')
 assert.match(browserSource, /readProjectRowCount/, 'advanced-filter verification must measure the real visible project rows')

@@ -199,8 +199,8 @@ export function SortableProjectListHeader({
     && dragState?.overHeaderId === headerId
     && dragState.overUnitKey === unitKey,
   )
-  const suppressIndividualTransform = unitKey === 'milestone' && activeUnitKey === 'milestone'
-  const transform = !suppressIndividualTransform && sortable.transform
+  const holdHeaderPosition = Boolean(activeUnitKey)
+  const transform = !holdHeaderPosition && sortable.transform
     ? { ...sortable.transform, y: 0 }
     : null
 
@@ -219,12 +219,12 @@ export function SortableProjectListHeader({
         locked ? 'is-locked' : '',
         isUnitDragging ? 'is-unit-dragging' : '',
         isDropTarget && dragState?.dropEdge ? `is-drop-${dragState.dropEdge}` : '',
-        sortable.isDragging && !suppressIndividualTransform ? 'is-dragging' : '',
+        sortable.isDragging ? 'is-dragging' : '',
       ].filter(Boolean).join(' ')}
       style={{
         ...style,
-        transform: CSS.Transform.toString(transform),
-        transition: sortable.transition,
+        transform: holdHeaderPosition ? undefined : CSS.Transform.toString(transform),
+        transition: holdHeaderPosition ? undefined : sortable.transition,
       }}
       {...(!locked && unitKey ? sortable.attributes : {})}
       aria-label={!locked && unitKey ? `拖动${unitLabel}调整列顺序` : cellProps['aria-label']}

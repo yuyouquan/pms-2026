@@ -95,17 +95,29 @@ const assertSelectedTopNav = async expected => {
 
 const clickTodoSource = async label => {
   const sourceLabel = ({ 计划待办: '计划', 转维待办: '转维' })[label] || label
-  const clicked = await page.evaluate(value => {
-    const item = Array.from(document.querySelectorAll('.pms-todo-directory__item'))
-      .find(element => {
-        const text = (element.textContent || '').trim()
-        return text === value || element.getAttribute('aria-label')?.startsWith(`${value}，`)
-      })
-    if (!item) return false
-    item.click()
-    return true
-  }, sourceLabel)
-  if (!clicked) throw new Error(`missing todo source: ${label}`)
+  const items = await page.$$('.pms-todo-directory__item')
+  let target = null
+  for (const item of items) {
+    const matches = await item.evaluate((element, value) => {
+      const text = (element.textContent || '').trim()
+      return text === value || element.getAttribute('aria-label')?.startsWith(`${value}，`)
+    }, sourceLabel)
+    if (matches) {
+      target = item
+      break
+    }
+  }
+  if (!target) throw new Error(`missing todo source: ${label}`)
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    await wait(250)
+    await target.evaluate(element => element.click())
+    const selected = await page.evaluate(value => {
+      const active = document.querySelector('.pms-todo-directory__item[aria-current="page"]')
+      return (active?.textContent || '').trim() === value
+        || active?.getAttribute('aria-label')?.startsWith(`${value}，`)
+    }, sourceLabel)
+    if (selected) break
+  }
   await assertSelectedTodoSource(sourceLabel)
 }
 
@@ -118,6 +130,21 @@ const assertSelectedTodoSource = async label => {
   }, { timeout: STEP_TIMEOUT }, label)
 }
 
+const clickTodoStatus = async label => {
+  const clicked = await page.evaluate(value => {
+    const tab = Array.from(document.querySelectorAll('[role="tablist"][aria-label="任务状态"] [role="tab"]'))
+      .find(element => (element.textContent || '').trim().startsWith(value))
+    if (!tab) return false
+    tab.click()
+    return true
+  }, label)
+  if (!clicked) throw new Error(`missing todo status: ${label}`)
+  await page.waitForFunction(value => {
+    const selected = document.querySelector('[role="tablist"][aria-label="任务状态"] [role="tab"][aria-selected="true"]')
+    return (selected?.textContent || '').trim().startsWith(value)
+  }, { timeout: STEP_TIMEOUT }, label)
+}
+
 const waitForTodoCount = async expected => {
   await page.waitForFunction(expectedCount => {
     const element = document.querySelector('.pms-todo-center__result-status[role="status"]')
@@ -126,8 +153,8 @@ const waitForTodoCount = async expected => {
   }, { timeout: STEP_TIMEOUT }, expected)
 }
 
-const openTodoRowWithKeyboard = async title => {
-  const selector = `button[aria-label="前往处理 ${title}"]`
+const openTodoRowWithKeyboard = async (title, action = '前往处理') => {
+  const selector = `button[aria-label="${action} ${title}"]`
   await waitForVisible(selector)
   await page.focus(selector)
   await page.keyboard.press('Enter')
@@ -398,10 +425,15 @@ try {
     await clickExactText('body', 'button', '清空筛选')
     await waitForTodoCount(1)
 
-    console.log('  action: select empty plan source')
+    console.log('  action: select aggregated plan source')
     await clickTodoSource('计划待办')
-    await waitForTodoCount(0)
-    await assertText('暂无待处理任务')
+    await waitForTodoCount(1)
+    await assertText('OP · 一级计划 V4')
+    await assertText('V4 (修订中)')
+    await clickTodoStatus('已完成')
+    await waitForTodoCount(4)
+    await assertText('查看详情')
+    await clickTodoStatus('待处理')
     await clickTodoSource('转维待办')
     await waitForTodoCount(1)
   })
@@ -416,6 +448,22 @@ try {
     await assertSelectedTopNav('工作台')
     await assertSelector('[aria-label="个人工作台任务"]')
     await assertSelectedTodoSource('转维')
+  })
+
+  await step('plan rows aggregate by version and restore the exact target version', async () => {
+    await clickTodoSource('计划待办')
+    await clickTodoStatus('已完成')
+    await waitForTodoCount(4)
+    await openTodoRowWithKeyboard('TR · 一级计划 V3', '查看详情')
+    await assertCurrentPlanVersion('V3 (已发布)')
+    await clickExactText('body', 'button', '返回工作台')
+    await clickTodoSource('计划待办')
+    await clickTodoStatus('待处理')
+    await waitForTodoCount(1)
+    await openTodoRowWithKeyboard('OP · 一级计划 V4')
+    await assertCurrentPlanVersion('V4 (修订中)')
+    await waitForEditableInput('input[aria-label^="planEndDate "]')
+    await clickExactText('body', 'button', '返回工作台')
   })
 
   await step('navigate to dedicated project list', async () => {

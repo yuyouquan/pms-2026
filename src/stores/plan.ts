@@ -11,7 +11,7 @@ import {
 import { initialProjects } from '@/data/projects'
 import { createMrAcceptancePlanScopeSeed } from '@/data/mrVersionPlanMocks'
 import type { GanttScaleMode } from '@/lib/ganttScale'
-import type { FollowVersionSource, MarketCurrentVersionState, MarketVersionsState } from '@/lib/marketRules'
+import { getMarketPlanVersionKey, type FollowVersionSource, type MarketCurrentVersionState, type MarketVersionsState } from '@/lib/marketRules'
 import type {
   TosTypeCurrentVersionState,
   TosTypePlanData,
@@ -45,7 +45,7 @@ import type {
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 10
+export const PLAN_STORE_VERSION = 13
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -718,11 +718,40 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   Object.entries(requiredColumnSettings).forEach(([key, value]) => {
     if (columnSettingsByView[key] === undefined) columnSettingsByView[key] = value
   })
+  const workbenchAcceptanceSeed = createMrAcceptancePlanScopeSeed()
+  const marketVersionsByKey = { ...(migrated.marketVersionsByKey || {}) }
+  const tosTypeVersionsByKey = { ...(migrated.tosTypeVersionsByKey || {}) }
+  const marketCurrentVersionByKey = { ...(migrated.marketCurrentVersionByKey || {}) }
+  if (persistedVersion < 13) {
+    Object.entries(workbenchAcceptanceSeed.publishedSnapshots).forEach(([key, tasks]) => {
+      if (!migratedSnapshots[key]) migratedSnapshots[key] = tasks.map(task => ({ ...task }))
+    })
+    Object.entries(workbenchAcceptanceSeed.marketVersionsByKey).forEach(([key, seededVersions]) => {
+      const storedVersions = Array.isArray(marketVersionsByKey[key]) ? marketVersionsByKey[key] : []
+      const storedIds = new Set(storedVersions.map((version: any) => version.id))
+      marketVersionsByKey[key] = [
+        ...storedVersions,
+        ...seededVersions.filter(version => !storedIds.has(version.id)).map(version => ({ ...version })),
+      ]
+    })
+    Object.entries(workbenchAcceptanceSeed.tosTypeVersionsByKey).forEach(([key, seededVersions]) => {
+      const storedVersions = Array.isArray(tosTypeVersionsByKey[key]) ? tosTypeVersionsByKey[key] : []
+      const storedIds = new Set(storedVersions.map((version: any) => version.id))
+      tosTypeVersionsByKey[key] = [
+        ...storedVersions,
+        ...seededVersions.filter(version => !storedIds.has(version.id)).map(version => ({ ...version })),
+      ]
+    })
+    const demoRevisionKey = getMarketPlanVersionKey('1', 'OP')
+    if (!marketCurrentVersionByKey[demoRevisionKey]) marketCurrentVersionByKey[demoRevisionKey] = 'v4'
+  }
   return {
     ...migrated,
-    tasks: shouldMigrateFiveStageLevel1
-      ? migrateLevel1TasksForProjectType(migrated.tasks, PROJECT_CATEGORY_MACHINE, true)
-      : migrated.tasks,
+    tasks: Array.isArray(migrated.tasks)
+      ? (shouldMigrateFiveStageLevel1
+          ? migrateLevel1TasksForProjectType(migrated.tasks, PROJECT_CATEGORY_MACHINE, true)
+          : migrated.tasks)
+      : LEVEL1_TASKS.map(task => ({ ...task })),
     marketPlanData: migratedMarketPlanData,
     tosTypePlanDataByProjectId: migratedTosTypePlanDataByProjectId,
     publishedSnapshots: migratedSnapshots,
@@ -730,6 +759,9 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     columnSettingsByView,
     configTemplateVersionScopes,
     configTemplateCompareScopes,
+    marketVersionsByKey,
+    marketCurrentVersionByKey,
+    tosTypeVersionsByKey,
   } as PlanState
 }
 
@@ -1068,7 +1100,7 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   }])),
   marketFollowVersionMeta: {},
   marketVersionsByKey: initialMrAcceptancePlanScope.marketVersionsByKey,
-  marketCurrentVersionByKey: {},
+  marketCurrentVersionByKey: { [getMarketPlanVersionKey('1', 'OP')]: 'v4' },
   tosTypePlanDataByProjectId: {},
   tosTypeVersionsByKey: initialMrAcceptancePlanScope.tosTypeVersionsByKey,
   tosTypeCurrentVersionByKey: {},
