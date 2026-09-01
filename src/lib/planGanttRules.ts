@@ -32,6 +32,30 @@ export interface PlanGanttTaskDateChange {
   endDate: string
 }
 
+export interface VisiblePlanGanttColumn {
+  name: string
+  label: string
+  width: number
+  align?: string
+  tree?: boolean
+  template?: (task: { duration?: number; progress?: number }) => string
+}
+
+export const buildVisiblePlanGanttColumns = (
+  definitions: readonly { key: string }[],
+): VisiblePlanGanttColumn[] => {
+  const columnsByKey: Record<string, VisiblePlanGanttColumn> = {
+    taskName: { name: 'text', label: '任务名称', width: 180, tree: true },
+    planStartDate: { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
+    planEndDate: { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
+    estimatedDays: { name: 'duration', label: '计划周期', align: 'center', width: 60, template: task => `${task.duration ?? 0}天` },
+    progress: { name: 'progress', label: '进度', align: 'center', width: 60, template: task => `${Math.round((task.progress ?? 0) * 100)}%` },
+  }
+  return definitions
+    .map(definition => columnsByKey[definition.key])
+    .filter((column): column is VisiblePlanGanttColumn => Boolean(column))
+}
+
 export interface PlanGanttInteractionTask {
   id: string | number
   type?: string

@@ -29,6 +29,30 @@ const versioning = await loadTypescriptModule(versioningPath)
 const projectMocks = await loadTypescriptModule(projectMockPath)
 const projectSpaceRules = loadTypeScriptModule(root, 'src/lib/projectSpaceLevel1Rules.ts')
 
+assert.equal(
+  typeof projectSpaceRules.shouldAutoEnablePlanEditMode,
+  'function',
+  'project-space plan entry must expose one deterministic draft edit-mode rule',
+)
+assert.equal(projectSpaceRules.shouldAutoEnablePlanEditMode({
+  activeModule: 'projectSpace',
+  projectSpaceModule: 'plan',
+  isCurrentDraft: true,
+  followedReadOnly: false,
+}), true, 'entering the plan module on a revision enables editing immediately')
+assert.equal(projectSpaceRules.shouldAutoEnablePlanEditMode({
+  activeModule: 'projectSpace',
+  projectSpaceModule: 'basic',
+  isCurrentDraft: true,
+  followedReadOnly: false,
+}), false, 'a revision must not keep project-space non-plan modules in plan edit mode')
+assert.equal(projectSpaceRules.shouldAutoEnablePlanEditMode({
+  activeModule: 'projectSpace',
+  projectSpaceModule: 'plan',
+  isCurrentDraft: true,
+  followedReadOnly: true,
+}), false, 'followed tOS plans remain read-only even when the selected version is a revision')
+
 const horizontalVersions = [
   { id: 'v1', versionNo: 'V1', status: '已发布' },
   { id: 'v2', versionNo: 'V2', status: '已发布' },
@@ -1378,7 +1402,30 @@ const technicalModuleSource = read('src/components/technical-project/TechnicalPl
 const compareModalSource = read('src/components/plans/PlanVersionCompareModal.tsx')
 const plan = loadTypeScriptModule(root, 'src/stores/plan.ts')
 
-assert.equal(plan.PLAN_STORE_VERSION, 10, 'plan persistence retires legacy level-three data after the V9 level-one upgrade')
+assert.match(
+  projectSpaceSource,
+  /shouldAutoEnablePlanEditMode\(\{[\s\S]*?projectSpaceModule,[\s\S]*?isCurrentDraft,[\s\S]*?followedReadOnly:\s*followedTosLevel1ReadOnly[\s\S]*?\}\)/,
+  'draft auto-edit effect must include the active project-space module in its decision',
+)
+assert.match(
+  projectSpaceSource,
+  /\/\/ Draft auto-edit mode[\s\S]*?useEffect\([\s\S]*?\[[^\]]*projectSpaceModule[^\]]*\]\)/,
+  'draft auto-edit effect must rerun when entering the plan module',
+)
+
+assert.equal(plan.PLAN_STORE_VERSION, 13, 'plan persistence retires legacy level-three data and backfills the workbench revision scope after the V9 level-one upgrade')
+const migratedPartialV11 = plan.migratePlanStoreState({
+  versions: structuredClone(plan.VERSION_DATA),
+  currentVersion: 'v3',
+  publishedSnapshots: {},
+  marketPlanData: {},
+  marketVersionsByKey: {},
+  marketCurrentVersionByKey: {},
+  tosTypePlanDataByProjectId: {},
+  tosTypeVersionsByKey: {},
+  tosTypeCurrentVersionByKey: {},
+}, 12)
+assert.ok(Array.isArray(migratedPartialV11.tasks) && migratedPartialV11.tasks.length > 0, 'version-only migrations restore non-persisted default L1 tasks instead of overriding the hydrated store with undefined')
 assert.deepEqual(plan.MACHINE_LEVEL1_TASKS, rules.buildMachineLevel1Tasks(true), 'plan store exports the dated machine seed')
 assert.deepEqual(plan.TOS_LEVEL1_TASKS, rules.buildTosLevel1Tasks(true), 'plan store exports the dated tOS seed')
 assert.deepEqual(plan.MACHINE_LEVEL1_TEMPLATE_TASKS, rules.buildMachineLevel1Tasks(false), 'plan store exports the undated machine template')
@@ -1551,7 +1598,7 @@ for (const tasks of [migratedV9.tasks, migratedTosConfig, migratedV9.marketPlanD
 }
 assert.deepEqual(migratedV9.configTemplateTasksByType['能力建设项目'], capabilityV8Seed, 'capability configuration data skips the five-stage migration')
 assert.deepEqual(migratedV9.publishedSnapshots['project::5::level1::v8'], capabilityV8Seed, 'capability project snapshots skip the five-stage migration')
-assert.deepEqual(plan.migratePlanStoreState(migratedV9, 9), migratedV9, 'the complete V9 store migration is idempotent')
+assert.deepEqual(plan.migratePlanStoreState(plan.migratePlanStoreState(migratedV9, 9), 13), plan.migratePlanStoreState(migratedV9, 9), 'the complete current store migration is idempotent')
 
 const legacySharedTosSeed = [
   { id: '1', stableId: 'stage-concept', parentId: null, order: 0, taskName: '概念阶段', source: 'template' },
@@ -1760,7 +1807,7 @@ assert.equal(migratedV8.publishedSnapshots['template::tOS版本项目::level3::v
 assert.deepEqual(migratedV8.publishedSnapshots['project::unknown::level1::v3'], unknownSnapshot, 'unknown ordinary project scopes remain exact')
 assert.deepEqual(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level2::v3::snapshot'], technicalSnapshot, 'tOS level-two snapshot keys do not cross into level one')
 assert.deepEqual(migratedV8.publishedSnapshots['project::tos-project::tos-type::Full::level1::v3'], unknownSnapshot, 'near-match tOS snapshot keys remain exact')
-assert.deepEqual(plan.migratePlanStoreState(migratedV8, 8), migratedV8, 'the complete V8 store migration is idempotent')
+assert.deepEqual(plan.migratePlanStoreState(migratedV8, 13), migratedV8, 'the complete current store migration is idempotent after upgrading a V8 fixture')
 
 assert.match(configSource, /getDefaultLevel1TasksForProjectType/, 'config center imports the selected-type default helper')
 assert.doesNotMatch(configSource, /LEVEL1_TEMPLATE_TASKS/, 'config center never falls back to the generic machine template')

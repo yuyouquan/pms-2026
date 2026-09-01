@@ -201,6 +201,7 @@ import {
 import {
   applyPlanGanttDateChangeResult,
   applyPlanTaskDatePatch,
+  buildVisiblePlanGanttColumns,
   buildPlanGanttTasks,
 } from '@/lib/planGanttRules'
 import {
@@ -212,6 +213,7 @@ import {
   selectLevel1HorizontalVersions,
   selectLatestPublishedLevel1Summary,
   resolveLevel1HorizontalActualProjectionAccess,
+  shouldAutoEnablePlanEditMode,
   sumLevel1StageEstimatedDays,
   type Level1HorizontalSurface,
   type ProjectSpaceLevel1ScopeToken,
@@ -2213,19 +2215,10 @@ export default function ProjectSpaceContainer() {
     [columnSettings, currentViewColumns],
   )
   const visibleColumns = orderedVisibleColumns.map(column => column.key)
-  const ganttColumns = useMemo<DHTMLXGanttColumn[]>(() => (
-    orderedVisibleColumns.map(column => {
-      const ganttColumnByKey: Record<string, DHTMLXGanttColumn> = {
-        taskName: { name: 'text', label: '任务名称', width: 180, tree: true },
-        predecessor: { name: 'predecessor', label: '前置任务', align: 'center', width: 70 },
-        planStartDate: { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
-        planEndDate: { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
-        estimatedDays: { name: 'duration', label: '计划周期', align: 'center', width: 60, template: task => task.duration + '天' },
-        progress: { name: 'progress', label: '进度', align: 'center', width: 60, template: task => Math.round(task.progress * 100) + '%' },
-      }
-      return ganttColumnByKey[column.key]
-    }).filter((column): column is DHTMLXGanttColumn => Boolean(column))
-  ), [orderedVisibleColumns])
+  const ganttColumns = useMemo<DHTMLXGanttColumn[]>(
+    () => buildVisiblePlanGanttColumns(orderedVisibleColumns) as DHTMLXGanttColumn[],
+    [orderedVisibleColumns],
+  )
   const applyColumnSettings = (nextSettings: typeof columnSettings) => {
     setColumnSettingsByView(previous => ({ ...previous, [currentViewKey]: nextSettings }))
   }
@@ -2258,12 +2251,17 @@ export default function ProjectSpaceContainer() {
   // ═══════ Effects ═══════
   // Draft auto-edit mode
   useEffect(() => {
-    if (isCurrentDraft && !followedTosLevel1ReadOnly) {
+    if (shouldAutoEnablePlanEditMode({
+      activeModule,
+      projectSpaceModule,
+      isCurrentDraft,
+      followedReadOnly: followedTosLevel1ReadOnly,
+    })) {
       setIsEditMode(true)
     } else {
       setIsEditMode(false)
     }
-  }, [currentVersion, followedTosLevel1ReadOnly, isCurrentDraft])
+  }, [activeModule, currentVersion, followedTosLevel1ReadOnly, isCurrentDraft, projectSpaceModule, setIsEditMode])
 
   useEffect(() => {
     if (!mrPlanNavigationIntent || mrPlanNavigationIntent.source !== 'joint-mr') return

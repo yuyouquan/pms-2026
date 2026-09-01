@@ -322,6 +322,7 @@ const publishedVersions = () => [
   { id: 'v1', versionNo: 'V1', status: '已发布' },
   { id: 'v2', versionNo: 'V2', status: '已发布' },
   { id: 'v3', versionNo: 'V3', status: '已发布' },
+  { id: 'v4', versionNo: 'V4', status: '修订中' },
 ]
 const MR_ACCEPTANCE_FIXED_MILESTONE_DATES: Readonly<Record<string, string>> = {
   'machine-ms-concept-kickoff': '2026-01-15',
@@ -413,9 +414,10 @@ export interface MrAcceptancePlanScopeSeed {
 export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
   const machineVersions = publishedVersions()
   const tosVersions = publishedVersions()
+  const machineProjectIds = ['1', '3', '7', '12', '13', '14', '15', '16', '17', '18']
   const versionOffset = (versionNo: string) => ({ V1: -14, V2: -7, V3: 0 }[versionNo] || 0)
   const publishedSnapshots: Record<string, Level1PlanTask[]> = {}
-  for (const projectId of ['1', '3']) {
+  for (const projectId of machineProjectIds) {
     for (const version of machineVersions.filter(candidate => candidate.status === '已发布')) {
       publishedSnapshots[`project::${projectId}::OP::level1::${version.id}`] = machineSnapshot(versionOffset(version.versionNo))
     }
@@ -425,10 +427,10 @@ export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
   }
   return {
     publishedSnapshots,
-    marketVersionsByKey: {
-      'project::1::OP::level1::versions': machineVersions.map(version => ({ ...version })),
-      'project::3::OP::level1::versions': machineVersions.map(version => ({ ...version })),
-    },
+    marketVersionsByKey: Object.fromEntries(machineProjectIds.map(projectId => [
+      `project::${projectId}::OP::level1::versions`,
+      machineVersions.map(version => ({ ...version })),
+    ])),
     tosTypeVersionsByKey: {
       'project::19::tos-type::Full::level1::versions': tosVersions.map(version => ({ ...version })),
     },

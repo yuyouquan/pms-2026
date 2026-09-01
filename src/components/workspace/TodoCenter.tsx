@@ -335,15 +335,15 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                   fixed: 'right',
                   width: 110,
                   render: (_value, record) => {
-                    if (record.status === 'completed') return null
+                    const actionLabel = record.status === 'completed' ? '查看详情' : '前往处理'
                     return (
                       <Button
                         type="link"
                         size="small"
-                        aria-label={`前往处理 ${record.title}`}
+                        aria-label={`${actionLabel} ${record.title}`}
                         onClick={() => onOpenTodo(record)}
                       >
-                        前往处理
+                        {actionLabel}
                       </Button>
                     )
                   },

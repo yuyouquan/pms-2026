@@ -27,6 +27,18 @@ const ganttRules = loadTypeScriptModule(root, 'src/lib/planGanttRules.ts')
 const projectSpaceLevel1Rules = loadTypeScriptModule(root, 'src/lib/projectSpaceLevel1Rules.ts')
 const versionCompareRules = await loadTypescriptModule('src/lib/versionCompare.ts')
 
+assert.equal(typeof ganttRules.buildVisiblePlanGanttColumns, 'function', 'gantt column projection must be centralized')
+assert.deepEqual(
+  ganttRules.buildVisiblePlanGanttColumns([
+    { key: 'taskName' },
+    { key: 'predecessor' },
+    { key: 'planStartDate' },
+    { key: 'planEndDate' },
+  ]).map(column => column.name),
+  ['text', 'start_date', 'end_date'],
+  'gantt view never exposes the predecessor column',
+)
+
 const machineTemplate = level1Rules.buildMachineLevel1Tasks(true)
 const machineProjection = level1Rules.projectLevel1Plan(machineTemplate, { mode: 'standard', today: '2026-08-27' })
 assert.equal(machineProjection.rows.length, machineTemplate.length, 'the nine-column tree projection preserves every whole-machine task')
