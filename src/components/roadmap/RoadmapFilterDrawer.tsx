@@ -2,13 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { DeleteOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Empty, Input, Select, Tooltip } from 'antd'
-import dayjs from 'dayjs'
+import { Button, Empty, Select, Tooltip } from 'antd'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
+import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
 import {
   createFilterCondition,
+  getDefaultFilterOperator,
   getFieldOptionsWithDuplicateDisabled,
   isValuelessFilterOperator,
+  isMultiValueFilterOperator,
+  normalizeFilterValueForOperator,
   type FilterFieldDefinition,
 } from '@/lib/filterConditions'
 import { getRoadmapFilterOperators } from '@/lib/roadmapFilters'
@@ -81,10 +84,12 @@ export default function RoadmapFilterDrawer({
       const valueless = isValuelessFilterOperator(condition.operator)
       const value = definition.kind === 'enum'
         ? valueless
-          ? []
-          : [...new Set((Array.isArray(condition.value) ? condition.value : [condition.value])
-            .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
-            .map(item => item.trim()))]
+          ? ''
+          : isMultiValueFilterOperator(condition.operator, definition.kind)
+            ? [...new Set((Array.isArray(condition.value) ? condition.value : [condition.value])
+              .filter((item): item is string => typeof item === 'string' && Boolean(item.trim()))
+              .map(item => item.trim()))]
+            : (Array.isArray(condition.value) ? condition.value[0] ?? '' : condition.value).trim()
         : valueless
           ? ''
           : typeof condition.value === 'string'
@@ -111,8 +116,8 @@ export default function RoadmapFilterDrawer({
     const definition = definitionsByKey.get(field)
     updateCondition(condition.id, {
       field: field as RoadmapFilterCondition['field'],
-      operator: definition?.kind === 'text' ? 'contains' : 'equals',
-      value: definition?.kind === 'enum' ? [] : '',
+      operator: getDefaultFilterOperator(definition?.kind ?? 'text'),
+      value: '',
     })
   }
 
@@ -123,51 +128,12 @@ export default function RoadmapFilterDrawer({
 
   const renderValueControl = (condition: RoadmapFilterCondition) => {
     const definition = definitionsByKey.get(condition.field)
-    if (!definition || isValuelessFilterOperator(condition.operator)) return null
-
-    if (definition.kind === 'enum') {
-      return (
-        <Select
-          aria-label={`${definition.label}筛选值`}
-          size="small"
-          mode="multiple"
-          maxTagCount="responsive"
-          allowClear
-          value={Array.isArray(condition.value)
-            ? condition.value
-            : condition.value ? [condition.value] : []}
-          placeholder={`请选择${definition.label}`}
-          options={definition.options ?? []}
-          onChange={value => updateCondition(condition.id, { value })}
-          style={{ width: '100%', height: ROADMAP_FILTER_CONTROL_HEIGHT }}
-        />
-      )
-    }
-
-    if (definition.kind === 'date') {
-      return (
-        <DatePicker
-          aria-label={`${definition.label}筛选值`}
-          size="small"
-          allowClear
-          format="YYYY-MM-DD"
-          value={typeof condition.value === 'string' && condition.value
-            ? dayjs(condition.value, 'YYYY-MM-DD')
-            : null}
-          onChange={date => updateCondition(condition.id, { value: date?.format('YYYY-MM-DD') ?? '' })}
-          style={{ width: '100%', height: ROADMAP_FILTER_CONTROL_HEIGHT }}
-        />
-      )
-    }
-
     return (
-      <Input
-        aria-label={`${definition.label}筛选值`}
+      <FilterConditionValue
         size="small"
-        value={typeof condition.value === 'string' ? condition.value : ''}
-        placeholder={`请输入${definition.label}`}
-        onChange={event => updateCondition(condition.id, { value: event.target.value })}
-        style={{ height: ROADMAP_FILTER_CONTROL_HEIGHT }}
+        condition={condition}
+        definition={definition}
+        onChange={value => updateCondition(condition.id, { value })}
       />
     )
   }
@@ -218,15 +184,15 @@ export default function RoadmapFilterDrawer({
                   options={operatorOptions as unknown as { label: string; value: RoadmapFilterOperator }[]}
                   onChange={operator => updateCondition(condition.id, {
                     operator,
-                    value: isValuelessFilterOperator(operator)
-                      ? definition?.kind === 'enum' ? [] : ''
-                      : condition.value,
+                    value: normalizeFilterValueForOperator(
+                      condition.value,
+                      operator,
+                      definition?.kind ?? 'text',
+                    ),
                   })}
                   style={{ minWidth: 0, height: ROADMAP_FILTER_CONTROL_HEIGHT }}
                 />
-                {!isValuelessFilterOperator(condition.operator)
-                  ? renderValueControl(condition)
-                  : <div aria-hidden />}
+                {renderValueControl(condition)}
                 <Tooltip title="删除条件">
                   <Button
                     aria-label="删除筛选条件"

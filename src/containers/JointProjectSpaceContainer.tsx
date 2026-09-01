@@ -38,7 +38,7 @@ export default function JointProjectSpaceContainer() {
           activeKey="mr-version-plan"
           items={[{
             key: 'mr-version-plan',
-            label: 'tOS&整机MR版本计划',
+            label: 'tOS&整机1+N项目计划',
             children: <JointMrVersionPlan onOpenProject={handleOpenProject} />,
           }]}
         />

@@ -117,6 +117,7 @@ export default function ProjectListContainer() {
     updateLinkedQuickFilterCondition([], 'technicalProjectType', ['tdt'])
   ))
   const [projectListTableToolbarHost, setProjectListTableToolbarHost] = useState<HTMLDivElement | null>(null)
+  const [projectListQuickFilterHost, setProjectListQuickFilterHost] = useState<HTMLDivElement | null>(null)
   const [projectListFilterSummaryHost, setProjectListFilterSummaryHost] = useState<HTMLDivElement | null>(null)
   const [aboutMineOnly, setAboutMineOnly] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -609,13 +610,6 @@ export default function ProjectListContainer() {
               </div>
             )}
 
-            {hasActiveFilterConditions && (
-              <div
-                className="pms-project-list-filter-summary-row"
-                ref={setProjectListFilterSummaryHost}
-              />
-            )}
-
             {projectTypeFilter === PROJECT_CATEGORY_TECH && (
               <div className="pms-project-list-technical-type-row" aria-label="技术项目类型快捷筛选">
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目类型</span>
@@ -634,6 +628,20 @@ export default function ProjectListContainer() {
                   >{item.label}</button>
                 ))}
               </div>
+            )}
+
+            {workbenchListState.kind === 'table' && (
+              <div className="pms-project-list-quick-filter-row" aria-label="项目列表快捷筛选">
+                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>快捷筛选</span>
+                <div ref={setProjectListQuickFilterHost} style={{ flex: 1, minWidth: 0 }} />
+              </div>
+            )}
+
+            {hasActiveFilterConditions && (
+              <div
+                className="pms-project-list-filter-summary-row"
+                ref={setProjectListFilterSummaryHost}
+              />
             )}
         </div>
       </div>
@@ -699,7 +707,8 @@ export default function ProjectListContainer() {
                     onViewRow={enterSummaryRow}
                     controlledFilters={technicalFilters}
                     onFiltersChange={setTechnicalFilters}
-                    showQuickFilters={false}
+                    showQuickFilters
+                    quickFilterHost={projectListQuickFilterHost}
                     showTable={false}
                     toolbarHost={projectListTableToolbarHost}
                     filterSummaryHost={projectListFilterSummaryHost}
@@ -719,7 +728,8 @@ export default function ProjectListContainer() {
                     matrixVariant={standardMatrixVariant}
                     controlledFilters={summaryFilters}
                     onFiltersChange={setSummaryFilters}
-                    showQuickFilters={false}
+                    showQuickFilters
+                    quickFilterHost={projectListQuickFilterHost}
                     showTable={false}
                     toolbarHost={projectListTableToolbarHost}
                     filterSummaryHost={projectListFilterSummaryHost}
@@ -794,7 +804,8 @@ export default function ProjectListContainer() {
                     onViewRow={enterSummaryRow}
                     controlledFilters={technicalFilters}
                     onFiltersChange={setTechnicalFilters}
-                    showQuickFilters={false}
+                    showQuickFilters
+                    quickFilterHost={projectListQuickFilterHost}
                     showTable={false}
                     toolbarHost={projectListTableToolbarHost}
                     filterSummaryHost={projectListFilterSummaryHost}
@@ -814,7 +825,8 @@ export default function ProjectListContainer() {
                     matrixVariant={standardMatrixVariant}
                     controlledFilters={summaryFilters}
                     onFiltersChange={setSummaryFilters}
-                    showQuickFilters={false}
+                    showQuickFilters
+                    quickFilterHost={projectListQuickFilterHost}
                     showTable={false}
                     toolbarHost={projectListTableToolbarHost}
                     filterSummaryHost={projectListFilterSummaryHost}
@@ -844,7 +856,8 @@ export default function ProjectListContainer() {
                     onViewRow={enterSummaryRow}
                     controlledFilters={technicalFilters}
                     onFiltersChange={setTechnicalFilters}
-                    showQuickFilters={false}
+                    showQuickFilters
+                    quickFilterHost={projectListQuickFilterHost}
                     toolbarHost={projectListTableToolbarHost}
                     filterSummaryHost={projectListFilterSummaryHost}
                     toolbarTrailingAction={projectListToolbarTrailingActions}
@@ -865,7 +878,8 @@ export default function ProjectListContainer() {
                   matrixVariant={standardMatrixVariant ?? 'tos'}
                   controlledFilters={summaryFilters}
                   onFiltersChange={setSummaryFilters}
-                  showQuickFilters={false}
+                  showQuickFilters
+                  quickFilterHost={projectListQuickFilterHost}
                   toolbarHost={projectListTableToolbarHost}
                   filterSummaryHost={projectListFilterSummaryHost}
                   toolbarTrailingAction={projectListToolbarTrailingActions}

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { createPortal } from 'react-dom'
 import {
   Button,
-  DatePicker,
   Empty,
   Input,
   Pagination,
@@ -23,8 +22,8 @@ import {
 } from '@ant-design/icons'
 import type { ColumnType, ColumnsType } from 'antd/es/table'
 import type { DragEndEvent } from '@dnd-kit/core'
-import dayjs from 'dayjs'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
+import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import {
   SortableProjectListHeader,
@@ -45,13 +44,13 @@ import {
   type ProjectListLeafColumnDefinition,
 } from '@/lib/projectListColumnOrder'
 import {
-  ENUM_FILTER_OPERATORS,
-  MULTI_ENUM_FILTER_OPERATORS,
   applyFilterConditions,
   createFilterCondition,
+  getDefaultFilterOperator,
   getFieldOptionsWithDuplicateDisabled,
   getFilterOperatorsForKind,
   isValuelessFilterOperator,
+  normalizeFilterValueForOperator,
   normalizeFilterConditions,
   type AnyFilterCondition,
   type FilterFieldDefinition,
@@ -78,7 +77,6 @@ import {
   buildStableGroupSegments,
   getProjectListFixedColumnKeys,
   groupProjectListRows,
-  TECHNICAL_PROJECT_TYPE_OPTIONS,
   type ProjectListVariant,
 } from '@/lib/projectListMatrix'
 
@@ -109,6 +107,7 @@ export interface ProjectSummaryTableProps {
   groupBy?: { key: string; fallbackLabel: string }
   machineHierarchy?: boolean
   toolbarHost?: HTMLElement | null
+  quickFilterHost?: HTMLElement | null
   filterSummaryHost?: HTMLElement | null
   showTable?: boolean
   showColumnSettings?: boolean
@@ -190,6 +189,7 @@ export default function ProjectSummaryTable({
   groupBy,
   machineHierarchy = false,
   toolbarHost,
+  quickFilterHost,
   filterSummaryHost,
   showTable = true,
   showColumnSettings = true,
@@ -302,18 +302,13 @@ export default function ProjectSummaryTable({
       .sort((left, right) => left.localeCompare(right, 'zh-CN', { numeric: true }))
       .map(value => ({ label: value, value }))
     if (matrixVariant === 'machine') {
-      return [
-        { key: 'secondaryCategory', label: '项目二级分类', options: projectOptions('secondaryCategory') },
-        { key: 'status', label: '状态', options: projectOptions('status') },
-        ...getProjectSummaryQuickFilterDefinitions(projectType, optionProjects),
-      ]
+      return getProjectSummaryQuickFilterDefinitions(projectType, optionProjects)
     }
     if (!matrixVariant?.startsWith('technical')) {
       return getProjectSummaryQuickFilterDefinitions(projectType, optionProjects)
     }
     const optionsFor = (key: string) => collectOptions(baseRows, key)
     return [
-      { key: 'technicalProjectType', label: '项目类型', options: TECHNICAL_PROJECT_TYPE_OPTIONS.map(option => ({ ...option })) },
       { key: 'technicalTrack', label: '技术赛道', options: optionsFor('technicalTrack') },
       { key: 'projectStage', label: '项目阶段', options: optionsFor('projectStage') },
     ]
@@ -326,7 +321,7 @@ export default function ProjectSummaryTable({
   const filterFieldDefinitions = useMemo<FilterFieldDefinition[]>(() => {
     const definitions = fieldDefinitions.map(definition => {
       const quickDefinition = quickFilterByKey.get(definition.key)
-      const kind = getFilterKind(definition)
+      const kind = quickDefinition ? 'enum' as const : getFilterKind(definition)
       return {
         key: definition.key,
         label: definition.title,
@@ -356,7 +351,7 @@ export default function ProjectSummaryTable({
   )
   const filterFieldDefinitionsRef = useRef(filterFieldDefinitions)
   filterFieldDefinitionsRef.current = filterFieldDefinitions
-  const storageKey = `pms:project-summary:${storageNamespace}:${projectType}`
+  const storageKey = `pms:project-summary:v2:${storageNamespace}:${projectType}:${matrixVariant ?? 'summary'}`
   const definitionSignature = useMemo(
     () => JSON.stringify(columnUnitDefinitions.map(definition => [
       definition.key,
@@ -798,78 +793,22 @@ export default function ProjectSummaryTable({
 
   const handleFieldChange = (condition: AnyFilterCondition, field: string) => {
     const definition = filterDefinitionByKey.get(field)
+    const operator = getDefaultFilterOperator(definition?.kind ?? 'text')
     updateTempCondition(condition.id, {
       field,
-      operator: definition?.multiple ? 'equalsAny' : 'equals',
-      value: definition?.multiple ? [] : '',
+      operator,
+      value: normalizeFilterValueForOperator('', operator, definition?.kind ?? 'text'),
     })
   }
 
   const renderFilterValue = (condition: AnyFilterCondition) => {
-    if (isValuelessFilterOperator(condition.operator)) return null
     const definition = filterDefinitionByKey.get(condition.field)
-    if (!definition) {
-      return <Input size={compactControlSize} disabled placeholder="请先选择筛选字段" />
-    }
-    if (definition.multiple) {
-      return (
-        <Select
-          size={compactControlSize}
-          mode="multiple"
-          aria-label={`${definition.label}筛选值`}
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          style={{ width: '100%' }}
-          placeholder="请选择筛选值"
-          value={Array.isArray(condition.value) ? condition.value : []}
-          options={definition.options}
-          onChange={value => updateTempCondition(condition.id, { value })}
-        />
-      )
-    }
-    if (definition.kind === 'date') {
-      const value = typeof condition.value === 'string' && condition.value
-        ? dayjs(condition.value)
-        : null
-      return (
-        <DatePicker
-          size={compactControlSize}
-          aria-label={`${definition.label}筛选值`}
-          style={{ width: '100%' }}
-          value={value?.isValid() ? value : null}
-          onChange={date => updateTempCondition(
-            condition.id,
-            { value: date ? date.format('YYYY-MM-DD') : '' },
-          )}
-        />
-      )
-    }
-    if (definition.kind === 'enum') {
-      return (
-        <Select
-          size={compactControlSize}
-          aria-label={`${definition.label}筛选值`}
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          style={{ width: '100%' }}
-          placeholder="请选择筛选值"
-          value={typeof condition.value === 'string' && condition.value
-            ? condition.value
-            : undefined}
-          options={definition.options}
-          onChange={value => updateTempCondition(condition.id, { value: value ?? '' })}
-        />
-      )
-    }
     return (
-      <Input
+      <FilterConditionValue
         size={compactControlSize}
-        aria-label={`${definition.label}筛选值`}
-        placeholder="输入筛选值"
-        value={typeof condition.value === 'string' ? condition.value : ''}
-        onChange={event => updateTempCondition(condition.id, { value: event.target.value })}
+        condition={condition}
+        definition={definition}
+        onChange={value => updateTempCondition(condition.id, { value })}
       />
     )
   }
@@ -910,11 +849,7 @@ export default function ProjectSummaryTable({
         <div className={`pms-filter-condition-list ${matrixVariant ? 'is-compact' : ''}`.trim()}>
           {tempFilters.map(condition => {
             const definition = filterDefinitionByKey.get(condition.field)
-            const operatorOptions = definition?.multiple
-              ? MULTI_ENUM_FILTER_OPERATORS
-              : definition?.kind === 'enum'
-                ? ENUM_FILTER_OPERATORS
-                : getFilterOperatorsForKind(definition?.kind ?? 'text')
+            const operatorOptions = getFilterOperatorsForKind(definition?.kind ?? 'text')
             return (
               <div
                 key={condition.id}
@@ -941,15 +876,16 @@ export default function ProjectSummaryTable({
                   aria-label="筛选条件"
                   value={condition.operator}
                   options={operatorOptions as any}
-                  disabled={definition?.multiple}
                   onChange={operator => updateTempCondition(condition.id, {
                     operator,
-                    value: isValuelessFilterOperator(operator) ? '' : condition.value,
+                    value: normalizeFilterValueForOperator(
+                      condition.value,
+                      operator,
+                      definition?.kind ?? 'text',
+                    ),
                   })}
                 />
-                {isValuelessFilterOperator(condition.operator)
-                  ? <span className="pms-filter-value-placeholder" aria-hidden />
-                  : renderFilterValue(condition)}
+                {renderFilterValue(condition)}
                 <Button
                   size={compactControlSize}
                   danger
@@ -995,61 +931,64 @@ export default function ProjectSummaryTable({
     </Space>
   )
 
+  const quickFilterControls = showQuickFilters ? (
+    <Space size={8} wrap className="pms-project-list-quick-filter-controls">
+      <Input
+        size={compactControlSize}
+        allowClear
+        aria-label={matrixVariant === 'technical-subproject' ? '快捷筛选-子项目名称' : '快捷筛选-项目名称'}
+        placeholder={matrixVariant === 'technical-subproject' ? '子项目名称' : '项目名称'}
+        prefix={<FilterOutlined />}
+        style={{ width: 180 }}
+        value={typeof filters.find(item => item.field === 'projectName')?.value === 'string'
+          ? filters.find(item => item.field === 'projectName')?.value as string
+          : ''}
+        onChange={event => setFilters(current => {
+          const others = current.filter(item => item.field !== 'projectName')
+          const value = event.target.value
+          return value ? [...others, { id: 'quick-projectName', field: 'projectName', operator: 'contains', value }] : others
+        })}
+      />
+      {quickFilterDefinitions.map(definition => (
+        <Select
+          size={compactControlSize}
+          key={definition.key}
+          mode="multiple"
+          allowClear
+          showSearch
+          maxTagCount={1}
+          optionFilterProp="label"
+          placeholder={definition.label}
+          aria-label={`快捷筛选-${definition.label}`}
+          style={{ minWidth: 160, maxWidth: 240 }}
+          options={definition.options}
+          value={getLinkedQuickFilterValues(filters, definition.key)}
+          onChange={values => setFilters(current => updateLinkedQuickFilterCondition(
+            current,
+            definition.key,
+            values,
+          ))}
+        />
+      ))}
+    </Space>
+  ) : null
+
   return (
     <div>
-      {(!toolbarHost || showQuickFilters) && <div className="pms-toolbar pms-project-summary-toolbar" style={{
+      {!toolbarHost && <div className="pms-toolbar pms-project-summary-toolbar" style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 12,
         marginBottom: 12,
       }}>
-        <Space size={8} wrap>
-          {showQuickFilters && matrixVariant?.startsWith('technical') && (
-            <Input
-              size={compactControlSize}
-              allowClear
-              aria-label="快捷筛选-项目名称"
-              placeholder="项目名称"
-              prefix={<FilterOutlined />}
-              style={{ width: 180 }}
-              value={typeof filters.find(item => item.field === 'projectName')?.value === 'string'
-                ? filters.find(item => item.field === 'projectName')?.value as string
-                : ''}
-              onChange={event => setFilters(current => {
-                const others = current.filter(item => item.field !== 'projectName')
-                const value = event.target.value
-                return value ? [...others, { id: 'quick-projectName', field: 'projectName', operator: 'contains', value }] : others
-              })}
-            />
-          )}
-          {showQuickFilters && quickFilterDefinitions.map(definition => (
-            <Select
-              size={compactControlSize}
-              key={definition.key}
-              mode="multiple"
-              allowClear
-              showSearch
-              maxTagCount={1}
-              optionFilterProp="label"
-              placeholder={definition.label}
-              aria-label={`快捷筛选-${definition.label}`}
-              style={{ minWidth: 160, maxWidth: 240 }}
-              options={definition.options}
-              value={getLinkedQuickFilterValues(filters, definition.key)}
-              onChange={values => setFilters(current => updateLinkedQuickFilterCondition(
-                current,
-                definition.key,
-                values,
-              ))}
-            />
-          ))}
-        </Space>
+        {quickFilterControls}
 
         {!toolbarHost && toolbarActions}
       </div>}
 
       {toolbarHost && createPortal(toolbarActions, toolbarHost)}
+      {quickFilterHost && quickFilterControls && createPortal(quickFilterControls, quickFilterHost)}
 
       {filterSummaryHost && createPortal((
         <ActiveFilterConditions

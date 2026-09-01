@@ -6692,11 +6692,16 @@ body,
 
 /* Project-list active conditions replace the legacy quick-filter controls. */
 .pms-project-list-secondary-row,
-.pms-project-list-technical-type-row {
+.pms-project-list-technical-type-row,
+.pms-project-list-quick-filter-row {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
+}
+
+.pms-project-list-quick-filter-controls {
+  width: 100%;
 }
 
 .pms-project-list-scope-actions {

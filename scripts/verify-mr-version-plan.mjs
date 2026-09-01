@@ -283,7 +283,7 @@ assert.ok(headerSource.indexOf('项目列表') < headerSource.indexOf('联合项
 assert.ok(headerSource.indexOf('联合项目空间') < headerSource.indexOf('tOS路标'))
 assert.match(uiSource, /\| ['"]jointProjectSpace['"]/)
 assert.match(pageSource, /activeModule === ['"]jointProjectSpace['"]/)
-assert.match(jointContainerSource, /tOS&整机MR版本计划/)
+assert.match(jointContainerSource, /tOS&整机1\+N项目计划/)
 for (const label of ['tOS版本号', '项目名称', '1+N版本类型', '停止发版', '停止发版记录']) {
   assert.ok(jointPlanSource.includes(label))
 }

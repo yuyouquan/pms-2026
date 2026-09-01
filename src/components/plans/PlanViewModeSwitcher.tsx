@@ -13,8 +13,8 @@ export interface PlanViewModeSwitcherProps {
 }
 
 const VIEW_OPTIONS = [
-  { label: '竖版表格', value: 'vertical', icon: <UnorderedListOutlined /> },
   { label: '横版表格', value: 'horizontal', icon: <SwapOutlined /> },
+  { label: '竖版表格', value: 'vertical', icon: <UnorderedListOutlined /> },
   { label: '甘特图', value: 'gantt', icon: <BarChartOutlined /> },
 ] satisfies readonly { label: string; value: PlanWorkspaceViewMode; icon: ReactNode }[]
 

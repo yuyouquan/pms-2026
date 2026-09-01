@@ -12,9 +12,9 @@ assert.equal(typeof matrix.buildStableGroupSegments, 'function', 'missing stable
 assert.equal(typeof matrix.resolveTechnicalProjectType, 'function', 'missing technical type resolver')
 assert.equal(typeof matrix.getProjectListFixedColumnKeys, 'function', 'missing project-list fixed-column resolver')
 assert.deepEqual(matrix.PROJECT_LIST_CATEGORIES, ['整机产品项目', 'tOS版本项目', '技术项目', '能力建设项目'])
-assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.machine.map(item => item.label), ['项目二级分类', '状态', '首销tOS版本', '芯片编码', '品牌', '产品系列', '产品类型'])
-assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.tos.map(item => item.label), ['版本类型', 'tOS版本'])
-assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.technical.map(item => item.label), ['项目类型', '项目名称', '技术赛道', '项目阶段'])
+assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.machine.map(item => item.label), ['项目名称', '首销tOS版本', '芯片编码', '品牌', '产品系列', '产品类型'])
+assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.tos.map(item => item.label), ['项目名称'])
+assert.deepEqual(matrix.PROJECT_LIST_QUICK_FILTERS.technical.map(item => item.label), ['项目名称', '技术赛道', '项目阶段'])
 assert.deepEqual(matrix.TECHNICAL_PROJECT_TYPE_OPTIONS, [
   { label: 'TDT项目', value: 'tdt' },
   { label: '子项目', value: 'subproject' },
@@ -24,7 +24,7 @@ assert.equal(matrix.resolveTechnicalProjectType(['tdt']), 'tdt')
 assert.equal(matrix.resolveTechnicalProjectType(['subproject']), 'subproject')
 assert.deepEqual(matrix.getProjectListFixedColumnKeys('machine'), [])
 assert.deepEqual(matrix.getProjectListFixedColumnKeys('tos'), ['tosVersion'])
-assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-tdt'), ['projectName'])
+assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-tdt'), [])
 assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-subproject'), ['projectName'])
 const seriesGroups = matrix.groupProjectListRows([
   { projectId: '1', productSeries: 'CAMON 50', projectName: 'A' },
@@ -67,22 +67,22 @@ assert.deepEqual(collapsed.map(row => row.projectId), ['1', '3', '4', '5'])
 assert.equal(collapsed[0].__productSeriesProjectCount, 2)
 const expected = {
   tos: ['tOS版本', '版本类型', '项目状态', 'SPM'],
-  'technical-tdt': ['TDT项目名称', '技术赛道', 'TMG及技术领域', '子领域', '技术项目负责人', '技术项目经理', '项目阶段'],
+  'technical-tdt': ['TDT项目名称', '子任务数', '技术赛道', 'TMG及技术领域', '子领域', '技术项目负责人', '技术项目经理', '质量代表', '产品代表', '标准化代表'],
   'technical-subproject': ['子任务名称', '所属TDT项目名称', '核心价值', '开发模式', '首导tOS', '首导整机产品', '项目阶段', '第1版转测', '第2版转测', '第X版转测', 'TDR3'],
 }
 for (const [variant, labels] of Object.entries(expected)) {
   const columns = matrix.getProjectListMatrix(variant, { milestones: ['动态节点'] })
   assert.deepEqual(columns.slice(0, labels.length).map(column => column.label), labels, `${variant} labels`)
-  columns.slice(0, labels.length).forEach(column => assert.deepEqual(
-    { required: column.required, hideable: column.hideable, reorderable: column.reorderable },
-    { required: true, hideable: false, reorderable: true },
-  ))
+  columns.slice(0, labels.length).forEach(column => assert.equal(column.reorderable, true))
 }
-const machineRequiredLabels = [
-  '品牌', '产品线', '产品系列', '项目数', '市场名', '项目名',
-  '版本类型', '首销tOS版本', '产品类型', '研发模式', '安卓版本', '芯片编码',
+const machineFieldLabels = [
+  '品牌', '产品线', '产品系列', '项目数', '市场名', '项目名称', '项目状态', '下一个节点',
+  '版本类型', '首销tOS版本', '当前tOS版本', '芯片编码', '芯片型号', '芯片平台',
+  '研发模式', '开发模式', '产品类型', '软件项目等级', '健康状态', '是否首发项目',
+  '升级策略', '系统类型', 'Kernel版本', '是否大版本升级', '机型分类', '禁止生产时间',
+  '保密级别', '安卓版本', '目标市场', '内存大小', '起步RAM', '是否二段式',
+  '是否外研Mini版本', 'JIRA项目', 'SPM', 'SPM部门（二级部门）',
 ]
-const machineTailLabels = ['SPM', 'SPM部门（二级部门）']
 const machineColumns = matrix.getProjectListMatrix('machine', {
   templateTasks: [
     { id: 'concept', taskName: '概念', order: 1 },
@@ -92,22 +92,26 @@ const machineColumns = matrix.getProjectListMatrix('machine', {
 })
 assert.deepEqual(
   machineColumns.map(column => column.label),
-  [...machineRequiredLabels, '概念启动', 'STR1', ...machineTailLabels],
+  [...machineFieldLabels, '概念启动', 'STR1'],
 )
-assert.ok(machineColumns.every(column => column.required && column.hideable === false))
+assert.ok(machineColumns.every(column => column.hideable && column.reorderable))
+assert.deepEqual(
+  machineColumns.filter(column => column.source !== 'templateTask' && column.defaultVisible).map(column => column.label),
+  ['品牌', '产品线', '产品系列', '项目数', '市场名', '项目名称', '项目状态', '下一个节点', '版本类型', '首销tOS版本', '当前tOS版本', '芯片编码', '研发模式', '开发模式', '软件项目等级', 'SPM', 'SPM部门（二级部门）'],
+)
 const machineColumnsWithAliasedOptionalFields = matrix.getProjectListMatrix('machine', {
   templateTasks: machineColumns.filter(column => column.source === 'templateTask'),
   optionalFields: [
     { key: 'firstSaleTosVersion', label: '首销 tOS 版本' },
-    { key: 'developMode', label: '开发模式' },
+    { key: 'developmentMode', label: '开发模式' },
     { key: 'remark', label: '备注' },
   ],
 })
 assert.equal(machineColumnsWithAliasedOptionalFields.filter(column => column.key === 'firstSaleTosVersion').length, 1)
-assert.equal(machineColumnsWithAliasedOptionalFields.find(column => column.key === 'firstSaleTosVersion')?.hideable, false)
-assert.equal(machineColumnsWithAliasedOptionalFields.filter(column => column.key === 'developMode').length, 1)
-assert.equal(machineColumnsWithAliasedOptionalFields.find(column => column.key === 'developMode')?.hideable, false)
-assert.equal(machineColumnsWithAliasedOptionalFields.find(column => column.key === 'remark')?.hideable, true)
+assert.equal(machineColumnsWithAliasedOptionalFields.find(column => column.key === 'firstSaleTosVersion')?.hideable, true)
+assert.equal(machineColumnsWithAliasedOptionalFields.filter(column => column.key === 'developmentMode').length, 1)
+assert.equal(machineColumnsWithAliasedOptionalFields.find(column => column.key === 'developmentMode')?.hideable, true)
+assert.equal(machineColumnsWithAliasedOptionalFields.some(column => column.key === 'remark'), false, 'machine matrix is limited to the approved 37 field units')
 assert.ok(matrix.getProjectListMatrix('machine', { milestones: ['最新一级模板节点'] }).some(column => column.label === '最新一级模板节点'), 'machine dynamic milestone column')
 assert.ok(matrix.getProjectListMatrix('tos', { milestones: ['最新已发布一级模板节点'] }).some(column => column.label === '最新已发布一级模板节点'), 'tOS latest published L1 milestone column')
 assert.ok(matrix.getProjectListMatrix('technical-tdt', { templateStages: ['阶段'], directLevel2Nodes: ['直属二级'] }).some(column => column.label === '直属二级'), 'TDT dynamic direct level-two column')
@@ -120,7 +124,7 @@ const grouped = matrix.buildGroupedMilestoneColumns([
   { id: 'b-1', parentId: 'phase-b', taskName: 'STR2', order: 1 },
 ], 'machine')
 assert.deepEqual(grouped.map(item => [item.label, item.group?.label]), [['概念启动', '概念'], ['STR1', '概念'], ['STR2', '计划']])
-assert.ok(grouped.every(item => item.required && item.hideable === false && item.reorderable))
+assert.ok(grouped.every(item => item.defaultVisible && item.hideable && item.reorderable))
 
 const childMilestones = matrix.buildGroupedMilestoneColumns([
   { id: 'c1', taskName: '第1版转测', order: 1 },
@@ -143,6 +147,7 @@ const rows = matrix.buildTechnicalProjectListRows({
   today: '2026-06-01',
 })
 assert.equal(rows.tdt[0]['milestone::规划启动'], '2026-02-01', 'latest published TDT date only')
+assert.equal(rows.tdt[0].subprojectCount, 1)
 assert.equal(rows.children[0].projectName, '子项目A')
 assert.equal(rows.children[0].parentProjectName, '端侧AI技术')
 assert.equal(rows.children[0].firstMachineProject, 'X6870')

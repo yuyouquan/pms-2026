@@ -7,15 +7,11 @@ export const TEXT_FILTER_OPERATORS = [
   { value: 'isNotEmpty', label: '不为空' },
 ] as const
 
-export const ENUM_FILTER_OPERATORS = [
-  { value: 'equals', label: '等于' },
-  { value: 'notEquals', label: '不等于' },
-  { value: 'isEmpty', label: '为空' },
-  { value: 'isNotEmpty', label: '不为空' },
-] as const
+export const ENUM_FILTER_OPERATORS = TEXT_FILTER_OPERATORS
 
 export const MULTI_ENUM_FILTER_OPERATORS = [
-  { value: 'equalsAny', label: '任一为' },
+  { value: 'contains', label: '包含' },
+  { value: 'notContains', label: '不包含' },
 ] as const
 
 export const DATE_FILTER_OPERATORS = [
@@ -61,12 +57,35 @@ export type AnyFilterCondition = FilterCondition | LinkedFilterCondition
 export const createFilterCondition = (): FilterCondition => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
   field: '',
-  operator: 'equals',
+  operator: 'contains',
   value: '',
 })
 
 export const isValuelessFilterOperator = (operator: FilterOperator | 'equalsAny') =>
   operator === 'isEmpty' || operator === 'isNotEmpty'
+
+export const getDefaultFilterOperator = (kind: FilterFieldKind): FilterOperator => (
+  kind === 'date' ? 'equals' : 'contains'
+)
+
+export const isMultiValueFilterOperator = (
+  operator: FilterOperator | 'equalsAny',
+  kind: FilterFieldKind,
+) => kind === 'enum' && (
+  operator === 'contains' || operator === 'notContains' || operator === 'equalsAny'
+)
+
+export const normalizeFilterValueForOperator = (
+  value: string | string[],
+  operator: FilterOperator | 'equalsAny',
+  kind: FilterFieldKind,
+): string | string[] => {
+  if (isValuelessFilterOperator(operator)) return ''
+  if (isMultiValueFilterOperator(operator, kind)) {
+    return Array.isArray(value) ? value : (value ? [value] : [])
+  }
+  return Array.isArray(value) ? value[0] ?? '' : value
+}
 
 export function getFilterOperatorsForKind(kind: FilterFieldKind) {
   if (kind === 'enum') return ENUM_FILTER_OPERATORS
@@ -78,7 +97,7 @@ function isOperatorAllowedForDefinition(
   operator: FilterOperator | 'equalsAny',
   definition: FilterFieldDefinition,
 ): boolean {
-  if (operator === 'equalsAny') return definition.multiple === true
+  if (operator === 'equalsAny') return definition.kind === 'enum'
   return getFilterOperatorsForKind(definition.kind).some(option => option.value === operator)
 }
 
@@ -116,15 +135,20 @@ export function normalizeFilterConditions<T extends AnyFilterCondition>(
     if (!isFilterConditionActive(condition) || selectedFields.has(condition.field)) return
     const definition = definitionsByKey?.get(condition.field)
     if (definitionsByKey && !definition) return
-    if (definition && !isOperatorAllowedForDefinition(condition.operator, definition)) return
+    const operator = condition.operator === 'equalsAny' ? 'contains' : condition.operator
+    if (definition && !isOperatorAllowedForDefinition(operator, definition)) return
 
     const normalizedValue = normalizeFilterValue(condition.value)
+    const keepMultipleValues = definition
+      ? isMultiValueFilterOperator(operator, definition.kind)
+      : condition.operator === 'equalsAny'
     selectedFields.add(condition.field)
     normalized.push({
       ...condition,
-      value: isValuelessFilterOperator(condition.operator)
+      operator,
+      value: isValuelessFilterOperator(operator)
         ? ''
-        : condition.operator === 'equalsAny'
+        : keepMultipleValues
           ? normalizedValue
           : Array.isArray(normalizedValue)
             ? normalizedValue[0] ?? ''
@@ -157,11 +181,20 @@ export function applyFilterConditions<T extends object>(
     if (kind === 'date' && isEmptyFilterValue(actualRaw)) return false
     const actualText = String(actualRaw ?? '')
     const actual = (definitionsByKey ? actualText.trim() : actualText).toLowerCase()
-    if (condition.operator === 'equalsAny') {
+    const definition = definitionsByKey?.get(condition.field)
+    if (definition?.kind === 'enum') {
+      const actualValues = (Array.isArray(actualRaw) ? actualRaw : [actualRaw])
+        .map(value => String(value ?? '').trim().toLowerCase())
+        .filter(Boolean)
       const expectedValues = (Array.isArray(condition.value) ? condition.value : [condition.value])
         .map(value => value.trim().toLowerCase())
         .filter(Boolean)
-      return expectedValues.includes(actual)
+      if (condition.operator === 'contains') {
+        return expectedValues.some(value => actualValues.includes(value))
+      }
+      if (condition.operator === 'notContains') {
+        return expectedValues.every(value => !actualValues.includes(value))
+      }
     }
 
     const expected = (Array.isArray(condition.value) ? condition.value[0] ?? '' : condition.value)

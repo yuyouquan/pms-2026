@@ -59,7 +59,7 @@ export function getProjectListFieldDefinitions(
     key: column.key,
     title: column.label,
     source: column.source ?? 'system',
-    defaultVisible: column.required,
+    defaultVisible: column.defaultVisible,
     hideable: column.hideable,
     inputType: column.source === 'templateTask' ? 'date' : 'system',
     width: column.width ?? 140,
@@ -251,17 +251,14 @@ export interface ProjectSummaryQuickFilterDefinition {
 }
 
 const MACHINE_QUICK_FILTERS = [
-  { key: 'firstSaleTosVersion', label: '首销 tOS 版本' },
+  { key: 'firstSaleTosVersion', label: '首销tOS版本' },
   { key: 'chipCode', label: '芯片编码' },
   { key: 'brand', label: '品牌' },
   { key: 'productSeries', label: '产品系列' },
   { key: 'productType', label: '产品类型' },
 ] as const
 
-const TOS_QUICK_FILTERS = [
-  { key: 'versionType', label: '版本类型' },
-  { key: 'tosVersion', label: 'tOS 版本' },
-] as const
+const TOS_QUICK_FILTERS = [] as const
 
 const TOP_LEVEL_QUICK_FILTER_FIELDS = new Set(['brand', 'versionType', 'tosVersion'])
 
@@ -319,7 +316,7 @@ export function updateLinkedQuickFilterCondition(
   const linkedCondition: AnyFilterCondition = {
     id: existing?.id ?? `quick-${field}`,
     field,
-    operator: 'equalsAny',
+    operator: 'contains',
     value: normalizedValues,
   }
   return [...otherConditions, linkedCondition]
@@ -331,7 +328,7 @@ export function getLinkedQuickFilterValues(
 ): string[] {
   const condition = conditions.find(candidate => (
     candidate.field === field
-    && candidate.operator === 'equalsAny'
+    && (candidate.operator === 'contains' || candidate.operator === 'equalsAny')
     && Array.isArray(candidate.value)
   ))
   return condition && Array.isArray(condition.value) ? [...condition.value] : []
@@ -362,31 +359,6 @@ export function normalizeStoredProjectSummaryFilters(
     const normalizedRawValue = Array.isArray(rawValue)
       ? rawValue.filter((entry): entry is string => typeof entry === 'string')
       : rawValue
-    const definition = definitionsByKey.get(candidate.field)
-
-    if (definition?.multiple) {
-      if (isValuelessFilterOperator(
-        candidate.operator as AnyFilterCondition['operator'],
-      )) return
-      const values = [
-        ...new Set(
-          (Array.isArray(normalizedRawValue)
-            ? normalizedRawValue
-            : [normalizedRawValue])
-            .map(entry => entry.trim())
-            .filter(Boolean),
-        ),
-      ]
-      if (values.length === 0) return
-      sanitized.push({
-        id: candidate.id,
-        field: candidate.field,
-        operator: 'equalsAny',
-        value: values,
-      })
-      return
-    }
-
     sanitized.push({
       id: candidate.id,
       field: candidate.field,
