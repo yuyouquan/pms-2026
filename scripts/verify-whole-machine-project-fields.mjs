@@ -154,16 +154,32 @@ for (const symbol of ['WHOLE_MACHINE_BASIC_INFO_FIELDS']) {
 }
 
 if (!jiraEditorSource) fail('Missing shared component: src/components/project-info/JiraProjectEditor.tsx')
+const getJsxTagName = (node, ast) => {
+  const tagName = ts.isJsxElement(node) ? node.openingElement.tagName : node.tagName
+  return tagName.getText(ast)
+}
 const hasJiraEditorJsx = source => {
   const ast = ts.createSourceFile('consumer.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
   let found = false
   const visit = node => {
-    if ((ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) && node.openingElement.tagName.getText(ast) === 'JiraProjectEditor') found = true
+    if ((ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) && getJsxTagName(node, ast) === 'JiraProjectEditor') found = true
     ts.forEachChild(node, visit)
   }
   visit(ast)
   return found
 }
+const importsJiraEditor = source => {
+  const ast = ts.createSourceFile('consumer.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  return ast.statements.some(statement => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== '@/components/project-info/JiraProjectEditor') return false
+    const clause = statement.importClause
+    if (!clause) return false
+    if (clause.name?.text === 'JiraProjectEditor') return true
+    return !!clause.namedBindings && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.some(element => (element.propertyName || element.name).text === 'JiraProjectEditor' && element.name.text === 'JiraProjectEditor')
+  })
+}
+assert.ok(importsJiraEditor(fieldInputSource), 'ProjectInfoFieldInput must import JiraProjectEditor from the shared component')
+assert.ok(importsJiraEditor(containerSource), 'ProjectSpaceContainer must import JiraProjectEditor from the shared component')
 assert.ok(hasJiraEditorJsx(fieldInputSource), 'ProjectInfoFieldInput must render JiraProjectEditor')
 assert.ok(hasJiraEditorJsx(containerSource), 'ProjectSpaceContainer must render JiraProjectEditor')
 
@@ -171,12 +187,13 @@ const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect 
 const expectedColumnKeys = ['server', 'projectKey', 'type', 'shared', 'affectProjects', 'actions']
 const editorAst = ts.createSourceFile('JiraProjectEditor.tsx', jiraEditorSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 let columnEntries = []
+const isExported = node => node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)
 const unwrapExpression = expression => {
   while (expression && (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression) || ts.isParenthesizedExpression(expression))) expression = expression.expression
   return expression
 }
 const visitEditorAst = node => {
-  if (ts.isVariableStatement(node) && node.declarationList.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
+  if (ts.isVariableStatement(node) && isExported(node)) {
     const declaration = node.declarationList.declarations.find(item => item.name.getText(editorAst) === 'JIRA_PROJECT_EDITOR_COLUMNS')
     const initializer = declaration && unwrapExpression(declaration.initializer)
     if (initializer && ts.isArrayLiteralExpression(initializer)) columnEntries = initializer.elements.map(element => {
@@ -195,11 +212,23 @@ assert.equal(columnEntries.length, jiraHeaders.length, 'shared JIRA editor must 
 assert.deepEqual(columnEntries.map(entry => entry?.key), expectedColumnKeys, 'JIRA column definition must contain exactly six keys in order')
 assert.deepEqual(columnEntries.map(entry => entry?.label), jiraHeaders, 'JIRA column definition must contain exactly six labels in order')
 let mapsColumns = false
+const componentBodies = []
+const visitComponentAst = node => {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'JiraProjectEditor' && isExported(node) && node.body) componentBodies.push(node.body)
+  if (ts.isVariableStatement(node) && isExported(node)) {
+    const declaration = node.declarationList.declarations.find(item => item.name.getText(editorAst) === 'JiraProjectEditor')
+    const initializer = declaration && unwrapExpression(declaration.initializer)
+    if (initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) && initializer.body) componentBodies.push(initializer.body)
+  }
+  ts.forEachChild(node, visitComponentAst)
+}
+visitComponentAst(editorAst)
+assert.ok(componentBodies.length > 0, 'shared JIRA editor must export JiraProjectEditor')
 const visitMapAst = node => {
   if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'map' && node.expression.expression.getText(editorAst) === 'JIRA_PROJECT_EDITOR_COLUMNS') mapsColumns = true
   ts.forEachChild(node, visitMapAst)
 }
-visitMapAst(editorAst)
+componentBodies.forEach(body => visitMapAst(body))
 assert.ok(mapsColumns, 'JIRA editor must render from the authoritative column definition')
 assert.match(projectInfoSectionsSource, /pms-project-info-jira-horizontal/, 'JIRA display must use its dedicated horizontal layout class')
 
