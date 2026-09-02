@@ -78,13 +78,9 @@ import {
   type PlanRevisionKind,
 } from '@/lib/planVersioning'
 import {
-  JIRA_AFFECT_PROJECT_OPTIONS,
-  JIRA_PROJECT_NAME_OPTIONS,
-  JIRA_PROJECT_TYPE_OPTIONS,
-  JIRA_SERVER_OPTIONS,
-  createJiraProjectConfig,
   formatJiraProjectTag,
   getJiraProjectUrl,
+  normalizeJiraProjectRows,
   type JiraProjectConfig,
 } from '@/lib/jiraProject'
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
@@ -167,6 +163,7 @@ import TargetProjectInformationView, { getHealthPresentation } from '@/component
 import MarketEditorModal from '@/components/project-info/MarketEditorModal'
 import TosTypeEditorModal from '@/components/project-info/TosTypeEditorModal'
 import ProjectPlanInfoGrid from '@/components/project-info/ProjectPlanInfoGrid'
+import { JiraProjectEditor } from '@/components/project-info/JiraProjectEditor'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import TechnicalProjectInformationView from '@/components/technical-project/TechnicalProjectInformationView'
 import TechnicalPlanModule from '@/components/technical-project/TechnicalPlanModule'
@@ -2143,51 +2140,6 @@ export default function ProjectSpaceContainer() {
     setShowMarketEditor(false)
   }
 
-  const getCurrentJiraProjects = (): JiraProjectConfig[] => {
-    const draftValue = editingProjectFields.jiraProjects
-    const source = draftValue ?? (selectedProject as any)?.jiraProjects ?? []
-    return Array.isArray(source) ? source : []
-  }
-
-  const normalizeJiraProjectRows = (rows: JiraProjectConfig[]) => (
-    rows
-      .map(row => ({
-        ...row,
-        server: row.server || JIRA_SERVER_OPTIONS[0].value,
-        type: row.type || 'sw',
-        projectKey: (row.projectKey || '').trim(),
-        affectProjects: (row.affectProjects || '').trim(),
-      }))
-      .filter(row => row.projectKey)
-  )
-
-  const updateJiraProjectRows = (updater: (rows: JiraProjectConfig[]) => JiraProjectConfig[]) => {
-    setEditingProjectFields((prev: any) => {
-      const source = Array.isArray(prev.jiraProjects) ? prev.jiraProjects : []
-      const rows = source.length > 0 ? source : [createJiraProjectConfig()]
-      return { ...prev, jiraProjects: updater(rows) }
-    })
-  }
-
-  const updateJiraProjectRow = (rowId: string, patch: Partial<JiraProjectConfig>) => {
-    updateJiraProjectRows(rows => rows.map(row => row.id === rowId ? { ...row, ...patch } : row))
-  }
-
-  const addJiraProjectRow = () => {
-    updateJiraProjectRows(rows => [...rows, createJiraProjectConfig()])
-  }
-
-  const copyJiraProjectRow = (rowId: string) => {
-    updateJiraProjectRows(rows => {
-      const row = rows.find(item => item.id === rowId)
-      return row ? [...rows, { ...row, id: `jira-${Date.now()}-${Math.random().toString(16).slice(2)}` }] : rows
-    })
-  }
-
-  const removeJiraProjectRow = (rowId: string) => {
-    updateJiraProjectRows(rows => rows.length > 1 ? rows.filter(row => row.id !== rowId) : [createJiraProjectConfig()])
-  }
-
   const currentProjectTransferApps = useMemo(() =>
     transfer.transferApplications.filter(a => a.projectName === selectedProject?.name),
     [transfer.transferApplications, selectedProject]
@@ -3092,7 +3044,7 @@ export default function ProjectSpaceContainer() {
       isTwoStage: (p as any).isTwoStage || '',
       isSlimVersion: (p as any).isSlimVersion || '',
       isOutsourcedMini: (p as any).isOutsourcedMini || '',
-      jiraProjects: currentJiraProjects.length > 0 ? currentJiraProjects : [createJiraProjectConfig()],
+      jiraProjects: currentJiraProjects,
       buildOption: (p as any).buildOption || '',
       buildMarket: (p as any).buildMarket || '',
       branchInfo: p.branchInfo || '',
@@ -3133,7 +3085,7 @@ export default function ProjectSpaceContainer() {
     }
     const updatedFields = {
       ...editingProjectFields,
-      jiraProjects: normalizeJiraProjectRows(Array.isArray(editingProjectFields.jiraProjects) ? editingProjectFields.jiraProjects : []),
+      jiraProjects: normalizeJiraProjectRows(editingProjectFields.jiraProjects),
     }
     const mergedProject = { ...selectedProject, ...updatedFields } as typeof selectedProject
     const updated = isSoftwareProjectType(mergedProject.type)
@@ -4670,13 +4622,10 @@ export default function ProjectSpaceContainer() {
       return <Space size={4} wrap>{cleaned.map(v => <Tag key={v} color={color} style={{ margin: 0 }}>{v}</Tag>)}</Space>
     }
     const renderSingleTag = (value: any, color = 'geekblue') => value ? <Tag color={color} style={{ margin: 0 }}>{String(value)}</Tag> : <span>-</span>
-    const affectProjectChoices = Array.from(new Map([
-      ...JIRA_AFFECT_PROJECT_OPTIONS,
-      ...projects.map((project: any) => {
-        const value = project.model || project.name
-        return { label: project.name === value ? value : `${value} ${project.name}`, value }
-      }),
-    ].map(option => [option.value, option])).values())
+    const affectProjectChoices = projects.map((project: any) => {
+      const value = project.model || project.name
+      return { label: project.name === value ? value : `${value} ${project.name}`, value }
+    })
     const getProjectFieldValue = (field: { key: string; fallbackKeys?: readonly string[] }) => {
       const source = p as Record<string, any>
       const keys = [field.key, ...(field.fallbackKeys || [])]
@@ -4708,79 +4657,6 @@ export default function ProjectSpaceContainer() {
         </Space>
       )
     }
-    const renderJiraProjectInlineEditor = (jiraProjects: JiraProjectConfig[]) => (
-      <div style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 12px', borderBottom: '1px solid #eef2ff', background: '#f8fafc' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>JIRA库配置</span>
-          <Button size="small" type="primary" icon={<PlusOutlined />} onClick={addJiraProjectRow}>新增一行</Button>
-        </div>
-        <div style={{ overflowX: 'auto', padding: 12 }}>
-          <div style={{ minWidth: 860 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1.15fr 0.9fr 64px 1.15fr 82px', gap: 10, alignItems: 'center', marginBottom: 8, color: '#111827', fontSize: 13, fontWeight: 600 }}>
-              <div style={{ textAlign: 'center' }}>JIRA服务器</div>
-              <div style={{ textAlign: 'center' }}>JIRA库名</div>
-              <div style={{ textAlign: 'center' }}>类型</div>
-              <div style={{ textAlign: 'center' }}>共库</div>
-              <div style={{ textAlign: 'center' }}>
-                <Space size={4}>
-                  <QuestionCircleOutlined style={{ fontSize: 12 }} />
-                  <span>Affect Projects</span>
-                </Space>
-              </div>
-              <div style={{ textAlign: 'center' }}>操作</div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {jiraProjects.map(row => (
-                <div key={row.id} style={{ display: 'grid', gridTemplateColumns: '1.15fr 1.15fr 0.9fr 64px 1.15fr 82px', gap: 10, alignItems: 'center' }}>
-                  <Select
-                    size="small"
-                    value={row.server}
-                    options={JIRA_SERVER_OPTIONS}
-                    onChange={(server) => updateJiraProjectRow(row.id, { server })}
-                  />
-                  <Select
-                    size="small"
-                    showSearch
-                    placeholder="请输入后选择"
-                    value={row.projectKey || undefined}
-                    options={JIRA_PROJECT_NAME_OPTIONS.map(value => ({ label: value, value }))}
-                    filterOption={(input, option) => String(option?.label || '').toLowerCase().includes(input.toLowerCase())}
-                    onChange={(projectKey) => updateJiraProjectRow(row.id, { projectKey })}
-                  />
-                  <Select
-                    size="small"
-                    value={row.type}
-                    options={JIRA_PROJECT_TYPE_OPTIONS}
-                    onChange={(type) => updateJiraProjectRow(row.id, { type })}
-                  />
-                  <div style={{ textAlign: 'center' }}>
-                    <Switch size="small" checked={row.shared} onChange={(shared) => updateJiraProjectRow(row.id, { shared })} />
-                  </div>
-                  <Select
-                    size="small"
-                    allowClear
-                    showSearch
-                    placeholder="请选择项目"
-                    value={row.affectProjects || undefined}
-                    options={affectProjectChoices}
-                    filterOption={(input, option) => String(option?.label || '').toLowerCase().includes(input.toLowerCase())}
-                    onChange={(affectProjects) => updateJiraProjectRow(row.id, { affectProjects: affectProjects || '' })}
-                  />
-                  <Space size={4} style={{ justifyContent: 'center', width: '100%' }}>
-                    <Tooltip title="复制">
-                      <Button type="text" size="small" icon={<CopyOutlined />} onClick={() => copyJiraProjectRow(row.id)} />
-                    </Tooltip>
-                    <Tooltip title="删除">
-                      <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => removeJiraProjectRow(row.id)} />
-                    </Tooltip>
-                  </Space>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    )
     const renderWholeMachineBasicInfoField = (field: (typeof WHOLE_MACHINE_BASIC_INFO_FIELDS)[number]) => {
       const visibleDevelopMode = basicInfoEditMode ? ef.developMode : p.developMode
       if (field.key === 'isOutsourcedMini' && visibleDevelopMode !== '外研') return null
@@ -4821,8 +4697,10 @@ export default function ProjectSpaceContainer() {
         return <Descriptions.Item key={field.key} label={field.label} span={4}>{content}</Descriptions.Item>
       }
       if (field.key === 'jiraProjects') {
-        const jiraProjects = (basicInfoEditMode ? getCurrentJiraProjects() : ((p as any).jiraProjects || [])) as JiraProjectConfig[]
-        content = basicInfoEditMode ? renderJiraProjectInlineEditor(jiraProjects) : renderJiraProjects(jiraProjects)
+        const jiraProjects = (basicInfoEditMode ? ef.jiraProjects : ((p as any).jiraProjects || [])) as JiraProjectConfig[]
+        content = basicInfoEditMode
+          ? <JiraProjectEditor rows={Array.isArray(jiraProjects) ? jiraProjects : []} onChange={rows => setEf('jiraProjects', rows)} disabled={!canEditBasicInfo} affectProjectOptions={affectProjectChoices} />
+          : renderJiraProjects(jiraProjects)
         return <Descriptions.Item key={field.key} label={field.label} span={4}>{content}</Descriptions.Item>
       }
       return <Descriptions.Item key={field.key} label={field.label}>{content}</Descriptions.Item>
