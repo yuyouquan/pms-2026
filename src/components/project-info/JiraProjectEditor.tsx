@@ -105,7 +105,7 @@ export function JiraProjectEditor({
   }
 
   return (
-    <div id={anchorId} className="pms-jira-project-editor">
+    <div id={anchorId} className="pms-jira-project-editor" data-jira-project-editor>
       <div className="pms-jira-project-editor__toolbar">
         <span className="pms-jira-project-editor__title">JIRA库配置</span>
         <Button size="small" type="primary" icon={<PlusOutlined />} disabled={disabled} onClick={() => onChange([...resolvedRows, createJiraProjectConfig()])}>新增一行</Button>

@@ -40,6 +40,7 @@
     "verify:project-field-order": "node scripts/verify-project-field-order-followup.mjs",
     "verify:project-surfaces-visual-refresh": "node scripts/verify-project-surfaces-visual-refresh.mjs",
     "verify:project-surfaces-visual-refresh-browser": "node screenshots/verify-project-surfaces-visual-refresh-browser.mjs",
+    "verify:jira-project-browser": "node screenshots/verify-jira-project-browser.mjs",
     "verify:workbench-browser": "node screenshots/verify-workbench-summary-floating-panels.mjs",
     "verify:redesign-browser": "node screenshots/verify-workbench-technical-project-redesign.mjs",
     "verify:liquid-glass": "node scripts/verify-liquid-glass-theme.mjs",

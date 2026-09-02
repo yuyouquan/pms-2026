@@ -98,6 +98,37 @@ final result: passed
 
 ---
 
+# JIRA 项目展示与编辑 QA（2026-09-02）
+
+- Source visual truth:
+  - `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-0d42ecd0-2af6-4924-92d4-2fec75e81f09.png`
+  - `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-708ef8d7-3edb-457a-afed-d24c7b24e753.jpg`
+- Implementation screenshots:
+  - `docs/prd/assets/jira-project-display.png`
+  - `docs/prd/assets/jira-project-editor.png`
+- Viewport: 1600 × 1000 CSS px，deviceScaleFactor 1。
+- State: 整机产品项目 `X6877-D8400_H991` 项目空间；扩展信息展开；编辑弹窗包含共库关闭与开启两条 JIRA 记录。
+
+## Findings
+
+- P0: none.
+- P1: none. `JIRA项目` 已固定为扩展信息最后一整行，标题居左、内容紧随其后，多个项目标签按行排列并自动换行。
+- P2: none. 编辑器完整展示 `JIRA服务器 / JIRA库名 / 类型 / 共库 / Affect Projects / 操作` 六列；共库关闭后 Affect Projects 保留显示、清空并禁用，共库开启时可填写且必填。
+- P3: 展示参考图中的 JIRA 标题采用上下居中布局；实现遵循用户后续确认，改为标题与内容左右布局。
+
+## Interaction verification
+
+- 新建项目与项目空间编辑均复用同一 JIRA 编辑器组件。
+- JIRA 记录支持新增、复制、删除。
+- 存在 JIRA 行时，JIRA服务器、JIRA库名、类型必填；共库开启时 Affect Projects 必填。
+- 共库由开启切换为关闭后，Affect Projects 值会被清空，控件继续显示但不可编辑。
+- 展示态链接可点击；无 JIRA 数据时显示 `-`。
+- 浏览器自动回归、TypeScript 检查和生产构建均通过。
+
+final result: passed
+
+---
+
 # 项目列表飞书表格式列拖动 QA（2026-08-31）
 
 - Source visual truth: `/var/folders/t_/bxx0q9dj4fd_ylb6wjl6tt5h0000gn/T/codex-clipboard-1166675d-167a-4d5e-9ad5-ab8249c22bfe.png`
