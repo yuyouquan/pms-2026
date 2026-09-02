@@ -375,7 +375,7 @@ registerAssertion('workbench list state follows the selected category', () => {
 registerAssertion('quick filters expose the expected linked project-info fields', () => {
   assert.deepEqual(
     getProjectSummaryQuickFilterDefinitions('整机产品项目', []).map(field => field.key),
-    ['firstSaleTosVersion', 'chipCode', 'brand', 'productSeries', 'productType'],
+    ['firstSaleTosVersion', 'chipCode', 'researchMode'],
   )
   assert.deepEqual(
     getProjectSummaryQuickFilterDefinitions('tOS版本项目', []).map(field => field.key),
