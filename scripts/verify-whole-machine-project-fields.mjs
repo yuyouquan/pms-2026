@@ -158,14 +158,14 @@ assert.match(fieldInputSource, /JiraProjectEditor/, 'ProjectInfoFieldInput must 
 assert.match(containerSource, /JiraProjectEditor/, 'ProjectSpaceContainer must use JiraProjectEditor')
 
 const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
-const headerRows = [...jiraEditorSource.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)]
-  .map(match => match[1])
-  .filter(row => jiraHeaders.every(header => row.includes(header)))
-assert.equal(headerRows.length, 1, 'shared JIRA editor must have one header row containing all six headers')
-const headerRow = headerRows[0] || ''
-assert.equal((headerRow.match(/<th\b/g) || []).length, jiraHeaders.length, 'JIRA header row must contain exactly six header cells')
-const headerPositions = jiraHeaders.map(header => headerRow.indexOf(header))
-assert.deepEqual([...headerPositions].sort((a, b) => a - b), headerPositions, 'JIRA header cells must be ordered exactly as specified')
+const columnDefinitionStart = jiraEditorSource.indexOf('export const JIRA_PROJECT_EDITOR_COLUMNS = [')
+assert.ok(columnDefinitionStart >= 0, 'shared JIRA editor must export JIRA_PROJECT_EDITOR_COLUMNS')
+const columnDefinition = jiraEditorSource.slice(columnDefinitionStart, jiraEditorSource.indexOf('] as const', columnDefinitionStart) + 9)
+const expectedColumnKeys = ['server', 'projectKey', 'type', 'shared', 'affectProjects', 'actions']
+const columnEntries = [...columnDefinition.matchAll(/\{[\s\S]*?key:\s*'([^']+)'[\s\S]*?label:\s*'([^']+)'[\s\S]*?\}/g)]
+assert.deepEqual(columnEntries.map(entry => entry[1]), expectedColumnKeys, 'JIRA column definition must contain exactly six keys in order')
+assert.deepEqual(columnEntries.map(entry => entry[2]), jiraHeaders, 'JIRA column definition must contain exactly six labels in order')
+assert.match(jiraEditorSource, /JIRA_PROJECT_EDITOR_COLUMNS\.map\(/, 'JIRA editor must render from the authoritative column definition')
 assert.match(projectInfoSectionsSource, /pms-project-info-jira-horizontal/, 'JIRA display must use its dedicated horizontal layout class')
 
 for (const forbiddenMarker of [
