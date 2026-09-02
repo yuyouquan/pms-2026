@@ -194,6 +194,12 @@ assert.match(basicInfoSave, /validateJiraProjectRows\(updatedFields\.jiraProject
 assert.doesNotMatch(basicInfoSave, /jiraProjects\.(?:filter|map)\([^)]*projectKey|projectKey[^\n]*\.filter/, 'project-space save must not silently drop incomplete JIRA rows by projectKey')
 assert.match(projectInfoModalSource, /errors=\{jiraProjectErrors\}/, 'ProjectInfoModal must pass JIRA row errors to the shared editor')
 assert.match(containerSource, /errors=\{basicInfoJiraErrors\}/, 'ProjectSpaceContainer must pass JIRA row errors to the shared editor')
+const modalCloseStart = projectInfoModalSource.indexOf('const requestClose = async () => {')
+const modalCloseEnd = projectInfoModalSource.indexOf('\n  const clearAndResetCreateDraft', modalCloseStart)
+const modalClose = projectInfoModalSource.slice(modalCloseStart, modalCloseEnd)
+assert.notEqual(modalCloseStart, -1, 'ProjectInfoModal close handler must exist')
+assert.match(projectInfoModalSource, /const closeProjectInfoModal = \(\) => \{\s*setJiraProjectErrors\(\[\]\)\s*onCancel\(\)/, 'accepted modal cancellation must clear JIRA row errors before closing')
+assert.match(modalClose, /onOk:\s*closeProjectInfoModal/, 'the discard confirmation must clear JIRA row errors only after the user accepts')
 
 const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
 const expectedColumnKeys = ['server', 'projectKey', 'type', 'shared', 'affectProjects', 'actions']

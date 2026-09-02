@@ -744,12 +744,17 @@ export default function ProjectInfoModal({
     return cancelDraftSave
   }, [activeGroups, cancelDraftSave, draftOwnerId, draftReadStatus, isCurrentCreateDraftSession, mode, open, persistCreateDraft, submitting, watchedValues])
 
+  const closeProjectInfoModal = () => {
+    setJiraProjectErrors([])
+    onCancel()
+  }
+
   const requestClose = async () => {
     if (mode === 'create') {
       if (submitting) return
       if (!enumReady) {
         invalidateCreateDraftSession()
-        onCancel()
+        closeProjectInfoModal()
         return
       }
       if (draftReadStatusRef.current === 'loading' || draftReadStatusRef.current === 'idle') {
@@ -758,12 +763,12 @@ export default function ProjectInfoModal({
       if (currentCreateDraftSessionRef.current?.ownerId !== (draftOwnerId || '')) return
       const session = startCreateDraftSession(draftOwnerId || '')
       if (draftReadStatusRef.current !== 'ready' || !draftOwnerId) {
-        if (isCurrentCreateDraftSession(session)) onCancel()
+        if (isCurrentCreateDraftSession(session)) closeProjectInfoModal()
         return
       }
       try {
         await persistCreateDraft(session)
-        if (isCurrentCreateDraftSession(session)) onCancel()
+        if (isCurrentCreateDraftSession(session)) closeProjectInfoModal()
       } catch {
         if (isCurrentCreateDraftSession(session)) messageApi.error('项目草稿自动保存失败')
       }
@@ -771,7 +776,7 @@ export default function ProjectInfoModal({
     }
 
     if (!form.isFieldsTouched()) {
-      onCancel()
+      closeProjectInfoModal()
       return
     }
     modalApi.confirm({
@@ -780,7 +785,7 @@ export default function ProjectInfoModal({
       okText: '放弃',
       cancelText: '继续填写',
       okButtonProps: { danger: true },
-      onOk: onCancel,
+      onOk: closeProjectInfoModal,
     })
   }
 
@@ -1025,7 +1030,7 @@ export default function ProjectInfoModal({
           resetCreateForm()
           setDraftReadStatus('ready')
         }
-        onCancel()
+        closeProjectInfoModal()
         onAfterCreate?.()
         return
       }
