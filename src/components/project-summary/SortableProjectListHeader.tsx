@@ -27,6 +27,17 @@ export interface SortableProjectListHeaderCellProps
   projectListColumnLabel?: string
   projectListHeaderId?: string
   projectListColumnLocked?: boolean
+  projectListLeafKey?: string
+  projectListResizable?: boolean
+  projectListColumnWidth?: number
+  onProjectListResize?: (event: ProjectListColumnResizeEvent) => void
+}
+
+export interface ProjectListColumnResizeEvent {
+  leafKey: string
+  width: number
+  clientX: number
+  phase: 'start' | 'move' | 'end'
 }
 
 interface SortableProjectListHeaderContextProps {
@@ -180,6 +191,10 @@ export function SortableProjectListHeader({
   projectListColumnLabel: unitLabel = unitKey ?? '字段',
   projectListHeaderId: headerId,
   projectListColumnLocked: locked = false,
+  projectListLeafKey: leafKey,
+  projectListResizable: resizable = false,
+  projectListColumnWidth: columnWidth = 140,
+  onProjectListResize,
   children,
   className,
   style,
@@ -203,6 +218,38 @@ export function SortableProjectListHeader({
   const transform = !holdHeaderPosition && sortable.transform
     ? { ...sortable.transform, y: 0 }
     : null
+  const startResize = (event: React.PointerEvent<HTMLSpanElement>) => {
+    if (!resizable || !leafKey || !onProjectListResize) return
+    event.preventDefault()
+    event.stopPropagation()
+    const startX = event.clientX
+    const startWidth = columnWidth
+    document.body.classList.add('pms-project-list-is-resizing')
+    onProjectListResize({ leafKey, width: startWidth, clientX: startX, phase: 'start' })
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault()
+      onProjectListResize({
+        leafKey,
+        width: startWidth + moveEvent.clientX - startX,
+        clientX: moveEvent.clientX,
+        phase: 'move',
+      })
+    }
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      document.body.classList.remove('pms-project-list-is-resizing')
+      onProjectListResize({
+        leafKey,
+        width: startWidth + upEvent.clientX - startX,
+        clientX: upEvent.clientX,
+        phase: 'end',
+      })
+    }
+    window.addEventListener('pointermove', handlePointerMove, { passive: false })
+    window.addEventListener('pointerup', handlePointerUp, { once: true })
+  }
 
   return (
     <th
@@ -231,6 +278,16 @@ export function SortableProjectListHeader({
       {...(!locked && unitKey ? sortable.listeners : {})}
     >
       <span className="pms-project-list-sortable-header-content">{children}</span>
+      {resizable && leafKey ? (
+        <span
+          className="pms-project-list-column-resize-handle"
+          role="separator"
+          aria-label={`调整${unitLabel}列宽`}
+          aria-orientation="vertical"
+          onPointerDown={startResize}
+          onClick={event => event.stopPropagation()}
+        />
+      ) : null}
     </th>
   )
 }

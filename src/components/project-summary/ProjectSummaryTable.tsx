@@ -29,6 +29,7 @@ import {
   SortableProjectListHeader,
   SortableProjectListHeaderContext,
   type ProjectListColumnDragState,
+  type ProjectListColumnResizeEvent,
 } from '@/components/project-summary/SortableProjectListHeader'
 import ActiveFilterConditions from '@/components/project-list/ActiveFilterConditions'
 import {
@@ -44,6 +45,7 @@ import {
   type ProjectListLeafColumnDefinition,
 } from '@/lib/projectListColumnOrder'
 import {
+  clampProjectListColumnWidth,
   getProjectListColumnWidth,
   normalizeProjectListColumnWidths,
 } from '@/lib/projectListColumnWidth'
@@ -286,6 +288,7 @@ export default function ProjectSummaryTable({
   )
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [headerDragState, setHeaderDragState] = useState<ProjectListColumnDragState | null>(null)
+  const tableShellRef = useRef<HTMLDivElement>(null)
   const applyColumnSettings = useCallback((nextSettings: SortableColumnSettingsValue<string>) => {
     setColumnSettings(normalizeProjectListUnitSettings(columnUnitDefinitions, nextSettings))
   }, [columnUnitDefinitions])
@@ -555,6 +558,23 @@ export default function ProjectSummaryTable({
     }
     return classes.join(' ')
   }, [columnUnitDefinitions, headerDragState, visibleDefinitions])
+  const handleProjectListResize = useCallback((event: ProjectListColumnResizeEvent) => {
+    setColumnWidths(current => ({
+      ...current,
+      [event.leafKey]: clampProjectListColumnWidth(event.width),
+    }))
+    const shell = tableShellRef.current
+    if (!shell) return
+    if (event.phase === 'end') {
+      shell.removeAttribute('data-column-resize-active')
+      shell.style.removeProperty('--pms-project-list-resize-x')
+      return
+    }
+    const shellRect = shell.getBoundingClientRect()
+    const guideX = Math.min(shellRect.width, Math.max(0, event.clientX - shellRect.left))
+    shell.dataset.columnResizeActive = 'true'
+    shell.style.setProperty('--pms-project-list-resize-x', `${Math.round(guideX)}px`)
+  }, [])
   const tableColumnByKey = useMemo(
     () => new Map<string, ColumnType<ProjectSummaryRow>>(buildProjectSummaryColumns(fieldDefinitions).map(column => {
       const key = String(column.key)
@@ -595,6 +615,10 @@ export default function ProjectSummaryTable({
             projectListColumnLabel: unitKey === 'milestone' ? '里程碑' : String(field?.title ?? key),
             projectListHeaderId: `leaf::${key}`,
             projectListColumnLocked: fixedColumnKeys.has(key),
+            projectListLeafKey: key,
+            projectListResizable: true,
+            projectListColumnWidth: fieldWidth,
+            onProjectListResize: handleProjectListResize,
           }
         },
         onCell: (record: ProjectSummaryRow) => {
@@ -723,7 +747,7 @@ export default function ProjectSummaryTable({
         },
       }] as const
     })),
-    [collapsedGroups, columnWidths, fieldDefinitions, fixedColumnKeys, getProjectListCellDragClass, groupBy, machineHierarchy],
+    [collapsedGroups, columnWidths, fieldDefinitions, fixedColumnKeys, getProjectListCellDragClass, groupBy, handleProjectListResize, machineHierarchy],
   )
   const columns = useMemo<ColumnsType<ProjectSummaryRow>>(() => {
     const result: ColumnsType<ProjectSummaryRow> = []
@@ -1020,7 +1044,7 @@ export default function ProjectSummaryTable({
         </Typography.Text>
       )}
 
-      {showTable && <div className="pms-solid-surface pms-project-summary-table-shell pms-project-summary-surface">
+      {showTable && <div ref={tableShellRef} className="pms-solid-surface pms-project-summary-table-shell pms-project-summary-surface">
         <SortableProjectListHeaderContext
           items={sortableHeaderIds}
           unitOrder={columnSettings.order}
