@@ -44,6 +44,10 @@ import {
   type ProjectListLeafColumnDefinition,
 } from '@/lib/projectListColumnOrder'
 import {
+  getProjectListColumnWidth,
+  normalizeProjectListColumnWidths,
+} from '@/lib/projectListColumnWidth'
+import {
   applyFilterConditions,
   createFilterCondition,
   getDefaultFilterOperator,
@@ -118,6 +122,7 @@ export interface ProjectSummaryTableProps {
 interface StoredProjectSummaryPreferences {
   filters?: AnyFilterCondition[]
   columns?: Partial<SortableColumnSettingsValue<string>> | string[]
+  columnWidths?: Record<string, number>
 }
 
 const getPopupContainer = () => document.body
@@ -279,6 +284,7 @@ export default function ProjectSummaryTable({
   const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(
     defaultColumnSettings,
   )
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [headerDragState, setHeaderDragState] = useState<ProjectListColumnDragState | null>(null)
   const applyColumnSettings = useCallback((nextSettings: SortableColumnSettingsValue<string>) => {
     setColumnSettings(normalizeProjectListUnitSettings(columnUnitDefinitions, nextSettings))
@@ -372,6 +378,7 @@ export default function ProjectSummaryTable({
   useEffect(() => {
     let storedFilters: AnyFilterCondition[] = []
     let storedColumns: SortableColumnSettingsValue<string> = defaultColumnSettings
+    let storedColumnWidths: Record<string, number> = {}
     try {
       const raw = window.localStorage.getItem(storageKey)
       const parsed = raw ? JSON.parse(raw) as unknown : {}
@@ -386,16 +393,20 @@ export default function ProjectSummaryTable({
         columnUnitDefinitions,
         getStoredColumns(stored.columns),
       )
+      storedColumnWidths = normalizeProjectListColumnWidths(fieldDefinitions, stored.columnWidths)
     } catch {
       storedFilters = []
       storedColumns = defaultColumnSettings
+      storedColumnWidths = {}
     }
     if (!isFilterControlled) setUncontrolledFilters(storedFilters)
     setColumnSettings(storedColumns)
+    setColumnWidths(storedColumnWidths)
     setHydratedKey(hydrationKey)
   }, [
     columnUnitDefinitions,
     defaultColumnSettings,
+    fieldDefinitions,
     filterDefinitionSignature,
     hydrationKey,
     storageKey,
@@ -408,6 +419,7 @@ export default function ProjectSummaryTable({
       window.localStorage.setItem(storageKey, JSON.stringify({
         filters,
         columns: normalizeProjectListUnitSettings(columnUnitDefinitions, columnSettings),
+        columnWidths: normalizeProjectListColumnWidths(fieldDefinitions, columnWidths),
       } satisfies StoredProjectSummaryPreferences))
     } catch {
       // Preference persistence must never block the table.
@@ -415,6 +427,8 @@ export default function ProjectSummaryTable({
   }, [
     columnUnitDefinitions,
     columnSettings,
+    columnWidths,
+    fieldDefinitions,
     filters,
     hydratedKey,
     hydrationKey,
@@ -546,7 +560,7 @@ export default function ProjectSummaryTable({
       const key = String(column.key)
       const fixed = fixedColumnKeys.has(key) ? 'left' as const : undefined
       const field = fieldDefinitions.find(definition => definition.key === key)
-      const fieldWidth = field?.width ?? 140
+      const fieldWidth = getProjectListColumnWidth(key, field?.width ?? 140, columnWidths)
       const lockedWidth = {
         width: fieldWidth,
         minWidth: fieldWidth,
@@ -709,7 +723,7 @@ export default function ProjectSummaryTable({
         },
       }] as const
     })),
-    [collapsedGroups, fieldDefinitions, fixedColumnKeys, getProjectListCellDragClass, groupBy, machineHierarchy],
+    [collapsedGroups, columnWidths, fieldDefinitions, fixedColumnKeys, getProjectListCellDragClass, groupBy, machineHierarchy],
   )
   const columns = useMemo<ColumnsType<ProjectSummaryRow>>(() => {
     const result: ColumnsType<ProjectSummaryRow> = []
@@ -773,7 +787,7 @@ export default function ProjectSummaryTable({
   }, [applyColumnSettings, canDropHeaderUnit, columnSettings, columnUnitDefinitions])
   const scrollWidth = visibleDefinitions.reduce((total, definition) => {
     const field = fieldDefinitions.find(candidate => candidate.key === definition.key)
-    return total + (field?.width ?? 140)
+    return total + getProjectListColumnWidth(definition.key, field?.width ?? 140, columnWidths)
   }, 0)
 
   const commitTempFilters = (next: AnyFilterCondition[]) => {

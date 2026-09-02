@@ -4,9 +4,25 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 
 const root = projectRoot(import.meta.url)
 const columnOrder = loadTypeScriptModule(root, 'src/lib/projectListColumnOrder.ts')
+const columnWidth = loadTypeScriptModule(root, 'src/lib/projectListColumnWidth.ts')
 const tableSource = readSource(root, 'src/components/project-summary/ProjectSummaryTable.tsx')
 const headerSource = readSource(root, 'src/components/project-summary/SortableProjectListHeader.tsx')
 const globalStyles = readSource(root, 'src/styles/globals.css')
+
+assert.equal(columnWidth.PROJECT_LIST_COLUMN_WIDTH_MIN, 80)
+assert.equal(columnWidth.PROJECT_LIST_COLUMN_WIDTH_MAX, 600)
+assert.deepEqual(
+  columnWidth.normalizeProjectListColumnWidths(
+    [{ key: 'projectName', width: 200 }, { key: 'milestone::STR1', width: 132 }],
+    { projectName: 40, 'milestone::STR1': 1000, removed: 120, invalid: 'wide' },
+  ),
+  { projectName: 80, 'milestone::STR1': 600 },
+  'stored widths keep only current leaf keys and clamp to the supported range',
+)
+assert.equal(columnWidth.resizeProjectListColumnWidth(200, 45), 245)
+assert.equal(columnWidth.resizeProjectListColumnWidth(100, -100), 80)
+assert.equal(columnWidth.getProjectListColumnWidth('projectName', 200, { projectName: 260 }), 260)
+assert.equal(columnWidth.getProjectListColumnWidth('status', 112, {}), 112)
 
 const definitions = [
   { key: 'projectName', title: '项目名', defaultVisible: true, hideable: false, fixed: 'left', source: 'system' },
@@ -168,6 +184,9 @@ assert.match(tableSource, /if \(!canDropHeaderUnit\(activeUnitKey, overUnitKey\)
 assert.match(tableSource, /canDrop=\{canDropHeaderUnit\}/, 'announcements must receive the same drop predicate')
 assert.match(tableSource, /components=\{\{[\s\S]*header:[\s\S]*SortableProjectListHeader/, 'Ant table must render the sortable header cell')
 assert.match(tableSource, /applyColumnSettings/, 'header and field settings must share one update function')
+assert.match(tableSource, /columnWidths\?:\s*Record<string, number>/, 'stored preferences must persist leaf column widths')
+assert.match(tableSource, /normalizeProjectListColumnWidths/, 'stored widths must be normalized against live leaf definitions')
+assert.match(tableSource, /getProjectListColumnWidth/, 'rendered columns must consume persisted widths')
 assert.match(tableSource, /pms-project-list-column-drag-source/, 'source unit must highlight its complete body columns')
 assert.match(tableSource, /pms-project-list-column-drop-\$\{headerDragState\.dropEdge\}/, 'drop target must expose a body-wide insertion edge')
 assert.match(tableSource, /onDragStateChange=\{setHeaderDragState\}/, 'table body must receive drag state from the sortable header context')
