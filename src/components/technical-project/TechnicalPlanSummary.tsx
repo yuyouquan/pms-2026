@@ -5,8 +5,9 @@ import { Card, Empty, Space, Tag, Tooltip } from 'antd'
 import { CalendarOutlined, EditOutlined } from '@ant-design/icons'
 import { ClickToEditDate } from '@/components/shared/PlanHelpers'
 import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
-import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
-import { getTechnicalPlanRowKey, selectVisibleTechnicalPlanVersions } from '@/lib/technicalPlanWorkspace'
+import { formatPlanPublishedDate } from '@/lib/planVersioning'
+import { selectLevel1HorizontalVersions } from '@/lib/projectSpaceLevel1Rules'
+import { getTechnicalPlanRowKey } from '@/lib/technicalPlanWorkspace'
 import { getTechnicalPlanKey, useTechnicalPlanStore, type TechnicalPlanScope } from '@/stores/technicalPlan'
 import type { TechnicalTemplateTask } from '@/types/technicalPlan'
 
@@ -30,11 +31,9 @@ const normalizeTasks = (tasks: readonly TechnicalTemplateTask[]) => tasks.map(ta
 export default function TechnicalPlanSummary({ scope, label, canEditPlan }: TechnicalPlanSummaryProps) {
   const instance = useTechnicalPlanStore(state => state.plansByKey[getTechnicalPlanKey(scope)])
   const updateCurrentTasks = useTechnicalPlanStore(state => state.updateCurrentTasks)
-  const visibleVersions = selectVisibleTechnicalPlanVersions(instance?.versions || [], canEditPlan)
-  const latestPublishedVersion = [...visibleVersions]
-    .filter(version => version.status === '已发布')
-    .sort(comparePublishedTechnicalPlanVersions)[0]
-  const activeDraft = canEditPlan ? visibleVersions.find(version => version.status === '修订中') : undefined
+  const visibleVersions = selectLevel1HorizontalVersions(instance?.versions || [], { surface: 'basic-info' })
+  const latestPublishedVersion = visibleVersions.find(version => version.status === '已发布')
+  const activeDraft = visibleVersions.find(version => version.status === '修订中')
   const currentVersion = activeDraft
     || visibleVersions.find(version => version.id === instance?.currentVersionId)
     || latestPublishedVersion
@@ -74,23 +73,23 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
       endDatesByTaskId: Object.fromEntries(projection.rows.map(task => [getTechnicalPlanRowKey(task), task.planEndDate || ''])),
     }
   })
-  const actualStarts = currentProjection.rows.map(row => Date.parse(row.actualStartDate)).filter(Number.isFinite)
-  const actualEnds = currentProjection.rows.map(row => Date.parse(row.actualEndDate)).filter(Number.isFinite)
+  const actualProjection = projectLevel1Plan(normalizeTasks(latestPublishedVersion?.tasks || []), { mode: projectionMode })
+  const actualStarts = actualProjection.rows.map(row => Date.parse(row.actualStartDate)).filter(Number.isFinite)
+  const actualEnds = actualProjection.rows.map(row => Date.parse(row.actualEndDate)).filter(Number.isFinite)
   const actualCycleDays = actualStarts.length && actualEnds.length
     ? Math.max(0, Math.ceil((Math.max(...actualEnds) - Math.min(...actualStarts)) / 86_400_000))
     : null
   const actualEndDatesByTaskId = Object.fromEntries(
-    currentProjection.rows.map(task => [getTechnicalPlanRowKey(task), task.actualEndDate || '']),
+    actualProjection.rows.map(task => [getTechnicalPlanRowKey(task), task.actualEndDate || '']),
   )
-  const canEditPlanEnd = canEditPlan && currentVersion.status === '修订中'
   const canEditActualEnd = canEditPlan && (
     currentVersion.status === '修订中' || currentVersion.id === latestPublishedVersion?.id
   )
-  const updateDate = (taskId: string, field: 'planEndDate' | 'actualEndDate', value: string) => {
-    if (field === 'planEndDate' ? !canEditPlanEnd : !canEditActualEnd) return
+  const updateActualDate = (taskKey: string, value: string) => {
+    if (!canEditActualEnd) return
     updateCurrentTasks(
       scope,
-      currentVersion.tasks.map(task => task.id === taskId ? { ...task, [field]: value } : task),
+      currentVersion.tasks.map(task => getTechnicalPlanRowKey(task) === taskKey ? { ...task, actualEndDate: value } : task),
       scope.kind === 'subproject' ? 1 : 2,
     )
   }
@@ -148,19 +147,20 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
             return (
               <tr key={row.version.id} className={isCurrent ? 'technical-plan-summary-current' : undefined}>
                 <td className="technical-plan-summary-sticky-version">
-                  <Space size={4}>
-                    <span className="technical-plan-summary-version">{row.version.versionNo}</span>
-                    {row.version.status === '修订中' && <Tooltip title="修订中"><EditOutlined aria-label="修订中" /></Tooltip>}
-                  </Space>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <Space size={4}>
+                      <span className="technical-plan-summary-version">{row.version.versionNo}</span>
+                      {row.version.status === '修订中' && <Tooltip title="修订中"><EditOutlined aria-label="修订中" /></Tooltip>}
+                    </Space>
+                    <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 400 }}>{formatPlanPublishedDate(row.version)}</span>
+                  </div>
                 </td>
                 <td className="technical-plan-summary-sticky-cycle">{displayCycle(row.cycleDays)}</td>
                 {columns.map(column => {
                   const planEndDate = row.endDatesByTaskId[getTechnicalPlanRowKey(column)]
                   return (
                     <td key={getTechnicalPlanRowKey(column)}>
-                      {isCurrent && canEditPlanEnd
-                        ? <ClickToEditDate align="center" value={planEndDate || ''} onChange={value => updateDate(column.id, 'planEndDate', value)} />
-                        : planEndDate || '-'}
+                      {planEndDate || '-'}
                     </td>
                   )
                 })}
@@ -171,11 +171,13 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
             <td className="technical-plan-summary-sticky-version"><span className="technical-plan-summary-version">实际</span></td>
             <td className="technical-plan-summary-sticky-cycle">{displayCycle(actualCycleDays)}</td>
             {columns.map(column => {
-              const actualEndDate = actualEndDatesByTaskId[getTechnicalPlanRowKey(column)] || ''
+              const taskKey = getTechnicalPlanRowKey(column)
+              const actualTask = actualProjection.rows.find(task => getTechnicalPlanRowKey(task) === taskKey)
+              const actualEndDate = actualTask ? actualEndDatesByTaskId[taskKey] || '' : ''
               return (
-                <td key={getTechnicalPlanRowKey(column)}>
-                  {canEditActualEnd
-                    ? <ClickToEditDate align="center" value={actualEndDate} onChange={value => updateDate(column.id, 'actualEndDate', value)} />
+                <td key={taskKey}>
+                  {actualTask && canEditActualEnd
+                    ? <ClickToEditDate align="center" value={actualEndDate} onChange={value => updateActualDate(taskKey, value)} />
                     : actualEndDate || '-'}
                 </td>
               )

@@ -211,7 +211,11 @@ export function resolveMrPermissions(input: MrPermissionInput): MrPermissionResu
   if (!currentUser) return result
   result.canView = true
   if (input.globalAdminUsers.some(user => trim(user) === currentUser)) {
-    return { canView: true, canEditTemplate: true, canEditTos: true, canEditMachine: true, canStopRelease: true, canEditMarket: true }
+    return {
+      canView: true, canEditTemplate: true, canEditTos: true, canEditMachine: true,
+      canStopRelease: true, canEditMarket: true,
+      ...(input.context === 'joint-machine' ? { canManageMachineLocks: true } : {}),
+    }
   }
   const configuredMachineSpms = input.machineSpmUsers?.length ? input.machineSpmUsers : [input.machineSpm]
   const machineSpmUsers = configuredMachineSpms
@@ -225,16 +229,38 @@ export function resolveMrPermissions(input: MrPermissionInput): MrPermissionResu
     result.canEditTos = true
     result.tosProjectIds = [tosProjectId]
   }
-  if (input.context === 'joint-machine' && machineProjectId && isMachineSpm) {
-    result.canEditMachine = true
-    result.canStopRelease = true
-    result.machineProjectIds = [machineProjectId]
+  if (input.context === 'joint-machine' && machineProjectId) {
+    const isTosManager = !!tosProjectId && input.tosManagerUsers.some(user => trim(user) === currentUser)
+    result.canEditMachine = resolveMachineRowEditAccess({
+      locked: input.locked === true,
+      isMachineSpm,
+      isTosManager,
+      isGlobalAdmin: false,
+    })
+    if (isMachineSpm) {
+      result.canStopRelease = true
+      result.machineProjectIds = [machineProjectId]
+    }
+    if (isTosManager) {
+      result.canManageMachineLocks = true
+      result.tosProjectIds = [tosProjectId]
+    }
   }
   if (input.context === 'machine-market' && machineProjectId && isMachineSpm) {
     result.canEditMarket = true
     result.machineProjectIds = [machineProjectId]
   }
   return result
+}
+
+export function resolveMachineRowEditAccess(input: {
+  locked: boolean
+  isMachineSpm: boolean
+  isTosManager: boolean
+  isGlobalAdmin: boolean
+}): boolean {
+  if (input.isGlobalAdmin || input.isTosManager) return true
+  return !input.locked && input.isMachineSpm
 }
 
 export function createTosMrVersionInstance(input: CreateTosMrVersionInput): TosMrVersionInstance {

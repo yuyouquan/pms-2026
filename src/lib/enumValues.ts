@@ -13,7 +13,7 @@ import {
 
 export { ENUM_TYPE_KEYS }
 
-type SingleEnumTypeKey = Exclude<EnumTypeKey, 'tmg-subdomain-mapping' | 'chip-mapping' | 'project-category-mapping'>
+type SingleEnumTypeKey = Exclude<EnumTypeKey, 'tmg-subdomain-mapping' | 'chip-mapping' | 'project-category-mapping' | 'package-mode-mapping'>
 
 const singleDefinition = <K extends SingleEnumTypeKey, L extends string, S extends string>(
   key: K,
@@ -79,6 +79,18 @@ export const ENUM_DEFINITIONS = {
     ],
   },
   'core-value': singleDefinition('core-value', '核心价值', '技术项目'),
+  'android-version': singleDefinition('android-version', '安卓版本', '整机产品项目'),
+  'package-mode-mapping': {
+    key: 'package-mode-mapping',
+    label: '组包方式',
+    scopeLabel: '整机产品项目',
+    kind: 'package-map',
+    columns: [
+      { key: 'androidVersion', label: '安卓版本' },
+      { key: 'chipModel', label: '芯片型号' },
+      { key: 'packageMode', label: '组包方式' },
+    ],
+  },
 } as const satisfies Record<EnumTypeKey, EnumTypeDefinition>
 
 const TOS_PREFIXED_TYPES = new Set<EnumTypeKey>(['first-sale-tos', 'roadmap-tos'])
@@ -198,6 +210,23 @@ export function validateAndNormalizeEnumRow<K extends EnumTypeKey>(
         fieldErrors: { ipmProjectCategory: 'IPM项目分类不能重复' },
       }
     }
+  } else if (definition.kind === 'package-map') {
+    const duplicate = comparableRows.some(existing => (
+      'androidVersion' in existing
+      && 'chipModel' in existing
+      && normalizeEnumFieldValue(type, 'androidVersion' as EnumFieldKeyByType<K>, existing.androidVersion) === row.androidVersion
+      && normalizeEnumFieldValue(type, 'chipModel' as EnumFieldKeyByType<K>, existing.chipModel) === row.chipModel
+    ))
+    if (duplicate) {
+      return {
+        ok: false,
+        reason: 'duplicate',
+        fieldErrors: {
+          androidVersion: '该组合已存在',
+          chipModel: '该组合已存在',
+        },
+      }
+    }
   } else {
     const fields = definition.columns.map(column => column.key)
     const duplicate = comparableRows.some(existing => {
@@ -306,5 +335,7 @@ export function createInitialEnumRows(): EnumRowsByType {
       { domain: '其他', subdomain: 'AIOT' },
     ]),
     'core-value': singleSeedRows('core-value', ['追赶', '人无我有', '人有我有']),
+    'android-version': [],
+    'package-mode-mapping': [],
   }
 }

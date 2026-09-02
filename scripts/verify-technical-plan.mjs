@@ -7,6 +7,7 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/technicalPlanRules.ts')
 const level1Rules = loadTypeScriptModule(root, 'src/lib/level1PlanRules.ts')
+const projectSpaceRules = loadTypeScriptModule(root, 'src/lib/projectSpaceLevel1Rules.ts')
 assert.deepEqual(rules.TDT_TEMPLATE_SEED, [['规划阶段', ['规划启动', 'charter DCP']], ['概念阶段', ['TDR1']], ['计划阶段', ['TDR2', 'PDCP']], ['开发验证阶段', ['TDR3_X', 'TDCP_X']], ['迁移阶段', ['TDR4', 'EDCP']]], 'TDT seed is complete and ordered')
 assert.deepEqual(rules.SUBPROJECT_TEMPLATE_SEED, ['第1版转测', '第2版转测', 'TDR3'], 'subproject seed is ordered')
 assert.throws(() => rules.validateTechnicalTemplateDepth('tdt', [{ children: [{ children: [{ children: [] }] }] }]), /depth/i)
@@ -85,8 +86,24 @@ assert.match(technicalPlanUiSource, /创建正式版本/, 'technical project pla
 assert.match(technicalPlanUiSource, /revisionKind/, 'technical project plan passes revision kind into its store')
 assert.match(technicalSummarySource, /canEditPlan/, 'technical basic-information summary accepts plan-maintenance permission')
 assert.match(technicalSummarySource, /updateCurrentTasks/, 'technical basic-information summary writes to the shared plan store')
-assert.match(technicalSummarySource, /const activeDraft = canEditPlan[\s\S]{0,220}const currentVersion = activeDraft/, 'authorized technical basic-information views prioritize the active revision even after another version was selected')
-assert.equal((technicalSummarySource.match(/<ClickToEditDate/g) || []).length >= 2, true, 'technical basic-information summary edits draft and actual completion dates inline')
+const summaryVisibilityVersions = [
+  { id: 'published', versionNo: 'V1', status: '已发布' },
+  { id: 'draft', versionNo: 'V2', status: '修订中' },
+]
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions(summaryVisibilityVersions, { surface: 'basic-info', includeDraft: false }).map(version => version.id),
+  ['published', 'draft'],
+  'technical basic-information shows the active revision to users without plan-maintenance permission',
+)
+assert.deepEqual(
+  projectSpaceRules.selectLevel1HorizontalVersions(summaryVisibilityVersions, { surface: 'basic-info', includeDraft: true }).map(version => version.id),
+  ['published', 'draft'],
+  'technical basic-information shows the same active revision to authorized maintainers',
+)
+assert.match(technicalSummarySource, /const activeDraft = visibleVersions\.find[\s\S]{0,180}const currentVersion = activeDraft/, 'technical basic-information prioritizes the visible active revision independently of permission')
+assert.equal((technicalSummarySource.match(/<ClickToEditDate/g) || []).length, 1, 'technical basic-information keeps all version plan dates read-only and exposes only the actual-date editor')
+assert.match(technicalSummarySource, /const canEditActualEnd = canEditPlan &&/, 'technical basic-information gates actual-date edits on plan-maintenance permission')
+assert.match(technicalSummarySource, /actualTask && canEditActualEnd[\s\S]{0,240}<ClickToEditDate/, 'technical basic-information actual-date editor also requires a matching published task')
 assert.match(technicalInformationSource, /<TechnicalPlanSummary[\s\S]{0,220}canEditPlan=/, 'technical information forwards plan-maintenance permission to the summary')
 assert.match(projectSpaceContainerSource, /<TechnicalProjectInformationView[\s\S]{0,420}canEditPlan=\{canGovernLevel1Plan\}/, 'project space uses technical plan permission instead of basic-information permission for plan dates')
 

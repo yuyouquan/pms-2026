@@ -3,6 +3,20 @@ export type PlanRevisionKind = 'gray' | 'formal'
 export interface PlanVersionLike {
   versionNo: string
   status?: string
+  publishedAt?: string
+}
+
+export const formatPlanPublishedDate = (version: PlanVersionLike): string => {
+  if (version.status === '修订中') return '修订中'
+  if (!version.publishedAt) return '-'
+  const publishedAt = new Date(version.publishedAt)
+  if (!Number.isFinite(publishedAt.getTime())) return '-'
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(publishedAt)
 }
 
 interface ParsedPlanVersion {

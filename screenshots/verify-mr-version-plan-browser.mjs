@@ -98,8 +98,19 @@ function installDeterministicBrowserEnvironment(fixedNow) {
   FixedDate.UTC = NativeDate.UTC
   globalThis.Date = FixedDate
   try {
-    window.localStorage.removeItem('pms-mr-version-plan-store')
-    window.localStorage.removeItem('pms-level3-plan-store')
+    const preserveNextReloadKey = 'pms-mr-browser-preserve-next-reload'
+    if (window.localStorage.getItem(preserveNextReloadKey)) {
+      window.localStorage.removeItem(preserveNextReloadKey)
+    } else {
+      window.localStorage.removeItem('pms-mr-version-plan-store')
+      window.localStorage.removeItem('pms-level3-plan-store')
+    }
+    window.localStorage.setItem('pms-enum-values', JSON.stringify({
+      state: { rowsByType: { 'package-mode-mapping': [
+        { id: 'mr-browser-package', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: '整包' },
+      ] } },
+      version: 3,
+    }))
   } catch {
     // about:blank has no storage origin; this hook runs again for the app origin.
   }
@@ -337,11 +348,11 @@ async function assertJointStickyColumns() {
     }))
   }
   for (const result of results) {
-    assert.equal(result.headers.length, 2)
+    assert.equal(result.headers.length, 3)
     assert.ok(result.headers.every(cell => cell.opaque && cell.ownsCenter && cell.zIndex === 6))
     for (const row of result.rows) {
       assert.ok(row)
-      assert.equal(row.fixed.length, 2)
+      assert.equal(row.fixed.length, 3)
       assert.ok(row.fixed.every(cell => cell.opaque && cell.ownsCenter && cell.zIndex === 3))
       assert.ok(result.headers.every(header => header.zIndex > row.fixed[0].zIndex))
       assert.equal(row.noOverlap, true)
@@ -708,6 +719,9 @@ try {
   assert.equal(jointRows[0].pickerCount, 0)
   assert.equal(jointRows[0].selectCount, 0)
   assert.ok(jointRows.findIndex(row => row.text.includes('X6855_H8917')) > 0)
+  assert.match(await page.$eval('.pms-joint-mr-table thead', node => node.innerText), /芯片编码/)
+  assert.equal(await page.evaluate(machineRow => [...document.querySelectorAll('tr[data-mr-row-kind="machine"]')]
+    .find(row => row.dataset.mrProjectId === machineRow)?.innerText.includes('整包') ?? false, '1'), true)
   pass(2, 'tOS reference precedes machine rows and is read-only')
 
   await assertJointStickyColumns()
@@ -762,13 +776,48 @@ try {
   await fillInput('input[aria-label="项目名称"]', '')
   pass(4, 'initial MR scenario matrix is visible and filters isolate clean rows')
 
+  assert.equal(await page.$('.pms-joint-mr-batch-actions'), null, '零勾选时不显示批量操作区')
+  assert.equal(await page.$eval(`${tosRow('16.3.0.140')} input[type="checkbox"]`, input => input.disabled), true, 'tOS 基准行不可勾选')
+  await page.click('input[aria-label="选择-16.3.0.140-X6877-D8400_H991"]')
+  await page.click('input[aria-label="选择-16.3.0.140-X6855_H8917"]')
+  await page.waitForSelector('.pms-joint-mr-batch-actions', { visible: true })
+  assert.match(await page.$eval('.pms-joint-mr-batch-actions', node => node.innerText), /^已勾选 2 个项目\s*锁定\s*解锁$/)
+  await clickVisibleText('锁定', '.pms-joint-mr-batch-actions button')
+  await page.waitForSelector('.ant-modal-wrap', { visible: true })
+  const lockConfirmationText = await page.$eval('.ant-modal-wrap', node => node.innerText)
+  assert.match(lockConfirmationText, /锁定所选项目[\s\S]*16\.3\.0\.140 \+ X6877-D8400_H991/)
+  assert.match(lockConfirmationText, /16\.3\.0\.140 \+ X6855_H8917/)
+  await clickTopVisibleModalButton('取消')
+  assert.notEqual(await page.$('.pms-joint-mr-batch-actions'), null, '取消保留选择')
+  await clickVisibleText('锁定', '.pms-joint-mr-batch-actions button')
+  await page.waitForSelector('.ant-modal-wrap', { visible: true })
+  await clickTopVisibleModalButton('锁定')
+  await page.waitForFunction(() => {
+    const raw = window.localStorage.getItem('pms-mr-version-plan-store')
+    const locks = raw ? JSON.parse(raw).state?.machineRowLocks : null
+    return Boolean(locks?.['1::19::16.3.0.140'] && locks?.['3::19::16.3.0.140'])
+  })
+  assert.equal(await page.$('.pms-joint-mr-batch-actions'), null, '成功后清空选择')
+  assert.notEqual(await page.$(`${machineRow('1', '16.3.0.140')} [aria-label="已锁定"]`), null)
+  await page.evaluate(() => window.localStorage.setItem('pms-mr-browser-preserve-next-reload', 'true'))
+  await page.reload({ waitUntil: 'networkidle2', timeout: TIMEOUT })
+  await wait(1_000)
+  await openMainMenu('jointProjectSpace')
+  await page.waitForSelector('.pms-joint-mr-table', { visible: true })
+  assert.notEqual(await page.$(`${machineRow('1', '16.3.0.140')} [aria-label="已锁定"]`), null, '刷新后锁定持久保留')
+
   await switchUser('王五')
-  assert.equal(await page.$eval('[aria-label="1-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), false)
+  assert.equal(await page.$eval('[aria-label="1-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), true, '锁定后整机 SPM 不可编辑')
+  assert.equal(await page.$eval('[aria-label="1-16.3.0.145-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), false)
   assert.equal(await page.$eval('[aria-label="3-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), true)
-  await chooseSelect('1-16.3.0.140-1+N版本类型', '4', '2')
-  assert.equal((await readMrState()).machinePlansByKey['1::16.3.0.140'].transferType, '4')
-  await chooseSelect('1-16.3.0.140-1+N版本类型', '2', '4')
-  pass(5, 'machine SPM edits only the owned project')
+  assert.equal(await page.$('.pms-joint-mr-table .ant-table-selection-column'), null, 'SPM 不显示选择列')
+  await chooseSelect('1-16.3.0.145-1+N版本类型', '4', '1')
+  assert.equal((await readMrState()).machinePlansByKey['1::16.3.0.145'].transferType, '4')
+  await chooseSelect('1-16.3.0.145-1+N版本类型', '1', '4')
+  await switchUser('李白')
+  assert.equal(await page.$eval('[aria-label="1-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), false, '对应 tOS 版本项目经理可编辑锁定行')
+  assert.notEqual(await page.$('.pms-joint-mr-table .ant-table-selection-column'), null, '版本项目经理显示选择列')
+  pass(5, 'locked rows tighten SPM access while the matching manager remains editable')
 
   await switchUser('张三')
   assert.equal(await page.$eval('[aria-label="3-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), false)

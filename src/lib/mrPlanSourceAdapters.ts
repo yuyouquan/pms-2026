@@ -8,7 +8,7 @@ import {
   type MarketVersionsState,
 } from '@/lib/marketRules'
 import { getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
-import { normalizeTosSnapshot } from '@/lib/enumConsumers'
+import { normalizeTosSnapshot, resolvePackageMode } from '@/lib/enumConsumers'
 import { normalizeMrBusinessDate } from '@/lib/mrVersionPlanRules'
 import {
   getMainTosType,
@@ -18,6 +18,7 @@ import {
   type TosTypeVersionsState,
 } from '@/lib/tosTypeRules'
 import type { ProjectItem } from '@/types/app'
+import type { PackageModeMappingRow } from '@/types/enums'
 import type {
   MrAggregationSources,
   MrLevel1TaskLike,
@@ -52,6 +53,7 @@ export interface MrStoreAdapterInput {
   tosTypeVersionsByKey: TosTypeVersionsState
   publishedSnapshots: SnapshotState
   fallbackVersions: readonly MrPlanVersionLike[]
+  packageModeRows: readonly PackageModeMappingRow[]
 }
 
 function cloneVersions(versions: readonly MrPlanVersionLike[]): MrPlanVersionLike[] {
@@ -175,6 +177,7 @@ function normalizeUsers(value: unknown): string[] {
 export function projectMachineMrMetadata(
   project: ProjectItem,
   marketRows: readonly MarketConfigRow[],
+  packageModeRows: readonly PackageModeMappingRow[] = [],
 ): MrMachineMetadata {
   const normalizedRows = normalizeMarketRows([...marketRows])
   const spmUsers = normalizeUsers(projectValue(project, 'machineSpm'))
@@ -185,10 +188,12 @@ export function projectMachineMrMetadata(
     spm: spmUsers.join(','),
     spmUsers,
     isMada: normalizedRows.some(row => row.isMadaControlled === '是') ? '是' : '否',
-    socPlatform: text(projectValue(project, 'chipModel'))
-      || text(projectValue(project, 'platform'))
-      || text(projectValue(project, 'chipPlatform')),
-    packageMode: '/',
+    chipCode: text(projectValue(project, 'chipCode')),
+    packageMode: resolvePackageMode(
+      packageModeRows,
+      projectValue(project, 'androidVersion'),
+      projectValue(project, 'chipModel'),
+    ) || '/',
   }
 }
 
@@ -271,7 +276,7 @@ export function buildMrAggregationSources(input: MrStoreAdapterInput): MrAggrega
       fallbackVersions: input.fallbackVersions,
     })
     result.machineProjects.push(getMachineProjectSource(project))
-    result.machineMetadataByProjectId[project.id] = projectMachineMrMetadata(project, marketRows)
+    result.machineMetadataByProjectId[project.id] = projectMachineMrMetadata(project, marketRows, input.packageModeRows)
     if (source) result.latestPublishedLevel1ByProjectId[project.id] = source
   })
 

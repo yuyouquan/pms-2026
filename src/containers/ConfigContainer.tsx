@@ -644,7 +644,7 @@ export default function ConfigContainer() {
 
     const publishedVersionId = currentVersion
     const publishedVersion = versions.find(v => v.id === publishedVersionId)
-    setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
+    setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布', publishedAt: new Date().toISOString() } : v))
     const snapshot = JSON.parse(JSON.stringify(configTasks))
     setPublishedSnapshots(prev => ({
       ...prev,

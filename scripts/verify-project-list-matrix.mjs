@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
-import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
+import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const matrix = loadTypeScriptModule(projectRoot(import.meta.url), 'src/lib/projectListMatrix.ts')
 assert.equal(typeof matrix.getProjectListMatrix, 'function', 'missing getProjectListMatrix')
@@ -223,6 +223,18 @@ assert.deepEqual(segments.map(segment => segment.key), ['phase::segment-0', 'pla
 
 const seedRoot = projectRoot(import.meta.url)
 const seedData = loadTypeScriptModule(seedRoot, 'src/data/projects.ts')
+const allowedStatuses = {
+  '整机产品项目': new Set(['待立项', '在研', '上市', 'EOS', '转维', '已取消', '已暂停']),
+  'tOS版本项目': new Set(['在研', '已完成']),
+  '能力建设项目': new Set(['在研', '已完成']),
+  '技术项目': new Set(['进行中', '已完成', '暂停', '已取消']),
+}
+for (const project of seedData.initialProjects) {
+  assert.ok(allowedStatuses[project.type]?.has(project.status), `${project.name}: ${project.status} is not an active ${project.type} status`)
+}
+const projectListSource = readSource(seedRoot, 'src/containers/ProjectListContainer.tsx')
+assert.match(projectListSource, /configuredStatusOptions/, 'project status shortcuts consume configured enum values')
+assert.doesNotMatch(projectListSource, /statusOptions\s*=\s*useMemo\([\s\S]{0,500}PROJECT_STATUS_CONFIG/, 'project status shortcuts never fall back to retired color-map values')
 const seedChildren = loadTypeScriptModule(seedRoot, 'src/stores/technicalProject.ts').INITIAL_TECHNICAL_SUBPROJECTS
 const seedPlans = loadTypeScriptModule(seedRoot, 'src/stores/technicalPlan.ts').INITIAL_TECHNICAL_PLANS
 const seedRows = matrix.buildTechnicalProjectListRows({

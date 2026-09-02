@@ -26,6 +26,8 @@ const expectedEnumDefinitions = [
   ['build-market', '编译市场', '整机产品项目', 'single'],
   ['tmg-subdomain-mapping', 'TMG及技术领域&子领域', '技术项目', 'tmg-map'],
   ['core-value', '核心价值', '技术项目', 'single'],
+  ['android-version', '安卓版本', '整机产品项目', 'single'],
+  ['package-mode-mapping', '组包方式', '整机产品项目', 'package-map'],
 ]
 const expectedEnumTypeKeys = expectedEnumDefinitions.map(([key]) => key)
 const expectedColumnsByKind = {
@@ -44,9 +46,14 @@ const expectedColumnsByKind = {
     { key: 'domain', label: 'TMG及技术领域' },
     { key: 'subdomain', label: '子领域' },
   ],
+  'package-map': () => [
+    { key: 'androidVersion', label: '安卓版本' },
+    { key: 'chipModel', label: '芯片型号' },
+    { key: 'packageMode', label: '组包方式' },
+  ],
 }
 
-console.log('[registry-contract] verifying 22-type flat enum registry')
+console.log('[registry-contract] verifying 24-type flat enum registry')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 assert.deepEqual(values.ENUM_TYPE_KEYS, expectedEnumTypeKeys, 'enum type keys are exported in the exact approved order')
 assert.deepEqual(Object.keys(values.ENUM_DEFINITIONS), expectedEnumTypeKeys, 'registry preserves the exact approved key order')
@@ -60,8 +67,8 @@ assert.deepEqual(
     counts[definition.kind] = (counts[definition.kind] ?? 0) + 1
     return counts
   }, {}),
-  { single: 19, 'chip-map': 1, 'project-category-map': 1, 'tmg-map': 1 },
-  'registry has exactly 19 single types and one of each mapping kind',
+  { single: 20, 'chip-map': 1, 'project-category-map': 1, 'tmg-map': 1, 'package-map': 1 },
+  'registry has exactly 20 single types and one of each mapping kind',
 )
 for (const definition of Object.values(values.ENUM_DEFINITIONS)) {
   assert.deepEqual(definition.columns, expectedColumnsByKind[definition.kind](definition), `${definition.key} exposes the exact columns for ${definition.kind}`)
@@ -124,6 +131,22 @@ assert.deepEqual(values.validateAndNormalizeEnumRow('tmg-subdomain-mapping', { d
   reason: 'invalid',
   fieldErrors: { subdomain: '不能为空' },
 }, 'mapping rows report each missing required column')
+assert.deepEqual(values.validateAndNormalizeEnumRow('package-mode-mapping', {
+  androidVersion: ' Android 16 ',
+  chipModel: ' MT6877 ',
+  packageMode: ' 方式B ',
+}, [{ id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: '方式A' }]), {
+  ok: false,
+  reason: 'duplicate',
+  fieldErrors: { androidVersion: '该组合已存在', chipModel: '该组合已存在' },
+}, 'package mappings reject a duplicate normalized Android-version and chip-model pair regardless of package mode')
+assert.deepEqual(values.validateAndNormalizeEnumRow('package-mode-mapping', {
+  androidVersion: ' Android 16 ', chipModel: '   ', packageMode: '   ',
+}, []), {
+  ok: false,
+  reason: 'invalid',
+  fieldErrors: { chipModel: '不能为空', packageMode: '不能为空' },
+}, 'package mappings require all three fields')
 assert.deepEqual(values.validateAndNormalizeEnumRow('project-category-mapping', {
   ipmProjectCategory: ' 技术平台 ',
   pmsProjectCategory: ' 技术项目 ',
@@ -185,6 +208,8 @@ const expectedSingleSeeds = {
   'build-option': ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b'],
   'build-market': ['op', 'tr'],
   'core-value': ['追赶', '人无我有', '人有我有'],
+  'android-version': [],
+  'package-mode-mapping': [],
 }
 const expectedTmgSeeds = [
   ['基础架构TMG', '无'], ['性能TMG', '无'], ['DFX TMG', '无'], ['UX TMG', '无'],
@@ -318,6 +343,12 @@ assert.deepEqual(migratedV2.rowsByType['core-value'], [
 assert.deepEqual(migratedV2.rowsByType['product-series'], [], 'an explicitly empty valid v2 array stays empty')
 assert.deepEqual(migratedV2.rowsByType['tmg-subdomain-mapping'], initialRows['tmg-subdomain-mapping'], 'a wholly unusable v2 type falls back to that type seed')
 assert.deepEqual(migratedV2.rowsByType['roadmap-tos'], initialRows['roadmap-tos'], 'missing v2 types fall back to their seeds')
+assert.deepEqual(migratedV2.rowsByType['android-version'], [], 'v2 migration adds an empty Android-version array')
+assert.deepEqual(migratedV2.rowsByType['package-mode-mapping'], [], 'v2 migration adds an empty package-mapping array')
+assert.deepEqual(migratedV2.rowsByType['core-value'], [
+  { id: 'keep-me', value: '自定义' },
+  { id: 'migrated-core-value-2', value: '另一个' },
+], 'v2 migration preserves valid existing enum rows while adding new arrays')
 const collisionSafeV2 = enumStore.migrateEnumState({ rowsByType: {
   'product-series': [
     { id: 'migrated-product-series-2', value: '已有ID' },
@@ -373,7 +404,7 @@ assert.deepEqual(Object.keys(partialized), ['rowsByType'], 'only rowsByType is p
 assert.notEqual(partialized.rowsByType, compatibilityFixture.getState().rowsByType, 'persisted rows are deep-cloned')
 partialized.rowsByType['roadmap-tos'][0].value = 'mutated-copy'
 assert.equal(compatibilityFixture.getRows('roadmap-tos')[0].value, '16.0', 'mutating a persistence snapshot cannot mutate store memory')
-assert.equal(enumStore.useEnumStore.persist.getOptions().version, 2, 'persist middleware exposes version 2 through its runtime options')
+assert.equal(enumStore.useEnumStore.persist.getOptions().version, 3, 'persist middleware exposes version 3 through its runtime options')
 const previousWindow = globalThis.window
 const officialPersistStorage = enumStore.useEnumStore.persist.getOptions().storage
 try {
@@ -539,6 +570,14 @@ console.log('[store-contract] passed')
 
 console.log('[flat-consumers] verifying UI source contracts')
 const enumUi = readSource(root, 'src/components/config/EnumConfig.tsx')
+const enumConsumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
+assert.equal(enumConsumers.resolvePackageMode([
+  { id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: ' 整包 ' },
+], ' Android 16 ', ' MT6877 '), '整包', 'package mode lookup uses exact trimmed Android-version and chip-model matching')
+assert.equal(enumConsumers.resolvePackageMode([
+  { id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: '整包' },
+], 'Android 16', 'mt6877'), '', 'package mode lookup remains case-sensitive and does not fuzzy match')
+assert.equal(enumConsumers.resolvePackageMode([], 'Android 16', 'MT6877'), '', 'package mode lookup returns an empty string when no mapping exists')
 const configUi = readSource(root, 'src/containers/ConfigContainer.tsx')
 const appShell = readSource(root, 'src/containers/AppShell.tsx')
 const globalStyles = readSource(root, 'src/styles/globals.css')
@@ -556,7 +595,7 @@ assert.match(enumUi, /rowsByType/, 'the UI reads the v2 row registry')
 assert.match(enumUi, /addEnumRow/, 'the UI adds complete dynamic rows')
 assert.match(enumUi, /updateEnumRow/, 'the UI updates rows by stable ID')
 assert.match(enumUi, /deleteEnumRow/, 'the UI deletes rows by stable ID')
-assert.match(enumUi, /配置项（22）/, 'flat left panel exposes the exact approved title')
+assert.match(enumUi, /配置项（24）/, 'flat left panel exposes the exact approved title')
 assert.match(enumUi, /ENUM_TYPE_KEYS\.filter[\s\S]*definition\.label[\s\S]*(?:includes|indexOf)/, 'search matches Chinese registry labels while filtering the ordered key list')
 assert.match(enumUi, /rowsByType\[type\]\.length/, 'each flat type item displays its current row count')
 assert.match(enumUi, /pms-enum-type-item--active/, 'the selected flat type item exposes the active class')
@@ -577,9 +616,13 @@ assert.match(enumUi, /formatEnumCellValue/, 'table cells use the central formatt
 assert.match(enumUi, /canEditEnums[\s\S]*title:\s*['"]操作['"]/, 'the action column is appended only for users with enum-edit permission')
 assert.match(enumUi, /const hasGlobalPermission\s*=\s*useHasGlobalPermission\(currentLoginUser\)/, 'EnumConfig resolves global permissions for the current user')
 assert.match(enumUi, /hasGlobalPermission\(['"]configCenter:enumEdit['"]\)/, 'enum mutations use the dedicated enum-edit permission')
-for (const copy of ['新增枚举值', '加载枚举值失败', '暂无配置值', '单字段', '两列映射', '三列映射', '芯片编码', '芯片型号', '芯片平台', 'IPM项目分类', 'PMS项目分类', 'PMS二级项目分类', 'TMG及技术领域', '子领域']) {
+for (const copy of ['新增枚举值', '加载枚举值失败', '暂无配置值', '单字段', '两列映射', '三列映射', '芯片编码', '芯片型号', '芯片平台', 'IPM项目分类', 'PMS项目分类', 'PMS二级项目分类', 'TMG及技术领域', '子领域', '安卓版本', '组包方式']) {
   assert.ok(enumUi.includes(copy), `EnumConfig must include UI copy: ${copy}`)
 }
+assert.match(enumUi, /editorDefinition\.kind\s*===\s*['"]package-map['"][\s\S]*rowsByType\[['"]android-version['"]\]/, 'package editor derives Android-version options from the configured single enum')
+assert.match(enumUi, /rowsByType\[['"]chip-mapping['"]\][\s\S]{0,500}chipModel/, 'package editor derives chip-model options from chip mappings')
+assert.match(enumUi, /showSearch[\s\S]{0,120}optionFilterProp=['"]label['"]/, 'package editor selects are searchable by label')
+assert.match(enumUi, /disabled:\s*true[\s\S]{0,160}已停用/, 'package editor preserves deleted source values as disabled historical options')
 for (const projectCategory of ['整机产品项目', 'tOS版本项目', '技术项目', '能力建设项目']) {
   assert.ok(enumUi.includes(projectCategory), `project category select includes exact option: ${projectCategory}`)
 }

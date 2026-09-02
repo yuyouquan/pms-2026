@@ -33,6 +33,7 @@ export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: st
   '维护': { color: '#13c2c2', tagColor: 'cyan' },
   'EOS': { color: '#64748b', tagColor: 'default' },
   '暂停': { color: '#d9d9d9', tagColor: 'default' },
+  '已暂停': { color: '#d9d9d9', tagColor: 'default' },
   '已取消': { color: '#ff4d4f', tagColor: 'error' },
   '已迁移': { color: '#06b6d4', tagColor: 'cyan' },
   '待验': { color: '#faad14', tagColor: 'warning' },
@@ -46,7 +47,7 @@ const PAGINATION_MACHINE_SERIES = [
   { name: 'NOTE 60', code: 'NT60', brand: 'Infinix', platform: 'SD7Gen4' },
 ] as const
 
-const PAGINATION_MACHINE_STATUSES = ['待立项', '在研', '上市', '转维', '规划中'] as const
+const PAGINATION_MACHINE_STATUSES = ['待立项', '在研', '上市', '转维', '待立项'] as const
 const PAGINATION_MACHINE_VERSION_TYPES = ['Full', 'Slim', 'GO'] as const
 
 export const ADDITIONAL_MACHINE_PROJECTS = PAGINATION_MACHINE_SERIES.flatMap((series, seriesIndex) => (
@@ -160,7 +161,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '3', name: 'X6855_H8917', type: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
-    status: '暂停', progress: 45, leader: '王五',
+    status: '已暂停', progress: 45, leader: '王五',
     markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '赵六', updatedAt: '3天前', productLine: 'SPARK', productCategory: 'CAMON', productSeries: 'P', tosVersion: 'tOS16.3',
     marketName: 'SPARK 30 Pro', brand: 'TECNO', developMode: '外研',
@@ -218,7 +219,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '11', name: 'HiOS-Launcher', type: PROJECT_TYPE_TOS_VERSION, secondaryCategory: PROJECT_TYPE_TOS_VERSION,
-    status: '已取消', progress: 48, leader: '王五',
+    status: '在研', progress: 48, leader: '王五',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '王五,李白', updatedAt: '5小时前', productLine: '系统应用', productSeries: '', osSeries: '', tosVersion: 'tOS16.1',
     planStartDate: '2026-03-10', planEndDate: '2026-08-20',
@@ -232,7 +233,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '4', name: 'X6876_H786', type: PROJECT_TYPE_TECH, secondaryCategory: '中长期技术',
-    status: '已迁移', progress: 100, leader: '孙七',
+    status: '已完成', progress: 100, leader: '孙七',
     markets: [], androidVersion: 'Android 15', chipPlatform: 'QCOM',
     spm: '李四', updatedAt: '5天前', productLine: '平台技术', domain: '基础架构,测试', tosVersions: 'tOS16.1,tOS16.3', tosVersion: 'tOS16.1',
     planStartDate: '2025-10-01', planEndDate: '2026-02-28',
@@ -246,7 +247,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '5', name: 'X6873_H972', type: PROJECT_TYPE_CAPABILITY, secondaryCategory: PROJECT_TYPE_CAPABILITY,
-    status: '暂停', progress: 30, leader: '周八',
+    status: '在研', progress: 30, leader: '周八',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'UNISOC',
     spm: '王五', updatedAt: '1周前', productLine: '基础能力', tosVersion: 'tOS16.1',
     planStartDate: '2026-02-15', planEndDate: '2026-07-31',
@@ -290,7 +291,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '8', name: 'tOS16.2', type: PROJECT_TYPE_TOS_VERSION, secondaryCategory: PROJECT_TYPE_TOS_VERSION,
-    status: '已取消', progress: 76, leader: '杜甫',
+    status: '在研', progress: 76, leader: '杜甫',
     markets: [], androidVersion: 'Android 17', chipPlatform: 'MTK',
     spm: '赵六', updatedAt: '2天前', productLine: 'tOS', productSeries: '16.X', osSeries: '16.X', tosVersion: 'tOS16.3',
     planStartDate: '2026-04-01', planEndDate: '2026-12-31',
@@ -303,7 +304,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '9', name: 'AI-Engine-V2', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
-    status: 'EOS', progress: 40, leader: '李四',
+    status: '进行中', progress: 40, leader: '李四',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '张三', updatedAt: '4小时前', productLine: 'AI引擎', domain: '影像,基础架构', tosVersions: 'tOS16.1,tOS16.3', tosVersion: 'tOS16.3',
     planStartDate: '2026-02-01', planEndDate: '2026-07-15',
@@ -317,7 +318,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '10', name: 'DevOps-Platform', type: PROJECT_TYPE_CAPABILITY, secondaryCategory: PROJECT_TYPE_CAPABILITY,
-    status: '暂停', progress: 55, leader: '孙七',
+    status: '在研', progress: 55, leader: '孙七',
     markets: [], androidVersion: '', chipPlatform: '',
     spm: '李四', updatedAt: '6小时前', productLine: '工程效率', tosVersion: 'tOS16.1',
     planStartDate: '2026-01-10', planEndDate: '2026-06-30',
@@ -518,7 +519,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '20', name: '基础架构-项目2', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
-    status: '在研', progress: 52, leader: '李四',
+    status: '进行中', progress: 52, leader: '李四',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '张三', updatedAt: '1小时前', productLine: '平台技术', domain: '基础架构,测试', tosVersions: 'tOS16.1,tOS16.3', tosVersion: 'tOS16.1',
     planStartDate: '2026-02-10', planEndDate: '2026-08-30',
@@ -532,7 +533,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '21', name: '影像-项目1', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
-    status: 'EOS', progress: 86, leader: '王五',
+    status: '进行中', progress: 86, leader: '王五',
     markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '王五', updatedAt: '3小时前', productLine: '影像算法', domain: '影像,测试', tosVersions: 'tOS16.1,tOS16.3', tosVersion: 'tOS16.1',
     planStartDate: '2026-03-01', planEndDate: '2026-09-15',
@@ -546,7 +547,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: 'mock-tech-aios-v3', name: 'AIOS架构演进V3', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
-    status: '在研', progress: 68, leader: '李四', markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '张三', updatedAt: '30分钟前', productLine: 'AIOS', domain: '系统应用', tosVersions: 'tOS16.3,tOS17.1', tosVersion: 'tOS16.3',
+    status: '进行中', progress: 68, leader: '李四', markets: [], androidVersion: 'Android 16', chipPlatform: 'MTK', spm: '张三', updatedAt: '30分钟前', productLine: 'AIOS', domain: '系统应用', tosVersions: 'tOS16.3,tOS17.1', tosVersion: 'tOS16.3',
     planStartDate: '2026-01-15', planEndDate: '2026-08-31', developCycle: 160, healthStatus: 'normal' as const, operatingSystem: 'Android 16',
     buildAddress: 'https://build.example.com/aios-v3', currentNode: 'TDR3', projectDescription: '推进 AIOS 核心架构演进，形成可复用的端侧智能服务底座。',
     branchInfo: 'main_dev_aios_v3', jenkinsUrl: 'https://jenkins.example.com/job/aios-v3', teamMembers: '李四,张三,王五,赵六',
@@ -554,7 +555,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: 'mock-tech-perf-power', name: '端侧性能功耗协同优化', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
-    status: '在研', progress: 56, leader: '孙七', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '李四', updatedAt: '1小时前', productLine: '基础架构', domain: '性能功耗', tosVersions: 'tOS16.3,tOS17.1', tosVersion: 'tOS16.3',
+    status: '进行中', progress: 56, leader: '孙七', markets: [], androidVersion: 'Android 16', chipPlatform: 'QCOM', spm: '李四', updatedAt: '1小时前', productLine: '基础架构', domain: '性能功耗', tosVersions: 'tOS16.3,tOS17.1', tosVersion: 'tOS16.3',
     planStartDate: '2026-02-01', planEndDate: '2026-09-15', developCycle: 170, healthStatus: 'normal' as const, operatingSystem: 'Android 16',
     buildAddress: 'https://build.example.com/perf-power', currentNode: 'TDR2', projectDescription: '围绕端侧算力与功耗建立跨芯片平台的协同优化能力。',
     branchInfo: 'main_dev_perf_power', jenkinsUrl: 'https://jenkins.example.com/job/perf-power', teamMembers: '孙七,李四,赵六,张三',
@@ -562,7 +563,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: 'mock-tech-system-experience', name: '下一代系统体验', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
-    status: '筹备中', progress: 35, leader: '王五', markets: [], androidVersion: 'Android 17', chipPlatform: 'MTK', spm: '赵六', updatedAt: '2小时前', productLine: '系统体验', domain: 'UX', tosVersions: 'tOS17.1,tOS17.2', tosVersion: 'tOS17.1',
+    status: '进行中', progress: 35, leader: '王五', markets: [], androidVersion: 'Android 17', chipPlatform: 'MTK', spm: '赵六', updatedAt: '2小时前', productLine: '系统体验', domain: 'UX', tosVersions: 'tOS17.1,tOS17.2', tosVersion: 'tOS17.1',
     planStartDate: '2026-03-01', planEndDate: '2026-10-31', developCycle: 180, healthStatus: 'warning' as const, operatingSystem: 'Android 17',
     buildAddress: 'https://build.example.com/system-experience', currentNode: '规划启动', projectDescription: '探索高帧交互、动效和系统反馈的一体化下一代体验。',
     branchInfo: 'main_dev_system_experience', jenkinsUrl: 'https://jenkins.example.com/job/system-experience', teamMembers: '王五,赵六,孙七,李白',
@@ -570,7 +571,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: 'mock-tech-6g-prestudy', name: '6G通信预研', type: PROJECT_TYPE_TECH, secondaryCategory: PROJECT_TYPE_TECH,
-    status: '在研', progress: 42, leader: '赵六', markets: [], androidVersion: 'Android 17', chipPlatform: 'QCOM', spm: '孙七', updatedAt: '4小时前', productLine: '通信技术', domain: '底软通信', tosVersions: 'tOS17.1,tOS17.2', tosVersion: 'tOS17.1',
+    status: '进行中', progress: 42, leader: '赵六', markets: [], androidVersion: 'Android 17', chipPlatform: 'QCOM', spm: '孙七', updatedAt: '4小时前', productLine: '通信技术', domain: '底软通信', tosVersions: 'tOS17.1,tOS17.2', tosVersion: 'tOS17.1',
     planStartDate: '2026-04-01', planEndDate: '2026-12-31', developCycle: 210, healthStatus: 'normal' as const, operatingSystem: 'Android 17',
     buildAddress: 'https://build.example.com/6g-prestudy', currentNode: 'TDR1', projectDescription: '开展 6G 协议与端侧通信能力预研，验证未来网络演进路径。',
     branchInfo: 'main_dev_6g_prestudy', jenkinsUrl: 'https://jenkins.example.com/job/6g-prestudy', teamMembers: '赵六,孙七,李四,王五',
