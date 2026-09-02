@@ -89,13 +89,13 @@ assert.deepEqual(
 )
 assert.deepEqual(
   projectSpaceRules.selectLevel1HorizontalVersions(horizontalVersions, { surface: 'basic-info', includeDraft: false }).map(version => version.id),
-  ['v2'],
-  'basic information exposes only the latest published level-one version',
+  ['v2', 'v3'],
+  'basic information exposes the latest published level-one version followed by the draft',
 )
 assert.deepEqual(
   projectSpaceRules.selectLevel1HorizontalVersions(horizontalVersions, { surface: 'basic-info', includeDraft: true }).map(version => version.id),
-  ['v2'],
-  'basic information ignores maintainer draft visibility and stays identical for every permission level',
+  ['v2', 'v3'],
+  'basic information always includes the read-only draft independently of edit permission',
 )
 assert.deepEqual(
   projectSpaceRules.selectLevel1HorizontalVersions(horizontalVersions, { surface: 'project-plan', includeDraft: true }).map(version => version.id),
@@ -106,9 +106,9 @@ assert.deepEqual(
   projectSpaceRules.selectLevel1HorizontalVersions([
     { id: 'draft-only', versionNo: 'V2', status: '修订中' },
     { id: 'broken', versionNo: 'latest', status: '已发布' },
-  ], { surface: 'basic-info', includeDraft: true }),
-  [],
-  'basic information returns a stable empty result when no valid published version exists',
+  ], { surface: 'basic-info', includeDraft: true }).map(version => version.id),
+  ['draft-only'],
+  'basic information can still expose a read-only draft when no valid publication exists',
 )
 assert.deepEqual(
   projectSpaceRules.selectLevel1HorizontalVersions([
@@ -1426,6 +1426,21 @@ const migratedPartialV11 = plan.migratePlanStoreState({
   tosTypeCurrentVersionByKey: {},
 }, 12)
 assert.ok(Array.isArray(migratedPartialV11.tasks) && migratedPartialV11.tasks.length > 0, 'version-only migrations restore non-persisted default L1 tasks instead of overriding the hydrated store with undefined')
+const persistedPublicationDate = '2026-09-02T04:05:06.000Z'
+const configScopeKey = 'config-template::整机产品项目::level1'
+const migratedPublishedConfigScope = plan.migratePlanStoreState({
+  configTemplateVersionScopes: {
+    [configScopeKey]: {
+      versions: [{ id: 'v9', versionNo: 'V9', status: '已发布', publishedAt: persistedPublicationDate }],
+      currentVersion: 'v9',
+    },
+  },
+}, plan.PLAN_STORE_VERSION)
+assert.equal(
+  migratedPublishedConfigScope.configTemplateVersionScopes[configScopeKey].versions[0].publishedAt,
+  persistedPublicationDate,
+  'plan-store hydration preserves the ISO publication timestamp written by configuration publishing',
+)
 assert.deepEqual(plan.MACHINE_LEVEL1_TASKS, rules.buildMachineLevel1Tasks(true), 'plan store exports the dated machine seed')
 assert.deepEqual(plan.TOS_LEVEL1_TASKS, rules.buildTosLevel1Tasks(true), 'plan store exports the dated tOS seed')
 assert.deepEqual(plan.MACHINE_LEVEL1_TEMPLATE_TASKS, rules.buildMachineLevel1Tasks(false), 'plan store exports the undated machine template')
@@ -1908,7 +1923,7 @@ assert.match(
 assert.match(projectSpaceSource, /planEndDate:\s*task\.planEndDate\s*\|\|\s*''/, 'tOS project initialization preserves project-linked mock plan dates')
 assert.match(projectSpaceSource, /actualStartDate:\s*task\.actualStartDate\s*\|\|\s*''/, 'tOS project initialization restores the project-list mock actual start date after clearing execution fields')
 assert.match(projectSpaceSource, /actualEndDate:\s*task\.actualEndDate\s*\|\|\s*''/, 'tOS project initialization restores the project-list mock actual end date after clearing execution fields')
-assert.match(projectSpaceSource, /selectLevel1HorizontalVersions\(horizontalVersions,\s*\{\s*surface,\s*includeDraft:\s*surface === 'project-plan' && level1SurfaceCanMaintain,?\s*\}\)/, 'horizontal surfaces select versions explicitly and only project-plan exposes drafts to maintainers')
+assert.match(projectSpaceSource, /selectLevel1HorizontalVersions\(horizontalVersions,\s*\{\s*surface,\s*includeDraft:\s*surface === 'project-plan' && level1SurfaceCanMaintain,?\s*\}\)/, 'horizontal surfaces select versions explicitly while basic-info applies its own read-only draft contract')
 assert.match(projectSpaceSource, /sumLevel1StageEstimatedDays\(vProjection\.rows\)/, 'horizontal development cycle sums root-stage estimated durations only')
 assert.match(projectSpaceSource, /versionProjections\s*=\s*displayVersions\.map/, 'horizontal rows project each version from its own source tasks')
 assert.match(projectSpaceSource, /getLevel1SurfaceVersionTasks\(version\)/, 'horizontal rows resolve each version from the current project dimension')

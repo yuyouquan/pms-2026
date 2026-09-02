@@ -85,11 +85,11 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
   const canEditActualEnd = canEditPlan && (
     currentVersion.status === '修订中' || currentVersion.id === latestPublishedVersion?.id
   )
-  const updateDate = (taskId: string, field: 'planEndDate' | 'actualEndDate', value: string) => {
-    if (field === 'planEndDate' || !canEditActualEnd) return
+  const updateActualDate = (taskKey: string, value: string) => {
+    if (!canEditActualEnd) return
     updateCurrentTasks(
       scope,
-      currentVersion.tasks.map(task => task.id === taskId ? { ...task, [field]: value } : task),
+      currentVersion.tasks.map(task => getTechnicalPlanRowKey(task) === taskKey ? { ...task, actualEndDate: value } : task),
       scope.kind === 'subproject' ? 1 : 2,
     )
   }
@@ -171,11 +171,13 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
             <td className="technical-plan-summary-sticky-version"><span className="technical-plan-summary-version">实际</span></td>
             <td className="technical-plan-summary-sticky-cycle">{displayCycle(actualCycleDays)}</td>
             {columns.map(column => {
-              const actualEndDate = actualEndDatesByTaskId[getTechnicalPlanRowKey(column)] || ''
+              const taskKey = getTechnicalPlanRowKey(column)
+              const actualTask = actualProjection.rows.find(task => getTechnicalPlanRowKey(task) === taskKey)
+              const actualEndDate = actualTask ? actualEndDatesByTaskId[taskKey] || '' : ''
               return (
-                <td key={getTechnicalPlanRowKey(column)}>
-                  {canEditActualEnd
-                    ? <ClickToEditDate align="center" value={actualEndDate} onChange={value => updateDate(column.id, 'actualEndDate', value)} />
+                <td key={taskKey}>
+                  {actualTask && canEditActualEnd
+                    ? <ClickToEditDate align="center" value={actualEndDate} onChange={value => updateActualDate(taskKey, value)} />
                     : actualEndDate || '-'}
                 </td>
               )

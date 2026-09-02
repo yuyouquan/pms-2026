@@ -152,5 +152,9 @@ const technicalSummarySource = readSource(root, 'src/components/technical-projec
 assert.match(technicalSummarySource, /selectLevel1HorizontalVersions\([\s\S]*?surface: 'basic-info'/, 'technical basic-info keeps latest published and draft rows')
 assert.match(technicalSummarySource, /formatPlanPublishedDate\(row\.version\)/, 'technical basic-info shows publication metadata')
 assert.doesNotMatch(technicalSummarySource, /canEditPlanEnd[\s\S]*?<ClickToEditDate[\s\S]*?planEndDate/, 'technical basic-info version rows do not expose plan-date editors')
+assert.match(technicalSummarySource, /actualTask\s*&&\s*canEditActualEnd[\s\S]{0,240}<ClickToEditDate/, 'technical basic-info only edits actual dates backed by the published projection')
+
+const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
+assert.match(configSource, /setVersions\(versions\.map\(v => v\.id === publishedVersionId \? \{ \.\.\.v, status: '已发布', publishedAt: new Date\(\)\.toISOString\(\) \} : v\)\)/, 'config template publishing persists an ISO publication timestamp')
 
 console.log('plan workspace shell contract passed')

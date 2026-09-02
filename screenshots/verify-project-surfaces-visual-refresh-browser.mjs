@@ -54,6 +54,7 @@ const TECHNICAL_PLAN_STORAGE_SEED = JSON.stringify({
             technicalTask('1', '第1版转测', '2026-01-15', '2026-03-20', '2026-01-18', '2026-03-12'),
             technicalTask('2', '第2版转测', '2026-03-21', '2026-06-08', '2026-03-18', '2026-05-29'),
             technicalTask('3', 'TDR3', '2026-06-09', '2026-08-31', '2026-06-05', '2026-08-28'),
+            technicalTask('4', 'MR新增节点', '2026-09-01', '2026-09-15', '', ''),
           ],
         }],
       },
@@ -605,12 +606,16 @@ try {
       const headerRows = Array.from(table.querySelectorAll('thead tr')).filter(visible)
       const headers = Array.from(headerRows[0]?.querySelectorAll('th') || []).map(cell => (cell.textContent || '').replace(/\s+/g, '').trim())
       const rows = Array.from(table.querySelectorAll('tbody tr')).filter(visible).map(row => Array.from(row.querySelectorAll('td')).map(cell => (cell.textContent || '').trim()))
+      const editableDateCells = Array.from(table.querySelectorAll('tbody tr')).filter(visible).map(row => Array.from(row.querySelectorAll('td')).map(cell => (
+        Array.from(cell.querySelectorAll('*')).some(element => getComputedStyle(element).cursor === 'pointer')
+      )))
       return {
         headerRows: headerRows.length,
         marker: headerRows[0]?.getAttribute('data-technical-plan-header'),
         grouped: table.querySelectorAll('thead [data-technical-plan-header="grouped"]').length,
         headers,
         rows,
+        editableDateCells,
         text: table.textContent || '',
       }
     })
@@ -629,6 +634,11 @@ try {
     assert.ok(versionRow.slice(2).some(value => DATE_PATTERN.test(value)), `技术子项目 V1 必须显示日期：${JSON.stringify(versionRow)}`)
     assert.ok(actualRow, `技术子项目必须显示实际行：${JSON.stringify(planState.rows)}`)
     assert.ok(actualRow.slice(2).filter(value => DATE_PATTERN.test(value)).length >= 2, `技术子项目实际行必须显示已播种的实际日期：${JSON.stringify(actualRow)}`)
+    const draftOnlyIndex = planState.headers.indexOf('MR新增节点')
+    const actualRowIndex = planState.rows.findIndex(row => row[0] === '实际')
+    assert.ok(draftOnlyIndex >= 2, `技术子项目必须显示仅存在于修订版的节点：${JSON.stringify(planState.headers)}`)
+    assert.equal(planState.editableDateCells[actualRowIndex]?.[draftOnlyIndex], false, `修订版新增节点不得产生无发布数据的实际日期编辑入口：${JSON.stringify(planState.editableDateCells)}`)
+    assert.equal(planState.editableDateCells[actualRowIndex]?.slice(2, draftOnlyIndex).some(Boolean), true, `已有发布节点必须保留实际日期编辑入口：${JSON.stringify(planState.editableDateCells)}`)
     await assertNoClippingOrOverlap(page, ['[aria-label="技术信息分类"]', 'table[aria-label="分布式服务框架版本活动"] thead'], '技术项目信息')
     const planElement = await page.$('table[aria-label="分布式服务框架版本活动"]')
     await planElement.screenshot({ path: join(ARTIFACT_DIR, '02-technical-child-plan.png') })
