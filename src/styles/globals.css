@@ -4482,13 +4482,6 @@ body {
   grid-column: 1 / -1;
 }
 
-.pms-project-info-jira-grid {
-  display: grid;
-  grid-template-columns: 1.2fr 1.2fr 0.7fr auto;
-  gap: 8px;
-  align-items: center;
-}
-
 .pms-project-info-modal .ant-form-item {
   margin-bottom: 20px;
 }
@@ -4597,17 +4590,6 @@ body {
 
 .pms-project-info-form-groups .ant-collapse-content-box {
   padding: 18px 16px 0 !important;
-}
-
-.pms-project-info-jira-row.ant-card {
-  border-color: #e2e8f0;
-  background: #fbfcfe;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
-}
-
-.pms-project-info-jira-row.ant-card:hover {
-  border-color: #c7d2fe;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
 }
 
 .pms-jira-project-editor {
@@ -4720,9 +4702,6 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .pms-project-info-jira-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4731,8 +4710,7 @@ body {
   .pms-project-info-modal .ant-select-selector,
   .pms-project-info-modal .ant-btn,
   .pms-project-info-form-groups > .ant-collapse-item,
-  .pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header,
-  .pms-project-info-jira-row.ant-card {
+  .pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header {
     transition: none !important;
   }
 }

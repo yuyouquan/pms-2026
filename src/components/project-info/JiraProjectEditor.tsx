@@ -47,46 +47,54 @@ export function JiraProjectEditor({
     ...affectProjectOptions,
   ].map(option => [option.value, option])).values())
 
-  const updateRow = (rowId: string, patch: Partial<JiraProjectConfig>) => {
-    onChange(rows.map(row => row.id === rowId ? patchJiraProjectConfig(row, patch) : row))
+  const updateRow = (rowIndex: number, patch: Partial<JiraProjectConfig>) => {
+    onChange(rows.map((row, index) => index === rowIndex ? patchJiraProjectConfig(row, patch) : row))
   }
 
-  const getFieldErrors = (row: JiraProjectConfig, rowIndex: number, fieldKey: JiraProjectEditorFieldKey) => (
+  const getFieldErrors = (rowIndex: number, fieldKey: JiraProjectEditorFieldKey) => (
     errors.filter(error => (
       error.fieldKey === fieldKey
-      && (error.rowId === row.id || (error.rowId === undefined && error.rowIndex === rowIndex))
+      && error.rowIndex === rowIndex
     ))
   )
 
   const renderCell = (row: JiraProjectConfig, rowIndex: number, key: JiraProjectEditorFieldKey) => {
-    const fieldErrors = getFieldErrors(row, rowIndex, key)
+    const fieldErrors = getFieldErrors(rowIndex, key)
+    const column = JIRA_PROJECT_EDITOR_COLUMNS.find(item => item.key === key)
+    const controlLabel = `第 ${rowIndex + 1} 行${column?.label || '操作'}`
+    const errorIds = fieldErrors.map((_, errorIndex) => `jira-project-editor-error-${rowIndex}-${key}-${errorIndex}`)
+    const invalidProps = {
+      'aria-label': controlLabel,
+      'aria-invalid': fieldErrors.length > 0 || undefined,
+      'aria-describedby': errorIds.length ? errorIds.join(' ') : undefined,
+    }
     let control: React.ReactNode
     if (key === 'server') {
-      control = <Select value={row.server || undefined} options={JIRA_SERVER_OPTIONS} disabled={disabled} onChange={server => updateRow(row.id, { server })} />
+      control = <Select {...invalidProps} value={row.server || undefined} options={JIRA_SERVER_OPTIONS} disabled={disabled} onChange={server => updateRow(rowIndex, { server })} />
     } else if (key === 'projectKey') {
-      control = <Select showSearch optionFilterProp="label" value={row.projectKey || undefined} options={projectOptions} disabled={disabled} placeholder="请输入后选择" onChange={projectKey => updateRow(row.id, { projectKey })} />
+      control = <Select {...invalidProps} showSearch optionFilterProp="label" value={row.projectKey || undefined} options={projectOptions} disabled={disabled} placeholder="请输入后选择" onChange={projectKey => updateRow(rowIndex, { projectKey })} />
     } else if (key === 'type') {
-      control = <Select value={row.type || undefined} options={JIRA_PROJECT_TYPE_OPTIONS} disabled={disabled} onChange={type => updateRow(row.id, { type })} />
+      control = <Select {...invalidProps} value={row.type || undefined} options={JIRA_PROJECT_TYPE_OPTIONS} disabled={disabled} onChange={type => updateRow(rowIndex, { type })} />
     } else if (key === 'shared') {
-      control = <Switch checked={row.shared} disabled={disabled} onChange={shared => updateRow(row.id, { shared })} />
+      control = <Switch {...invalidProps} checked={row.shared} disabled={disabled} onChange={shared => updateRow(rowIndex, { shared })} />
     } else if (key === 'affectProjects') {
-      control = <Select allowClear showSearch optionFilterProp="label" value={row.affectProjects || undefined} options={resolvedAffectProjectOptions} disabled={disabled || !row.shared} placeholder="请选择项目" onChange={affectProjects => updateRow(row.id, { affectProjects: affectProjects || '' })} />
+      control = <Select {...invalidProps} allowClear showSearch optionFilterProp="label" value={row.affectProjects || undefined} options={resolvedAffectProjectOptions} disabled={disabled || !row.shared} placeholder="请选择项目" onChange={affectProjects => updateRow(rowIndex, { affectProjects: affectProjects || '' })} />
     } else {
       control = (
         <Space size={4}>
           <Tooltip title="复制">
-            <Button type="text" size="small" icon={<CopyOutlined />} aria-label="复制 JIRA 项目" disabled={disabled} onClick={() => onChange([...rows, copyJiraProjectConfig(row)])} />
+            <Button type="text" size="small" icon={<CopyOutlined />} aria-label={`复制第 ${rowIndex + 1} 行 JIRA 项目`} disabled={disabled} onClick={() => onChange([...rows.slice(0, rowIndex + 1), copyJiraProjectConfig(row), ...rows.slice(rowIndex + 1)])} />
           </Tooltip>
           <Tooltip title="删除">
-            <Button type="text" danger size="small" icon={<DeleteOutlined />} aria-label="删除 JIRA 项目" disabled={disabled} onClick={() => onChange(rows.filter(item => item.id !== row.id))} />
+            <Button type="text" danger size="small" icon={<DeleteOutlined />} aria-label={`删除第 ${rowIndex + 1} 行 JIRA 项目`} disabled={disabled} onClick={() => onChange(rows.filter((_, index) => index !== rowIndex))} />
           </Tooltip>
         </Space>
       )
     }
     return (
-      <div key={key} className={`pms-jira-project-editor__cell pms-jira-project-editor__cell--${key}`} data-jira-field={key}>
+      <div key={key} role="cell" className={`pms-jira-project-editor__cell pms-jira-project-editor__cell--${key}`} data-jira-field={key}>
         {control}
-        {fieldErrors.map((error, index) => <div key={`${error.message}-${index}`} className="pms-jira-project-editor__error" role="alert">{error.message}</div>)}
+        {fieldErrors.map((error, errorIndex) => <div key={`${error.message}-${errorIndex}`} id={errorIds[errorIndex]} className="pms-jira-project-editor__error" role="alert">{error.message}</div>)}
       </div>
     )
   }
@@ -98,17 +106,17 @@ export function JiraProjectEditor({
         <Button size="small" type="primary" icon={<PlusOutlined />} disabled={disabled} onClick={() => onChange([...rows, createJiraProjectConfig()])}>新增一行</Button>
       </div>
       <div className="pms-jira-project-editor__scroll">
-        <div className="pms-jira-project-editor__table">
-          <div className="pms-jira-project-editor__header">
+        <div className="pms-jira-project-editor__table" role="table" aria-label="JIRA库配置">
+          <div className="pms-jira-project-editor__header" role="row">
             {JIRA_PROJECT_EDITOR_COLUMNS.map(column => (
-              <div key={column.key} className={`pms-jira-project-editor__header-cell pms-jira-project-editor__header-cell--${column.key}`}>
+              <div key={column.key} id={`jira-project-editor-column-${column.key}`} role="columnheader" className={`pms-jira-project-editor__header-cell pms-jira-project-editor__header-cell--${column.key}`}>
                 <span>{column.label}</span>
                 {(['server', 'projectKey', 'type'].includes(column.key) || column.key === 'affectProjects') && <sup>{column.key === 'affectProjects' ? '（共库时必填）' : '*'}</sup>}
               </div>
             ))}
           </div>
           {rows.map((row, rowIndex) => (
-            <div key={row.id} className="pms-jira-project-editor__row" data-jira-row={row.id}>
+            <div key={`${row.id || 'jira-row'}-${rowIndex}`} role="row" className="pms-jira-project-editor__row" data-jira-row={rowIndex}>
               {JIRA_PROJECT_EDITOR_COLUMNS.map(column => renderCell(row, rowIndex, column.key))}
             </div>
           ))}

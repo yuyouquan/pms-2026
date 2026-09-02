@@ -19,7 +19,7 @@ import {
   App, Menu, notification, Select, Input, Popconfirm, Tooltip, Modal,
   Checkbox, DatePicker, Form, Avatar, Empty, Slider, Alert, Statistic,
   Descriptions, Divider, Radio, Dropdown, Breadcrumb, Collapse,
-  Typography, Pagination, Switch
+  Typography, Pagination
 } from 'antd'
 import dayjs from 'dayjs'
 import 'dhtmlx-gantt/codebase/dhtmlxgantt.css'
@@ -33,7 +33,7 @@ import {
   AuditOutlined, DownloadOutlined, CloseCircleOutlined,
   SafetyOutlined, SendOutlined, DeploymentUnitOutlined, ShareAltOutlined,
   PlusSquareOutlined, MinusSquareOutlined, CaretDownOutlined, StopOutlined,
-  FilterOutlined, CopyOutlined, QuestionCircleOutlined,
+  FilterOutlined, CopyOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
