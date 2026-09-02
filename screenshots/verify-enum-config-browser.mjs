@@ -16,6 +16,7 @@ const TYPES = [
   ['chip-mapping', '芯片编码/芯片型号/芯片平台'], ['memory-size', '内存大小'],
   ['project-category-mapping', '项目分类'], ['build-option', '编译选项'], ['build-market', '编译市场'],
   ['tmg-subdomain-mapping', 'TMG及技术领域&子领域'], ['core-value', '核心价值'],
+  ['android-version', '安卓版本'], ['package-mode-mapping', '组包方式'],
 ]
 const single = (type, values) => values.map((value, index) => ({ id: `fx-${type}-${index + 1}`, value }))
 const ROWS = {
@@ -53,8 +54,13 @@ const ROWS = {
     { id: 'fx-tmg-3', domain: '基础架构TMG', subdomain: '无' },
   ],
   'core-value': single('core-value', ['追赶']),
+  'android-version': single('android-version', ['Android 16']),
+  'package-mode-mapping': [
+    { id: 'fx-package-1', androidVersion: 'Android 16', chipModel: 'M100', packageMode: '整包' },
+    { id: 'fx-package-history', androidVersion: 'Android 14', chipModel: 'M099', packageMode: '历史组包' },
+  ],
 }
-const envelope = () => JSON.stringify({ state: { rowsByType: ROWS }, version: 2 })
+const envelope = () => JSON.stringify({ state: { rowsByType: ROWS }, version: 3 })
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 async function baseUrl() {
@@ -108,6 +114,40 @@ const selectOption = async (page, label, value) => {
   if (!visible.includes(value)) throw new Error(`select ${label} options ${JSON.stringify(visible)} missing ${value}`)
   await clickExact(page, '.ant-select-item-option', value)
 }
+const searchSelectOption = async (page, label, query, value) => {
+  const selector = `input[aria-label="${label}"]`
+  await page.$eval(selector, input => {
+    const target = input.closest('.ant-select-selector') || input
+    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    target.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+    target.click()
+  })
+  await wait(200)
+  await page.type(selector, query)
+  await wait(300)
+  const visible = await page.$$eval('.ant-select-item-option', options => options
+    .filter(option => option.getBoundingClientRect().height > 0)
+    .map(option => (option.textContent || '').trim()))
+  if (!visible.includes(value)) throw new Error(`searchable select ${label} options ${JSON.stringify(visible)} missing ${value}`)
+  await clickExact(page, '.ant-select-item-option', value)
+}
+const assertDisabledHistoricalOption = async (page, label, value) => {
+  const selector = `input[aria-label="${label}"]`
+  await page.click(selector)
+  await wait(200)
+  const state = await page.$$eval('.ant-select-item-option', (options, expected) => {
+    const option = options.find(candidate => (
+      candidate.getBoundingClientRect().height > 0
+      && (candidate.textContent || '').trim() === expected
+    ))
+    return option ? {
+      disabled: option.classList.contains('ant-select-item-option-disabled') || option.getAttribute('aria-disabled') === 'true',
+      text: (option.textContent || '').trim(),
+    } : null
+  }, `${value}（已停用）`)
+  if (!state?.disabled) throw new Error(`historical ${label} option is not disabled: ${JSON.stringify(state)}`)
+  await page.keyboard.press('Escape')
+}
 const add = async page => {
   await page.$eval('[data-testid="enum-add-button"]', element => element.click())
   await page.waitForSelector('.ant-modal', { visible: true })
@@ -136,6 +176,9 @@ const headers = async (page, expected) => {
 const switchUser = async (page, user) => {
   await page.$eval('[aria-label="切换当前用户"]', element => element.click())
   await page.waitForSelector('.ant-dropdown:not(.ant-dropdown-hidden)', { visible: true })
+  await page.waitForFunction(value => Array.from(document.querySelectorAll('.pms-user-menu__name')).some(element => (
+    element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === value
+  )), {}, user)
   const clicked = await page.evaluate(value => {
     const name = Array.from(document.querySelectorAll('.pms-user-menu__name')).find(element => (
       element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === value
@@ -176,7 +219,7 @@ try {
     const actualTypes = await page.$$eval('[data-testid^="enum-type-"]', buttons => buttons.map(button => [
       button.getAttribute('data-testid')?.replace('enum-type-', ''), button.querySelector('.pms-enum-type-copy')?.textContent?.trim(),
     ]))
-    if (JSON.stringify(actualTypes) !== JSON.stringify(TYPES)) throw new Error(`22 exact order mismatch: ${JSON.stringify(actualTypes)}`)
+    if (JSON.stringify(actualTypes) !== JSON.stringify(TYPES)) throw new Error(`24 exact order mismatch: ${JSON.stringify(actualTypes)}`)
     console.log('  PASS registry/order')
     const registryText = await page.$eval('.pms-enum-workspace-shell', element => element.textContent || '')
     if (registryText.includes('通用') || registryText.includes('人力资源管道')) throw new Error('legacy categories remain')
@@ -184,6 +227,8 @@ try {
     await selectType(page, 'chip-mapping'); await headers(page, ['序号', '芯片编码', '芯片型号', '芯片平台', '操作'])
     await selectType(page, 'project-category-mapping'); await headers(page, ['序号', 'IPM项目分类', 'PMS项目分类', 'PMS二级项目分类', '操作'])
     await selectType(page, 'tmg-subdomain-mapping'); await headers(page, ['序号', 'TMG及技术领域', '子领域', '操作'])
+    await selectType(page, 'android-version'); await headers(page, ['序号', '安卓版本', '操作'])
+    await selectType(page, 'package-mode-mapping'); await headers(page, ['序号', '安卓版本', '芯片型号', '组包方式', '操作'])
     console.log('  PASS table shapes')
 
     await selectType(page, 'product-series'); await add(page); await modalButton(page, '新增'); await waitText(page, '不能为空'); console.log('    CRUD empty')
@@ -210,6 +255,17 @@ try {
     if (sequence.join(',') !== '1,2') throw new Error(`reindex ${sequence}`)
     console.log('  PASS single CRUD')
 
+    await selectType(page, 'android-version'); await add(page); await setInput(page, '安卓版本', 'Android 17')
+    await modalButton(page, '新增'); await waitText(page, '配置值已新增')
+    const androidEditId = await rowId(page, 'Android 17')
+    await page.$eval(`[data-testid="enum-edit-${androidEditId}"]`, element => element.click())
+    await setInput(page, '安卓版本', 'Android 18'); await modalButton(page, '保存'); await waitText(page, '配置值已更新')
+    const androidDeleteId = await rowId(page, 'Android 18')
+    await page.$eval(`[data-testid="enum-delete-${androidDeleteId}"]`, element => element.click())
+    await confirmDelete(page); await wait(500)
+    if ((await page.$eval('.pms-enum-table', element => element.textContent || '')).includes('Android 18')) throw new Error('Android CRUD delete retained edited row')
+    console.log('  PASS Android CRUD')
+
     await selectType(page, 'first-sale-tos'); await add(page); await setInput(page, '首销tOS版本', 'tOS18.preview'); await modalButton(page, '新增')
     await page.waitForFunction(() => (document.body?.innerText || '').includes('tOS18.preview'))
     const tosBody = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).state.rowsByType['first-sale-tos'].find(row => row.value === '18.preview')?.value, STORAGE_KEY)
@@ -235,6 +291,25 @@ try {
     await modalButton(page, '新增'); await waitText(page, '该行已存在'); await setInput(page, '子领域', '图形'); await modalButton(page, '新增'); await waitText(page, '图形')
     console.log('  PASS TMG tuples')
 
+    await selectType(page, 'package-mode-mapping'); await add(page)
+    await searchSelectOption(page, '安卓版本', 'Android 16', 'Android 16')
+    await searchSelectOption(page, '芯片型号', 'M101', 'M101')
+    await setInput(page, '组包方式', '分包'); await modalButton(page, '新增'); await waitText(page, '配置值已新增')
+    const packageEditId = await rowId(page, '分包')
+    await page.$eval(`[data-testid="enum-edit-${packageEditId}"]`, element => element.click())
+    await setInput(page, '组包方式', '分包升级'); await modalButton(page, '保存'); await waitText(page, '配置值已更新')
+    await add(page)
+    await searchSelectOption(page, '安卓版本', 'Android 16', 'Android 16')
+    await searchSelectOption(page, '芯片型号', 'M101', 'M101')
+    await setInput(page, '组包方式', '不同方式'); await modalButton(page, '新增'); await waitText(page, '该组合已存在')
+    await modalButton(page, '取消')
+    const historyId = await rowId(page, '历史组包')
+    await page.$eval(`[data-testid="enum-edit-${historyId}"]`, element => element.click())
+    await assertDisabledHistoricalOption(page, '安卓版本', 'Android 14')
+    await assertDisabledHistoricalOption(page, '芯片型号', 'M099')
+    await modalButton(page, '取消')
+    console.log('  PASS package mapping add/edit/duplicate/search/history')
+
     await selectType(page, 'product-series'); await page.$eval('[data-testid^="enum-edit-"]', element => element.click()); await switchUser(page, '孙七')
     await wait(500); await page.keyboard.press('Escape')
     if (await page.$('[data-testid="enum-add-button"]')) throw new Error('viewer retained write controls')
@@ -255,7 +330,8 @@ try {
     await openConfig(page, false); await waitText(page, '本地枚举配置无法读取'); await clickExact(page, 'button', '重试'); await waitText(page, '本地枚举配置无法读取'); await clickExact(page, 'button', '重置本地配置')
     await page.waitForSelector('[data-testid="enum-type-first-sale-tos"]', { visible: true })
     const state = await page.evaluate(key => ({ data: JSON.parse(localStorage.getItem(key)), neighbor: localStorage.getItem(`${key}-neighbor`) }), STORAGE_KEY)
-    if (state.neighbor !== 'keep-me' || state.data.version !== 2 || Object.keys(state.data.state.rowsByType).length !== 22) throw new Error(`bad reset ${JSON.stringify(state)}`)
+    if (state.neighbor !== 'keep-me' || state.data.version !== 3 || Object.keys(state.data.state.rowsByType).length !== 24) throw new Error(`bad reset ${JSON.stringify(state)}`)
+    if (!Array.isArray(state.data.state.rowsByType['android-version']) || !Array.isArray(state.data.state.rowsByType['package-mode-mapping'])) throw new Error(`reset omitted new enum arrays ${JSON.stringify(state.data.state.rowsByType)}`)
   }, { beforeLoad: page => page.evaluateOnNewDocument(key => { localStorage.setItem(key, '{broken'); localStorage.setItem(`${key}-neighbor`, 'keep-me') }, STORAGE_KEY) })
 
   await run(browser, url, 'unavailable-retry', async page => {
