@@ -188,6 +188,14 @@ for (const rule of [
 ]) {
   assert.match(globalsSource, rule, 'JIRA project display must keep label and wrapped linked tags on one horizontal row')
 }
+for (const rule of [
+  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s*\{[\s\S]*flex-direction:\s*column/,
+  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*width:\s*100%/,
+  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.ant-tag\s*\{[\s\S]*max-width:\s*100%/,
+  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.ant-tag\s+a\s*\{[\s\S]*text-overflow:\s*ellipsis/,
+]) {
+  assert.match(globalsSource, rule, 'JIRA project display must stay within the row on narrow screens')
+}
 assert.deepEqual(
   machineSpaceDefinitions.filter(field => field.defaultVisible).map(field => field.key),
   machineSpaceDefaultVisible,

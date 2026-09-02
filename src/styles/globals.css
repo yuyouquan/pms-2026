@@ -5401,6 +5401,43 @@ body {
   }
 }
 
+@media (max-width: 480px) {
+  .pms-project-info-jira-horizontal {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pms-project-info-jira-horizontal .pms-project-info-display-label {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .pms-project-info-jira-horizontal .pms-project-info-display-value {
+    width: 100%;
+  }
+
+  .pms-project-info-jira-horizontal .ant-space,
+  .pms-project-info-jira-horizontal .ant-space-item,
+  .pms-project-info-jira-horizontal .ant-tag {
+    max-width: 100%;
+  }
+
+  .pms-project-info-jira-horizontal .ant-space-item {
+    min-width: 0;
+  }
+
+  .pms-project-info-jira-horizontal .ant-tag {
+    overflow: hidden;
+  }
+
+  .pms-project-info-jira-horizontal .ant-tag a {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pms-project-plan-info-metric,
   .pms-project-info-core-card,
