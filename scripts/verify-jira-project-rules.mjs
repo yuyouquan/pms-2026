@@ -51,7 +51,11 @@ assert.deepEqual(rules.normalizeJiraProjectConfig(legacy), {
   id: 'legacy', server: 'jira.transsion.com', projectKey: 'KN4-tOS16', type: 'sw', shared: false, affectProjects: '',
 }, 'legacy rows migrate missing shared and Affect Projects safely')
 
-const incomplete = { id: 'incomplete', server: '', projectKey: '', type: 'sw', shared: false, affectProjects: '' }
-assert.deepEqual(rules.normalizeJiraProjectRows([incomplete]), [incomplete], 'normalization preserves incomplete rows for validation')
+const rawIncomplete = { id: 'incomplete', server: '  ', projectKey: ' ', type: ' sw ', affectProjects: ' legacy ', extra: 'preserved' }
+const normalizedIncompleteRows = rules.normalizeJiraProjectRows([rawIncomplete])
+assert.equal(normalizedIncompleteRows.length, 1, 'normalization preserves incomplete rows for validation')
+assert.deepEqual(normalizedIncompleteRows[0], {
+  id: 'incomplete', server: '', projectKey: '', type: 'sw', shared: false, affectProjects: '', extra: 'preserved',
+}, 'batch normalization trims raw incomplete rows and applies legacy defaults')
 
 console.log('JIRA project rules are correct.')

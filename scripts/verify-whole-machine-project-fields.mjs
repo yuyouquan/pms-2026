@@ -158,12 +158,14 @@ assert.match(fieldInputSource, /JiraProjectEditor/, 'ProjectInfoFieldInput must 
 assert.match(containerSource, /JiraProjectEditor/, 'ProjectSpaceContainer must use JiraProjectEditor')
 
 const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
-const headerPositions = jiraHeaders.map(header => jiraEditorSource.indexOf(header))
-assert.ok(headerPositions.every(position => position >= 0), 'shared JIRA editor must render all six headers')
-assert.deepEqual([...headerPositions].sort((a, b) => a - b), headerPositions, 'shared JIRA editor must render the six headers in order')
-for (const header of jiraHeaders) {
-  assert.equal(jiraEditorSource.split(header).length - 1, 1, `shared JIRA editor must render exactly one ${header} header`)
-}
+const headerRows = [...jiraEditorSource.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)]
+  .map(match => match[1])
+  .filter(row => jiraHeaders.every(header => row.includes(header)))
+assert.equal(headerRows.length, 1, 'shared JIRA editor must have one header row containing all six headers')
+const headerRow = headerRows[0] || ''
+assert.equal((headerRow.match(/<th\b/g) || []).length, jiraHeaders.length, 'JIRA header row must contain exactly six header cells')
+const headerPositions = jiraHeaders.map(header => headerRow.indexOf(header))
+assert.deepEqual([...headerPositions].sort((a, b) => a - b), headerPositions, 'JIRA header cells must be ordered exactly as specified')
 assert.match(projectInfoSectionsSource, /pms-project-info-jira-horizontal/, 'JIRA display must use its dedicated horizontal layout class')
 
 for (const forbiddenMarker of [
