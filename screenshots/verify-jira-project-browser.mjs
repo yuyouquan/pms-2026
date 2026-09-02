@@ -146,6 +146,13 @@ try {
         && input instanceof HTMLInputElement && !input.disabled
         && !field.querySelector('.ant-select-selection-item')
     }, {}, affect)
+    await page.$eval(shared, element => element.click())
+    await page.waitForFunction(selector => {
+      const field = document.querySelector(selector)
+      const input = field?.querySelector('input')
+      return field?.querySelector('.ant-select')?.classList.contains('ant-select-disabled')
+        && input instanceof HTMLInputElement && input.disabled
+    }, {}, affect)
   })
 
   await deadline('capture editor evidence', async () => {
