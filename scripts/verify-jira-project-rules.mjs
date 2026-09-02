@@ -34,6 +34,16 @@ for (const field of ['server', 'projectKey', 'type']) {
   assert.equal(typeof error.message, 'string', `${field} validation includes a meaningful message`)
   assert.ok(error.message.trim().length > 0, `${field} validation message is not empty`)
 }
+assert.equal(
+  rules.validateJiraProjectRows([{ ...validRow, projectKey: '' }]).find(error => error.fieldKey === 'projectKey')?.message,
+  '请填写JIRA库名',
+  'JIRA project key validation uses the same JIRA库名 label as the editor',
+)
+assert.equal(
+  rules.validateJiraProjectRows([{ ...validRow, type: '' }]).find(error => error.fieldKey === 'type')?.message,
+  '请填写类型',
+  'JIRA type validation uses the same 类型 label as the editor',
+)
 {
   const errors = rules.validateJiraProjectRows([validRow, { ...validRow, id: 'invalid-1', shared: true, affectProjects: '' }])
   const error = errors.find(item => item.rowIndex === 1 && item.fieldKey === 'affectProjects')

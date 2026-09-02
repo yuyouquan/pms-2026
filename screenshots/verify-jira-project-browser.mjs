@@ -8,7 +8,7 @@ import puppeteer from 'puppeteer'
 
 const BASE_URL = process.env.PMS_BASE_URL || process.env.BASE_URL || 'http://127.0.0.1:3317'
 const TIMEOUT = 20_000
-const OUTPUT_DIR = 'docs/prd/assets'
+const OUTPUT_DIR = process.env.JIRA_BROWSER_OUTPUT_DIR || 'docs/prd/assets'
 const HEADERS = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
 const EDITOR = '.ant-modal [data-jira-project-editor]'
 
@@ -126,17 +126,31 @@ try {
   })
 
   await deadline('verify shared off clears and disables Affect', async () => {
-    const row = `${EDITOR} [data-jira-row="0"]`
+    await page.waitForFunction(editorSelector => Array.from(document.querySelectorAll(`${editorSelector} [data-jira-row]`)).some(candidate => (
+      candidate.querySelector('[data-jira-field="shared"] button')?.getAttribute('aria-checked') === 'true'
+      && candidate.querySelector('[data-jira-field="affectProjects"]')?.textContent?.trim() === 'KN4'
+    )), {}, EDITOR)
+    const rowIndex = await page.$$eval(`${EDITOR} [data-jira-row]`, candidates => candidates.findIndex(candidate => (
+      candidate.querySelector('[data-jira-field="shared"] button')?.getAttribute('aria-checked') === 'true'
+      && candidate.querySelector('[data-jira-field="affectProjects"]')?.textContent?.trim() === 'KN4'
+    )))
+    assert.notEqual(rowIndex, -1, 'a shared mock row with an existing Affect Projects value is required')
+    const row = `${EDITOR} [data-jira-row="${rowIndex}"]`
     const shared = `${row} [data-jira-field="shared"] button`
     const affect = `${row} [data-jira-field="affectProjects"]`
     assert.equal(await page.$eval(shared, element => element.getAttribute('aria-checked')), 'true')
+    assert.equal(
+      await page.$eval(affect, element => element.textContent?.trim()),
+      'KN4',
+      'the row must begin with an existing Affect Projects value so clearing cannot pass falsely',
+    )
     await page.$eval(shared, element => element.click())
     await page.waitForFunction(selector => {
       const field = document.querySelector(selector)
       const input = field?.querySelector('input')
       return field?.querySelector('.ant-select')?.classList.contains('ant-select-disabled')
         && input instanceof HTMLInputElement && input.disabled
-        && !field.querySelector('.ant-select-selection-item')
+        && field.textContent?.trim() !== 'KN4'
     }, {}, affect)
     await page.$eval(shared, element => element.click())
     await page.waitForFunction(selector => {
@@ -144,7 +158,7 @@ try {
       const input = field?.querySelector('input')
       return !field?.querySelector('.ant-select')?.classList.contains('ant-select-disabled')
         && input instanceof HTMLInputElement && !input.disabled
-        && !field.querySelector('.ant-select-selection-item')
+        && field.textContent?.trim() !== 'KN4'
     }, {}, affect)
     await page.$eval(shared, element => element.click())
     await page.waitForFunction(selector => {
