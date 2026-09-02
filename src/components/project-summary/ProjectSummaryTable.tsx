@@ -971,8 +971,8 @@ export default function ProjectSummaryTable({
       <Input
         size={compactControlSize}
         allowClear
-        aria-label={matrixVariant === 'technical-subproject' ? '快捷筛选-子项目名称' : '快捷筛选-项目名称'}
-        placeholder={matrixVariant === 'technical-subproject' ? '子项目名称' : '项目名称'}
+        aria-label={matrixVariant === 'technical-subproject' ? '快捷筛选-子任务名称' : '快捷筛选-项目名称'}
+        placeholder={matrixVariant === 'technical-subproject' ? '子任务名称' : '项目名称'}
         prefix={<FilterOutlined />}
         style={{ width: 180 }}
         value={typeof filters.find(item => item.field === 'projectName')?.value === 'string'

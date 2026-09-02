@@ -95,6 +95,54 @@ const assertMilestoneLeavesContiguous = async () => {
   assert.equal(indices.at(-1) - indices[0] + 1, indices.length, '里程碑叶子必须连续呈现')
 }
 
+const quickFilterLabels = async () => page.$$eval(
+  '[aria-label="项目列表快捷筛选"] [aria-label^="快捷筛选-"]',
+  elements => [...new Set(elements.flatMap(element => {
+    const rect = element.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0
+      ? [element.getAttribute('aria-label')?.replace('快捷筛选-', '')]
+      : []
+  }).filter(Boolean))],
+)
+
+const resizeLeafHeader = async (leafKey, deltaX) => {
+  const headerSelector = `.pms-project-summary-table thead th[data-project-list-header-id="leaf::${leafKey}"]`
+  const header = await headerForSelector(headerSelector)
+  await header.evaluate(element => element.scrollIntoView({ block: 'nearest', inline: 'center' }))
+  await wait(120)
+  const beforeWidth = await header.evaluate(element => element.getBoundingClientRect().width)
+  const beforeOrder = await unitOrder()
+  const handle = await header.$('.pms-project-list-column-resize-handle')
+  assert.ok(handle, `${leafKey} 必须提供列宽拖动命中区`)
+  const handleBox = await handle.boundingBox()
+  if (!handleBox) throw new Error(`${leafKey} 列宽拖动命中区不可见`)
+  const from = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(from.x + deltaX, from.y, { steps: 10 })
+  await wait(120)
+  const activeFeedback = await page.$eval('.pms-project-summary-table-shell', shell => ({
+    active: shell.getAttribute('data-column-resize-active'),
+    guideX: shell.style.getPropertyValue('--pms-project-list-resize-x'),
+    guideWidth: getComputedStyle(shell, '::before').width,
+  }))
+  await page.mouse.up()
+  await wait(300)
+  const afterHeader = await headerForSelector(headerSelector)
+  const afterWidth = await afterHeader.evaluate(element => element.getBoundingClientRect().width)
+  assert.equal(activeFeedback.active, 'true', '拖动列宽时必须显示贯穿线')
+  assert.match(activeFeedback.guideX, /^\d+px$/, '列宽贯穿线必须跟随鼠标位置')
+  assert.equal(activeFeedback.guideWidth, '1px', '列宽贯穿线必须保持1px')
+  assert.ok(afterWidth >= beforeWidth + deltaX - 3, `列宽应随拖动增加：${beforeWidth} -> ${afterWidth}`)
+  assert.deepEqual(await unitOrder(), beforeOrder, '列宽拖动不得改变表头顺序')
+  assert.equal(
+    await page.$eval('.pms-project-summary-table-shell', shell => shell.hasAttribute('data-column-resize-active')),
+    false,
+    '松开鼠标后必须清理列宽贯穿线',
+  )
+  return afterWidth
+}
+
 const headerForUnit = async unit => {
   const handles = await page.$$(`.pms-project-summary-table thead th[data-project-list-column-unit="${unit}"][data-project-list-draggable="true"]`)
   for (const handle of handles) {
@@ -224,8 +272,10 @@ const keyboardDrop = async (selector, arrowKey) => {
   await header.focus()
   await page.keyboard.press('Space')
   await wait(120)
-  await page.keyboard.press(arrowKey)
-  await wait(120)
+  for (const key of Array.isArray(arrowKey) ? arrowKey : [arrowKey]) {
+    await page.keyboard.press(key)
+    await wait(120)
+  }
   await page.keyboard.press('Space')
   await wait(220)
   return page.$$eval(
@@ -393,7 +443,17 @@ try {
   })
   await page.reload({ waitUntil: 'networkidle0', timeout: TIMEOUT })
   await ensureProjectList('整机产品项目')
+  assert.deepEqual(await quickFilterLabels(), ['项目名称', '首销tOS版本', '芯片编码', '研发模式'])
   await assertRepresentativeListInteractions()
+
+  const resizedProjectNameWidth = await resizeLeafHeader('projectName', 64)
+  await page.reload({ waitUntil: 'networkidle0', timeout: TIMEOUT })
+  await ensureProjectList('整机产品项目')
+  const persistedProjectNameWidth = await page.$eval(
+    '.pms-project-summary-table thead th[data-project-list-header-id="leaf::projectName"]',
+    element => element.getBoundingClientRect().width,
+  )
+  assert.ok(Math.abs(persistedProjectNameWidth - resizedProjectNameWidth) <= 2, '刷新后必须恢复自定义列宽')
 
   const beforeOrdinaryDrag = await unitOrder()
   await dragHeader('brand', 'productLine')
@@ -461,23 +521,20 @@ try {
 
   await clickCategory('tOS版本项目')
   await page.waitForSelector('.pms-project-summary-table thead', { visible: true, timeout: TIMEOUT })
+  assert.deepEqual(await quickFilterLabels(), ['项目名称'])
   await assertFixedUnit('tosVersion')
   assert.ok(await milestoneHeaderCount() > 0, 'tOS 列表必须保持里程碑表头')
-  const beforeFixedTargetDrop = await unitOrder()
-  await dragHeaderToLockedUnit('status', 'tosVersion')
-  assert.deepEqual(await unitOrder(), beforeFixedTargetDrop, '固定列区域不得成为非固定列的插入位置')
-  const beforeFixedKeyboardDrop = await unitOrder()
-  const fixedKeyboardAnnouncement = await keyboardDrop(
-    '.pms-project-summary-table thead th[data-project-list-column-unit="versionType"]',
-    'ArrowLeft',
-  )
-  assert.deepEqual(await unitOrder(), beforeFixedKeyboardDrop, '键盘放到固定列不得改变顺序')
-  assert.match(fixedKeyboardAnnouncement, /未移动版本类型：.*不可作为放置位置/)
-
+  await openFieldSettings()
+  assert.deepEqual(await fieldSettingsVisibleOrder(), ['tOS版本', '里程碑', '版本项目经理'])
+  await closeFieldSettings()
   await clickCategory('技术项目')
   await page.waitForSelector('.pms-project-summary-table thead', { visible: true, timeout: TIMEOUT })
-  await assertFixedUnit('projectName')
+  assert.deepEqual(await quickFilterLabels(), ['项目名称', '技术赛道', 'TMG及技术领域'])
   assert.ok(await milestoneHeaderCount() > 0, '技术项目列表必须保持里程碑表头')
+  await clickExact('button', '子项目', '[aria-label="技术项目类型快捷筛选"]')
+  await page.waitForSelector('[aria-label="快捷筛选-子任务名称"]', { visible: true, timeout: TIMEOUT })
+  assert.deepEqual(await quickFilterLabels(), ['子任务名称', '所属TDT项目名称'])
+  await assertFixedUnit('projectName')
 
   assert.deepEqual(browserErrors, [], `浏览器异常：\n${browserErrors.join('\n')}`)
   console.log(`PASS project list header reorder browser acceptance (${BASE_URL})`)

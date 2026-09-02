@@ -122,6 +122,14 @@ assert.deepEqual(
   [['tOS版本', true, true], ['版本项目经理', true, true]],
   'tOS list keeps only the three configurable units: tOS version, milestone and version project manager',
 )
+assert.deepEqual(
+  matrix.getProjectListMatrix('tos', {
+    milestones: ['STR1'],
+    optionalFields: [{ key: 'firstProject', label: '首发项目' }],
+  }).map(column => column.label),
+  ['tOS版本', 'STR1', '版本项目经理'],
+  'tOS list must not append project-space optional fields',
+)
 assert.ok(matrix.getProjectListMatrix('technical-tdt', { templateStages: ['阶段'], directLevel2Nodes: ['直属二级'] }).some(column => column.label === '直属二级'), 'TDT dynamic direct level-two column')
 assert.deepEqual(matrix.getProjectListMatrix('capability', {}), [], 'capability list has no matrix columns')
 const grouped = matrix.buildGroupedMilestoneColumns([

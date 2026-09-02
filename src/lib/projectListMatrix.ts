@@ -405,7 +405,7 @@ export function getProjectListMatrix(
           : undefined,
         taskId: `dynamic-${index}`,
       }))
-  const optional = (variant === 'machine' || variant === 'technical-tdt' ? [] : (options.optionalFields || []))
+  const optional = (variant === 'technical-subproject' ? (options.optionalFields || []) : [])
     .filter(field => !existingKeys.has(field.key) && !dynamic.some(item => item.key === field.key))
     .map(field => ({
       key: field.key,
