@@ -82,7 +82,13 @@ type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 export type ProjectListViewMode = 'list' | 'card' | 'calendar'
 type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode }
 
-export const PROJECT_STORE_VERSION = 7
+export const PROJECT_STORE_VERSION = 8
+
+const withEosTransitionTime = (project: Project, previous?: Project, now = new Date().toISOString()): Project => {
+  if (project.status !== 'EOS') return project
+  if (previous?.status === 'EOS' && project.statusChangedAt) return project
+  return { ...project, statusChangedAt: project.statusChangedAt || now }
+}
 
 export function synchronizeTechnicalRoleMembers(
   existing: Record<string, string[]>,
@@ -443,7 +449,8 @@ export function migrateProjectState(persistedState: unknown, version: number): P
   if (persistedState.projects.length > 0 && projects.length === 0) {
     return { projects: initialProjectState.map(cloneProjectSeed), projectListView }
   }
-  const migratedProjects = version < PROJECT_STORE_VERSION
+  const migrationNow = new Date().toISOString()
+  const migratedProjects = (version < PROJECT_STORE_VERSION
     ? (() => {
         const seedById = new Map(initialProjectState.map(seed => [seed.id, seed]))
         const merged = projects.map(project => {
@@ -455,7 +462,7 @@ export function migrateProjectState(persistedState: unknown, version: number): P
           ...initialProjectState.filter(seed => !seenIds.has(seed.id)).map(cloneProjectSeed),
         ]
       })()
-    : projects
+    : projects).map(project => withEosTransitionTime(project, undefined, migrationNow))
   return { projects: migratedProjects, projectListView }
 }
 
@@ -595,6 +602,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       let projectToAdd = sourceBid && newProject.sourceBid !== sourceBid
         ? { ...newProject, sourceBid }
         : newProject
+      projectToAdd = withEosTransitionTime(projectToAdd)
       if (hasDuplicateProjectSourceBid(get().projects, projectToAdd)) return false
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
       if (isMachineProjectType(projectToAdd.type)) {
@@ -642,6 +650,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       let projectToSave = sourceBid && updated.sourceBid !== sourceBid
         ? { ...updated, sourceBid }
         : updated
+      projectToSave = withEosTransitionTime(projectToSave, existing)
       if (hasDuplicateProjectSourceBid(get().projects, projectToSave)) return null
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
       if (isMachineProjectType(projectToSave.type)) {

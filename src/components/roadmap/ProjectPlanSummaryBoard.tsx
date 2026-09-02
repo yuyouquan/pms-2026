@@ -7,6 +7,7 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
+import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
 import {
   inferOsSeriesFromProjectName,
   inferTosVersionFromProjectName,
@@ -21,7 +22,7 @@ import {
   PROJECT_TYPE_TECH,
   PROJECT_TYPE_TOS_VERSION,
 } from '@/constants/projectTypes'
-import type { FilterCondition, FilterFieldDefinition } from '@/lib/filterConditions'
+import type { AnyFilterCondition, FilterFieldDefinition } from '@/lib/filterConditions'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -31,10 +32,12 @@ import {
 import {
   applyFilterConditions,
   createFilterCondition,
+  getDefaultFilterOperator,
   getFieldOptionsWithDuplicateDisabled,
   getFilterOperatorsForKind,
   isFilterConditionActive,
   isValuelessFilterOperator,
+  normalizeFilterValueForOperator,
   normalizeFilterConditions,
 } from '@/lib/filterConditions'
 import {
@@ -571,7 +574,7 @@ function parseMilestoneDateRangeValue(value: unknown): MilestoneDateRange {
   return normalizeDateRange([start, end])
 }
 
-function isMilestoneDateFilter(condition: FilterCondition) {
+function isMilestoneDateFilter(condition: AnyFilterCondition) {
   return condition.field === MILESTONE_FILTER_FIELD
     || condition.field === TECH_MILESTONE_FILTER_FIELD
 }
@@ -580,7 +583,7 @@ function createMilestoneDateFilter(
   range: MilestoneDateRange,
   id?: string,
   field = MILESTONE_FILTER_FIELD,
-): FilterCondition {
+): AnyFilterCondition {
   return {
     id: id || createFilterCondition().id,
     field,
@@ -589,17 +592,17 @@ function createMilestoneDateFilter(
   }
 }
 
-function getMilestoneDateRangeFromFilters(conditions: FilterCondition[]) {
+function getMilestoneDateRangeFromFilters(conditions: AnyFilterCondition[]) {
   const condition = conditions.find(isMilestoneDateFilter)
   return condition ? parseMilestoneDateRangeValue(condition.value) : null
 }
 
-function getStandardFilterConditions(conditions: FilterCondition[]) {
+function getStandardFilterConditions(conditions: AnyFilterCondition[]) {
   return conditions.filter(condition => !isMilestoneDateFilter(condition))
 }
 
 function normalizeProjectFilterConditions(
-  conditions: FilterCondition[],
+  conditions: AnyFilterCondition[],
   fallbackRange?: MilestoneDateRange,
   filterFieldDefinitions?: readonly FilterFieldDefinition[],
 ) {
@@ -754,8 +757,8 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set())
   const [collapsedSeries, setCollapsedSeries] = useState<Set<string>>(new Set())
   const [motionVersion, setMotionVersion] = useState(0)
-  const [filters, setFilters] = useState<FilterCondition[]>([])
-  const [tempFilters, setTempFilters] = useState<FilterCondition[]>([])
+  const [filters, setFilters] = useState<AnyFilterCondition[]>([])
+  const [tempFilters, setTempFilters] = useState<AnyFilterCondition[]>([])
   const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(() => (
     getDefaultColumnSettings(getScopedColumnDefinitions(
       getAvailableColumnsForScope('overall', []),
@@ -944,7 +947,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setStatusFilter(normalizeStatusFilter(state.statusFilter))
     const nextDateRange = normalizeDateRange(state.milestoneDateRange)
     const nextFilters = normalizeProjectFilterConditions(
-      (state.filters || []) as FilterCondition[],
+      (state.filters || []) as AnyFilterCondition[],
       nextDateRange,
       getFilterDefinitionsForScope(nextScope),
     )
@@ -1164,7 +1167,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     normalizedFilters.length ? normalizedFilters.map(item => ({ ...item })) : [createFilterCondition()]
   )
 
-  const commitSummaryFilters = (next: FilterCondition[]) => {
+  const commitSummaryFilters = (next: AnyFilterCondition[]) => {
     const nextFilters = normalizeProjectFilterConditions(
       next,
       undefined,
@@ -1179,16 +1182,16 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     setSharedRowsOverride(null)
   }
 
-  const updateTempFilter = (conditionId: string, patch: Partial<FilterCondition>) => {
+  const updateTempFilter = (conditionId: string, patch: Partial<AnyFilterCondition>) => {
     commitSummaryFilters(tempFilters.map(item => item.id === conditionId ? { ...item, ...patch } : item))
   }
 
-  const handleTempFilterFieldChange = (condition: FilterCondition, field: string) => {
+  const handleTempFilterFieldChange = (condition: AnyFilterCondition, field: string) => {
     const definition = filterFieldByKey.get(field)
     const operator = field === MILESTONE_FILTER_FIELD
       || field === TECH_MILESTONE_FILTER_FIELD
       ? 'contains'
-      : getFilterOperatorsForKind(definition?.kind ?? 'text')[0]?.value ?? 'equals'
+      : getDefaultFilterOperator(definition?.kind ?? 'text')
     updateTempFilter(condition.id, {
       field,
       operator,
@@ -1196,7 +1199,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     })
   }
 
-  const handleTempFilterDateRangeChange = (condition: FilterCondition, dates: any) => {
+  const handleTempFilterDateRangeChange = (condition: AnyFilterCondition, dates: any) => {
     const nextRange = dates?.[0] && dates?.[1]
       ? [dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')] as [string, string]
       : null
@@ -1206,7 +1209,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     })
   }
 
-  const renderFilterValueControl = (condition: FilterCondition) => {
+  const renderFilterValueControl = (condition: AnyFilterCondition) => {
     if (isMilestoneDateFilter(condition)) {
       const range = parseMilestoneDateRangeValue(condition.value)
       return (
@@ -1226,42 +1229,12 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
       )
     }
 
-    if (isValuelessFilterOperator(condition.operator)) return null
-
     const definition = filterFieldByKey.get(condition.field)
-    if (definition?.kind === 'enum' && definition.options?.length) {
-      return (
-        <Select
-          style={{ width: '100%' }}
-          showSearch
-          allowClear
-          placeholder="请选择筛选值"
-          options={definition.options}
-          value={condition.value || undefined}
-          onChange={value => updateTempFilter(condition.id, { value: value ?? '' })}
-        />
-      )
-    }
-    if (definition?.kind === 'date') {
-      return (
-        <DatePicker
-          style={{ width: '100%' }}
-          format="YYYY-MM-DD"
-          value={condition.value && dayjs(condition.value).isValid()
-            ? dayjs(condition.value)
-            : null}
-          onChange={date => updateTempFilter(condition.id, {
-            value: date ? date.format('YYYY-MM-DD') : '',
-          })}
-        />
-      )
-    }
-
     return (
-      <Input
-        placeholder="输入筛选值"
-        value={condition.value}
-        onChange={(event) => updateTempFilter(condition.id, { value: event.target.value })}
+      <FilterConditionValue
+        condition={condition}
+        definition={definition}
+        onChange={value => updateTempFilter(condition.id, { value })}
       />
     )
   }
@@ -2400,16 +2373,18 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
                             )) as any}
                           disabled={isMilestoneDateFilter(condition)}
                           onChange={(value) => {
-                            const operator = value as FilterCondition['operator']
+                            const operator = value as AnyFilterCondition['operator']
                             updateTempFilter(condition.id, {
                               operator,
-                              value: isValuelessFilterOperator(operator) ? '' : condition.value,
+                              value: normalizeFilterValueForOperator(
+                                condition.value,
+                                operator,
+                                filterFieldByKey.get(condition.field)?.kind ?? 'text',
+                              ),
                             })
                           }}
                       />
-                      {isValuelessFilterOperator(condition.operator) && !isMilestoneDateFilter(condition)
-                        ? <span className="pms-filter-value-placeholder" aria-hidden />
-                        : renderFilterValueControl(condition)}
+                      {renderFilterValueControl(condition)}
                       <Button
                         icon={<DeleteOutlined />}
                         danger

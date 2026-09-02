@@ -614,10 +614,12 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
   const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
   let filters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
   const tosCondition = filters.find(condition => condition.field === 'firstSaleTosVersionId')
-  const tosValues = tosCondition && Array.isArray(tosCondition.value) ? tosCondition.value : null
-  const selectedTosVersionId = tosValues
-    ? tosValues.length === 1 ? tosValues[0] : null
-    : persistedSelectedTosVersionId
+  const selectedTosVersionId = tosCondition?.operator === 'equals'
+    && typeof tosCondition.value === 'string'
+    ? tosCondition.value
+    : tosCondition
+      ? null
+      : persistedSelectedTosVersionId
   if (!tosCondition && viewMode === 'table' && selectedTosVersionId) {
     filters = sanitizeRoadmapFilterConditions(
       setRoadmapTosVersionFilter(filters, selectedTosVersionId),
@@ -983,9 +985,8 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const sanitized = sanitizeRoadmapFilterConditions(filters, selectableVersions)
         const tosCondition = sanitized.find(condition => condition.field === 'firstSaleTosVersionId')
         const selectedTosVersionId = tosCondition?.operator === 'equals'
-          && Array.isArray(tosCondition.value)
-          && tosCondition.value.length === 1
-          ? tosCondition.value[0]
+          && typeof tosCondition.value === 'string'
+          ? tosCondition.value
           : null
         const brand = getRoadmapQuickFilterValue(sanitized, 'brand')
         const productType = getRoadmapQuickFilterValue(sanitized, 'productType')

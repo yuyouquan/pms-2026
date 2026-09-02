@@ -16,7 +16,7 @@ const UPDATE_TRACKED_SCREENSHOTS = process.env.PMS_UPDATE_SCREENSHOTS === '1'
 const OUTPUT = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-mr-version-plan-actual-'))
 const EXPECTED_SCREENSHOTS = [
   'configuration.png', 'tos-vertical.png', 'tos-horizontal.png', 'joint-valid.png',
-  'joint-invalid.png', 'stop-record.png', 'machine-vertical.png', 'machine-horizontal.png',
+  'joint-invalid.png', 'eos-hidden.png', 'machine-vertical.png', 'machine-horizontal.png',
 ]
 const STEP_MARKERS = [
   'STEP 1 PASS', 'STEP 2 PASS', 'STEP 3 PASS', 'STEP 4 PASS', 'STEP 5 PASS',
@@ -791,28 +791,26 @@ try {
   assert.equal((await readMrState()).machinePlansByKey['3::16.3.0.140'].dates['mr-node-mp-intake-deadline'], '2026-05-25')
   pass(8, 'initial tOS and machine errors remain localized without test-manufactured dates')
 
-  const initialStopReleaseCount = (await readMrState()).stopReleaseRecords.length
-  await clickVisibleText('停止发版')
-  await chooseSelect('停止发版项目名称', 'X6877-D8400_H991')
-  await fillDate('input[aria-label="停止发版日期"]', '2026-05-31')
-  assert.equal(await page.$eval('input[aria-label="停止发版日期"]', input => input.value), '2026-05-31')
-  await clickTopVisibleModalButton('确认停止')
-  await page.waitForFunction(expectedCount => {
-    const raw = window.localStorage.getItem('pms-mr-version-plan-store')
-    return raw && JSON.parse(raw).state.stopReleaseRecords.length === expectedCount
-  }, {}, initialStopReleaseCount + 1)
-  const stoppedState = await readMrState()
-  assert.ok(stoppedState.machinePlansByKey['1::16.3.0.140'])
-  assert.equal(stoppedState.stopReleaseRecords.at(-1)?.stopDate, '2026-05-31')
-  assert.equal(stoppedState.machinePlansByKey['1::16.3.0.145'], undefined)
-  assert.equal(stoppedState.stopReleaseRecords.at(-1).projectId, '1')
-  await clickVisibleText('停止发版记录')
-  await page.waitForSelector('[role="dialog"]', { visible: true })
-  assert.match(await page.$eval('[role="dialog"]', node => node.innerText), /X6877-D8400_H991/)
-  await screenshot('stop-record.png')
-  await closeTopVisibleModal()
-  await wait(300)
-  pass(9, 'stop release removes future rows and records history')
+  const jointToolbarText = await page.$eval('.pms-joint-mr-toolbar', node => node.innerText)
+  assert.equal(jointToolbarText.includes('停止发版'), false)
+  assert.equal(jointToolbarText.includes('停止发版记录'), false)
+  await page.evaluate(() => {
+    const raw = window.localStorage.getItem('pms-projects')
+    if (!raw) throw new Error('project state missing')
+    const stored = JSON.parse(raw)
+    stored.state.projects = stored.state.projects.map(project => project.id === '1'
+      ? { ...project, status: 'EOS', statusChangedAt: '2026-05-31T09:00:00.000+08:00' }
+      : project)
+    window.localStorage.setItem('pms-projects', JSON.stringify(stored))
+  })
+  await page.reload({ waitUntil: 'networkidle2', timeout: TIMEOUT })
+  await wait(1_000)
+  await openMainMenu('jointProjectSpace')
+  await page.waitForSelector('.pms-joint-mr-table', { visible: true })
+  assert.notEqual(await page.$(machineRow('1', '16.3.0.140')), null, 'EOS date keeps same-day and earlier releases')
+  assert.equal(await page.$(machineRow('1', '16.3.0.145')), null, 'EOS date hides later releases')
+  await screenshot('eos-hidden.png')
+  pass(9, 'EOS transition time replaces manual stop-release controls')
 
   await page.click('button[aria-label="打开项目-X6877-D8400_H991"]')
   await page.waitForSelector('.pms-machine-mr-table [data-mr-tos-version="16.3.0.140"]', { visible: true })

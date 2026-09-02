@@ -140,7 +140,7 @@ function ProjectInfoGroupPanel({
             <div className="pms-project-info-display-rows">
               <div className="pms-project-info-display-grid">
                 {visibleFields.map(field => (
-                  <div key={field.key} className="pms-project-info-display-item">
+                  <div key={field.key} className={`pms-project-info-display-item${field.key === 'jiraProjects' ? ' pms-project-info-display-item--full-row' : ''}`}>
                     <div className="pms-project-info-display-label">{field.label}</div>
                     <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType, field.key)}</div>
                   </div>

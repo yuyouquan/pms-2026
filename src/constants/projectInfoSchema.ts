@@ -188,11 +188,12 @@ export const MACHINE_PROJECT_SPACE_INFO_FIELD_KEYS = [
   'systemType', 'kernelVersion', 'androidMajorUpgrade', 'modelCategory',
   'productionForbiddenDate', 'confidentialityLevel', 'projectModel', 'androidVersion',
   'mainboardName', 'productType', 'chipCode', 'chipModel', 'chipPlatform',
-  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'jiraProjects',
+  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini',
   'baselineName', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
   'keyComponentsSheet', 'machineSpm', 'machineSpp', 'machineCmo',
   'machineSoftwareSe', 'machineQualityRepresentative',
   'machineDevelopmentRepresentative', 'machineTestRepresentative', 'machineOther',
+  'jiraProjects',
 ] as const
 
 export const MACHINE_PROJECT_SPACE_INFO_FIELDS = pickOrderedFields(
@@ -277,7 +278,7 @@ export const TECHNICAL_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = [
 const TECHNICAL_PROJECT_CREATE_ONLY_FIELDS = defineFields([
   { key: 'secondaryCategory', label: '项目分类', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'projectName', label: '子项目名称', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
-  { key: 'status', label: '项目状态', group: 'basic', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
+  { key: 'status', label: '项目状态', group: 'basic', inputType: 'select', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false },
 ])
 
 type TechnicalProjectCreateFieldKey =

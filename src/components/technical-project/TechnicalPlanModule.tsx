@@ -18,6 +18,7 @@ import SubprojectConfigModal from '@/components/technical-project/SubprojectConf
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
+import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
 import { ClickToEditDate, DHTMLXGantt } from '@/components/shared/PlanHelpers'
 import {
   applyPlanWorkspaceFilters,
@@ -45,12 +46,13 @@ import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1FlatM
 import { applyPlanGanttDateChange, applyPlanTaskDatePatch, buildPlanGanttTasks } from '@/lib/planGanttRules'
 import {
   createFilterCondition,
+  getDefaultFilterOperator,
   getFieldOptionsWithDuplicateDisabled,
   getFilterOperatorsForKind,
   isFilterConditionActive,
-  isValuelessFilterOperator,
+  normalizeFilterValueForOperator,
   normalizeFilterConditions,
-  type FilterCondition,
+  type AnyFilterCondition,
   type FilterOperator,
 } from '@/lib/filterConditions'
 import {
@@ -316,8 +318,8 @@ export default function TechnicalPlanModule({
   const [compareTargetId, setCompareTargetId] = useState('')
   const [hasCompared, setHasCompared] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
-  const [filters, setFilters] = useState<FilterCondition[]>([])
-  const [tempFilters, setTempFilters] = useState<FilterCondition[]>([createFilterCondition()])
+  const [filters, setFilters] = useState<AnyFilterCondition[]>([])
+  const [tempFilters, setTempFilters] = useState<AnyFilterCondition[]>([createFilterCondition()])
   const [configuringChild, setConfiguringChild] = useState<TechnicalSubproject | null>(null)
   const [configTrigger, setConfigTrigger] = useState<HTMLElement | null>(null)
   const [deleteOpening, setDeleteOpening] = useState<TechnicalSubprojectTransferScopeToken | null>(null)
@@ -770,12 +772,12 @@ export default function TechnicalPlanModule({
       .catch(() => message.error('复制失败，请重试'))
   }
 
-  const commitTechnicalFilters = (next: FilterCondition[]) => {
+  const commitTechnicalFilters = (next: AnyFilterCondition[]) => {
     setTempFilters(next)
     setFilters(normalizeFilterConditions(next, filterFields))
   }
 
-  const updateTechnicalFilter = (id: string, patch: Partial<FilterCondition>) => {
+  const updateTechnicalFilter = (id: string, patch: Partial<AnyFilterCondition>) => {
     commitTechnicalFilters(tempFilters.map(item => item.id === id ? { ...item, ...patch } : item))
   }
 
@@ -920,31 +922,33 @@ export default function TechnicalPlanModule({
                           tempFilters,
                           condition.id,
                         )}
-                        onChange={field => updateTechnicalFilter(condition.id, { field, operator: 'equals', value: '' })}
+                        onChange={field => {
+                          const nextDefinition = filterFields.find(item => item.key === field)
+                          updateTechnicalFilter(condition.id, {
+                            field,
+                            operator: getDefaultFilterOperator(nextDefinition?.kind ?? 'text'),
+                            value: '',
+                          })
+                        }}
                       />
                       <Select
                         aria-label="筛选条件"
-                        value={condition.operator}
+                        value={condition.operator === 'equalsAny' ? 'contains' : condition.operator}
                         options={[...getFilterOperatorsForKind(definition?.kind || 'text')]}
-                        onChange={(operator: FilterOperator) => updateTechnicalFilter(condition.id, { operator, value: isValuelessFilterOperator(operator) ? '' : condition.value })}
+                        onChange={(operator: FilterOperator) => updateTechnicalFilter(condition.id, {
+                          operator,
+                          value: normalizeFilterValueForOperator(
+                            condition.value,
+                            operator,
+                            definition?.kind ?? 'text',
+                          ),
+                        })}
                       />
-                      {!isValuelessFilterOperator(condition.operator) && definition?.kind === 'enum' ? (
-                        <Select
-                          aria-label="筛选值"
-                          placeholder="请选择"
-                          allowClear
-                          value={condition.value || undefined}
-                          options={definition.options}
-                          onChange={value => updateTechnicalFilter(condition.id, { value: value || '' })}
-                        />
-                      ) : !isValuelessFilterOperator(condition.operator) ? (
-                        <Input
-                          aria-label="筛选值"
-                          placeholder={definition?.kind === 'date' ? 'YYYY-MM-DD' : '输入筛选值'}
-                          value={condition.value}
-                          onChange={event => updateTechnicalFilter(condition.id, { value: event.target.value })}
-                        />
-                      ) : <span className="pms-filter-value-placeholder" aria-hidden />}
+                      <FilterConditionValue
+                        condition={condition}
+                        definition={definition}
+                        onChange={value => updateTechnicalFilter(condition.id, { value })}
+                      />
                       <Button
                         icon={<DeleteOutlined />}
                         danger

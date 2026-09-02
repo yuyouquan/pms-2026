@@ -52,11 +52,12 @@ const machineSpaceInfoKeys = [
   'systemType', 'kernelVersion', 'androidMajorUpgrade', 'modelCategory',
   'productionForbiddenDate', 'confidentialityLevel', 'projectModel', 'androidVersion',
   'mainboardName', 'productType', 'chipCode', 'chipModel', 'chipPlatform',
-  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'jiraProjects',
+  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini',
   'baselineName', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
   'keyComponentsSheet', 'machineSpm', 'machineSpp', 'machineCmo',
   'machineSoftwareSe', 'machineQualityRepresentative',
   'machineDevelopmentRepresentative', 'machineTestRepresentative', 'machineOther',
+  'jiraProjects',
 ]
 const machineSpaceDefaultVisible = [
   ...machineSpaceCoreKeys,
@@ -67,9 +68,9 @@ const machineSpaceDefaultVisible = [
   'systemType', 'kernelVersion', 'androidMajorUpgrade', 'modelCategory',
   'productionForbiddenDate', 'confidentialityLevel', 'chipCode', 'chipModel',
   'chipPlatform', 'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini',
-  'jiraProjects', 'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
+  'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
   'machineQualityRepresentative', 'machineDevelopmentRepresentative',
-  'machineTestRepresentative', 'machineOther',
+  'machineTestRepresentative', 'machineOther', 'jiraProjects',
 ]
 
 const technicalCreateKeys = [
@@ -81,7 +82,7 @@ const technicalCreateKeys = [
   'edcpReport',
 ]
 const technicalCreateRequiredKeys = [
-  'tmg', 'subdomain', 'projectValue', 'projectYear', 'technicalLead',
+  'status', 'tmg', 'subdomain', 'projectValue', 'projectYear', 'technicalLead',
   'technicalProjectManager',
 ]
 const technicalSpaceCoreKeys = [
@@ -171,6 +172,7 @@ assert.equal(machineCreateDefinitions.get('isOutsourcedMini')?.requiredOnCreate,
 for (const key of ['wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'jiraProjects']) {
   assert.equal(machineCreateDefinitions.get(key)?.requiredOnCreate, false, `${key} must remain optional on create`)
 }
+assert.match(projectInfoSectionsSource, /field\.key === 'jiraProjects'[\s\S]*pms-project-info-display-item--full-row/)
 assert.deepEqual(
   machineSpaceDefinitions.filter(field => field.defaultVisible).map(field => field.key),
   machineSpaceDefaultVisible,
@@ -201,9 +203,13 @@ assert.deepEqual(
   technicalCreateRequiredKeys,
   'technical create required metadata must match the approved list',
 )
-for (const key of ['secondaryCategory', 'technicalTrack', 'projectName', 'status']) {
+for (const key of ['secondaryCategory', 'technicalTrack', 'projectName']) {
   assert.equal(technicalCreateDefinitions.get(key)?.readOnly, true, `${key} is a displayed source snapshot`)
 }
+assert.equal(technicalCreateDefinitions.get('status')?.inputType, 'select', 'technical status is a configured user selection')
+assert.doesNotMatch(technicalCreateSource, /TECHNICAL_SOURCE_SNAPSHOT_KEYS[^\n]*['"]status['"]/, 'technical status is not an IPM source snapshot')
+assert.match(technicalCreateSource, /useSingleEnumOptions\(['"]technical-project-status['"]/, 'technical status reads its configured enum')
+assert.match(technicalCreateSource, /field\.key === ['"]status['"][\s\S]*<Select/, 'technical status renders as a Select')
 assert.equal(technicalCreateDefinitions.get('technicalOther')?.label, '其他')
 assert.equal(technical.TECHNICAL_TEAM_FIELDS.find(field => field.key === 'technicalProjectManager')?.required, true)
 assert.equal(technical.TECHNICAL_DELIVERABLE_FIELDS.find(field => field.key === 'charterReport')?.label, 'Charter报告')
@@ -606,8 +612,8 @@ assert.equal(
     draftStatus: '已取消',
     sourceStatus: '筹备中',
   }),
-  '待立项',
-  'technical draft hydration must replace stale status with the current mapped IPM status',
+  '已取消',
+  'technical draft hydration must preserve the user-selected draft status',
 )
 assert.equal(
   projectInfoRules.resolveProjectCreationDraftSourceStatus({

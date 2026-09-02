@@ -1282,8 +1282,8 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
   if (!Number.isFinite(Date.parse(planned.createdAt)) || !Number.isFinite(Date.parse(planned.updatedAt))) throw new Error('timestamps were not normalized')
   if (
     migrated.filters.length !== 2
-    || JSON.stringify(migrated.filters.find(condition => condition.field === 'brand')?.value) !== JSON.stringify(['TECNO'])
-    || JSON.stringify(migrated.filters.find(condition => condition.field === 'productType')?.value) !== JSON.stringify(['老品'])
+    || migrated.filters.find(condition => condition.field === 'brand')?.value !== 'TECNO'
+    || migrated.filters.find(condition => condition.field === 'productType')?.value !== '老品'
     || JSON.stringify(migrated.visibleColumns) !== JSON.stringify([
       'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
     ])
@@ -1479,7 +1479,7 @@ registerTableAssertions('roadmap hydration preserves historical persisted tOS sn
   const hydrated = hydrateRoadmapStoreFromEnvelope(envelope)
   if (
     hydrated.selectedTosVersionId !== 'missing-version'
-    || JSON.stringify(hydrated.filters.find(condition => condition.field === 'firstSaleTosVersionId')?.value) !== JSON.stringify(['missing-version'])
+    || hydrated.filters.find(condition => condition.field === 'firstSaleTosVersionId')?.value !== 'missing-version'
     || !hydrated.visibleColumns.includes('firstSaleTosVersionId')
     || hydrated.visibleColumns[0] === 'unknown'
     || hydrated.columnOrder[0] !== 'firstSaleTosVersionId'
@@ -2615,10 +2615,12 @@ registerAssertion('roadmap typed filters enforce kind-specific operators with AN
   if (filtered.length !== 1 || filtered[0].name !== 'Spark 40') {
     throw new Error(`typed filter AND semantics failed: ${JSON.stringify(filtered)}`)
   }
-  const invalidEnumContains = filters.normalizeFilterConditions([
-    { id: 'invalid', field: 'brand', operator: 'contains', value: 'TEC' },
+  const validEnumContains = filters.normalizeFilterConditions([
+    { id: 'enum-contains', field: 'brand', operator: 'contains', value: ['TECNO', 'Infinix'] },
   ], definitions)
-  if (invalidEnumContains.length !== 0) throw new Error('enum fields accepted the text-only contains operator')
+  if (validEnumContains.length !== 1 || !Array.isArray(validEnumContains[0].value)) {
+    throw new Error('enum fields rejected the approved multi-value contains operator')
+  }
   const duplicateFields = filters.normalizeFilterConditions([
     { id: 'one', field: 'name', operator: 'contains', value: 'Spark' },
     { id: 'two', field: 'name', operator: 'notContains', value: 'Note' },
@@ -2637,7 +2639,7 @@ registerAssertion('roadmap typed filters enforce kind-specific operators with AN
   for (const operator of ['equals', 'notEquals', 'contains', 'notContains', 'isEmpty', 'isNotEmpty']) {
     if (!textOperators.includes(operator)) throw new Error(`text operators are missing ${operator}`)
   }
-  if (enumOperators.includes('contains') || !enumOperators.includes('isNotEmpty')) {
+  if (!['equals', 'notEquals', 'contains', 'notContains', 'isEmpty', 'isNotEmpty'].every(operator => enumOperators.includes(operator))) {
     throw new Error('enum operators do not match the approved contract')
   }
   if (!dateOperators.includes('before') || !dateOperators.includes('after') || dateOperators.includes('contains')) {
@@ -2658,7 +2660,7 @@ registerAssertion('roadmap filter domain sanitizers preserve valid saved orphans
     { id: 'duplicate-field', field: 'marketName', operator: 'equals', value: 'ignored' },
     { id: 'bad-enum-operator', field: 'brand', operator: 'contains', value: 'TEC' },
     { id: 'bad-enum-value', field: 'brand', operator: 'equals', value: 'Unknown' },
-    { id: 'valid-enum', field: 'brand', operator: 'equals', value: ['TECNO', 'Infinix', 'Unknown', 'TECNO'] },
+    { id: 'valid-enum', field: 'brand', operator: 'contains', value: ['TECNO', 'Infinix', 'Unknown', 'TECNO'] },
     { id: 'valid-ram', field: 'startRam', operator: 'notEquals', value: '4GB' },
     { id: 'bad-date', field: 'launchDate', operator: 'after', value: '2026-02-30' },
     { id: 'valid-date', field: 'str5Date', operator: 'before', value: '2028-02-29' },
@@ -2673,10 +2675,10 @@ registerAssertion('roadmap filter domain sanitizers preserve valid saved orphans
   const sanitized = domain.sanitizeRoadmapFilterConditions(malicious, versions)
   const expected = [
     ['marketName', 'contains', 'Europe'],
-    ['brand', 'equals', ['TECNO', 'Infinix']],
-    ['startRam', 'notEquals', ['4GB']],
+    ['brand', 'contains', ['TECNO', 'Infinix']],
+    ['startRam', 'notEquals', '4GB'],
     ['str5Date', 'before', '2028-02-29'],
-    ['firstSaleTosVersionId', 'equals', ['99.0']],
+    ['firstSaleTosVersionId', 'equals', '99.0'],
     ['productSeries', 'isEmpty', ''],
   ]
   if (JSON.stringify(sanitized.map(item => [item.field, item.operator, item.value])) !== JSON.stringify(expected)) {
@@ -2685,7 +2687,7 @@ registerAssertion('roadmap filter domain sanitizers preserve valid saved orphans
   const secondPass = domain.sanitizeRoadmapFilterConditions(sanitized, versions)
   if (JSON.stringify(secondPass) !== JSON.stringify(sanitized)) throw new Error('roadmap filter sanitizer is not idempotent')
   const tosOperators = domain.getRoadmapFilterOperators('firstSaleTosVersionId', 'enum')
-  if (JSON.stringify(tosOperators) !== JSON.stringify([{ value: 'equals', label: '等于' }])) {
+  if (JSON.stringify(tosOperators.map(item => item.label)) !== JSON.stringify(['等于', '不等于', '包含', '不包含', '为空', '不为空'])) {
     throw new Error(`tOS filter exposed non-equality operators: ${JSON.stringify(tosOperators)}`)
   }
 
@@ -2708,14 +2710,14 @@ registerAssertion('roadmap selectable filters use OR within a condition and AND 
     { id: 'three', brand: 'itel', startRam: '4GB' },
   ]
   const equals = domain.applyRoadmapFilters(rows, 'all', 'all', [
-    { id: 'brand', field: 'brand', operator: 'equals', value: ['TECNO', 'Infinix'] },
-    { id: 'ram', field: 'startRam', operator: 'equals', value: ['4GB', '8GB'] },
+    { id: 'brand', field: 'brand', operator: 'contains', value: ['TECNO', 'Infinix'] },
+    { id: 'ram', field: 'startRam', operator: 'contains', value: ['4GB', '8GB'] },
   ], definitions)
   if (equals.map(row => row.id).join(',') !== 'one,two') {
     throw new Error(`multi equals must OR values and AND conditions: ${JSON.stringify(equals)}`)
   }
   const notEquals = domain.applyRoadmapFilters(rows, 'all', 'all', [
-    { id: 'brand', field: 'brand', operator: 'notEquals', value: ['TECNO', 'itel'] },
+    { id: 'brand', field: 'brand', operator: 'notContains', value: ['TECNO', 'itel'] },
   ], definitions)
   if (notEquals.map(row => row.id).join(',') !== 'two') {
     throw new Error(`multi notEquals must reject every listed value: ${JSON.stringify(notEquals)}`)
@@ -2724,9 +2726,11 @@ registerAssertion('roadmap selectable filters use OR within a condition and AND 
 
 registerAssertion('roadmap selectable filter UI and evolution columns honor multi-selection', () => {
   const drawerSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapFilterDrawer.tsx'), 'utf8')
-  for (const contract of ['mode="multiple"', 'maxTagCount="responsive"', "definition.kind === 'enum'"]) {
-    if (!drawerSource.includes(contract)) throw new Error(`selectable filter UI is missing ${contract}`)
+  const sharedValueSource = fs.readFileSync(path.join(root, 'src/components/shared/FilterConditionValue.tsx'), 'utf8')
+  for (const contract of ["mode={multiple ? 'multiple' : undefined}", 'showSearch', "definition.kind === 'enum'"]) {
+    if (!sharedValueSource.includes(contract)) throw new Error(`selectable filter UI is missing ${contract}`)
   }
+  if (!drawerSource.includes('FilterConditionValue')) throw new Error('roadmap drawer does not reuse the shared value control')
   const evolution = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'))
   const versions = [
     { id: 'tos-17-2', major: 17, minor: 2 },
@@ -2743,7 +2747,7 @@ registerAssertion('roadmap selectable filter UI and evolution columns honor mult
   }
 })
 
-registerAssertion('roadmap filter setters accept only current enum values', () => {
+registerAssertion('roadmap filter setters accept approved operators and current enum values', () => {
   const storeModule = loadIsolatedRoadmapStore()
   const store = resetRoadmapStore(storeModule)
   for (const operator of ['notEquals', 'isEmpty', 'isNotEmpty']) {
@@ -2753,9 +2757,8 @@ registerAssertion('roadmap filter setters accept only current enum values', () =
       operator,
       value: operator === 'notEquals' ? '17.2' : '',
     }])
-    if (store.getState().selectedTosVersionId !== null
-      || store.getState().filters.some(filter => filter.field === 'firstSaleTosVersionId')) {
-      throw new Error(`runtime sanitizer retained tOS ${operator}`)
+    if (!store.getState().filters.some(filter => filter.field === 'firstSaleTosVersionId' && filter.operator === operator)) {
+      throw new Error(`runtime sanitizer rejected approved tOS ${operator}`)
     }
   }
   store.getState().setFilters([
@@ -2806,7 +2809,7 @@ registerAssertion('current-version roadmap hydration rejects malicious typed fil
   if (hydrated.filters.map(filter => filter.id).join(',') !== 'bad-version,valid-text') {
     throw new Error(`malicious version-1 filters survived hydration: ${JSON.stringify(hydrated.filters)}`)
   }
-  if (JSON.stringify(hydrated.filters[0].value) !== JSON.stringify(['missing'])
+  if (hydrated.filters[0].value !== 'missing'
     || hydrated.filters[1].value !== 'risk'
     || JSON.stringify(hydrated.visibleColumnsByView.table) !== JSON.stringify(['firstSaleTosVersionId', 'brand', 'remark'])) {
     throw new Error(`hydrated filter/column state was not normalized: ${JSON.stringify(hydrated)}`)
@@ -2949,11 +2952,9 @@ registerAssertion('roadmap filter and column drawers preserve quick filters and 
     '筛选条件',
     '字段',
     '条件',
-    '值',
     'getFieldOptionsWithDuplicateDisabled',
-    'DatePicker',
     'Select',
-    'Input',
+    'FilterConditionValue',
     'resetAdvancedFilters',
     'onApply',
     'getRoadmapFilterOperators',
@@ -3261,7 +3262,7 @@ registerAssertion('roadmap quick filters and drawer conditions share one source'
   const filterModule = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
   const brandEquals = filterModule.setRoadmapQuickFilter([], 'brand', 'TECNO')
   if (brandEquals.length !== 1 || brandEquals[0].operator !== 'equals'
-    || JSON.stringify(brandEquals[0].value) !== JSON.stringify(['TECNO'])) {
+    || brandEquals[0].value !== 'TECNO') {
     throw new Error('brand quick filter did not create an equals condition')
   }
   if (filterModule.getRoadmapQuickFilterValue(brandEquals, 'brand') !== 'TECNO') {
@@ -3274,7 +3275,7 @@ registerAssertion('roadmap quick filters and drawer conditions share one source'
   if (filterModule.setRoadmapQuickFilter(custom, 'brand', 'all').length !== 0) {
     throw new Error('quick all did not clear the drawer condition')
   }
-  const nonQuickBrand = [{ ...brandEquals[0], value: ['待定'] }]
+  const nonQuickBrand = [{ ...brandEquals[0], value: '待定' }]
   if (filterModule.getRoadmapQuickFilterValue(nonQuickBrand, 'brand') !== 'custom') {
     throw new Error('brand values without an external shortcut must expose custom state')
   }
@@ -3289,7 +3290,7 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
   store.getState().setSelectedTosVersionId('17.2')
   const selectorCondition = store.getState().filters.find(condition => condition.field === 'firstSaleTosVersionId')
   if (selectorCondition?.operator !== 'equals'
-    || JSON.stringify(selectorCondition.value) !== JSON.stringify(['17.2'])) {
+    || selectorCondition.value !== '17.2') {
     throw new Error('table tOS selector did not update the drawer condition')
   }
   store.getState().setSelectedTosVersionId(null)
@@ -3300,7 +3301,7 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
   store.getState().setFilters([{
     id: 'drawer-tos',
     field: 'firstSaleTosVersionId',
-    operator: 'equals',
+    operator: 'contains',
     value: ['16.0', '17.2'],
   }])
   if (store.getState().selectedTosVersionId !== null) {
@@ -3310,7 +3311,7 @@ registerAssertion('table tOS selector and drawer tOS condition stay synchronized
     id: 'drawer-single-tos',
     field: 'firstSaleTosVersionId',
     operator: 'equals',
-    value: ['16.0'],
+    value: '16.0',
   }])
   if (store.getState().selectedTosVersionId !== '16.0') {
     throw new Error('single-value drawer tOS condition did not synchronize the table selector')
@@ -3337,7 +3338,7 @@ registerAssertion('persisted tOS selection preserves historical snapshots unless
   const validCondition = valid.filters.find(condition => condition.field === 'firstSaleTosVersionId')
   if (valid.selectedTosVersionId !== '17.2'
     || validCondition?.operator !== 'equals'
-    || JSON.stringify(validCondition.value) !== JSON.stringify(['17.2'])) {
+    || validCondition.value !== '17.2') {
     throw new Error('valid persisted concrete selection was not preserved and synchronized')
   }
   const evolutionMulti = storeModule.migrateRoadmapState({
@@ -3347,7 +3348,7 @@ registerAssertion('persisted tOS selection preserves historical snapshots unless
     filters: [{
       id: 'evolution-tos',
       field: 'firstSaleTosVersionId',
-      operator: 'equals',
+      operator: 'contains',
       value: ['16.0', '17.2'],
     }],
   }, 1)
@@ -3361,7 +3362,7 @@ registerAssertion('persisted tOS selection preserves historical snapshots unless
   roundTripStore.getState().setFilters([{
     id: 'round-trip-tos',
     field: 'firstSaleTosVersionId',
-    operator: 'equals',
+    operator: 'contains',
     value: ['16.0', '17.2'],
   }])
   roundTripStore.getState().setViewMode('table')
@@ -3391,7 +3392,7 @@ registerAssertion('persisted tOS selection preserves historical snapshots unless
     }, 1)
     const filter = migrated.filters.find(condition => condition.field === 'firstSaleTosVersionId')
     if (migrated.selectedTosVersionId !== '17.2'
-      || JSON.stringify(filter?.value) !== JSON.stringify(['17.2'])) {
+      || filter?.value !== '17.2') {
       throw new Error(`${name} persisted selection overrode the valid filter fact`)
     }
   }
@@ -3402,7 +3403,7 @@ registerAssertion('persisted tOS selection preserves historical snapshots unless
   }, 1)
   const historicalFilter = invalidWithoutFilter.filters.find(condition => condition.field === 'firstSaleTosVersionId')
   if (invalidWithoutFilter.selectedTosVersionId !== 'missing-version'
-    || JSON.stringify(historicalFilter?.value) !== JSON.stringify(['missing-version'])) {
+    || historicalFilter?.value !== 'missing-version') {
     throw new Error('historical persisted selection without a filter was not preserved')
   }
 })
@@ -3715,7 +3716,7 @@ registerAssertion('roadmap defers enum policy until hydration and preserves save
     throw new Error(`migration cleared the not-yet-hydrated selection: ${migrated.selectedTosVersionId}`)
   }
   const migratedValues = migrated.filters.find(filter => filter.field === 'firstSaleTosVersionId')?.value
-  if (JSON.stringify(migratedValues) !== JSON.stringify(['19.4'])) {
+  if (migratedValues !== '19.4') {
     throw new Error(`migration cleared the not-yet-hydrated filter: ${JSON.stringify(migrated.filters)}`)
   }
 

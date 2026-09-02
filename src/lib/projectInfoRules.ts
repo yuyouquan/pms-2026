@@ -9,7 +9,6 @@ import {
 } from '@/constants/projectInfoSchema'
 import { isMachineProjectType, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
-import { mapIpmProjectStatus } from '@/lib/projectStatus'
 export { deriveStartingRam } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
 
@@ -88,14 +87,8 @@ interface ProjectCreationDraftSourceStatusInput {
 }
 
 export const resolveProjectCreationDraftSourceStatus = ({
-  projectType,
   draftStatus,
-  sourceStatus,
 }: ProjectCreationDraftSourceStatusInput): string => {
-  const currentSourceStatus = String(sourceStatus || '').trim()
-  if (projectType === PROJECT_CATEGORY_TECH && currentSourceStatus) {
-    return mapIpmProjectStatus(currentSourceStatus, projectType)
-  }
   return String(draftStatus || '').trim()
 }
 

@@ -242,9 +242,9 @@ export function createInitialEnumRows(): EnumRowsByType {
   return {
     'first-sale-tos': singleSeedRows('first-sale-tos', ['16.0.1', '16.0.2', '17.2.0', '16.0', '17.2']),
     'roadmap-tos': singleSeedRows('roadmap-tos', ['16.0', '17.2']),
-    'machine-project-status': singleSeedRows('machine-project-status', ['待立项', '在研', '上市', '转维', 'EOS', '暂停', '已取消', '规划中']),
-    'technical-project-status': singleSeedRows('technical-project-status', ['待立项', '在研', '上市', 'EOS', '暂停', '已取消', '规划中', '已迁移']),
-    'tos-capability-project-status': singleSeedRows('tos-capability-project-status', ['在研', '已完成', '暂停', '已取消']),
+    'machine-project-status': singleSeedRows('machine-project-status', ['待立项', '在研', '上市', 'EOS', '转维', '已取消', '已暂停']),
+    'technical-project-status': singleSeedRows('technical-project-status', ['进行中', '已完成', '暂停', '已取消']),
+    'tos-capability-project-status': singleSeedRows('tos-capability-project-status', ['在研', '已完成']),
     'machine-health-status': singleSeedRows('machine-health-status', ['正常', '关注', '风险']),
     'version-type': singleSeedRows('version-type', ['Full', 'Slim', 'PAD', 'GO']),
     'software-project-level': singleSeedRows('software-project-level', ['S', 'A', 'B', 'C', 'D']),

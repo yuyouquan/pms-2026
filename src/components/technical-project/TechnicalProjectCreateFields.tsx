@@ -18,7 +18,7 @@ import type { DeliverableValue } from '@/types/technicalProject'
 import type { ProjectInfoFieldDefinition } from '@/constants/projectInfoSchema'
 
 const personOptions = ALL_USERS.map(user => ({ label: user, value: user }))
-const TECHNICAL_SOURCE_SNAPSHOT_KEYS = new Set(['secondaryCategory', 'technicalTrack', 'projectName', 'status'])
+const TECHNICAL_SOURCE_SNAPSHOT_KEYS = new Set(['secondaryCategory', 'technicalTrack', 'projectName'])
 const technicalTeamFieldsByKey = new Map(TECHNICAL_TEAM_FIELDS.map(field => [field.key, field]))
 const technicalDeliverableFieldsByKey = new Map(TECHNICAL_DELIVERABLE_FIELDS.map(field => [field.key, field]))
 
@@ -110,7 +110,10 @@ export default function TechnicalProjectCreateFields({
     historicalDomain,
   )
   const projectValueHistory = useMemo(() => projectValue ? [projectValue] : [], [projectValue])
+  const status = String(Form.useWatch('status', form) || '')
+  const statusHistory = useMemo(() => status ? [status] : [], [status])
   const projectValueOptions = useSingleEnumOptions('core-value', projectValueHistory)
+  const projectStatusOptions = useSingleEnumOptions('technical-project-status', statusHistory)
   const preProjectOptions = getPreProjectCandidates(existingProjects, currentProjectId).map(project => ({
     value: project.id,
     label: `${project.name}（${project.type}）`,
@@ -138,6 +141,9 @@ export default function TechnicalProjectCreateFields({
 
   const renderTechnicalControl = (field: ProjectInfoFieldDefinition) => {
     if (TECHNICAL_SOURCE_SNAPSHOT_KEYS.has(field.key)) return <Input disabled />
+    if (field.key === 'status') {
+      return <Select options={projectStatusOptions} placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'} />
+    }
     if (field.key === 'tmg') {
       return (
         <Select
@@ -186,7 +192,7 @@ export default function TechnicalProjectCreateFields({
 
   return (
     <div className="pms-technical-project-fields">
-      <div className="pms-technical-section-heading"><span>技术项目信息</span><small>项目分类、技术赛道、子项目名称和项目状态来自 IPM 项目快照</small></div>
+      <div className="pms-technical-section-heading"><span>技术项目信息</span><small>项目分类、技术赛道和子项目名称来自 IPM 项目快照；项目状态需手动选择</small></div>
       <div className="pms-project-info-form-grid">
         {fields.map(field => {
           const isRequired = !field.readOnly

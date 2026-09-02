@@ -16,6 +16,7 @@ export type ProjectListVariant =
 export interface ProjectListColumnDefinition {
   key: string
   label: string
+  defaultVisible: boolean
   required: boolean
   hideable: boolean
   reorderable: boolean
@@ -81,23 +82,22 @@ export const PROJECT_LIST_CATEGORIES = [
 
 export const PROJECT_LIST_QUICK_FILTERS = {
   machine: [
-    { key: 'secondaryCategory', label: '项目二级分类' },
-    { key: 'status', label: '状态' },
+    { key: 'projectName', label: '项目名称' },
     { key: 'firstSaleTosVersion', label: '首销tOS版本' },
     { key: 'chipCode', label: '芯片编码' },
-    { key: 'brand', label: '品牌' },
-    { key: 'productSeries', label: '产品系列' },
-    { key: 'productType', label: '产品类型' },
+    { key: 'researchMode', label: '研发模式' },
   ],
   tos: [
-    { key: 'versionType', label: '版本类型' },
-    { key: 'tosVersion', label: 'tOS版本' },
+    { key: 'projectName', label: '项目名称' },
   ],
-  technical: [
-    { key: 'technicalProjectType', label: '项目类型' },
+  technicalTdt: [
     { key: 'projectName', label: '项目名称' },
     { key: 'technicalTrack', label: '技术赛道' },
-    { key: 'projectStage', label: '项目阶段' },
+    { key: 'tmg', label: 'TMG及技术领域' },
+  ],
+  technicalSubproject: [
+    { key: 'projectName', label: '子任务名称' },
+    { key: 'parentProjectName', label: '所属TDT项目名称' },
   ],
 } as const
 
@@ -115,7 +115,7 @@ export function resolveTechnicalProjectType(values: readonly string[]): Technica
 const PROJECT_LIST_FIXED_COLUMN_KEYS: Record<ProjectListVariant, readonly string[]> = {
   machine: [],
   tos: ['tosVersion'],
-  'technical-tdt': ['projectName'],
+  'technical-tdt': [],
   'technical-subproject': ['projectName'],
   capability: [],
 }
@@ -267,7 +267,23 @@ export function buildMachineProjectHierarchyPage<T extends Record<string, unknow
 const GROUP_COLORS = ['#e8f3ff', '#fff0e6', '#fff8db', '#edf6dc', '#f2e8ff'] as const
 
 const required = (key: string, label: string, width = 132): ProjectListColumnDefinition => ({
-  key, label, width, required: true, hideable: false, reorderable: true, source: 'system',
+  key, label, width, defaultVisible: true, required: true, hideable: true, reorderable: true, source: 'system',
+})
+
+const listField = (
+  key: string,
+  label: string,
+  defaultVisible: boolean,
+  width = 132,
+): ProjectListColumnDefinition => ({
+  key,
+  label,
+  width,
+  defaultVisible,
+  required: defaultVisible,
+  hideable: true,
+  reorderable: true,
+  source: 'system',
 })
 
 const childMilestone = (label: string): ProjectListColumnDefinition => ({
@@ -278,23 +294,36 @@ const childMilestone = (label: string): ProjectListColumnDefinition => ({
 
 const STATIC_COLUMNS: Record<Exclude<ProjectListVariant, 'capability'>, ProjectListColumnDefinition[]> = {
   machine: [
-    required('brand', '品牌', 112), required('productLine', '产品线', 120),
-    required('productSeries', '产品系列', 148), required('projectCount', '项目数', 88),
-    required('marketName', '市场名', 150), required('projectName', '项目名', 200),
-    required('versionType', '版本类型', 112), required('firstSaleTosVersion', '首销tOS版本', 128),
-    required('productType', '产品类型', 112), required('developMode', '研发模式', 112),
-    required('androidVersion', '安卓版本', 112), required('chipCode', '芯片编码', 120),
-    required('spm', 'SPM', 112), required('spmDepartment', 'SPM部门（二级部门）', 180),
+    listField('brand', '品牌', true, 112), listField('productLine', '产品线', true, 120),
+    listField('productSeries', '产品系列', true, 148), listField('projectCount', '项目数', true, 88),
+    listField('marketName', '市场名', true, 150), listField('projectName', '项目名称', true, 200),
+    listField('status', '项目状态', true, 112), listField('currentNode', '下一个节点', true, 112),
+    listField('versionType', '版本类型', true, 112), listField('firstSaleTosVersion', '首销tOS版本', true, 128),
+    listField('currentTosVersion', '当前tOS版本', true, 128), listField('chipCode', '芯片编码', true, 120),
+    listField('chipModel', '芯片型号', false, 120), listField('chipPlatform', '芯片平台', false, 120),
+    listField('researchMode', '研发模式', true, 112), listField('developmentMode', '开发模式', true, 112),
+    listField('productType', '产品类型', false, 112), listField('softwareProjectLevel', '软件项目等级', true, 132),
+    listField('healthStatus', '健康状态', false, 112), listField('isFirstLaunchProject', '是否首发项目', false, 132),
+    listField('dimensionUpgradeStrategy', '升级策略', false, 112), listField('systemType', '系统类型', false, 112),
+    listField('kernelVersion', 'Kernel版本', false, 120), listField('androidMajorUpgrade', '是否大版本升级', false, 148),
+    listField('modelCategory', '机型分类', false, 112), listField('productionForbiddenDate', '禁止生产时间', false, 132),
+    listField('confidentialityLevel', '保密级别', false, 112), listField('androidVersion', '安卓版本', false, 112),
+    listField('targetMarket', '目标市场', false, 112), listField('memorySize', '内存大小', false, 112),
+    listField('startingRam', '起步RAM', false, 112), listField('isTwoStage', '是否二段式', false, 120),
+    listField('isOutsourcedMini', '是否外研Mini版本', false, 148), listField('jiraProjects', 'JIRA项目', false, 140),
+    listField('spm', 'SPM', true, 112), listField('spmDepartment', 'SPM部门（二级部门）', true, 180),
   ],
   tos: [
-    required('tosVersion', 'tOS版本'), required('versionType', '版本类型'),
-    required('status', '项目状态'), required('spm', 'SPM'),
+    required('tosVersion', 'tOS版本'), required('spm', '版本项目经理', 160),
   ],
   'technical-tdt': [
-    required('projectName', 'TDT项目名称', 200), required('technicalTrack', '技术赛道'),
-    required('tmg', 'TMG及技术领域', 160), required('subdomain', '子领域'),
-    required('technicalLead', '技术项目负责人', 160),
-    required('technicalProjectManager', '技术项目经理', 160), required('projectStage', '项目阶段'),
+    listField('projectName', 'TDT项目名称', true, 200), listField('subprojectCount', '子任务数', true, 100),
+    listField('technicalTrack', '技术赛道', true), listField('tmg', 'TMG及技术领域', true, 160),
+    listField('subdomain', '子领域', true), listField('technicalLead', '技术项目负责人', true, 160),
+    listField('technicalProjectManager', '技术项目经理', true, 160),
+    listField('qualityRepresentative', '质量代表', false, 132),
+    listField('productRepresentative', '产品代表', false, 132),
+    listField('standardizationRepresentative', '标准化代表', false, 140),
   ],
   'technical-subproject': [
     required('projectName', '子任务名称', 200), required('parentProjectName', '所属TDT项目名称', 200),
@@ -376,29 +405,34 @@ export function getProjectListMatrix(
           : undefined,
         taskId: `dynamic-${index}`,
       }))
-  const optional = (options.optionalFields || [])
+  const optional = (variant === 'technical-subproject' ? (options.optionalFields || []) : [])
     .filter(field => !existingKeys.has(field.key) && !dynamic.some(item => item.key === field.key))
     .map(field => ({
       key: field.key,
       label: field.label,
       width: field.width ?? 140,
+      defaultVisible: field.defaultVisible ?? false,
       required: false,
       hideable: true,
       reorderable: true,
       source: 'projectInfo' as const,
     }))
-  const beforeTail = variant === 'machine' ? base.slice(0, 12)
-    : variant === 'tos' ? base.slice(0, 3)
+  const beforeTail = variant === 'machine' ? base
+    : variant === 'tos' ? base.slice(0, 1)
       : variant === 'technical-tdt' ? base
         : base.slice(0, 7)
-  const tail = variant === 'machine' ? base.slice(12)
-    : variant === 'tos' ? base.slice(3)
+  const tail = variant === 'machine' ? []
+    : variant === 'tos' ? base.slice(1)
       : variant === 'technical-subproject' ? base.slice(7)
         : []
   const milestoneColumns = dynamic.filter(column => !existingLabels.has(column.label))
   // Legacy label-only callers are source-contract probes; real template tasks
   // carry grouping metadata and are placed at their visual position.
-  if (!options.templateTasks?.length) return [...base, ...milestoneColumns, ...optional]
+  if (!options.templateTasks?.length) {
+    return variant === 'tos'
+      ? [...beforeTail, ...milestoneColumns, ...tail, ...optional]
+      : [...base, ...milestoneColumns, ...optional]
+  }
   return [...beforeTail, ...milestoneColumns, ...tail, ...optional]
 }
 
@@ -443,6 +477,14 @@ export function buildTechnicalProjectListRows(input: {
   const machineNames = new Map((input.machineProjects || []).map(project => [project.id, project.name]))
   const technicalProjects = input.projects.filter(project => project.type === '技术项目')
   const parentById = new Map(technicalProjects.map(project => [project.id, project]))
+  const activeSubprojectCounts = new Map<string, number>()
+  input.subprojects.forEach(child => {
+    if (!child.active) return
+    activeSubprojectCounts.set(
+      child.parentProjectId,
+      (activeSubprojectCounts.get(child.parentProjectId) ?? 0) + 1,
+    )
+  })
   const stageByParent = new Map<string, string>()
   const tdt = technicalProjects.map(project => {
     const published = latestPublished(input.plansByKey[`${project.id}:tdt`])
@@ -463,12 +505,16 @@ export function buildTechnicalProjectListRows(input: {
       projectName: project.name,
       targetProjectId: project.id,
       technicalProjectType: 'tdt' as const,
+      subprojectCount: activeSubprojectCounts.get(project.id) ?? 0,
       status: project.status || '-',
       technicalTrack: project.technicalTrack || '-',
       tmg: project.tmg || '-',
       subdomain: project.subdomain || '-',
       technicalLead: project.technicalLead || '-',
       technicalProjectManager: project.technicalProjectManager || '-',
+      qualityRepresentative: project.qualityRepresentative || '-',
+      productRepresentative: project.productRepresentative || '-',
+      standardizationRepresentative: project.standardizationRepresentative || '-',
       projectStage,
       ...(published ? milestoneValues(published.tasks) : {}),
     }

@@ -59,10 +59,8 @@ export const resolveConfiguredProjectStatus = ({
     if (mode === 'edit' && submitted === originalStatus.trim()) return submitted
     return ''
   }
-  if (projectType === 'tOS版本项目') {
-    return mapIpmProjectStatus(ipmStatus, projectType)
-  }
-  return liveValues[0] || ''
+  if (mode === 'edit' && originalStatus.trim()) return originalStatus.trim()
+  return ''
 }
 
 export interface InitialProjectStatusPatchInput {
@@ -72,18 +70,5 @@ export interface InitialProjectStatusPatchInput {
   ipmStatus?: string
 }
 
-/** Source refreshes may initialize status once, but must never overwrite a user selection. */
-export const buildInitialProjectStatusPatch = ({
-  initialize,
-  projectType,
-  configuredValues,
-  ipmStatus = '',
-}: InitialProjectStatusPatchInput): { status?: string } => initialize
-  ? {
-      status: resolveConfiguredProjectStatus({
-        projectType,
-        configuredValues,
-        ipmStatus,
-      }),
-    }
-  : {}
+/** Project status is always selected by the user and is never copied from IPM. */
+export const buildInitialProjectStatusPatch = (_input: InitialProjectStatusPatchInput): { status?: string } => ({})

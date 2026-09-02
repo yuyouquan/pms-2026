@@ -26,10 +26,15 @@ sandbox.module.exports = sandbox.exports
 vm.runInNewContext(outputText, sandbox, { filename: modulePath })
 
 const {
+  DATE_FILTER_OPERATORS,
+  ENUM_FILTER_OPERATORS,
   FILTER_OPERATORS,
   applyFilterConditions,
+  createFilterCondition,
   getFieldOptionsWithDuplicateDisabled,
+  getDefaultFilterOperator,
   isFilterConditionActive,
+  isMultiValueFilterOperator,
   isValuelessFilterOperator,
   normalizeFilterConditions,
 } = sandbox.module.exports
@@ -40,6 +45,21 @@ assert.deepEqual(
   plain(FILTER_OPERATORS.map((item) => item.label)),
   ['等于', '不等于', '包含', '不包含', '为空', '不为空'],
 )
+assert.deepEqual(
+  plain(ENUM_FILTER_OPERATORS.map((item) => item.label)),
+  ['等于', '不等于', '包含', '不包含', '为空', '不为空'],
+)
+assert.deepEqual(
+  plain(DATE_FILTER_OPERATORS.map((item) => item.label)),
+  ['等于', '不等于', '早于', '晚于'],
+)
+assert.equal(createFilterCondition().operator, 'contains')
+assert.equal(getDefaultFilterOperator('text'), 'contains')
+assert.equal(getDefaultFilterOperator('enum'), 'contains')
+assert.equal(getDefaultFilterOperator('date'), 'equals')
+assert.equal(isMultiValueFilterOperator('contains', 'enum'), true)
+assert.equal(isMultiValueFilterOperator('notContains', 'enum'), true)
+assert.equal(isMultiValueFilterOperator('equals', 'enum'), false)
 
 assert.equal(isValuelessFilterOperator('isEmpty'), true)
 assert.equal(isValuelessFilterOperator('isNotEmpty'), true)
@@ -59,6 +79,42 @@ const rows = [
 assert.deepEqual(
   plain(applyFilterConditions(rows, [{ id: '1', field: 'owner', operator: 'notEquals', value: '张三' }]).map((row) => row.name)),
   ['Beta', 'Gamma', 'Delta', 'Epsilon'],
+)
+
+const enumDefinitions = [{
+  key: 'status',
+  label: '状态',
+  kind: 'enum',
+  options: [
+    { label: '进行中', value: '进行中' },
+    { label: '未开始', value: '未开始' },
+  ],
+}]
+assert.deepEqual(
+  plain(applyFilterConditions(
+    rows,
+    [{ id: 'enum-contains', field: 'status', operator: 'contains', value: ['进行中', '已完成'] }],
+    enumDefinitions,
+  ).map(row => row.name)),
+  ['Alpha', 'Beta'],
+  'enum contains must match any selected option',
+)
+assert.deepEqual(
+  plain(applyFilterConditions(
+    rows,
+    [{ id: 'enum-not-contains', field: 'status', operator: 'notContains', value: ['进行中', '已完成'] }],
+    enumDefinitions,
+  ).map(row => row.name)),
+  ['Gamma', 'Delta', 'Epsilon'],
+  'enum notContains must reject every selected option',
+)
+assert.deepEqual(
+  plain(normalizeFilterConditions(
+    [{ id: 'legacy-any', field: 'status', operator: 'equalsAny', value: ['进行中', '已完成'] }],
+    enumDefinitions,
+  )),
+  [{ id: 'legacy-any', field: 'status', operator: 'contains', value: ['进行中', '已完成'] }],
+  'legacy equalsAny must migrate to enum contains',
 )
 assert.deepEqual(
   plain(applyFilterConditions(rows, [{ id: '1', field: 'note', operator: 'isEmpty', value: '' }]).map((row) => row.name)),

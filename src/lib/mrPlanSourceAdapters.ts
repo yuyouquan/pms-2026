@@ -222,6 +222,8 @@ function getMachineProjectSource(project: ProjectItem) {
     currentTosVersion: normalizeTosSnapshot(projectValue(project, 'currentTosVersion')),
     spm: spmUsers.join(','),
     spmUsers,
+    status: project.status,
+    statusChangedAt: project.statusChangedAt,
   }
 }
 

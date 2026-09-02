@@ -258,7 +258,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '7', name: 'X6890-D8500_H1001', type: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
-    status: '上市', progress: 100, leader: '李白',
+    status: 'EOS', statusChangedAt: '2026-06-30T09:10:00.000+08:00', progress: 100, leader: '李白',
     markets: ['OP', 'TR', 'RU', 'IN'], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '张三', updatedAt: '1天前', productLine: 'CAMON', productCategory: 'Note', productSeries: 'A', tosVersion: 'tOS16.3',
     marketName: 'CAMON 40 Pro', brand: 'TECNO', developMode: 'ODC',
@@ -329,7 +329,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '12', name: 'CN5C-D8400_H992', type: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
-    status: '在研', progress: 58, leader: '张三',
+    status: 'EOS', statusChangedAt: '2026-07-31T09:20:00.000+08:00', progress: 58, leader: '张三',
     markets: ['OP', 'TR'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '李白,张三', updatedAt: '30分钟前', productLine: 'CAMON', productCategory: 'CAMON', productSeries: 'CAMON 50', tosVersion: 'tOS16.3',
     marketName: 'CAMON 50C', brand: 'TECNO', developMode: 'ODC',
@@ -354,7 +354,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '13', name: 'CN5M-D8400_H993', type: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
-    status: '转维', progress: 92, leader: '李四',
+    status: 'EOS', statusChangedAt: '2026-08-31T09:30:00.000+08:00', progress: 92, leader: '李四',
     markets: ['OP', 'RU'], androidVersion: 'Android 16', chipPlatform: 'MTK',
     spm: '王五', updatedAt: '4小时前', productLine: 'CAMON', productCategory: 'CAMON', productSeries: 'CAMON 50', tosVersion: 'tOS16.3',
     marketName: 'CAMON 50M', brand: 'TECNO', developMode: 'ODC',
@@ -379,7 +379,7 @@ export const initialProjects: ProjectSeed[] = [
   },
   {
     id: '14', name: 'CN6_H902', type: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
-    status: '上市', progress: 100, leader: '赵六',
+    status: 'EOS', statusChangedAt: '2026-05-31T09:40:00.000+08:00', progress: 100, leader: '赵六',
     markets: ['OP', 'TR', 'RU'], androidVersion: 'Android 16', chipPlatform: 'QCOM',
     spm: '赵六', updatedAt: '昨天', productLine: 'CAMON', productCategory: 'CAMON', productSeries: 'P', tosVersion: 'tOS16.3',
     marketName: 'CAMON P', brand: 'TECNO', developMode: '联合开发',

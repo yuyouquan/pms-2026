@@ -2,6 +2,7 @@ import { compareTosVersionNumbers, normalizeMrBusinessDate } from '@/lib/mrVersi
 import type {
   ApplyStopReleaseInput,
   ApplyStopReleaseResult,
+  EosExclusionInput,
   JointMachinePlan,
   MrLevel1Source,
   MrMachineProjectSource,
@@ -120,6 +121,22 @@ export function isPlanExcludedByStopRecord(input: StopExclusionInput): boolean {
   })
 }
 
+/** EOS is inclusive: the release whose collection start equals the EOS day remains visible. */
+export function isPlanExcludedByMachineEos(input: EosExclusionInput): boolean {
+  const machine = input.machineProjects.find(project => project.id === input.plan.projectId)
+  if (trim(machine?.status) !== 'EOS') return false
+  const eosDate = normalizeMrBusinessDate(trim(machine?.statusChangedAt).slice(0, 10))
+  if (!eosDate) return false
+  const planVersion = canonicalizeTosMrVersion(input.plan.tosVersion)
+  if (!planVersion) return false
+  const instance = input.tosInstances.find(item => (
+    item.projectId === input.plan.tosProjectId && canonicalizeTosMrVersion(item.tosVersion) === planVersion
+  ))
+  if (!instance) return false
+  const collectionStart = findActivityDate(instance, COLLECTION_START)
+  return !!collectionStart && collectionStart > eosDate
+}
+
 function normalizeStopRecord(record: ApplyStopReleaseInput['record']): ApplyStopReleaseInput['record'] {
   const id = trim(record.id)
   const projectId = trim(record.projectId)
@@ -224,7 +241,7 @@ export function reconcileJointMachinePlans(input: ReconcileJointInput): Reconcil
           updatedBy: trim(machine.spm),
           updatedAt: today,
         }
-        if (isPlanExcludedByStopRecord({ plan, tosInstances: input.tosInstances, stopRecords: input.stopRecords })) return
+        if (isPlanExcludedByMachineEos({ plan, tosInstances: input.tosInstances, machineProjects: input.machineProjects })) return
         persistedPlans[key] = plan
         const instanceKey = `${instance.projectId}::${instance.tosVersion}`
         const list = eligibleByInstance.get(instanceKey) ?? []

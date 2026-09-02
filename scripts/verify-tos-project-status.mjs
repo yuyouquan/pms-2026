@@ -35,12 +35,12 @@ assert.equal(resolveConfiguredProjectStatus({
   projectType: 'tOS版本项目',
   configuredValues: ['规划中', '在研'],
   ipmStatus: '进行中',
-}), '在研', 'tOS create keeps the existing IPM status synchronization when it is live')
+}), '', 'tOS create requires the user to select a configured status')
 assert.equal(resolveConfiguredProjectStatus({
   projectType: 'tOS版本项目',
   configuredValues: ['规划中', '已完成'],
   ipmStatus: '进行中',
-}), '在研', 'tOS create displays the mapped IPM status even when status configuration is missing it')
+}), '', 'tOS create does not copy the IPM source status')
 assert.equal(resolveConfiguredProjectStatus({
   projectType: 'tOS版本项目',
   configuredValues: ['规划中', '已完成'],
@@ -50,7 +50,7 @@ assert.equal(resolveConfiguredProjectStatus({
   projectType: '能力建设项目',
   configuredValues: ['规划中', '在研'],
   ipmStatus: '进行中',
-}), '规划中', 'capability create chooses the first live configured status instead of a hard-coded default')
+}), '', 'capability create requires an explicit configured status selection')
 assert.equal(resolveConfiguredProjectStatus({
   projectType: '能力建设项目',
   configuredValues: ['规划中', '在研'],
@@ -64,7 +64,7 @@ assert.equal(resolveConfiguredProjectStatus({
 assert.equal(resolveConfiguredProjectStatus({
   projectType: '整机产品项目',
   configuredValues: ['整机自定义状态', '整机备用状态'],
-}), '整机自定义状态', 'machine create initializes from the first live configured status')
+}), '', 'machine create requires an explicit configured status selection')
 assert.equal(resolveConfiguredProjectStatus({
   projectType: '技术项目',
   configuredValues: ['技术预览中'],
@@ -86,7 +86,7 @@ assert.equal(JSON.stringify(buildInitialProjectStatusPatch({
   initialize: true,
   projectType: '整机产品项目',
   configuredValues: ['整机自定义状态'],
-})), JSON.stringify({ status: '整机自定义状态' }), 'new machine source flow initializes the configured status once')
+})), JSON.stringify({}), 'new machine source flow must not initialize project status')
 assert.equal(JSON.stringify(buildInitialProjectStatusPatch({
   initialize: false,
   projectType: '整机产品项目',
@@ -101,7 +101,7 @@ const projectList = read('src/containers/ProjectListContainer.tsx')
 const projectSpace = read('src/containers/ProjectSpaceContainer.tsx')
 
 assert.match(externalPool, /ipmStatus\?: string/)
-assert.match(projectInfoModal, /buildInitialProjectStatusPatch\([\s\S]*ipmStatus:\s*entry\.ipmStatus/)
+assert.match(projectInfoModal, /buildInitialProjectStatusPatch\(/)
 assert.match(projectInfoModal, /getProjectStatusEnumType/)
 assert.match(projectInfoModal, /buildEnumOptions/)
 assert.match(projectInfoModal, /useEnumHydration/)
@@ -110,7 +110,7 @@ assert.match(projectInfoModal, /showConfiguredProjectStatus/, 'machine, technica
 assert.match(projectInfoModal, /buildInitialProjectStatusPatch/, 'source refresh applies status only at initialization')
 assert.doesNotMatch(projectInfoModal, /:\s*'待立项'/, 'create flow does not inject a hard-coded machine or technical status')
 assert.match(projectInfoModal, /resolveConfiguredProjectStatus/, 'project submission uses the runtime configured-status boundary')
-assert.match(projectInfoModal, /IPM 映射状态/, 'tOS create reports a missing mapped status configuration explicitly')
+assert.doesNotMatch(projectInfoModal, /disabled=\{projectType === PROJECT_TYPE_TOS_VERSION\}/, 'tOS project status is user-selectable')
 assert.doesNotMatch(projectInfoModal, /CREATE_FORM_DEFAULTS[^}]*status:\s*'待立项'/s, 'project create no longer injects the stale status default')
 assert.match(addProjectModal, /status: payload\.projectStatus/)
 assert.match(projectList, /getProjectStatusEnumType/)

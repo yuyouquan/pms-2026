@@ -201,6 +201,20 @@ assert.deepEqual(
   'machine version persistence migration is idempotent',
 )
 
+const legacyEosState = projectStore.migrateProjectState({ projects: [{
+  ...persistedMachineBase,
+  id: 'legacy-eos-machine',
+  status: 'EOS',
+}] }, projectStore.PROJECT_STORE_VERSION - 1)
+const legacyEosProject = legacyEosState.projects.find(project => project.id === 'legacy-eos-machine')
+assert.match(legacyEosProject?.statusChangedAt || '', /^\d{4}-\d{2}-\d{2}T/, 'legacy EOS projects receive a migration timestamp')
+assert.equal(
+  projectStore.migrateProjectState(legacyEosState, projectStore.PROJECT_STORE_VERSION).projects
+    .find(project => project.id === 'legacy-eos-machine')?.statusChangedAt,
+  legacyEosProject?.statusChangedAt,
+  'EOS migration preserves the first recorded transition timestamp',
+)
+
 const deleteNew = {
   ...newMachine,
   id: 'delete-new',

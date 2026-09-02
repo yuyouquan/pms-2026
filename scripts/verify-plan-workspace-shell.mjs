@@ -90,7 +90,15 @@ for (const prop of ['scopeTabs', 'notices', 'versionControls', 'primaryActions',
 for (const label of ['计划作用域', '计划版本操作', '计划工具', '计划内容']) {
   assert.match(shellSource, new RegExp(`aria-label=[{]?['\"]${label}`), `shared shell exposes stable aria label ${label}`)
 }
-assert.equal(hasExport(parseTsx(readSource(root, 'src/components/plans/PlanViewModeSwitcher.tsx'), 'PlanViewModeSwitcher.tsx'), 'PlanViewModeSwitcher'), true, 'view switcher is exported')
+const viewSwitcherSource = readSource(root, 'src/components/plans/PlanViewModeSwitcher.tsx')
+assert.equal(hasExport(parseTsx(viewSwitcherSource, 'PlanViewModeSwitcher.tsx'), 'PlanViewModeSwitcher'), true, 'view switcher is exported')
+const horizontalPosition = viewSwitcherSource.indexOf("label: '横版表格'")
+const verticalPosition = viewSwitcherSource.indexOf("label: '竖版表格'")
+const ganttPosition = viewSwitcherSource.indexOf("label: '甘特图'")
+assert.ok(
+  horizontalPosition >= 0 && horizontalPosition < verticalPosition && verticalPosition < ganttPosition,
+  'canonical view switcher orders horizontal, vertical, then gantt',
+)
 const compareModalSource = readSource(root, 'src/components/plans/PlanVersionCompareModal.tsx')
 assert.equal(hasExport(parseTsx(compareModalSource, 'PlanVersionCompareModal.tsx'), 'PlanVersionCompareModal'), true, 'version compare modal is exported')
 assert.match(compareModalSource, /const handleCompare = \(\) => \{\s*setFilterType\('all'\)\s*onCompare\(\)\s*\}/, 'starting a comparison resets the active change filter before comparing')
@@ -109,5 +117,10 @@ assert.ok(noticesExpression && noticesExpression.kind !== ts.SyntaxKind.NullKeyw
 assert.match(scopeTabsExpression.getText(projectSpaceFile), /planWorkspaceScopeTabs/, 'whole-machine shell mounts market, tOS type, and plan-level scope controls')
 assert.match(noticesExpression.getText(projectSpaceFile), /planWorkspaceNotices/, 'whole-machine shell mounts current plan notices')
 assert.doesNotMatch(projectSpaceSource, /scopeTabs=\{null\}|notices=\{null\}/, 'whole-machine shell never dead-mounts its scope or notice slots')
+assert.match(
+  projectSpaceSource,
+  /projectPlanLevel !== 'level1' && projectPlanViewMode !== 'horizontal'/,
+  'level-one plan never exposes the field-configuration action',
+)
 
 console.log('plan workspace shell contract passed')

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import puppeteer from 'puppeteer'
@@ -333,7 +334,9 @@ const runScenario = async (name, options, exercise) => {
   page.setDefaultNavigationTimeout(TIMEOUT)
   page.on('pageerror', error => applicationErrors.push(`[pageerror] ${error.message}`))
   page.on('console', message => {
-    if (message.type() === 'error') applicationErrors.push(`[console.error] ${message.text()}`)
+    if (message.type() !== 'error') return
+    if (/Warning: \[antd: (?:Descriptions|Statistic)\].*deprecated/.test(message.text())) return
+    applicationErrors.push(`[console.error] ${message.text()}`)
   })
   page.on('requestfailed', request => {
     applicationErrors.push(`[requestfailed] ${request.method()} ${request.url()} ${request.failure()?.errorText || ''}`)
@@ -367,8 +370,12 @@ await mkdir(ARTIFACT_DIR, { recursive: true })
 try {
   browser = await puppeteer.launch({
     headless: 'new',
-    executablePath: process.env.PMS_CHROME_EXECUTABLE || undefined,
-    args: ['--no-sandbox', '--disable-dev-shm-usage', '--window-size=1600,1000'],
+    executablePath: process.env.PMS_CHROME_EXECUTABLE
+      || (existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        : undefined),
+    protocolTimeout: Math.max(300_000, TIMEOUT * 4),
+    args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--window-size=1600,1000'],
   })
   await prewarm()
 
@@ -525,6 +532,7 @@ try {
     ].map(key => {
       const wrapper = document.querySelector(`.ant-modal [data-project-create-field="${key}"]`)
       const control = wrapper?.querySelector('input, select, [role="combobox"]')
+      const antSelect = wrapper?.querySelector('.ant-select')
       const rect = control?.getBoundingClientRect()
       const style = control ? getComputedStyle(control) : null
       return [key, {
@@ -535,10 +543,12 @@ try {
         value: control instanceof HTMLInputElement || control instanceof HTMLSelectElement ? control.value : (control?.textContent || '').trim(),
         disabled: control instanceof HTMLInputElement || control instanceof HTMLSelectElement ? control.disabled : control?.getAttribute('aria-disabled') === 'true',
         readOnly: control instanceof HTMLInputElement ? control.readOnly : false,
+        isSelect: Boolean(antSelect),
+        selectDisabled: antSelect?.classList.contains('ant-select-disabled') || false,
         visible: Boolean(rect && rect.width > 0 && rect.height > 0 && style?.display !== 'none' && style?.visibility !== 'hidden'),
       }]
     })))
-    for (const key of ['secondaryCategory', 'technicalTrack', 'projectName', 'status']) {
+    for (const key of ['secondaryCategory', 'technicalTrack', 'projectName']) {
       assert.equal(createControlState[key].wrapper, true, `${key} 必须位于对应 data-project-create-field 包装器：${JSON.stringify(createControlState)}`)
       assert.equal(createControlState[key].visible, true, `${key} 必须有可见真实控件：${JSON.stringify(createControlState)}`)
       assert.equal(createControlState[key].tag, 'INPUT', `${key} IPM 快照必须渲染为输入控件：${JSON.stringify(createControlState)}`)
@@ -547,7 +557,10 @@ try {
     assert.equal(createControlState.secondaryCategory.value, '研发级-基础研究-重点项目', `项目分类必须预填 IPM 来源值：${JSON.stringify(createControlState)}`)
     assert.equal(createControlState.technicalTrack.value, 'AIOS', `技术赛道必须预填非空 IPM 来源值：${JSON.stringify(createControlState)}`)
     assert.equal(createControlState.projectName.value, 'AI-Engine-V3', `子项目名称必须预填 IPM 来源值：${JSON.stringify(createControlState)}`)
-    assert.equal(createControlState.status.value, '待立项', `项目状态必须保留配置初始化状态：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.status.wrapper, true, `项目状态必须显示：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.status.isSelect, true, `项目状态必须使用下拉选择：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.status.selectDisabled, false, `项目状态必须允许用户选择：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.status.value, '', `项目状态不得自动带出：${JSON.stringify(createControlState)}`)
     await page.screenshot({ path: join(ARTIFACT_DIR, '01-add-modal.png'), fullPage: false })
     await clickExact(page, '.ant-modal button', '取消')
     await page.waitForFunction(() => !Array.from(document.querySelectorAll('.pms-project-info-modal-surface')).some(element => {
@@ -636,7 +649,7 @@ try {
     }))
     assert.equal(technicalWorkspaceState.version, 'V1', `技术子项目计划必须保留已发布版本状态：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.createRevisionVisible, true, `技术子项目计划必须保留创建修订入口：${JSON.stringify(technicalWorkspaceState)}`)
-    assert.deepEqual(technicalWorkspaceState.viewValues, ['vertical', 'horizontal', 'gantt'], `技术子项目计划必须保留竖版/横版/甘特图视图控制：${JSON.stringify(technicalWorkspaceState)}`)
+    assert.deepEqual(technicalWorkspaceState.viewValues, ['horizontal', 'vertical', 'gantt'], `技术子项目计划必须保留横版/竖版/甘特图视图控制：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.horizontalChecked, true, `技术子项目计划默认横版视图必须可观察：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.planContent, true, `技术子项目计划内容区域必须存在：${JSON.stringify(technicalWorkspaceState)}`)
     const workspacePlanSelector = '[aria-label="计划内容"] table:has(thead tr[data-technical-plan-header="single-row"])'

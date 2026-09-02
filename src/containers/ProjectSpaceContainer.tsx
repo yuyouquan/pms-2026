@@ -43,6 +43,7 @@ import { compareVersionsForTable } from '@/lib/versionCompare'
 import { ensurePublishedComparisonSnapshots, resolveComparisonVersionTasks } from '@/lib/versionComparisonSnapshots'
 import { shouldShowLatestPublishedLevel1Summary } from '@/lib/projectBasicInfoPresentation'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
+import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
 import TosMrVersionPlan from '@/components/plans/TosMrVersionPlan'
 import MachineMrVersionPlan from '@/components/plans/MachineMrVersionPlan'
@@ -54,13 +55,15 @@ import {
   type PlanWorkspaceViewMode,
 } from '@/lib/planWorkspace'
 import {
-  FILTER_OPERATORS,
   createFilterCondition,
+  getDefaultFilterOperator,
   getFieldOptionsWithDuplicateDisabled,
+  getFilterOperatorsForKind,
   isFilterConditionActive,
-  isValuelessFilterOperator,
+  normalizeFilterValueForOperator,
   normalizeFilterConditions,
-  type FilterCondition,
+  type AnyFilterCondition,
+  type FilterFieldDefinition,
 } from '@/lib/filterConditions'
 import { GANTT_SCALE_OPTIONS } from '@/lib/ganttScale'
 import { resolveMrPlanNavigationAction } from '@/lib/mrNavigationRules'
@@ -701,7 +704,7 @@ const getPlanRevisionKindFromVersion = (version?: PlanVersionLike): PlanRevision
   return parsed.minor === null ? 'formal' : 'gray'
 }
 
-type PlanFilterCondition = FilterCondition
+type PlanFilterCondition = AnyFilterCondition
 type PlanCloneSource = {
   type: 'template' | 'market'
   label: string
@@ -2438,13 +2441,19 @@ export default function ProjectSpaceContainer() {
   }
 
   const usesGovernedLevel1Filters = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
-  const planFilterFieldOptions = usesGovernedLevel1Filters
-    ? LEVEL1_TREE_FILTER_FIELDS.map(field => ({ label: field.label, value: field.key }))
-    : TABLE_COLUMNS.map(field => ({ label: field.title, value: field.key }))
+  const planFilterFieldDefinitions: FilterFieldDefinition[] = usesGovernedLevel1Filters
+    ? LEVEL1_TREE_FILTER_FIELDS.map(field => ({ ...field })) as FilterFieldDefinition[]
+    : TABLE_COLUMNS.map(field => ({
+        key: field.key,
+        label: field.title,
+        kind: field.key.toLowerCase().includes('date') ? 'date' : 'text',
+      }))
+  const planFilterFieldOptions = planFilterFieldDefinitions.map(field => ({ label: field.label, value: field.key }))
+  const planFilterFieldByKey = new Map(planFilterFieldDefinitions.map(field => [field.key, field]))
   const hasActiveLevel1PlanFilters = level1PlanFilters.some(isFilterConditionActive)
   const commitLevel1PlanFilters = (next: PlanFilterCondition[]) => {
     setTempLevel1PlanFilters(next)
-    setLevel1PlanFilters(normalizeFilterConditions(next))
+    setLevel1PlanFilters(normalizeFilterConditions(next, planFilterFieldDefinitions))
   }
   const updateLevel1PlanFilter = (id: string, patch: Partial<PlanFilterCondition>) => {
     commitLevel1PlanFilters(tempLevel1PlanFilters.map(item => item.id === id ? { ...item, ...patch } : item))
@@ -5602,35 +5611,41 @@ export default function ProjectSpaceContainer() {
                       onClose={() => setShowLevel1PlanFilterDrawer(false)}
                     >
                       <div className="pms-filter-condition-list">
-                        {tempLevel1PlanFilters.map((condition) => (
-                          <div key={condition.id} className="pms-filter-condition-row">
+                        {tempLevel1PlanFilters.map((condition) => {
+                          const definition = planFilterFieldByKey.get(condition.field)
+                          return <div key={condition.id} className="pms-filter-condition-row">
                               <Select
                                 aria-label="筛选字段"
                                 placeholder="筛选字段"
                                 value={condition.field || undefined}
                                 options={getFieldOptionsWithDuplicateDisabled(planFilterFieldOptions, tempLevel1PlanFilters, condition.id)}
-                                onChange={(value) => updateLevel1PlanFilter(condition.id, { field: value, value: '' })}
+                                onChange={(value) => {
+                                  const nextDefinition = planFilterFieldByKey.get(value)
+                                  const operator = getDefaultFilterOperator(nextDefinition?.kind ?? 'text')
+                                  updateLevel1PlanFilter(condition.id, { field: value, operator, value: '' })
+                                }}
                               />
                               <Select
                                 aria-label="筛选条件"
                                 value={condition.operator}
-                                options={FILTER_OPERATORS as any}
+                                options={getFilterOperatorsForKind(definition?.kind ?? 'text') as any}
                                 onChange={(value) => {
                                   const operator = value as PlanFilterCondition['operator']
                                   updateLevel1PlanFilter(condition.id, {
                                     operator,
-                                    value: isValuelessFilterOperator(operator) ? '' : condition.value,
+                                    value: normalizeFilterValueForOperator(
+                                      condition.value,
+                                      operator,
+                                      definition?.kind ?? 'text',
+                                    ),
                                   })
                                 }}
                               />
-                              {!isValuelessFilterOperator(condition.operator) ? (
-                                <Input
-                                  aria-label="筛选值"
-                                  placeholder="输入筛选值"
-                                  value={condition.value}
-                                  onChange={(e) => updateLevel1PlanFilter(condition.id, { value: e.target.value })}
-                                />
-                              ) : <span className="pms-filter-value-placeholder" aria-hidden />}
+                              <FilterConditionValue
+                                condition={condition}
+                                definition={definition}
+                                onChange={value => updateLevel1PlanFilter(condition.id, { value })}
+                              />
                               <Button
                                 icon={<DeleteOutlined />}
                                 danger
@@ -5641,7 +5656,7 @@ export default function ProjectSpaceContainer() {
                                 }}
                               />
                           </div>
-                        ))}
+                        })}
                       </div>
                     </FloatingFilterPanel>
                   ) : projectPlanLevel !== 'level1' ? (
@@ -5652,7 +5667,7 @@ export default function ProjectSpaceContainer() {
                       <Tooltip title="导出为 Excel"><Button aria-label="导出计划" icon={<DownloadOutlined />} style={{ borderRadius: 6 }} /></Tooltip>
                     </Dropdown>
                   )}
-                  {projectPlanViewMode !== 'horizontal' && (
+                  {projectPlanLevel !== 'level1' && projectPlanViewMode !== 'horizontal' && (
                     <SortableColumnSettings
                       open={showColumnModal}
                       trigger={(

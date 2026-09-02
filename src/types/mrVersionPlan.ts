@@ -191,6 +191,8 @@ export interface MrMachineProjectSource {
   currentTosVersion?: string
   spm?: string
   spmUsers?: string[]
+  status?: string
+  statusChangedAt?: string
 }
 
 export interface MrLevel1Source {
@@ -260,6 +262,12 @@ export interface StopExclusionInput {
   plan: JointMachinePlan
   tosInstances: readonly TosMrVersionInstance[]
   stopRecords: readonly MrStopReleaseRecord[]
+}
+
+export interface EosExclusionInput {
+  plan: JointMachinePlan
+  tosInstances: readonly TosMrVersionInstance[]
+  machineProjects: readonly MrMachineProjectSource[]
 }
 
 export interface ApplyStopReleaseInput {
