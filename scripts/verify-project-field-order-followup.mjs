@@ -207,6 +207,9 @@ for (const key of ['secondaryCategory', 'technicalTrack', 'projectName']) {
   assert.equal(technicalCreateDefinitions.get(key)?.readOnly, true, `${key} is a displayed source snapshot`)
 }
 assert.equal(technicalCreateDefinitions.get('status')?.inputType, 'select', 'technical status is a configured user selection')
+assert.doesNotMatch(technicalCreateSource, /TECHNICAL_SOURCE_SNAPSHOT_KEYS[^\n]*['"]status['"]/, 'technical status is not an IPM source snapshot')
+assert.match(technicalCreateSource, /useSingleEnumOptions\(['"]technical-project-status['"]/, 'technical status reads its configured enum')
+assert.match(technicalCreateSource, /field\.key === ['"]status['"][\s\S]*<Select/, 'technical status renders as a Select')
 assert.equal(technicalCreateDefinitions.get('technicalOther')?.label, '其他')
 assert.equal(technical.TECHNICAL_TEAM_FIELDS.find(field => field.key === 'technicalProjectManager')?.required, true)
 assert.equal(technical.TECHNICAL_DELIVERABLE_FIELDS.find(field => field.key === 'charterReport')?.label, 'Charter报告')

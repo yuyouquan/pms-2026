@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import puppeteer from 'puppeteer'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
@@ -414,9 +415,13 @@ const assertFixedUnit = async unit => {
 try {
   browser = await puppeteer.launch({
     headless: 'new',
-    executablePath: process.env.PMS_CHROME_EXECUTABLE || undefined,
+    executablePath: process.env.PMS_CHROME_EXECUTABLE
+      || (fs.existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+        ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+        : undefined),
+    protocolTimeout: Math.max(300_000, TIMEOUT * 4),
     defaultViewport: { width: 1600, height: 1000 },
-    args: ['--no-sandbox', '--window-size=1600,1000'],
+    args: ['--no-sandbox', '--disable-gpu', '--window-size=1600,1000'],
   })
   page = await browser.newPage()
   page.on('pageerror', error => browserErrors.push(`[pageerror] ${error.message}`))

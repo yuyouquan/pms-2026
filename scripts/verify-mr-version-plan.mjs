@@ -2013,7 +2013,7 @@ assert.match(mrTemplateTableSource, /data-mr-template-activity-id/)
 for (let step = 1; step <= 15; step += 1) assert.match(mrBrowserVerifierSource, new RegExp(`STEP ${step} PASS`))
 for (const screenshot of [
   'configuration.png', 'tos-vertical.png', 'tos-horizontal.png', 'joint-valid.png',
-  'joint-invalid.png', 'stop-record.png', 'machine-vertical.png', 'machine-horizontal.png',
+  'joint-invalid.png', 'eos-hidden.png', 'machine-vertical.png', 'machine-horizontal.png',
 ]) assert.match(mrBrowserVerifierSource, new RegExp(screenshot.replace('.', '\\.')))
 assert.match(mrBrowserVerifierSource, /PASS MR version plan browser verification/)
 assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 3)

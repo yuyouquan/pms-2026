@@ -40,7 +40,7 @@ const MACHINE_SPACE_BASIC_LABELS = [
 ]
 const MACHINE_SPACE_EXTENDED_LABELS = [
   '芯片编码', '芯片型号', '芯片平台', '内存大小', '起步RAM', '是否二段式',
-  '是否外研Mini版本', 'JIRA项目', '基线名称', '整机PD', 'PCBA表', '出货国家表', '关键器件选型表',
+  '是否外研Mini版本', '基线名称', '整机PD', 'PCBA表', '出货国家表', '关键器件选型表', 'JIRA项目',
 ]
 const MACHINE_SPACE_TEAM_LABELS = [
   'SPM', 'SPP', 'CMO', '软件SE', '质量代表', '开发代表', '测试代表', '其他',
@@ -538,6 +538,8 @@ const completeMachineProjectForm = async (page, { bid, version }) => {
   await assertNoText(page, '当前tOS版本', '.ant-modal')
   await assertDisabledCreateFields(page, MACHINE_READ_ONLY_FIELD_KEYS)
   console.log('    FORM fixed machine fields verified')
+  console.log('    FORM status')
+  await selectFormOption(page, '项目状态', '在研')
   console.log('    FORM development')
   await selectFormOption(page, '开发模式', 'ODC')
   await assertCreateFieldLabelOrder(page, MACHINE_CREATE_LABELS)
@@ -1242,6 +1244,23 @@ try {
         }
       }
       await closeFieldVisibilityPicker(page)
+    }
+
+    await expandInformationSection(page, '扩展信息', '.pms-project-info-collapse--extended')
+    const jiraLayout = await page.evaluate(() => {
+      const grid = document.querySelector('.pms-project-info-collapse--extended .pms-project-info-display-grid')
+      const item = Array.from(grid?.querySelectorAll('.pms-project-info-display-item') || [])
+        .find(element => (element.querySelector('.pms-project-info-display-label')?.textContent || '').trim() === 'JIRA项目')
+      const gridRect = grid?.getBoundingClientRect()
+      const itemRect = item?.getBoundingClientRect()
+      return {
+        isLast: Boolean(item && item === grid?.lastElementChild),
+        fullRowClass: item?.classList.contains('pms-project-info-display-item--full-row') || false,
+        widthRatio: gridRect && itemRect ? itemRect.width / gridRect.width : 0,
+      }
+    })
+    if (!jiraLayout.isLast || !jiraLayout.fullRowClass || jiraLayout.widthRatio < 0.95) {
+      throw new Error(`JIRA项目必须位于扩展信息最后并独占整行：${JSON.stringify(jiraLayout)}`)
     }
 
     const preferenceKey = await page.evaluate(() => {
