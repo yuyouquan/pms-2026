@@ -253,9 +253,7 @@ export interface ProjectSummaryQuickFilterDefinition {
 const MACHINE_QUICK_FILTERS = [
   { key: 'firstSaleTosVersion', label: '首销tOS版本' },
   { key: 'chipCode', label: '芯片编码' },
-  { key: 'brand', label: '品牌' },
-  { key: 'productSeries', label: '产品系列' },
-  { key: 'productType', label: '产品类型' },
+  { key: 'researchMode', label: '研发模式' },
 ] as const
 
 const TOS_QUICK_FILTERS = [] as const

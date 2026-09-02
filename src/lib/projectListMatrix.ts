@@ -85,17 +85,19 @@ export const PROJECT_LIST_QUICK_FILTERS = {
     { key: 'projectName', label: '项目名称' },
     { key: 'firstSaleTosVersion', label: '首销tOS版本' },
     { key: 'chipCode', label: '芯片编码' },
-    { key: 'brand', label: '品牌' },
-    { key: 'productSeries', label: '产品系列' },
-    { key: 'productType', label: '产品类型' },
+    { key: 'researchMode', label: '研发模式' },
   ],
   tos: [
     { key: 'projectName', label: '项目名称' },
   ],
-  technical: [
+  technicalTdt: [
     { key: 'projectName', label: '项目名称' },
     { key: 'technicalTrack', label: '技术赛道' },
-    { key: 'projectStage', label: '项目阶段' },
+    { key: 'tmg', label: 'TMG及技术领域' },
+  ],
+  technicalSubproject: [
+    { key: 'projectName', label: '子任务名称' },
+    { key: 'parentProjectName', label: '所属TDT项目名称' },
   ],
 } as const
 
@@ -312,8 +314,7 @@ const STATIC_COLUMNS: Record<Exclude<ProjectListVariant, 'capability'>, ProjectL
     listField('spm', 'SPM', true, 112), listField('spmDepartment', 'SPM部门（二级部门）', true, 180),
   ],
   tos: [
-    required('tosVersion', 'tOS版本'), required('versionType', '版本类型'),
-    required('status', '项目状态'), required('spm', 'SPM'),
+    required('tosVersion', 'tOS版本'), required('spm', '版本项目经理', 160),
   ],
   'technical-tdt': [
     listField('projectName', 'TDT项目名称', true, 200), listField('subprojectCount', '子任务数', true, 100),
@@ -417,17 +418,21 @@ export function getProjectListMatrix(
       source: 'projectInfo' as const,
     }))
   const beforeTail = variant === 'machine' ? base
-    : variant === 'tos' ? base.slice(0, 3)
+    : variant === 'tos' ? base.slice(0, 1)
       : variant === 'technical-tdt' ? base
         : base.slice(0, 7)
   const tail = variant === 'machine' ? []
-    : variant === 'tos' ? base.slice(3)
+    : variant === 'tos' ? base.slice(1)
       : variant === 'technical-subproject' ? base.slice(7)
         : []
   const milestoneColumns = dynamic.filter(column => !existingLabels.has(column.label))
   // Legacy label-only callers are source-contract probes; real template tasks
   // carry grouping metadata and are placed at their visual position.
-  if (!options.templateTasks?.length) return [...base, ...milestoneColumns, ...optional]
+  if (!options.templateTasks?.length) {
+    return variant === 'tos'
+      ? [...beforeTail, ...milestoneColumns, ...tail, ...optional]
+      : [...base, ...milestoneColumns, ...optional]
+  }
   return [...beforeTail, ...milestoneColumns, ...tail, ...optional]
 }
 

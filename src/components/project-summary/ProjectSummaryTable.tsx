@@ -296,11 +296,6 @@ export default function ProjectSummaryTable({
     [fieldDefinitions, planTasksByProjectId, projects, providedRows],
   )
   const quickFilterDefinitions = useMemo(() => {
-    const projectOptions = (key: string) => [...new Set(optionProjects
-      .map(project => String(project[key] ?? '').trim())
-      .filter(Boolean))]
-      .sort((left, right) => left.localeCompare(right, 'zh-CN', { numeric: true }))
-      .map(value => ({ label: value, value }))
     if (matrixVariant === 'machine') {
       return getProjectSummaryQuickFilterDefinitions(projectType, optionProjects)
     }
@@ -308,10 +303,12 @@ export default function ProjectSummaryTable({
       return getProjectSummaryQuickFilterDefinitions(projectType, optionProjects)
     }
     const optionsFor = (key: string) => collectOptions(baseRows, key)
-    return [
-      { key: 'technicalTrack', label: '技术赛道', options: optionsFor('technicalTrack') },
-      { key: 'projectStage', label: '项目阶段', options: optionsFor('projectStage') },
-    ]
+    return matrixVariant === 'technical-subproject'
+      ? [{ key: 'parentProjectName', label: '所属TDT项目名称', options: optionsFor('parentProjectName') }]
+      : [
+          { key: 'technicalTrack', label: '技术赛道', options: optionsFor('technicalTrack') },
+          { key: 'tmg', label: 'TMG及技术领域', options: optionsFor('tmg') },
+        ]
   }, [baseRows, matrixVariant, optionProjects, projectType])
   const quickFilterByKey = useMemo(
     () => new Map(quickFilterDefinitions.map(definition => [definition.key, definition])),
