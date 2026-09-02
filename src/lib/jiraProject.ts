@@ -4,9 +4,81 @@ export interface JiraProjectConfig {
   id: string
   server: string
   projectKey: string
-  type: JiraProjectType
+  type: JiraProjectType | ''
   shared: boolean
   affectProjects: string
+}
+
+export class JiraProjectValidationError extends Error {
+  readonly rowId: string
+  readonly rowIndex: number
+  readonly fieldKey: string
+
+  constructor(rowId: string, rowIndex: number, fieldKey: string, message: string) {
+    super(message)
+    this.name = 'JiraProjectValidationError'
+    this.rowId = rowId
+    this.rowIndex = rowIndex
+    this.fieldKey = fieldKey
+  }
+}
+
+type JiraProjectConfigInput = Partial<JiraProjectConfig> & Record<string, unknown>
+
+const jiraProjectCopySequence = { value: 0 }
+
+const createUniqueJiraProjectId = () => {
+  jiraProjectCopySequence.value += 1
+  return `jira-${Date.now()}-${jiraProjectCopySequence.value}-${Math.random().toString(16).slice(2)}`
+}
+
+export const normalizeJiraProjectConfig = (input: JiraProjectConfigInput): JiraProjectConfig => {
+  const shared = input.shared === true
+  const type = typeof input.type === 'string' ? input.type.trim() : ''
+  return {
+    id: typeof input.id === 'string' ? input.id.trim() : '',
+    server: typeof input.server === 'string' ? input.server.trim() : '',
+    projectKey: typeof input.projectKey === 'string' ? input.projectKey.trim() : '',
+    type: type === 'sw' || type === 'monkey' ? type : '',
+    shared,
+    affectProjects: shared && typeof input.affectProjects === 'string' ? input.affectProjects.trim() : '',
+  }
+}
+
+export const normalizeJiraProjectRows = (rows: unknown): JiraProjectConfig[] => (
+  Array.isArray(rows) ? rows.map(row => normalizeJiraProjectConfig((row && typeof row === 'object' ? row : {}) as JiraProjectConfigInput)) : []
+)
+
+export const patchJiraProjectConfig = (
+  config: JiraProjectConfig,
+  patch: Partial<JiraProjectConfig>,
+): JiraProjectConfig => normalizeJiraProjectConfig({ ...config, ...patch } as JiraProjectConfigInput)
+
+export const copyJiraProjectConfig = (config: JiraProjectConfig): JiraProjectConfig => ({
+  ...normalizeJiraProjectConfig(config as JiraProjectConfigInput),
+  id: createUniqueJiraProjectId(),
+})
+
+const JIRA_REQUIRED_FIELDS: Array<{ key: 'server' | 'projectKey' | 'type'; label: string }> = [
+  { key: 'server', label: 'JIRA服务器' },
+  { key: 'projectKey', label: 'JIRA项目' },
+  { key: 'type', label: 'JIRA类型' },
+]
+
+export const validateJiraProjectRows = (rows: unknown): JiraProjectValidationError[] => {
+  if (!Array.isArray(rows)) return []
+  const errors: JiraProjectValidationError[] = []
+  rows.forEach((rawRow, rowIndex) => {
+    const row = normalizeJiraProjectConfig((rawRow && typeof rawRow === 'object' ? rawRow : {}) as JiraProjectConfigInput)
+    const rowId = row.id || `row-${rowIndex}`
+    JIRA_REQUIRED_FIELDS.forEach(({ key, label }) => {
+      if (!row[key]) errors.push(new JiraProjectValidationError(rowId, rowIndex, key, `请填写${label}`))
+    })
+    if (row.shared && !row.affectProjects) {
+      errors.push(new JiraProjectValidationError(rowId, rowIndex, 'affectProjects', '共享JIRA项目请填写影响项目'))
+    }
+  })
+  return errors
 }
 
 export const JIRA_SERVER_OPTIONS = [
@@ -98,7 +170,7 @@ export const getMarketProjectName = (projectName: string, market: string) =>
   market ? `${projectName}-${market}` : projectName
 
 export const createJiraProjectConfig = (): JiraProjectConfig => ({
-  id: `jira-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  id: createUniqueJiraProjectId(),
   server: JIRA_SERVER_OPTIONS[0].value,
   projectKey: '',
   type: 'sw',

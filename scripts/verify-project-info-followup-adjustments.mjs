@@ -51,6 +51,8 @@ const schemaModule = evaluateTypeScriptModule(
   },
 )
 
+const jiraProjectModule = evaluateTypeScriptModule('src/lib/jiraProject.ts')
+
 const rulesModule = evaluateTypeScriptModule(
   'src/lib/projectInfoRules.ts',
   id => {
@@ -62,6 +64,7 @@ const rulesModule = evaluateTypeScriptModule(
         getProjectInfoValue: () => undefined,
       }
     }
+    if (id === '@/lib/jiraProject') return jiraProjectModule
     if (id === '@/lib/projectStatus') {
       return { mapIpmProjectStatus: value => String(value || '') }
     }
@@ -181,6 +184,31 @@ const machineSubmitValues = rulesModule.getProjectInfoModalSubmitValues('整机�
 })
 assert.equal(machineSubmitValues.developmentMode, 'ODC', 'machine modal submission must retain basic fields')
 assert.equal(machineSubmitValues.chipModel, 'M1', 'machine modal submission must retain extended fields')
+
+const completeJiraRow = {
+  id: 'jira-complete', server: 'jira.transsion.com', projectKey: 'KN4-tOS16', type: 'sw', shared: true, affectProjects: 'KN4',
+}
+assert.equal(
+  rulesModule.validateProjectInfoValues('整机产品项目', { jiraProjects: [] }, { fieldKeys: new Set(['jiraProjects']) }).length,
+  0,
+  'an empty JIRA row array is valid for whole-machine project info',
+)
+const incompleteJiraErrors = rulesModule.validateProjectInfoValues('整机产品项目', {
+  jiraProjects: [{ id: 'jira-incomplete', server: 'jira.transsion.com', projectKey: '', type: 'sw', shared: false, affectProjects: '' }],
+}, { fieldKeys: new Set(['jiraProjects']) })
+assert.ok(incompleteJiraErrors.some(error => error.fieldKey === 'jiraProjects' && error.groupKey === 'extended' && error.message.startsWith('第 1 行：')),
+  'incomplete JIRA rows map to the jiraProjects extended field with a row number')
+const sharedJiraErrors = rulesModule.validateProjectInfoValues('整机产品项目', { jiraProjects: [{ ...completeJiraRow, affectProjects: '' }] }, { fieldKeys: new Set(['jiraProjects']) })
+assert.ok(sharedJiraErrors.some(error => error.fieldKey === 'jiraProjects' && error.message.includes('影响项目')),
+  'shared JIRA rows require Affect Projects through project-info validation')
+const invalidTypeErrors = rulesModule.validateProjectInfoValues('整机产品项目', { jiraProjects: [{ ...completeJiraRow, type: '' }] }, { fieldKeys: new Set(['jiraProjects']) })
+assert.ok(invalidTypeErrors.some(error => error.fieldKey === 'jiraProjects' && error.message.startsWith('第 1 行：')),
+  'invalid JIRA type is reported through project-info validation')
+assert.equal(
+  rulesModule.validateProjectInfoValues('整机产品项目', { jiraProjects: [{ ...completeJiraRow, affectProjects: '' }] }, { fieldKeys: new Set(['projectModel']) }).length,
+  0,
+  'JIRA validation is skipped when jiraProjects is outside the validation scope',
+)
 
 const modal = read('src/components/project-info/ProjectInfoModal.tsx')
 assert.match(modal, /getProjectInfoModalFields\(projectType\)/, 'the modal must use its scoped field projection')

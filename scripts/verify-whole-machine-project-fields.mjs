@@ -1,13 +1,16 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import ts from 'typescript'
+import { projectRoot, readSource } from './lib/source-contract.mjs'
 
-const root = process.cwd()
+const root = projectRoot(import.meta.url)
 const fieldFile = path.join(root, 'src/constants/projectBasicFields.ts')
-const containerFile = path.join(root, 'src/containers/ProjectSpaceContainer.tsx')
 const jiraLibFile = path.join(root, 'src/lib/jiraProject.ts')
-const projectDataFile = path.join(root, 'src/data/projects.ts')
 
 const expectedBasicLabels = [
+  '项目名称',
   '项目名',
   '主板名',
   '市场名',
@@ -15,6 +18,10 @@ const expectedBasicLabels = [
   '产品类型',
   '安卓版本',
   'tOS版本',
+  '首销 tOS 版本',
+  '起步RAM',
+  'STR5时间',
+  '上市时间',
   '研发模式',
   '合作形式',
   '品牌',
@@ -27,12 +34,14 @@ const expectedBasicLabels = [
   '是否二段式',
   '是否为Slim版本',
   '是否外研mini版本',
+  '备注',
   '项目描述',
   'Jira项目',
 ]
 
 const expectedHardwareLabels = [
   '市场项目名',
+  '平台',
   '芯片平台',
   '芯片型号',
   '版本类型',
@@ -128,9 +137,13 @@ if (!fs.existsSync(fieldFile)) fail('Missing src/constants/projectBasicFields.ts
 if (!fs.existsSync(jiraLibFile)) fail('Missing src/lib/jiraProject.ts')
 
 const fieldsSource = fs.readFileSync(fieldFile, 'utf8')
-const containerSource = fs.readFileSync(containerFile, 'utf8')
-const jiraLibSource = fs.readFileSync(jiraLibFile, 'utf8')
-const projectDataSource = fs.readFileSync(projectDataFile, 'utf8')
+const containerSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const fieldInputSource = readSource(root, 'src/components/project-info/ProjectInfoFieldInput.tsx')
+const projectInfoModalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
+const projectInfoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
+const jiraEditorSource = readSource(root, 'src/components/project-info/JiraProjectEditor.tsx')
+const jiraLibSource = readSource(root, 'src/lib/jiraProject.ts')
+const projectDataSource = readSource(root, 'src/data/projects.ts')
 
 assertSameLabels(extractLabels(fieldsSource, 'WHOLE_MACHINE_BASIC_INFO_FIELDS'), expectedBasicLabels, 'WHOLE_MACHINE_BASIC_INFO_FIELDS')
 assertSameLabels(extractLabels(fieldsSource, 'WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS'), expectedHardwareLabels, 'WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS')
@@ -141,31 +154,115 @@ for (const symbol of ['WHOLE_MACHINE_BASIC_INFO_FIELDS']) {
   if (!containerSource.includes(symbol)) fail(`ProjectSpaceContainer.tsx does not use ${symbol}`)
 }
 
-for (const marker of [
-  'JIRA服务器',
-  'JIRA库名',
-  'Affect Projects',
-  '新增一行',
-  'renderJiraProjectInlineEditor',
-  'wideWholeMachineBasicInfoFields',
-  'JIRA_AFFECT_PROJECT_OPTIONS',
-  'column={1}',
-  'span={4}',
-  "field.key === 'projectDescription'",
-  'getJiraProjectUrl(project)',
-  'target="_blank"',
-  'isOutsourcedMini',
-]) {
-  if (!containerSource.includes(marker)) fail(`ProjectSpaceContainer.tsx missing marker: ${marker}`)
+if (!jiraEditorSource) fail('Missing shared component: src/components/project-info/JiraProjectEditor.tsx')
+const getJsxTagName = (node, ast) => {
+  const tagName = ts.isJsxElement(node) ? node.openingElement.tagName : node.tagName
+  return tagName.getText(ast)
 }
+const hasJiraEditorJsx = source => {
+  const ast = ts.createSourceFile('consumer.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  let found = false
+  const visit = node => {
+    if ((ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) && getJsxTagName(node, ast) === 'JiraProjectEditor') found = true
+    ts.forEachChild(node, visit)
+  }
+  visit(ast)
+  return found
+}
+const importsJiraEditor = source => {
+  const ast = ts.createSourceFile('consumer.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  return ast.statements.some(statement => {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || statement.moduleSpecifier.text !== '@/components/project-info/JiraProjectEditor') return false
+    const clause = statement.importClause
+    if (!clause) return false
+    if (clause.name?.text === 'JiraProjectEditor') return true
+    return !!clause.namedBindings && ts.isNamedImports(clause.namedBindings) && clause.namedBindings.elements.some(element => (element.propertyName || element.name).text === 'JiraProjectEditor' && element.name.text === 'JiraProjectEditor')
+  })
+}
+assert.ok(importsJiraEditor(fieldInputSource), 'ProjectInfoFieldInput must import JiraProjectEditor from the shared component')
+assert.ok(importsJiraEditor(containerSource), 'ProjectSpaceContainer must import JiraProjectEditor from the shared component')
+assert.ok(hasJiraEditorJsx(fieldInputSource), 'ProjectInfoFieldInput must render JiraProjectEditor')
+assert.ok(hasJiraEditorJsx(containerSource), 'ProjectSpaceContainer must render JiraProjectEditor')
+
+const basicInfoSaveStart = containerSource.indexOf('const saveBasicInfoEdit = () => {')
+const basicInfoSaveEnd = containerSource.indexOf('\n  //', basicInfoSaveStart)
+const basicInfoSave = containerSource.slice(basicInfoSaveStart, basicInfoSaveEnd)
+assert.notEqual(basicInfoSaveStart, -1, 'project-space basic-info save handler must exist')
+assert.match(projectInfoModalSource, /validateJiraProjectRows/, 'ProjectInfoModal must use the canonical JIRA row validator for editor errors')
+assert.match(containerSource, /validateJiraProjectRows/, 'ProjectSpaceContainer must use the canonical JIRA row validator before save')
+assert.match(basicInfoSave, /validateJiraProjectRows\(updatedFields\.jiraProjects\)/, 'project-space save must validate normalized JIRA rows before update')
+assert.doesNotMatch(basicInfoSave, /jiraProjects\.(?:filter|map)\([^)]*projectKey|projectKey[^\n]*\.filter/, 'project-space save must not silently drop incomplete JIRA rows by projectKey')
+assert.match(projectInfoModalSource, /errors=\{jiraProjectErrors\}/, 'ProjectInfoModal must pass JIRA row errors to the shared editor')
+assert.match(containerSource, /errors=\{basicInfoJiraErrors\}/, 'ProjectSpaceContainer must pass JIRA row errors to the shared editor')
+const modalCloseStart = projectInfoModalSource.indexOf('const requestClose = async () => {')
+const modalCloseEnd = projectInfoModalSource.indexOf('\n  const clearAndResetCreateDraft', modalCloseStart)
+const modalClose = projectInfoModalSource.slice(modalCloseStart, modalCloseEnd)
+assert.notEqual(modalCloseStart, -1, 'ProjectInfoModal close handler must exist')
+assert.match(projectInfoModalSource, /const closeProjectInfoModal = \(\) => \{\s*setJiraProjectErrors\(\[\]\)\s*onCancel\(\)/, 'accepted modal cancellation must clear JIRA row errors before closing')
+assert.match(modalClose, /onOk:\s*closeProjectInfoModal/, 'the discard confirmation must clear JIRA row errors only after the user accepts')
+assert.match(projectInfoModalSource, /const infoValues = normalizeProjectInfoModalSubmitValues\(/, 'modal must submit its normalized JIRA row array')
+assert.match(projectInfoModalSource, /const editHydrationKey = getProjectInfoModalEditHydrationKey\(/, 'modal hydration must be keyed by open edit project identity')
+
+const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
+const expectedColumnKeys = ['server', 'projectKey', 'type', 'shared', 'affectProjects', 'actions']
+const editorAst = ts.createSourceFile('JiraProjectEditor.tsx', jiraEditorSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+let columnEntries = []
+const isExported = node => node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)
+const unwrapExpression = expression => {
+  while (expression && (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression) || ts.isParenthesizedExpression(expression))) expression = expression.expression
+  return expression
+}
+const visitEditorAst = node => {
+  if (ts.isVariableStatement(node) && isExported(node)) {
+    const declaration = node.declarationList.declarations.find(item => item.name.getText(editorAst) === 'JIRA_PROJECT_EDITOR_COLUMNS')
+    const initializer = declaration && unwrapExpression(declaration.initializer)
+    if (initializer && ts.isArrayLiteralExpression(initializer)) columnEntries = initializer.elements.map(element => {
+      if (!ts.isObjectLiteralExpression(element)) return null
+      const readString = propertyName => {
+        const property = element.properties.find(item => item.name?.getText(editorAst) === propertyName)
+        return property && ts.isPropertyAssignment(property) && ts.isStringLiteral(property.initializer) ? property.initializer.text : null
+      }
+      return { key: readString('key'), label: readString('label') }
+    })
+  }
+  ts.forEachChild(node, visitEditorAst)
+}
+visitEditorAst(editorAst)
+assert.equal(columnEntries.length, jiraHeaders.length, 'shared JIRA editor must export one six-entry JIRA project column definition')
+assert.deepEqual(columnEntries.map(entry => entry?.key), expectedColumnKeys, 'JIRA column definition must contain exactly six keys in order')
+assert.deepEqual(columnEntries.map(entry => entry?.label), jiraHeaders, 'JIRA column definition must contain exactly six labels in order')
+let mapsColumns = false
+const componentBodies = []
+const visitComponentAst = node => {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'JiraProjectEditor' && isExported(node) && node.body) componentBodies.push(node.body)
+  if (ts.isVariableStatement(node) && isExported(node)) {
+    const declaration = node.declarationList.declarations.find(item => item.name.getText(editorAst) === 'JiraProjectEditor')
+    const initializer = declaration && unwrapExpression(declaration.initializer)
+    if (initializer && (ts.isArrowFunction(initializer) || ts.isFunctionExpression(initializer)) && initializer.body) componentBodies.push(initializer.body)
+  }
+  ts.forEachChild(node, visitComponentAst)
+}
+visitComponentAst(editorAst)
+assert.ok(componentBodies.length > 0, 'shared JIRA editor must export JiraProjectEditor')
+const visitMapAst = node => {
+  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'map' && node.expression.expression.getText(editorAst) === 'JIRA_PROJECT_EDITOR_COLUMNS') mapsColumns = true
+  ts.forEachChild(node, visitMapAst)
+}
+componentBodies.forEach(body => visitMapAst(body))
+assert.ok(mapsColumns, 'JIRA editor must render from the authoritative column definition')
+assert.match(projectInfoSectionsSource, /pms-project-info-jira-horizontal/, 'JIRA display must use its dedicated horizontal layout class')
 
 for (const forbiddenMarker of [
-  'showJiraEditor',
-  'jiraDraftRows',
-  "编辑 ${selectedProject?.model || selectedProject?.name || ''} 的JIRA库",
+  'renderJiraProjectInlineEditor',
+  'updateJiraProjectRows',
+  'updateJiraProjectRow',
+  'addJiraProjectRow',
+  'copyJiraProjectRow',
+  'removeJiraProjectRow',
 ]) {
-  if (containerSource.includes(forbiddenMarker)) fail(`ProjectSpaceContainer.tsx should not contain modal-only marker: ${forbiddenMarker}`)
+  if (containerSource.includes(forbiddenMarker)) fail(`ProjectSpaceContainer.tsx should not contain duplicated JIRA row helper: ${forbiddenMarker}`)
 }
+assert.doesNotMatch(containerSource, /(?:function\s+normalizeJiraProjectRows\s*\(|(?:const|let)\s+normalizeJiraProjectRows\s*=)/, 'ProjectSpaceContainer.tsx must not declare a duplicate JIRA normalizer')
 
 for (const marker of [
   'getJiraRegionLabel',

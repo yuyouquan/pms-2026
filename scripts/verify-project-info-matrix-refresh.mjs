@@ -178,6 +178,9 @@ const projectInfoRulesModule = evaluateTypeScriptModule(
     if (id === '@/lib/projectStatus') {
       return { mapIpmProjectStatus: status => status }
     }
+    if (id === '@/lib/jiraProject') {
+      return { validateJiraProjectRows: () => [] }
+    }
     throw new Error(`Unexpected project-info rules module: ${id}`)
   },
 )

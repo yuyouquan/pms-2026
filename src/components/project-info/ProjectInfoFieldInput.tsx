@@ -1,16 +1,10 @@
 'use client'
 
-import { Button, Card, Input, Select, Space } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { Input, Select } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
+import { JiraProjectEditor } from '@/components/project-info/JiraProjectEditor'
 import type { ProjectInfoFieldDefinition } from '@/constants/projectInfoSchema'
-import {
-  createJiraProjectConfig,
-  JIRA_PROJECT_NAME_OPTIONS,
-  JIRA_PROJECT_TYPE_OPTIONS,
-  JIRA_SERVER_OPTIONS,
-  type JiraProjectConfig,
-} from '@/lib/jiraProject'
+import type { JiraProjectConfig } from '@/lib/jiraProject'
 import type { ProjectInfoValue } from '@/types/app'
 import { formatTosSnapshot } from '@/lib/enumConsumers'
 
@@ -37,24 +31,7 @@ export default function ProjectInfoFieldInput({
     const rows = Array.isArray(value) && value.every(item => typeof item === 'object')
       ? value as JiraProjectConfig[]
       : []
-    const updateRow = (id: string, patch: Partial<JiraProjectConfig>) => {
-      onChange?.(rows.map(row => row.id === id ? { ...row, ...patch } : row))
-    }
-    return (
-      <Space orientation="vertical" size={8} style={{ width: '100%' }}>
-        {rows.map(row => (
-          <Card key={row.id} size="small" className="pms-project-info-jira-row">
-            <div className="pms-project-info-jira-grid">
-              <Select value={row.server} options={JIRA_SERVER_OPTIONS} onChange={server => updateRow(row.id, { server })} />
-              <Select showSearch value={row.projectKey || undefined} options={JIRA_PROJECT_NAME_OPTIONS.map(item => ({ label: item, value: item }))} onChange={projectKey => updateRow(row.id, { projectKey })} placeholder="JIRA 项目" />
-              <Select value={row.type} options={JIRA_PROJECT_TYPE_OPTIONS} onChange={type => updateRow(row.id, { type })} />
-              <Button danger type="text" icon={<DeleteOutlined />} onClick={() => onChange?.(rows.filter(item => item.id !== row.id))}>删除</Button>
-            </div>
-          </Card>
-        ))}
-        <Button type="dashed" icon={<PlusOutlined />} onClick={() => onChange?.([...rows, createJiraProjectConfig()])}>添加 JIRA 项目</Button>
-      </Space>
-    )
+    return <JiraProjectEditor rows={rows} onChange={nextRows => onChange?.(nextRows)} />
   }
 
   if (field.readOnly) {

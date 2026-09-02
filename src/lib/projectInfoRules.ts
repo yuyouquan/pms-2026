@@ -9,6 +9,7 @@ import {
 } from '@/constants/projectInfoSchema'
 import { isMachineProjectType, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { validateJiraProjectRows } from '@/lib/jiraProject'
 export { deriveStartingRam } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
 
@@ -318,6 +319,17 @@ export const validateProjectInfoValues = (
       groupKey: 'basic',
       message: options.tosAggregateMissingSources.join('；'),
     })
+  }
+
+  if (
+    type === '整机产品项目'
+    && (!validationFieldKeys || validationFieldKeys.has('jiraProjects'))
+  ) {
+    errors.push(...validateJiraProjectRows(values.jiraProjects).map(error => ({
+      fieldKey: 'jiraProjects',
+      groupKey: 'extended' as const,
+      message: `第 ${error.rowIndex + 1} 行：${error.message}`,
+    })))
   }
   return errors
 }

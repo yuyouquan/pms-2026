@@ -4482,13 +4482,6 @@ body {
   grid-column: 1 / -1;
 }
 
-.pms-project-info-jira-grid {
-  display: grid;
-  grid-template-columns: 1.2fr 1.2fr 0.7fr auto;
-  gap: 8px;
-  align-items: center;
-}
-
 .pms-project-info-modal .ant-form-item {
   margin-bottom: 20px;
 }
@@ -4599,15 +4592,88 @@ body {
   padding: 18px 16px 0 !important;
 }
 
-.pms-project-info-jira-row.ant-card {
-  border-color: #e2e8f0;
-  background: #fbfcfe;
-  transition: border-color 200ms ease, box-shadow 200ms ease;
+.pms-jira-project-editor {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
 }
 
-.pms-project-info-jira-row.ant-card:hover {
-  border-color: #c7d2fe;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
+.pms-jira-project-editor__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eef2ff;
+  background: #f8fafc;
+}
+
+.pms-jira-project-editor__title {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pms-jira-project-editor__scroll {
+  overflow-x: auto;
+  padding: 12px;
+}
+
+.pms-jira-project-editor__table {
+  min-width: 860px;
+}
+
+.pms-jira-project-editor__header,
+.pms-jira-project-editor__row {
+  display: grid;
+  grid-template-columns: 1.15fr 1.15fr .9fr 64px 1.15fr 82px;
+  gap: 10px;
+  align-items: start;
+}
+
+.pms-jira-project-editor__header {
+  align-items: center;
+  margin-bottom: 8px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pms-jira-project-editor__header-cell,
+.pms-jira-project-editor__cell {
+  min-width: 0;
+  text-align: center;
+}
+
+.pms-jira-project-editor__header-cell sup {
+  margin-left: 3px;
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.pms-jira-project-editor__row + .pms-jira-project-editor__row {
+  margin-top: 8px;
+}
+
+.pms-jira-project-editor__cell .ant-select {
+  width: 100%;
+  text-align: left;
+}
+
+.pms-jira-project-editor__cell--shared,
+.pms-jira-project-editor__cell--actions {
+  padding-top: 3px;
+}
+
+.pms-jira-project-editor__error {
+  margin-top: 4px;
+  color: #dc2626;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: left;
 }
 
 @media (max-width: 1199px) {
@@ -4636,9 +4702,6 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .pms-project-info-jira-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -4647,8 +4710,7 @@ body {
   .pms-project-info-modal .ant-select-selector,
   .pms-project-info-modal .ant-btn,
   .pms-project-info-form-groups > .ant-collapse-item,
-  .pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header,
-  .pms-project-info-jira-row.ant-card {
+  .pms-project-info-form-groups > .ant-collapse-item > .ant-collapse-header {
     transition: none !important;
   }
 }
@@ -4974,6 +5036,28 @@ body {
   grid-column: 1 / -1;
   align-items: stretch;
   text-align: left;
+}
+
+.pms-project-info-jira-horizontal {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.pms-project-info-jira-horizontal .pms-project-info-display-label {
+  flex: 0 0 120px;
+  min-width: 120px;
+  text-align: left;
+}
+
+.pms-project-info-jira-horizontal .pms-project-info-display-value {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  text-align: left;
+}
+
+.pms-project-info-jira-horizontal .ant-space {
+  flex-wrap: wrap;
 }
 
 .pms-project-info-display-label {
@@ -5314,6 +5398,46 @@ body {
 @media (max-width: 520px) {
   .pms-project-info-core-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .pms-project-info-jira-horizontal {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pms-project-info-jira-horizontal .pms-project-info-display-label {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .pms-project-info-jira-horizontal .pms-project-info-display-value {
+    width: 100%;
+  }
+
+  .pms-project-info-jira-horizontal .ant-space,
+  .pms-project-info-jira-horizontal .ant-space-item,
+  .pms-project-info-jira-horizontal .ant-tag {
+    max-width: 100%;
+  }
+
+  .pms-project-info-jira-horizontal .ant-space-item {
+    min-width: 0;
+  }
+
+  .pms-project-info-jira-horizontal .ant-tag {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .pms-project-info-jira-horizontal .ant-tag a {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

@@ -11,6 +11,7 @@ const technicalInformationSource = readSource(root, 'src/components/technical-pr
 const technicalSummarySource = readSource(root, 'src/components/technical-project/TechnicalPlanSummary.tsx')
 const technicalPlanSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const planGanttRulesSource = readSource(root, 'src/lib/planGanttRules.ts')
 const basicInfoPresentationPath = 'src/lib/projectBasicInfoPresentation.ts'
 const basicInfoPresentationSource = readSource(root, basicInfoPresentationPath)
 const workspaceSource = readSource(root, 'src/components/workspace/WorkspaceModule.tsx')
@@ -300,8 +301,9 @@ assert.match(taskTableRenderer, /<DatePicker[\s\S]{0,420}planStartDate/, 'task-t
 assert.match(taskTableRenderer, /<ClickToEditDate[\s\S]{0,420}actualStartDate/, 'task-table renderer must retain actual-date editing')
 assert.match(horizontalTableRenderer, /ClickToEditDate[\s\S]{0,260}planEndDate/, 'horizontal plan renderer must retain planned-completion editing')
 assert.match(horizontalTableRenderer, /ClickToEditDate[\s\S]{0,260}actualEndDate/, 'horizontal plan renderer must retain actual-completion editing')
-assert.match(ganttColumnProjection, /planStartDate:[\s\S]{0,160}label:\s*['"]计划开始['"]/, 'Gantt columns must retain planned-start dates')
-assert.match(ganttColumnProjection, /planEndDate:[\s\S]{0,160}label:\s*['"]计划完成['"]/, 'Gantt columns must retain planned-completion dates')
+assert.match(ganttColumnProjection, /buildVisiblePlanGanttColumns\(orderedVisibleColumns\)/, 'Gantt column projection must consume the shared visible-column builder')
+assert.match(planGanttRulesSource, /planStartDate:\s*\{[^}]{0,160}label:\s*['"]计划开始['"]/, 'shared Gantt columns must retain planned-start dates')
+assert.match(planGanttRulesSource, /planEndDate:\s*\{[^}]{0,160}label:\s*['"]计划完成['"]/, 'shared Gantt columns must retain planned-completion dates')
 assert.match(ganttRenderer, /<DHTMLXGantt[\s\S]{0,260}columns=\{ganttColumns\}/, 'Gantt renderer must consume the date-capable columns')
 assert.match(ganttRenderer, /onTaskDateChange=\{change =>/, 'Gantt renderer must retain date editing callbacks')
 

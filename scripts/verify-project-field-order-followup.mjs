@@ -18,6 +18,7 @@ const technicalCreateSource = readSource(root, 'src/components/technical-project
 const fieldVisibilityPickerSource = readSource(root, 'src/components/project-info/FieldVisibilityPicker.tsx')
 const targetProjectInformationSource = readSource(root, 'src/components/project-info/TargetProjectInformationView.tsx')
 const projectInfoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
+const globalsSource = readSource(root, 'src/styles/globals.css')
 const projectPlanInfoGridSource = readSource(root, 'src/components/project-info/ProjectPlanInfoGrid.tsx')
 const technicalInformationSource = readSource(root, 'src/components/technical-project/TechnicalProjectInformationView.tsx')
 const redesignBrowserSource = readSource(root, 'screenshots/verify-workbench-technical-project-redesign.mjs')
@@ -173,6 +174,36 @@ for (const key of ['wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet', 'keyCo
   assert.equal(machineCreateDefinitions.get(key)?.requiredOnCreate, false, `${key} must remain optional on create`)
 }
 assert.match(projectInfoSectionsSource, /field\.key === 'jiraProjects'[\s\S]*pms-project-info-display-item--full-row/)
+assert.match(
+  projectInfoSectionsSource,
+  /field\.key === 'jiraProjects'[\s\S]*pms-project-info-jira-horizontal/,
+  'JIRA projects must use the dedicated horizontal full-row display class',
+)
+for (const rule of [
+  /\.pms-project-info-jira-horizontal\s*\{[\s\S]*flex-direction:\s*row/,
+  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-label\s*\{[\s\S]*min-width:\s*120px/,
+  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*margin-top:\s*0/,
+  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*text-align:\s*left/,
+  /\.pms-project-info-jira-horizontal\s+\.ant-space\s*\{[\s\S]*flex-wrap:\s*wrap/,
+]) {
+  assert.match(globalsSource, rule, 'JIRA project display must keep label and wrapped linked tags on one horizontal row')
+}
+for (const rule of [
+  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s*\{[\s\S]*flex-direction:\s*column/,
+  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*width:\s*100%/,
+  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.ant-tag\s*\{[\s\S]*max-width:\s*100%/,
+  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.ant-tag\s+a\s*\{[\s\S]*text-overflow:\s*ellipsis/,
+]) {
+  assert.match(globalsSource, rule, 'JIRA project display must stay within the row on narrow screens')
+}
+const narrowJiraStart = globalsSource.lastIndexOf('@media (max-width: 480px)')
+const narrowJiraEnd = globalsSource.indexOf('@media (prefers-reduced-motion: reduce)', narrowJiraStart)
+const narrowJiraSource = globalsSource.slice(narrowJiraStart, narrowJiraEnd)
+const narrowJiraLinkRule = narrowJiraSource.match(/\.pms-project-info-jira-horizontal \.ant-tag a\s*\{([^}]*)\}/)?.[1] || ''
+assert.match(narrowJiraSource, /\.pms-project-info-jira-horizontal \.ant-tag\s*\{[^}]*display:\s*inline-flex/, 'narrow JIRA tags must keep their icon and link on one flex line')
+assert.match(narrowJiraSource, /\.pms-project-info-jira-horizontal \.ant-tag\s*\{[^}]*min-width:\s*0/, 'narrow JIRA tags must allow their text to shrink')
+assert.match(narrowJiraLinkRule, /text-overflow:\s*ellipsis/, 'narrow JIRA links must truncate safely')
+assert.doesNotMatch(narrowJiraLinkRule, /display:\s*block/, 'narrow JIRA links must not split from their tag icon')
 assert.deepEqual(
   machineSpaceDefinitions.filter(field => field.defaultVisible).map(field => field.key),
   machineSpaceDefaultVisible,
