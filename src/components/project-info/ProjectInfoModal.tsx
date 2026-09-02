@@ -5,6 +5,7 @@ import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
+import { JiraProjectEditor } from '@/components/project-info/JiraProjectEditor'
 import TechnicalProjectCreateFields from '@/components/technical-project/TechnicalProjectCreateFields'
 import {
   getProjectInfoFields,
@@ -61,6 +62,11 @@ import { useProjectStore } from '@/stores/project'
 import { useEnumStore } from '@/stores/enums'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
 import { useEnumHydration } from '@/hooks/useEnumOptions'
+import {
+  validateJiraProjectRows,
+  type JiraProjectConfig,
+  type JiraProjectValidationError,
+} from '@/lib/jiraProject'
 import {
   buildChipOptions,
   buildEnumOptions,
@@ -166,6 +172,7 @@ export default function ProjectInfoModal({
   const [activeGroups, setActiveGroups] = useState<string[]>([])
   const [aggregateWarnings, setAggregateWarnings] = useState<string[]>([])
   const [machineFamilyError, setMachineFamilyError] = useState('')
+  const [jiraProjectErrors, setJiraProjectErrors] = useState<JiraProjectValidationError[]>([])
   const [draftReadStatus, setDraftReadStatusState] = useState<DraftReadStatus>('idle')
   const [draftHydrationAttempt, setDraftHydrationAttempt] = useState(0)
   const lastAppliedSourceRef = useRef<string>('')
@@ -336,6 +343,7 @@ export default function ProjectInfoModal({
     form.setFieldsValue(CREATE_FORM_DEFAULTS)
     setAggregateWarnings([])
     setMachineFamilyError('')
+    setJiraProjectErrors([])
     activeGroupsRef.current = []
     setActiveGroups([])
     lastAppliedSourceRef.current = ''
@@ -359,6 +367,7 @@ export default function ProjectInfoModal({
     lastAppliedSourceRef.current = ''
     setAggregateWarnings([])
     setMachineFamilyError('')
+    setJiraProjectErrors([])
     // The Form instance survives modal close/reopen. Clear the previous project's
     // unmentioned fields before applying the next project's values.
     form.resetFields()
@@ -409,6 +418,18 @@ export default function ProjectInfoModal({
     activeGroupsRef.current = nextActiveGroups
     setActiveGroups(nextActiveGroups)
   }, [existingProjects, form, mode, open, project, responsiblePersons])
+
+  const focusJiraProjects = useCallback(() => {
+    setActiveGroups(previous => {
+      const nextActiveGroups = [...new Set([...previous, 'extended'])]
+      activeGroupsRef.current = nextActiveGroups
+      return nextActiveGroups
+    })
+    setTimeout(() => {
+      form.scrollToField('jiraProjects', { block: 'center' })
+      document.getElementById('project-info-jira-projects')?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+    }, 0)
+  }, [form])
 
   useEffect(() => {
     if (!open || mode !== 'create' || !enumReady) {
@@ -894,6 +915,8 @@ export default function ProjectInfoModal({
     const infoValues = normalizedProjectType === PROJECT_CATEGORY_TECH
       ? normalizeTechnicalProjectValues(values as Record<string, unknown>) as ProjectInfoValues
       : getProjectInfoModalSubmitValues(normalizedProjectType, values)
+    const canonicalJiraProjectErrors = validateJiraProjectRows(infoValues.jiraProjects)
+    setJiraProjectErrors(canonicalJiraProjectErrors)
     if (normalizedProjectType === PROJECT_CATEGORY_TECH) {
       try {
         validateTechnicalProject({
@@ -942,10 +965,14 @@ export default function ProjectInfoModal({
       },
     )
     if (editableErrors.length) {
-      const first = editableErrors[0]
+      const jiraError = editableErrors.find(error => error.fieldKey === 'jiraProjects')
+      const first = jiraError || editableErrors[0]
       form.setFields(editableErrors.map(error => ({ name: error.fieldKey, errors: [error.message] })))
-      setActiveGroups(previous => [...new Set([...previous, first.groupKey])])
-      setTimeout(() => form.scrollToField(first.fieldKey, { block: 'center' }), 0)
+      if (jiraError) focusJiraProjects()
+      else {
+        setActiveGroups(previous => [...new Set([...previous, first.groupKey])])
+        setTimeout(() => form.scrollToField(first.fieldKey, { block: 'center' }), 0)
+      }
       messageApi.error(first.message)
       return
     }
@@ -1003,6 +1030,7 @@ export default function ProjectInfoModal({
         return
       }
       if (componentMountedRef.current) {
+        setJiraProjectErrors([])
         if (mode === 'create') resetCreateForm()
         else form.resetFields()
       }
@@ -1057,6 +1085,16 @@ export default function ProjectInfoModal({
                 chipPlatform: chip.chipPlatform,
               })
             }}
+          />
+        ) : field.inputType === 'jira' ? (
+          <JiraProjectEditor
+            rows={Array.isArray(watchedValues.jiraProjects) ? watchedValues.jiraProjects as JiraProjectConfig[] : []}
+            anchorId="project-info-jira-projects"
+            onChange={rows => {
+              form.setFieldValue(renderedField.key, rows)
+              setJiraProjectErrors([])
+            }}
+            errors={jiraProjectErrors}
           />
         ) : (
           <ProjectInfoFieldInput
@@ -1123,6 +1161,7 @@ export default function ProjectInfoModal({
         disabled={isCreateDraftInteractionBlocked}
         onValuesChange={(changedValues) => {
           if (typeof changedValues.bid === 'string') handleCandidateChange(changedValues.bid)
+          if (changedValues.jiraProjects !== undefined) setJiraProjectErrors([])
           if (changedValues.firstLaunchProjects !== undefined) {
             handleInfoFieldChange('firstLaunchProjects', changedValues.firstLaunchProjects)
           }

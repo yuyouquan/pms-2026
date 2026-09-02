@@ -81,7 +81,9 @@ import {
   formatJiraProjectTag,
   getJiraProjectUrl,
   normalizeJiraProjectRows,
+  validateJiraProjectRows,
   type JiraProjectConfig,
+  type JiraProjectValidationError,
 } from '@/lib/jiraProject'
 import { notifyPublishChanges, notifyDueTasks } from '@/lib/feishu-notify'
 import type { TaskChange, PlanDueNotice } from '@/types/plan-notify'
@@ -981,6 +983,8 @@ export default function ProjectSpaceContainer() {
   const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
   const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
   const [transferInfoCollapsed, setTransferInfoCollapsed] = useState(false)
+  const [basicInfoJiraErrors, setBasicInfoJiraErrors] = useState<JiraProjectValidationError[]>([])
+  const basicInfoJiraEditorRef = useRef<HTMLDivElement | null>(null)
   const [level1InsertionDialog, setLevel1InsertionDialog] = useState<Level1InsertionDialog | null>(null)
   const [level1ReorderDialog, setLevel1ReorderDialog] = useState<Level1ReorderDialog | null>(null)
   const level1FocusRetryRef = useRef<{
@@ -3018,6 +3022,7 @@ export default function ProjectSpaceContainer() {
   // Basic info
   const startBasicInfoEdit = () => {
     if (!selectedProject) return; const p = selectedProject
+    setBasicInfoJiraErrors([])
     const currentJiraProjects = Array.isArray((p as any).jiraProjects) ? (p as any).jiraProjects.map((row: JiraProjectConfig) => ({ ...row })) : []
     setEditingProjectFields({
       projectCode: p.projectCode || p.model || '',
@@ -3087,6 +3092,18 @@ export default function ProjectSpaceContainer() {
       ...editingProjectFields,
       jiraProjects: normalizeJiraProjectRows(editingProjectFields.jiraProjects),
     }
+    const jiraProjectErrors = validateJiraProjectRows(updatedFields.jiraProjects)
+    if (jiraProjectErrors.length) {
+      const first = jiraProjectErrors[0]
+      setEditingProjectFields((previous: any) => ({ ...previous, jiraProjects: updatedFields.jiraProjects }))
+      setBasicInfoJiraErrors(jiraProjectErrors)
+      message.error(`第 ${first.rowIndex + 1} 行：${first.message}`)
+      setTimeout(() => {
+        basicInfoJiraEditorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        basicInfoJiraEditorRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
+      }, 0)
+      return
+    }
     const mergedProject = { ...selectedProject, ...updatedFields } as typeof selectedProject
     const updated = isSoftwareProjectType(mergedProject.type)
       ? {
@@ -3099,6 +3116,7 @@ export default function ProjectSpaceContainer() {
       message.error('整机项目的路标必填信息不完整或取值不合法，无法保存')
       return
     }
+    setBasicInfoJiraErrors([])
     setBasicInfoEditMode(false)
     message.success('基本信息已保存')
   }
@@ -4699,7 +4717,7 @@ export default function ProjectSpaceContainer() {
       if (field.key === 'jiraProjects') {
         const jiraProjects = (basicInfoEditMode ? ef.jiraProjects : ((p as any).jiraProjects || [])) as JiraProjectConfig[]
         content = basicInfoEditMode
-          ? <JiraProjectEditor rows={Array.isArray(jiraProjects) ? jiraProjects : []} onChange={rows => setEf('jiraProjects', rows)} disabled={!canEditBasicInfo} affectProjectOptions={affectProjectChoices} />
+          ? <div ref={basicInfoJiraEditorRef} data-jira-project-editor-anchor><JiraProjectEditor rows={Array.isArray(jiraProjects) ? jiraProjects : []} onChange={rows => { setEf('jiraProjects', rows); setBasicInfoJiraErrors([]) }} errors={basicInfoJiraErrors} disabled={!canEditBasicInfo} affectProjectOptions={affectProjectChoices} /></div>
           : renderJiraProjects(jiraProjects)
         return <Descriptions.Item key={field.key} label={field.label} span={4}>{content}</Descriptions.Item>
       }
@@ -4845,7 +4863,7 @@ export default function ProjectSpaceContainer() {
         </Card>
         {/* Section: Basic info */}
         <Card id="section-basic" style={{ marginBottom: 20, borderRadius: 8 }} title={sectionTitle(<SettingOutlined style={{ color: 'var(--pms-brand)' }} />, '基本信息', 'var(--pms-brand)')} extra={
-          basicInfoEditMode ? (<Space><Button size="small" onClick={() => setBasicInfoEditMode(false)}>取消</Button><Button size="small" type="primary" loading={!enumHasHydrated} disabled={!enumReady} onClick={saveBasicInfoEdit}>保存</Button></Space>) : (
+          basicInfoEditMode ? (<Space><Button size="small" onClick={() => { setBasicInfoJiraErrors([]); setBasicInfoEditMode(false) }}>取消</Button><Button size="small" type="primary" loading={!enumHasHydrated} disabled={!enumReady} onClick={saveBasicInfoEdit}>保存</Button></Space>) : (
             canEditBasicInfo
               ? <Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} onClick={startBasicInfoEdit}>编辑</Button>
               : <Tooltip title="无基本信息编辑权限"><Button aria-label="编辑项目信息" size="small" icon={<EditOutlined />} disabled>编辑</Button></Tooltip>

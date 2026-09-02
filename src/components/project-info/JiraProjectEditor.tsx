@@ -26,7 +26,9 @@ export const JIRA_PROJECT_EDITOR_COLUMNS = [
 type JiraProjectEditorFieldKey = keyof JiraProjectConfig | 'actions'
 
 interface JiraProjectEditorProps {
-  rows: JiraProjectConfig[]
+  rows?: JiraProjectConfig[]
+  value?: JiraProjectConfig[]
+  anchorId?: string
   onChange: (rows: JiraProjectConfig[]) => void
   errors?: JiraProjectValidationError[]
   disabled?: boolean
@@ -36,19 +38,22 @@ interface JiraProjectEditorProps {
 const projectOptions = JIRA_PROJECT_NAME_OPTIONS.map(value => ({ label: value, value }))
 
 export function JiraProjectEditor({
-  rows,
+  rows = [],
+  value,
+  anchorId,
   onChange,
   errors = [],
   disabled = false,
   affectProjectOptions = [],
 }: JiraProjectEditorProps) {
+  const resolvedRows = Array.isArray(value) ? value : rows
   const resolvedAffectProjectOptions = Array.from(new Map([
     ...JIRA_AFFECT_PROJECT_OPTIONS,
     ...affectProjectOptions,
   ].map(option => [option.value, option])).values())
 
   const updateRow = (rowIndex: number, patch: Partial<JiraProjectConfig>) => {
-    onChange(rows.map((row, index) => index === rowIndex ? patchJiraProjectConfig(row, patch) : row))
+    onChange(resolvedRows.map((row, index) => index === rowIndex ? patchJiraProjectConfig(row, patch) : row))
   }
 
   const getFieldErrors = (rowIndex: number, fieldKey: JiraProjectEditorFieldKey) => (
@@ -83,10 +88,10 @@ export function JiraProjectEditor({
       control = (
         <Space size={4}>
           <Tooltip title="复制">
-            <Button type="text" size="small" icon={<CopyOutlined />} aria-label={`复制第 ${rowIndex + 1} 行 JIRA 项目`} disabled={disabled} onClick={() => onChange([...rows.slice(0, rowIndex + 1), copyJiraProjectConfig(row), ...rows.slice(rowIndex + 1)])} />
+            <Button type="text" size="small" icon={<CopyOutlined />} aria-label={`复制第 ${rowIndex + 1} 行 JIRA 项目`} disabled={disabled} onClick={() => onChange([...resolvedRows.slice(0, rowIndex + 1), copyJiraProjectConfig(row), ...resolvedRows.slice(rowIndex + 1)])} />
           </Tooltip>
           <Tooltip title="删除">
-            <Button type="text" danger size="small" icon={<DeleteOutlined />} aria-label={`删除第 ${rowIndex + 1} 行 JIRA 项目`} disabled={disabled} onClick={() => onChange(rows.filter((_, index) => index !== rowIndex))} />
+            <Button type="text" danger size="small" icon={<DeleteOutlined />} aria-label={`删除第 ${rowIndex + 1} 行 JIRA 项目`} disabled={disabled} onClick={() => onChange(resolvedRows.filter((_, index) => index !== rowIndex))} />
           </Tooltip>
         </Space>
       )
@@ -100,10 +105,10 @@ export function JiraProjectEditor({
   }
 
   return (
-    <div className="pms-jira-project-editor">
+    <div id={anchorId} className="pms-jira-project-editor">
       <div className="pms-jira-project-editor__toolbar">
         <span className="pms-jira-project-editor__title">JIRA库配置</span>
-        <Button size="small" type="primary" icon={<PlusOutlined />} disabled={disabled} onClick={() => onChange([...rows, createJiraProjectConfig()])}>新增一行</Button>
+        <Button size="small" type="primary" icon={<PlusOutlined />} disabled={disabled} onClick={() => onChange([...resolvedRows, createJiraProjectConfig()])}>新增一行</Button>
       </div>
       <div className="pms-jira-project-editor__scroll">
         <div className="pms-jira-project-editor__table" role="table" aria-label="JIRA库配置">
@@ -115,7 +120,7 @@ export function JiraProjectEditor({
               </div>
             ))}
           </div>
-          {rows.map((row, rowIndex) => (
+          {resolvedRows.map((row, rowIndex) => (
             <div key={`${row.id || 'jira-row'}-${rowIndex}`} role="row" className="pms-jira-project-editor__row" data-jira-row={rowIndex}>
               {JIRA_PROJECT_EDITOR_COLUMNS.map(column => renderCell(row, rowIndex, column.key))}
             </div>

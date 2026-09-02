@@ -139,6 +139,7 @@ if (!fs.existsSync(jiraLibFile)) fail('Missing src/lib/jiraProject.ts')
 const fieldsSource = fs.readFileSync(fieldFile, 'utf8')
 const containerSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const fieldInputSource = readSource(root, 'src/components/project-info/ProjectInfoFieldInput.tsx')
+const projectInfoModalSource = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const projectInfoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
 const jiraEditorSource = readSource(root, 'src/components/project-info/JiraProjectEditor.tsx')
 const jiraLibSource = readSource(root, 'src/lib/jiraProject.ts')
@@ -182,6 +183,17 @@ assert.ok(importsJiraEditor(fieldInputSource), 'ProjectInfoFieldInput must impor
 assert.ok(importsJiraEditor(containerSource), 'ProjectSpaceContainer must import JiraProjectEditor from the shared component')
 assert.ok(hasJiraEditorJsx(fieldInputSource), 'ProjectInfoFieldInput must render JiraProjectEditor')
 assert.ok(hasJiraEditorJsx(containerSource), 'ProjectSpaceContainer must render JiraProjectEditor')
+
+const basicInfoSaveStart = containerSource.indexOf('const saveBasicInfoEdit = () => {')
+const basicInfoSaveEnd = containerSource.indexOf('\n  //', basicInfoSaveStart)
+const basicInfoSave = containerSource.slice(basicInfoSaveStart, basicInfoSaveEnd)
+assert.notEqual(basicInfoSaveStart, -1, 'project-space basic-info save handler must exist')
+assert.match(projectInfoModalSource, /validateJiraProjectRows/, 'ProjectInfoModal must use the canonical JIRA row validator for editor errors')
+assert.match(containerSource, /validateJiraProjectRows/, 'ProjectSpaceContainer must use the canonical JIRA row validator before save')
+assert.match(basicInfoSave, /validateJiraProjectRows\(updatedFields\.jiraProjects\)/, 'project-space save must validate normalized JIRA rows before update')
+assert.doesNotMatch(basicInfoSave, /jiraProjects\.(?:filter|map)\([^)]*projectKey|projectKey[^\n]*\.filter/, 'project-space save must not silently drop incomplete JIRA rows by projectKey')
+assert.match(projectInfoModalSource, /errors=\{jiraProjectErrors\}/, 'ProjectInfoModal must pass JIRA row errors to the shared editor')
+assert.match(containerSource, /errors=\{basicInfoJiraErrors\}/, 'ProjectSpaceContainer must pass JIRA row errors to the shared editor')
 
 const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
 const expectedColumnKeys = ['server', 'projectKey', 'type', 'shared', 'affectProjects', 'actions']
