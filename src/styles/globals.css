@@ -5427,11 +5427,14 @@ body {
   }
 
   .pms-project-info-jira-horizontal .ant-tag {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
     overflow: hidden;
   }
 
   .pms-project-info-jira-horizontal .ant-tag a {
-    display: block;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

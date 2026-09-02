@@ -196,6 +196,14 @@ for (const rule of [
 ]) {
   assert.match(globalsSource, rule, 'JIRA project display must stay within the row on narrow screens')
 }
+const narrowJiraStart = globalsSource.lastIndexOf('@media (max-width: 480px)')
+const narrowJiraEnd = globalsSource.indexOf('@media (prefers-reduced-motion: reduce)', narrowJiraStart)
+const narrowJiraSource = globalsSource.slice(narrowJiraStart, narrowJiraEnd)
+const narrowJiraLinkRule = narrowJiraSource.match(/\.pms-project-info-jira-horizontal \.ant-tag a\s*\{([^}]*)\}/)?.[1] || ''
+assert.match(narrowJiraSource, /\.pms-project-info-jira-horizontal \.ant-tag\s*\{[^}]*display:\s*inline-flex/, 'narrow JIRA tags must keep their icon and link on one flex line')
+assert.match(narrowJiraSource, /\.pms-project-info-jira-horizontal \.ant-tag\s*\{[^}]*min-width:\s*0/, 'narrow JIRA tags must allow their text to shrink')
+assert.match(narrowJiraLinkRule, /text-overflow:\s*ellipsis/, 'narrow JIRA links must truncate safely')
+assert.doesNotMatch(narrowJiraLinkRule, /display:\s*block/, 'narrow JIRA links must not split from their tag icon')
 assert.deepEqual(
   machineSpaceDefinitions.filter(field => field.defaultVisible).map(field => field.key),
   machineSpaceDefaultVisible,
