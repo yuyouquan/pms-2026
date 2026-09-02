@@ -4,6 +4,7 @@ export interface ConfigTemplateVersion {
   id: string
   versionNo: string
   status: string
+  publishedAt?: string
 }
 
 export interface ConfigTemplateVersionScope {

@@ -39,7 +39,7 @@ const TECHNICAL_PLAN_STORAGE_SEED = JSON.stringify({
         }],
       },
       'mock-tech-aios-v3:subproject:IPM-AIOS-001': {
-        planKey: 'mock-tech-aios-v3:subproject:IPM-AIOS-001', templateKind: 'subproject', currentVersionId: 'tech-ipm-aios-001-v1',
+        planKey: 'mock-tech-aios-v3:subproject:IPM-AIOS-001', templateKind: 'subproject', currentVersionId: 'tech-ipm-aios-001-v2-draft',
         columnSettings: { order: [], visible: [] }, collapsedRows: [],
         versions: [{
           id: 'tech-ipm-aios-001-v1', versionNo: 'V1', templateType: 'subproject', status: '已发布', publishedAt: '2026-02-02T00:00:00Z',
@@ -47,6 +47,13 @@ const TECHNICAL_PLAN_STORAGE_SEED = JSON.stringify({
             technicalTask('1', '第1版转测', '2026-01-15', '2026-03-15', '2026-01-18', '2026-03-12'),
             technicalTask('2', '第2版转测', '2026-03-16', '2026-06-01', '2026-03-18', '2026-05-29'),
             technicalTask('3', 'TDR3', '2026-06-02', '2026-08-31', '2026-06-05', '2026-08-28'),
+          ],
+        }, {
+          id: 'tech-ipm-aios-001-v2-draft', versionNo: 'V2', templateType: 'subproject', status: '修订中',
+          tasks: [
+            technicalTask('1', '第1版转测', '2026-01-15', '2026-03-20', '2026-01-18', '2026-03-12'),
+            technicalTask('2', '第2版转测', '2026-03-21', '2026-06-08', '2026-03-18', '2026-05-29'),
+            technicalTask('3', 'TDR3', '2026-06-09', '2026-08-31', '2026-06-05', '2026-08-28'),
           ],
         }],
       },
@@ -382,6 +389,9 @@ try {
   await runScenario('01-list-modal', async page => {
     await openMain(page, '项目列表')
     await clickAria(page, '卡片视图')
+    await page.waitForSelector('[aria-label="状态快捷筛选"] button', { visible: true, timeout: TIMEOUT })
+    const machineStatusOptions = await page.$$eval('[aria-label="状态快捷筛选"] button', buttons => buttons.map(button => (button.textContent || '').trim()))
+    assert.deepEqual(machineStatusOptions, ['全部', '待立项', '在研', '上市', 'EOS', '转维', '已取消', '已暂停'], `整机状态快捷筛选必须只保留当前枚举：${JSON.stringify(machineStatusOptions)}`)
     await page.waitForSelector('.pms-project-list-content .pms-project-card', { visible: true, timeout: TIMEOUT })
     const cards = await page.$$eval('.pms-project-list-content .pms-project-card', elements => elements.filter(element => {
       const rect = element.getBoundingClientRect()
@@ -609,9 +619,12 @@ try {
     assert.equal(planState.grouped, 0, '技术子项目不得出现 grouped 表头')
     assert.equal(planState.text.includes('子项目计划'), false, '技术子项目不得合成“子项目计划”分组')
     assert.deepEqual(planState.headers.slice(0, 2), ['版本', '开发周期'], `技术子项目表头必须从版本/开发周期开始：${JSON.stringify(planState.headers)}`)
-    const versionRow = planState.rows.find(row => row[0] === 'V1')
+    const versionRow = planState.rows.find(row => row[0].startsWith('V1'))
+    const draftRow = planState.rows.find(row => row[0].startsWith('V2'))
     const actualRow = planState.rows.find(row => row[0] === '实际')
     assert.ok(versionRow, `技术子项目必须显示 V1 行：${JSON.stringify(planState.rows)}`)
+    assert.ok(versionRow[0].includes('2026-02-02'), `技术子项目 V1 下方必须显示发布时间：${JSON.stringify(versionRow)}`)
+    assert.ok(draftRow?.[0].includes('修订中'), `技术子项目必须在最新发布后显示只读修订行：${JSON.stringify(planState.rows)}`)
     assert.match(versionRow[1], /^\d+(?:天)?$/, `技术子项目开发周期必须为数值：${JSON.stringify(versionRow)}`)
     assert.ok(versionRow.slice(2).some(value => DATE_PATTERN.test(value)), `技术子项目 V1 必须显示日期：${JSON.stringify(versionRow)}`)
     assert.ok(actualRow, `技术子项目必须显示实际行：${JSON.stringify(planState.rows)}`)
@@ -647,8 +660,8 @@ try {
       horizontalChecked: Boolean(document.querySelector('[aria-label="计划视图"] input[value="horizontal"]:checked')),
       planContent: Boolean(document.querySelector('[aria-label="计划内容"]')),
     }))
-    assert.equal(technicalWorkspaceState.version, 'V1', `技术子项目计划必须保留已发布版本状态：${JSON.stringify(technicalWorkspaceState)}`)
-    assert.equal(technicalWorkspaceState.createRevisionVisible, true, `技术子项目计划必须保留创建修订入口：${JSON.stringify(technicalWorkspaceState)}`)
+    assert.equal(technicalWorkspaceState.version, 'V2（修订中）', `技术子项目计划必须保留修订版本状态：${JSON.stringify(technicalWorkspaceState)}`)
+    assert.equal(technicalWorkspaceState.createRevisionVisible, false, `已有修订版本时不得重复创建修订：${JSON.stringify(technicalWorkspaceState)}`)
     assert.deepEqual(technicalWorkspaceState.viewValues, ['horizontal', 'vertical', 'gantt'], `技术子项目计划必须保留横版/竖版/甘特图视图控制：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.horizontalChecked, true, `技术子项目计划默认横版视图必须可观察：${JSON.stringify(technicalWorkspaceState)}`)
     assert.equal(technicalWorkspaceState.planContent, true, `技术子项目计划内容区域必须存在：${JSON.stringify(technicalWorkspaceState)}`)
@@ -676,7 +689,8 @@ try {
     assert.equal(workspacePlanState.grouped, 0, '技术子项目工作区不得出现 grouped 表头')
     assert.equal(workspacePlanState.text.includes('子项目计划'), false, '技术子项目工作区不得显示“子项目计划”分组')
     assert.deepEqual(workspacePlanState.headers.slice(0, 2), ['版本', '开发周期'], `技术子项目工作区表头必须从版本/开发周期开始：${JSON.stringify(workspacePlanState.headers)}`)
-    assert.ok(workspacePlanState.rows.some(row => row[0] === 'V1'), `技术子项目工作区必须保留 V1 行：${JSON.stringify(workspacePlanState.rows)}`)
+    assert.ok(workspacePlanState.rows.some(row => row[0].startsWith('V1') && row[0].includes('2026-02-02')), `技术子项目工作区必须保留带发布时间的 V1 行：${JSON.stringify(workspacePlanState.rows)}`)
+    assert.ok(workspacePlanState.rows.some(row => row[0].startsWith('V2') && row[0].includes('修订中')), `技术子项目工作区必须显示修订中元数据：${JSON.stringify(workspacePlanState.rows)}`)
     assert.ok(workspacePlanState.rows.some(row => row[0] === '实际'), `技术子项目工作区必须保留实际行：${JSON.stringify(workspacePlanState.rows)}`)
     await assertHorizontalPlanDateBindings(page, workspacePlanSelector, '技术子项目工作区横版计划')
     const workspacePlan = await page.$(workspacePlanSelector)
@@ -725,6 +739,14 @@ try {
       assert.deepEqual(summaryState.summaryRegionText, [], `${sample.name} 最新发布摘要区域不得残留日期摘要文本：${JSON.stringify(summaryState)}`)
       assert.deepEqual(summaryState.exactSummaryLabelsOutsidePlanTables, [], `${sample.name} 基础信息计划区不得残留四项摘要标签：${JSON.stringify(summaryState)}`)
       await page.waitForSelector('#section-plan table[aria-label="一级计划横版"]', { visible: true, timeout: TIMEOUT })
+      const basicVersionRows = await page.$$eval('#section-plan table[aria-label="一级计划横版"] tbody tr', rows => rows.map(row => ({
+        version: (row.querySelector('td')?.textContent || '').replace(/\s+/g, '').trim(),
+        planDateInputs: row.querySelectorAll('td input').length,
+      })))
+      assert.ok(basicVersionRows[0]?.version.startsWith('V3') && basicVersionRows[0].version.includes('2026-06-25'), `${sample.name} 基础信息首行必须是带发布时间的最新发布版本：${JSON.stringify(basicVersionRows)}`)
+      assert.ok(basicVersionRows[1]?.version.startsWith('V4') && basicVersionRows[1].version.includes('修订中'), `${sample.name} 基础信息第二行必须是修订版本：${JSON.stringify(basicVersionRows)}`)
+      assert.equal(basicVersionRows[1]?.planDateInputs, 0, `${sample.name} 基础信息修订版本必须只读：${JSON.stringify(basicVersionRows)}`)
+      assert.equal(basicVersionRows.at(-1)?.version, '实际', `${sample.name} 基础信息实际行必须位于最后：${JSON.stringify(basicVersionRows)}`)
       await assertDateCells(page, '#section-plan table[aria-label="一级计划横版"]', `${sample.name} 基础信息横版计划`, 4)
       await assertHorizontalPlanDateBindings(page, '#section-plan table[aria-label="一级计划横版"]', `${sample.name} 基础信息横版计划`)
       await assertNoClippingOrOverlap(page, ['#section-plan .ant-card-head', '#section-plan table[aria-label="一级计划横版"] thead'], `${sample.name} 基础信息计划`)

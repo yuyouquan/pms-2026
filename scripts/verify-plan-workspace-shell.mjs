@@ -5,6 +5,26 @@ import ts from 'typescript'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
+const planVersioning = loadTypeScriptModule(root, 'src/lib/planVersioning.ts')
+const level1Rules = loadTypeScriptModule(root, 'src/lib/projectSpaceLevel1Rules.ts')
+const versionFixtures = [
+  { id: 'v1', versionNo: 'V1', status: '已发布', publishedAt: '2026-08-01T03:00:00Z' },
+  { id: 'v2', versionNo: 'V2', status: '已发布', publishedAt: '2026-09-01T16:30:00Z' },
+  { id: 'v3', versionNo: 'V3', status: '修订中' },
+]
+assert.deepEqual(
+  level1Rules.selectLevel1HorizontalVersions(versionFixtures, { surface: 'basic-info' }).map(version => version.status),
+  ['已发布', '修订中'],
+  'basic-info horizontal view keeps the latest published version followed by the draft',
+)
+assert.equal(planVersioning.formatPlanPublishedDate(versionFixtures[0]), '2026-08-01', 'published dates render in Shanghai calendar time')
+assert.equal(planVersioning.formatPlanPublishedDate(versionFixtures[1]), '2026-09-02', 'publication date respects Asia/Shanghai across UTC date boundaries')
+assert.equal(planVersioning.formatPlanPublishedDate({ versionNo: 'V1', status: '已发布' }), '-', 'legacy published versions without a timestamp show a dash')
+assert.equal(planVersioning.formatPlanPublishedDate({ versionNo: 'V3', status: '修订中' }), '修订中', 'draft versions show their state beneath the version number')
+const planStoreSource = readSource(root, 'src/stores/plan.ts')
+assert.match(planStoreSource, /versionNo: 'V1',[^\n]+publishedAt:/, 'initial whole-machine and tOS V1-V3 mocks carry deterministic publication timestamps')
+const mrAcceptanceSeedSource = readSource(root, 'src/data/mrVersionPlanMocks.ts')
+assert.match(mrAcceptanceSeedSource, /versionNo: 'V3',[^\n]+publishedAt:/, 'MR acceptance version scopes carry deterministic publication timestamps')
 const workspacePath = 'src/lib/planWorkspace.ts'
 assert.equal(fs.existsSync(`${root}/${workspacePath}`), true, 'shared plan-workspace rules exist')
 
@@ -122,5 +142,15 @@ assert.match(
   /projectPlanLevel !== 'level1' && projectPlanViewMode !== 'horizontal'/,
   'level-one plan never exposes the field-configuration action',
 )
+assert.match(projectSpaceSource, /publishedAt:\s*new Date\(\)\.toISOString\(\)/, 'whole-machine and tOS publishing stamps the publication time')
+assert.match(projectSpaceSource, /formatPlanPublishedDate\(version\)/, 'whole-machine and tOS horizontal version cells show publication metadata')
+assert.match(projectSpaceSource, /surface === 'project-plan'[\s\S]*?<ClickToEditDate/, 'basic-info draft date cells remain read-only')
+
+const technicalPlanSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
+assert.match(technicalPlanSource, /formatPlanPublishedDate\(row\)/, 'technical horizontal version cells show publication metadata')
+const technicalSummarySource = readSource(root, 'src/components/technical-project/TechnicalPlanSummary.tsx')
+assert.match(technicalSummarySource, /selectLevel1HorizontalVersions\([\s\S]*?surface: 'basic-info'/, 'technical basic-info keeps latest published and draft rows')
+assert.match(technicalSummarySource, /formatPlanPublishedDate\(row\.version\)/, 'technical basic-info shows publication metadata')
+assert.doesNotMatch(technicalSummarySource, /canEditPlanEnd[\s\S]*?<ClickToEditDate[\s\S]*?planEndDate/, 'technical basic-info version rows do not expose plan-date editors')
 
 console.log('plan workspace shell contract passed')

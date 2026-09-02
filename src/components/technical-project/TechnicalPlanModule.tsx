@@ -39,7 +39,7 @@ import {
   selectVisibleTechnicalPlanVersions,
 } from '@/lib/technicalPlanWorkspace'
 import { compareVersionsForTable } from '@/lib/versionCompare'
-import type { PlanRevisionKind } from '@/lib/planVersioning'
+import { formatPlanPublishedDate, type PlanRevisionKind } from '@/lib/planVersioning'
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
 import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1FlatMilestones, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, type Level1FlatMilestoneRow } from '@/lib/level1PlanRules'
@@ -97,7 +97,7 @@ function TechnicalHorizontalPlanTable({
 }: {
   tasks: readonly TechnicalTemplateTask[]
   templateKind: TechnicalTemplateKind
-  versions: readonly { id: string; versionNo: string; status: string; tasks: TechnicalTemplateTask[] }[]
+  versions: readonly { id: string; versionNo: string; status: string; publishedAt?: string; tasks: TechnicalTemplateTask[] }[]
   currentVersionId: string
   canEditPlanEnd: boolean
   canEditActualEnd: boolean
@@ -117,6 +117,7 @@ function TechnicalHorizontalPlanTable({
     id: string
     versionNo: string
     status: string
+    publishedAt?: string
     rowType: 'version' | 'actual'
     endDatesByTaskId: Record<string, string>
     cycleDays: number | null
@@ -127,6 +128,7 @@ function TechnicalHorizontalPlanTable({
       id: version.id,
       versionNo: version.versionNo,
       status: version.status,
+      publishedAt: version.publishedAt,
       rowType: 'version' as const,
       endDatesByTaskId: Object.fromEntries(versionProjection.rows.map(row => [getTechnicalPlanRowKey(row), row.planEndDate || ''])),
       cycleDays: sumLevel1EstimatedDays(versionProjection.rows),
@@ -230,14 +232,17 @@ function TechnicalHorizontalPlanTable({
                 style={isCurrent ? { background: '#fafffe' } : undefined}
               >
                 <td style={{ ...versionTdStyle, color: isCurrent ? 'var(--pms-brand)' : '#111827', background: isCurrent ? 'var(--pms-brand-surface)' : '#fff' }}>
-                  <Space size={5} style={{ justifyContent: 'center', width: '100%' }}>
-                    <span>{row.versionNo}</span>
-                    {row.status === '修订中' && (
-                      <Tooltip title="修订中">
-                        <EditOutlined aria-label="修订中" style={{ color: '#722ed1', fontSize: 13 }} />
-                      </Tooltip>
-                    )}
-                  </Space>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                    <Space size={5} style={{ justifyContent: 'center', width: '100%' }}>
+                      <span>{row.versionNo}</span>
+                      {row.status === '修订中' && (
+                        <Tooltip title="修订中">
+                          <EditOutlined aria-label="修订中" style={{ color: '#722ed1', fontSize: 13 }} />
+                        </Tooltip>
+                      )}
+                    </Space>
+                    <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 400 }}>{formatPlanPublishedDate(row)}</span>
+                  </div>
                 </td>
                 <td style={{ ...cycleTdStyle, background: isCurrent ? '#f0f9ff' : '#fff' }}>
                   <Tooltip title="所有一级活动的预估工期总和"><span>{row.cycleDays ?? '-'}</span></Tooltip>

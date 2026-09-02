@@ -29,6 +29,7 @@ export type PlanVersionLike = {
   id: string
   versionNo: string
   status: string
+  publishedAt?: string
 }
 
 export type FollowVersionSource = {

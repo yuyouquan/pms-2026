@@ -92,6 +92,7 @@ export interface Level1HorizontalVersion {
   id: string
   versionNo: string
   status: string
+  publishedAt?: string
 }
 
 export const selectLevel1HorizontalVersions = <Version extends Level1HorizontalVersion>(
@@ -113,7 +114,10 @@ export const selectLevel1HorizontalVersions = <Version extends Level1HorizontalV
   const latestPublished = versions
     .filter(version => version.status === '已发布' && parsePlanVersionNo(version.versionNo))
     .sort((left, right) => comparePlanVersions(right, left))[0]
-  return latestPublished ? [latestPublished] : []
+  const latestDraft = versions
+    .filter(version => version.status === '修订中' && parsePlanVersionNo(version.versionNo))
+    .sort((left, right) => comparePlanVersions(right, left))[0]
+  return [latestPublished, latestDraft].filter((version): version is Version => Boolean(version))
 }
 
 export interface Level1StageDurationRow {

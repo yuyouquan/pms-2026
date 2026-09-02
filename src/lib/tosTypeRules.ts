@@ -32,6 +32,7 @@ export type TosTypePlanVersion = {
   id: string
   versionNo: string
   status: string
+  publishedAt?: string
 }
 
 export type TosTypeVersionsState = Record<string, TosTypePlanVersion[]>

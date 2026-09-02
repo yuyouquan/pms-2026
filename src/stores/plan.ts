@@ -39,6 +39,7 @@ import {
 } from '@/lib/technicalPlanRules'
 import type {
   ConfigTemplateCompareScope,
+  ConfigTemplateVersion,
   ConfigTemplateVersionScope,
   TechnicalTemplateKind,
 } from '@/types/technicalPlan'
@@ -59,10 +60,10 @@ export const FIXED_LEVEL2_PLANS = [
   { id: 'plan1', name: '在研版本火车计划', type: '在研版本火车计划', fixed: true as const },
 ]
 
-export const VERSION_DATA = [
-  { id: 'v1', versionNo: 'V1', status: '已发布' },
-  { id: 'v2', versionNo: 'V2', status: '已发布' },
-  { id: 'v3', versionNo: 'V3', status: '已发布' },
+export const VERSION_DATA: ConfigTemplateVersion[] = [
+  { id: 'v1', versionNo: 'V1', status: '已发布', publishedAt: '2026-04-15T02:00:00.000Z' },
+  { id: 'v2', versionNo: 'V2', status: '已发布', publishedAt: '2026-05-20T02:00:00.000Z' },
+  { id: 'v3', versionNo: 'V3', status: '已发布', publishedAt: '2026-06-25T02:00:00.000Z' },
   { id: 'v4', versionNo: 'V4', status: '修订中' },
 ]
 

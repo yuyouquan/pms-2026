@@ -322,9 +322,9 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
 }
 
 const publishedVersions = () => [
-  { id: 'v1', versionNo: 'V1', status: '已发布' },
-  { id: 'v2', versionNo: 'V2', status: '已发布' },
-  { id: 'v3', versionNo: 'V3', status: '已发布' },
+  { id: 'v1', versionNo: 'V1', status: '已发布', publishedAt: '2026-04-15T02:00:00.000Z' },
+  { id: 'v2', versionNo: 'V2', status: '已发布', publishedAt: '2026-05-20T02:00:00.000Z' },
+  { id: 'v3', versionNo: 'V3', status: '已发布', publishedAt: '2026-06-25T02:00:00.000Z' },
   { id: 'v4', versionNo: 'V4', status: '修订中' },
 ]
 const MR_ACCEPTANCE_FIXED_MILESTONE_DATES: Readonly<Record<string, string>> = {

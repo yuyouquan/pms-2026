@@ -71,6 +71,7 @@ import { resolveMachineTosUpdate } from '@/lib/machineTosVersions'
 import { resolveVisiblePlanVersion } from '@/lib/todoAggregation'
 import {
   comparePlanVersions,
+  formatPlanPublishedDate,
   getNextPlanRevisionVersionNo,
   getPlanVersionId,
   parsePlanVersionNo,
@@ -2077,7 +2078,7 @@ export default function ProjectSpaceContainer() {
             market,
             versionId,
             versionNo,
-            versions: [...versionsWithoutDraft, { id: versionId, versionNo, status: '已发布' }],
+            versions: [...versionsWithoutDraft, { id: versionId, versionNo, status: '已发布', publishedAt: new Date().toISOString() }],
             tasks: syncedMarketPlanData[market]?.tasks || [],
           }
         })
@@ -2822,7 +2823,7 @@ export default function ProjectSpaceContainer() {
         )
       : marketPlanData
     const versionNo = publishedVersion?.versionNo || publishedVersionId
-    setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布' } : v))
+    setVersions(versions.map(v => v.id === publishedVersionId ? { ...v, status: '已发布', publishedAt: new Date().toISOString() } : v))
     if (shouldSyncFollowMarkets) setMarketPlanData(nextMarketPlanData)
     if (selectedProject && isMarketScopedLevel1) {
       setMarketFollowVersionMeta(prev => {
@@ -4507,19 +4508,22 @@ export default function ProjectSpaceContainer() {
               return (
                 <tr key={version.id} style={isLatest ? { background: '#fafffe' } : undefined}>
                   <td style={{ ...versionTdStyle, color: isLatest ? 'var(--pms-brand)' : '#111827', background: isLatest ? 'var(--pms-brand-surface)' : '#fff' }}>
-                    <Space size={5} style={{ justifyContent: 'center', width: '100%' }}>
-                      <span>{version.versionNo}</span>
-                      {version.status === '修订中' && (
-                        <Tooltip title="修订中">
-                          <EditOutlined aria-label="修订中" style={{ color: '#722ed1', fontSize: 13 }} />
-                        </Tooltip>
-                      )}
-                    </Space>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <Space size={5} style={{ justifyContent: 'center', width: '100%' }}>
+                        <span>{version.versionNo}</span>
+                        {version.status === '修订中' && (
+                          <Tooltip title="修订中">
+                            <EditOutlined aria-label="修订中" style={{ color: '#722ed1', fontSize: 13 }} />
+                          </Tooltip>
+                        )}
+                      </Space>
+                      <span style={{ color: '#94a3b8', fontSize: 11, fontWeight: 400 }}>{formatPlanPublishedDate(version)}</span>
+                    </div>
                   </td>
                   <td style={{ ...cycleTdStyle, background: isLatest ? '#f0f9ff' : '#fff' }}><Tooltip title="所有一级活动的预估工期总和"><span>{devCycle ?? '-'}</span></Tooltip></td>
                   {vMilestones.map((m: any, mi: number) => (
                     <td key={mi} style={tdStyle}>
-                      {canEditLevel1HorizontalDateCell(m) && version.id === horizontalCurrentVersion && level1SurfaceIsDraft && level1SurfaceCanMaintain
+                      {surface === 'project-plan' && canEditLevel1HorizontalDateCell(m) && version.id === horizontalCurrentVersion && level1SurfaceIsDraft && level1SurfaceCanMaintain
                         ? <ClickToEditDate align="center" value={m.planEndDate || ''} onChange={(nextValue) => setLevel1SurfaceTasks(level1SurfaceLiveTasks.map((task: any) => (task.stableId || task.id) === (m.stableId || m.id) ? { ...task, planEndDate: nextValue } : task))} />
                         : m?.planEndDate || '-'}
                     </td>
