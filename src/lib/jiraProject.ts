@@ -61,8 +61,8 @@ export const copyJiraProjectConfig = (config: JiraProjectConfig): JiraProjectCon
 
 const JIRA_REQUIRED_FIELDS: Array<{ key: 'server' | 'projectKey' | 'type'; label: string }> = [
   { key: 'server', label: 'JIRA服务器' },
-  { key: 'projectKey', label: 'JIRA项目' },
-  { key: 'type', label: 'JIRA类型' },
+  { key: 'projectKey', label: 'JIRA库名' },
+  { key: 'type', label: '类型' },
 ]
 
 export const validateJiraProjectRows = (rows: unknown): JiraProjectValidationError[] => {
