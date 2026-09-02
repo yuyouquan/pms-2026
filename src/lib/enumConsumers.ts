@@ -3,6 +3,7 @@ import type {
   EnumRowByType,
   EnumRowsByType,
   EnumTypeKey,
+  PackageModeMappingRow,
   SingleEnumRow,
 } from '@/types/enums'
 
@@ -47,6 +48,20 @@ const historyOption = (value: string, label: string): EnumOption => ({
 })
 
 const nonemptyString = (input: unknown): string => typeof input === 'string' ? input.trim() : ''
+
+export function resolvePackageMode(
+  rows: readonly PackageModeMappingRow[],
+  androidVersion: unknown,
+  chipModel: unknown,
+): string {
+  const android = nonemptyString(androidVersion)
+  const chip = nonemptyString(chipModel)
+  if (!android || !chip) return ''
+  return rows.find(row => (
+    row.androidVersion.trim() === android
+    && row.chipModel.trim() === chip
+  ))?.packageMode.trim() ?? ''
+}
 
 /** Project snapshots persist the tOS body; presentation owns the single prefix. */
 export function normalizeTosSnapshot(input: unknown): string {

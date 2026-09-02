@@ -36,7 +36,7 @@ export type EnumStore = EnumState & EnumActions
 export type PersistedEnumState = Pick<EnumState, 'rowsByType'>
 
 export const ENUM_STORAGE_KEY = 'pms-enum-values'
-const ENUM_STORE_VERSION = 2
+const ENUM_STORE_VERSION = 3
 
 interface SynchronousStateStorage {
   getItem: (name: string) => string | null

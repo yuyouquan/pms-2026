@@ -21,11 +21,13 @@ export const ENUM_TYPE_KEYS = [
   'build-market',
   'tmg-subdomain-mapping',
   'core-value',
+  'android-version',
+  'package-mode-mapping',
 ] as const
 
 export type EnumTypeKey = (typeof ENUM_TYPE_KEYS)[number]
 
-export type EnumKind = 'single' | 'tmg-map' | 'chip-map' | 'project-category-map'
+export type EnumKind = 'single' | 'tmg-map' | 'chip-map' | 'project-category-map' | 'package-map'
 
 export interface BaseEnumRow {
   id: string
@@ -52,7 +54,13 @@ export interface ProjectCategoryMappingRow extends BaseEnumRow {
   pmsSecondaryCategory: string
 }
 
-export type EnumRow = SingleEnumRow | TmgMappingRow | ChipMappingRow | ProjectCategoryMappingRow
+export interface PackageModeMappingRow extends BaseEnumRow {
+  androidVersion: string
+  chipModel: string
+  packageMode: string
+}
+
+export type EnumRow = SingleEnumRow | TmgMappingRow | ChipMappingRow | ProjectCategoryMappingRow | PackageModeMappingRow
 
 export type EnumRowByType<K extends EnumTypeKey> = K extends 'tmg-subdomain-mapping'
   ? TmgMappingRow
@@ -60,7 +68,9 @@ export type EnumRowByType<K extends EnumTypeKey> = K extends 'tmg-subdomain-mapp
     ? ChipMappingRow
     : K extends 'project-category-mapping'
       ? ProjectCategoryMappingRow
-      : SingleEnumRow
+      : K extends 'package-mode-mapping'
+        ? PackageModeMappingRow
+        : SingleEnumRow
 
 export type EnumRowsByType = {
   [K in EnumTypeKey]: EnumRowByType<K>[]

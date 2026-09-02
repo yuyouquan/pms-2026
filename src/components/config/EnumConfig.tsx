@@ -61,6 +61,7 @@ const KIND_LABELS = {
   'tmg-map': '两列映射',
   'chip-map': '三列映射',
   'project-category-map': '三列映射',
+  'package-map': '三列映射',
 } as const
 
 function emptyDraft(type: EnumTypeKey): DraftValues {
@@ -423,6 +424,65 @@ export default function EnumConfig({
     if (editorDefinition.kind === 'single') {
       return fieldItem('value', editorDefinition.label)
     }
+    if (editorDefinition.kind === 'package-map') {
+      const androidValues = rowsByType['android-version']
+        .map(row => row.value.trim())
+        .filter(Boolean)
+      const chipModels = [...new Set(rowsByType['chip-mapping']
+        .map(row => row.chipModel.trim())
+        .filter(Boolean))]
+      const androidOptions: Array<{ value: string; label: string; disabled?: boolean }> = androidValues
+        .map(value => ({ value, label: value }))
+      const chipModelOptions: Array<{ value: string; label: string; disabled?: boolean }> = chipModels
+        .map(value => ({ value, label: value }))
+      const historicalAndroid = draft.androidVersion?.trim() ?? ''
+      const historicalChipModel = draft.chipModel?.trim() ?? ''
+      if (modalMode === 'edit' && historicalAndroid && !androidValues.includes(historicalAndroid)) {
+        androidOptions.push({ disabled: true, value: historicalAndroid, label: `${historicalAndroid}（已停用）` })
+      }
+      if (modalMode === 'edit' && historicalChipModel && !chipModels.includes(historicalChipModel)) {
+        chipModelOptions.push({ disabled: true, value: historicalChipModel, label: `${historicalChipModel}（已停用）` })
+      }
+      return (
+        <>
+          <Form.Item
+            label="安卓版本"
+            required
+            validateStatus={fieldErrors.androidVersion ? 'error' : undefined}
+            help={fieldErrors.androidVersion}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              value={draft.androidVersion || undefined}
+              aria-label="安卓版本"
+              aria-invalid={Boolean(fieldErrors.androidVersion)}
+              placeholder="请选择安卓版本"
+              options={androidOptions}
+              onChange={value => setDraftField('androidVersion', value)}
+            />
+          </Form.Item>
+          <Form.Item
+            label="芯片型号"
+            required
+            validateStatus={fieldErrors.chipModel ? 'error' : undefined}
+            help={fieldErrors.chipModel}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              value={draft.chipModel || undefined}
+              aria-label="芯片型号"
+              aria-invalid={Boolean(fieldErrors.chipModel)}
+              placeholder="请选择芯片型号"
+              options={chipModelOptions}
+              onChange={value => setDraftField('chipModel', value)}
+            />
+          </Form.Item>
+          {fieldItem('packageMode', '组包方式')}
+        </>
+      )
+    }
     if (editorDefinition.kind === 'chip-map') {
       return (
         <>
@@ -538,7 +598,7 @@ export default function EnumConfig({
         collapsed={collapsed}
         onCollapsedChange={onCollapsedChange}
         expandedWidth={288}
-        title="配置项（22）"
+        title="配置项（24）"
         ariaLabel="枚举配置项"
         className="pms-enum-sidebar"
         content={(
