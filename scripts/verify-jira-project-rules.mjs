@@ -86,5 +86,10 @@ assert.ok(
   rules.validateJiraProjectRows([omittedType]).some(error => error.fieldKey === 'type'),
   'an omitted JIRA type is reported as required',
 )
+assert.equal(
+  rules.normalizeJiraProjectConfig({ ...validRow, shared: 'false' }).shared,
+  false,
+  'a non-boolean shared value is treated as non-shared',
+)
 
 console.log('JIRA project rules are correct.')

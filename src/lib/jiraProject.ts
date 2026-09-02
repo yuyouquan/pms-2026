@@ -4,7 +4,7 @@ export interface JiraProjectConfig {
   id: string
   server: string
   projectKey: string
-  type: JiraProjectType
+  type: JiraProjectType | ''
   shared: boolean
   affectProjects: string
 }
@@ -33,13 +33,13 @@ const createUniqueJiraProjectId = () => {
 }
 
 export const normalizeJiraProjectConfig = (input: JiraProjectConfigInput): JiraProjectConfig => {
-  const shared = input.shared === undefined || input.shared === null ? false : Boolean(input.shared)
+  const shared = input.shared === true
   const type = typeof input.type === 'string' ? input.type.trim() : ''
   return {
     id: typeof input.id === 'string' ? input.id.trim() : '',
     server: typeof input.server === 'string' ? input.server.trim() : '',
     projectKey: typeof input.projectKey === 'string' ? input.projectKey.trim() : '',
-    type: type === 'sw' || type === 'monkey' ? type : '' as JiraProjectType,
+    type: type === 'sw' || type === 'monkey' ? type : '',
     shared,
     affectProjects: shared && typeof input.affectProjects === 'string' ? input.affectProjects.trim() : '',
   }

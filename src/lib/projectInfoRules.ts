@@ -9,6 +9,7 @@ import {
 } from '@/constants/projectInfoSchema'
 import { isMachineProjectType, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { deriveStartingRam, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { validateJiraProjectRows } from '@/lib/jiraProject'
 export { deriveStartingRam } from '@/lib/projectInfoValues'
 import type { ProjectInfoValues } from '@/types/app'
 
@@ -284,32 +285,6 @@ const isEmptyValue = (value: unknown) => (
   || (Array.isArray(value) && value.length === 0)
 )
 
-type JiraRowValidation = { rowIndex: number; fieldKey: string; message: string }
-
-// Keep this lookup lazy so the standalone schema contract evaluator can load
-// this rules module without needing to emulate the whole Jira module graph.
-const getJiraRowValidation = (rows: unknown): JiraRowValidation[] => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const jiraRules = require('@/lib/jiraProject') as { validateJiraProjectRows?: (value: unknown) => JiraRowValidation[] }
-    if (typeof jiraRules.validateJiraProjectRows === 'function') return jiraRules.validateJiraProjectRows(rows)
-  } catch {
-    // The browser build resolves this module; isolated contract evaluators may not.
-  }
-  const normalizedRows = Array.isArray(rows) ? rows : []
-  return normalizedRows.flatMap((rawRow, rowIndex) => {
-    const row = rawRow && typeof rawRow === 'object' ? rawRow as Record<string, unknown> : {}
-    const text = (key: string) => typeof row[key] === 'string' ? row[key].trim() : ''
-    const errors: JiraRowValidation[] = []
-    for (const key of ['server', 'projectKey', 'type']) {
-      if (!text(key)) errors.push({ rowIndex, fieldKey: key, message: `请填写JIRA${key === 'server' ? '服务器' : key === 'projectKey' ? '项目' : '类型'}` })
-    }
-    const shared = row.shared === undefined || row.shared === null ? false : Boolean(row.shared)
-    if (shared && !text('affectProjects')) errors.push({ rowIndex, fieldKey: 'affectProjects', message: '共享JIRA项目请填写影响项目' })
-    return errors
-  })
-}
-
 export const validateProjectInfoValues = (
   type: string,
   values: ProjectInfoValues,
@@ -350,7 +325,7 @@ export const validateProjectInfoValues = (
     type === '整机产品项目'
     && (!validationFieldKeys || validationFieldKeys.has('jiraProjects'))
   ) {
-    errors.push(...getJiraRowValidation(values.jiraProjects).map(error => ({
+    errors.push(...validateJiraProjectRows(values.jiraProjects).map(error => ({
       fieldKey: 'jiraProjects',
       groupKey: 'extended' as const,
       message: `第 ${error.rowIndex + 1} 行：${error.message}`,
