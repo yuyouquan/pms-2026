@@ -39,6 +39,17 @@ assert.match(jointPlanSource, /rowSelection/, '联合计划提供管理员批量
 assert.match(jointPlanSource, /已勾选.*个项目/, '联合计划显示批量选择计数')
 assert.match(jointPlanSource, /锁定所选项目/, '联合计划提供锁定确认')
 assert.match(jointPlanSource, /解锁所选项目/, '联合计划提供解锁确认')
+assert.match(
+  jointPlanSource,
+  /function resolveCurrentBatchAccess\([\s\S]*useProjectStore\.getState\(\)[\s\S]*usePlanStore\.getState\(\)[\s\S]*usePermissionStore\.getState\(\)[\s\S]*useEnumStore\.getState\(\)/,
+  '批量确认必须从当前 Zustand 状态重新解析身份与归属',
+)
+assert.match(
+  jointPlanSource,
+  /onOk:\s*\(\)\s*=>\s*\{[\s\S]*resolveCurrentBatchAccess\(\)[\s\S]*lockMachineRows\(rows, actor, permission\)[\s\S]*unlockMachineRows\(rows, actor, permission\)/,
+  '锁定与解锁必须使用确认时重新解析的权限',
+)
+assert.equal([...globalsSource.matchAll(/\.pms-joint-mr-toolbar\s*\{/g)].length, 2, '桌面与响应式各保留一处联合 MR 工具栏样式')
 assert.doesNotMatch(jointPlanSource, /<Space\s+direction=/, 'MR joint space must not emit Ant Design Space deprecation errors')
 assert.doesNotMatch(configSource, /<Divider\s+type=/, 'MR template configuration must not emit Ant Design Divider deprecation errors')
 assert.doesNotMatch(configSource, /<Space[^>]*\ssplit=/, 'MR template configuration must not emit Ant Design Space deprecation errors')

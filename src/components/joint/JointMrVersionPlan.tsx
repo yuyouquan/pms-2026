@@ -124,6 +124,43 @@ function buildJointCellErrors(errors: readonly MrCellError[]): Record<string, Re
   return result
 }
 
+function resolveCurrentBatchAccess(): { actor: string; permission: MrPermissionResult } {
+  const projectState = useProjectStore.getState()
+  const planState = usePlanStore.getState()
+  const permissionState = usePermissionStore.getState()
+  const enumState = useEnumStore.getState()
+  const currentSources = buildMrAggregationSources({
+    projects: projectState.projects,
+    marketConfigsByProjectId: projectState.marketConfigsByProjectId,
+    tosTypeConfigsByProjectId: projectState.tosTypeConfigsByProjectId,
+    marketVersionsByKey: planState.marketVersionsByKey,
+    tosTypeVersionsByKey: planState.tosTypeVersionsByKey,
+    publishedSnapshots: planState.publishedSnapshots,
+    fallbackVersions: planState.versions,
+    packageModeRows: enumState.rowsByType['package-mode-mapping'],
+  })
+  const actor = projectState.currentLoginUser.trim()
+  const globalAdminUsers = permissionState.globalRoles.find(role => role.name === '管理组')?.members ?? []
+  const isGlobalAdmin = globalAdminUsers.some(user => user.trim() === actor)
+  const managedTosProjectIds = currentSources.tosProjects
+    .filter(project => (currentSources.tosManagerUsersByProjectId[project.projectId] ?? [])
+      .some(user => user.trim() === actor))
+    .map(project => project.projectId)
+  return {
+    actor,
+    permission: {
+      canView: Boolean(actor),
+      canEditTemplate: isGlobalAdmin,
+      canEditTos: false,
+      canEditMachine: isGlobalAdmin,
+      canStopRelease: false,
+      canEditMarket: false,
+      canManageMachineLocks: isGlobalAdmin || managedTosProjectIds.length > 0,
+      tosProjectIds: managedTosProjectIds,
+    },
+  }
+}
+
 export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlanProps) {
   const [messageApi, messageContextHolder] = message.useMessage()
   const [modalApi, modalContextHolder] = Modal.useModal()
@@ -308,16 +345,6 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     .filter(project => (sources.tosManagerUsersByProjectId[project.projectId] ?? []).some(user => user.trim() === currentLoginUser.trim()))
     .map(project => project.projectId), [currentLoginUser, sources.tosManagerUsersByProjectId, sources.tosProjects])
   const canBatchManage = isGlobalAdmin || managedTosProjectIds.length > 0
-  const batchPermission = useMemo<MrPermissionResult>(() => ({
-    canView: true,
-    canEditTemplate: isGlobalAdmin,
-    canEditTos: false,
-    canEditMachine: isGlobalAdmin,
-    canStopRelease: false,
-    canEditMarket: false,
-    canManageMachineLocks: canBatchManage,
-    tosProjectIds: managedTosProjectIds,
-  }), [canBatchManage, isGlobalAdmin, managedTosProjectIds])
   useEffect(() => {
     const selectableKeys = new Set(filteredRows.flatMap(row => (
       row.kind === 'machine' && (isGlobalAdmin || managedTosProjectIds.includes(row.tosProjectId)) ? [row.key] : []
@@ -351,9 +378,10 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
       okText: action === 'lock' ? '锁定' : '解锁',
       cancelText: '取消',
       onOk: () => {
+        const { actor, permission } = resolveCurrentBatchAccess()
         const result = action === 'lock'
-          ? lockMachineRows(rows, currentLoginUser, batchPermission)
-          : unlockMachineRows(rows, currentLoginUser, batchPermission)
+          ? lockMachineRows(rows, actor, permission)
+          : unlockMachineRows(rows, actor, permission)
         if (result.processed > 0) {
           void messageApi.success(`${action === 'lock' ? '锁定' : '解锁'}成功 ${result.processed} 个项目${result.skipped ? `，${result.skipped} 个项目已过期或无权限` : ''}`)
           setSelectedRowKeys([])

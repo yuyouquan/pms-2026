@@ -7208,13 +7208,6 @@ body,
   margin-bottom: 14px;
 }
 
-.pms-joint-mr-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
 .pms-joint-mr-batch-actions {
   margin-left: auto;
   white-space: nowrap;
