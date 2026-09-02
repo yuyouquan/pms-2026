@@ -5038,6 +5038,28 @@ body {
   text-align: left;
 }
 
+.pms-project-info-jira-horizontal {
+  flex-direction: row;
+  align-items: flex-start;
+}
+
+.pms-project-info-jira-horizontal .pms-project-info-display-label {
+  flex: 0 0 120px;
+  min-width: 120px;
+  text-align: left;
+}
+
+.pms-project-info-jira-horizontal .pms-project-info-display-value {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  text-align: left;
+}
+
+.pms-project-info-jira-horizontal .ant-space {
+  flex-wrap: wrap;
+}
+
 .pms-project-info-display-label {
   color: #7c8798;
   font-size: 12px;

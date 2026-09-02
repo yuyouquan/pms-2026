@@ -18,6 +18,7 @@ const technicalCreateSource = readSource(root, 'src/components/technical-project
 const fieldVisibilityPickerSource = readSource(root, 'src/components/project-info/FieldVisibilityPicker.tsx')
 const targetProjectInformationSource = readSource(root, 'src/components/project-info/TargetProjectInformationView.tsx')
 const projectInfoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
+const globalsSource = readSource(root, 'src/styles/globals.css')
 const projectPlanInfoGridSource = readSource(root, 'src/components/project-info/ProjectPlanInfoGrid.tsx')
 const technicalInformationSource = readSource(root, 'src/components/technical-project/TechnicalProjectInformationView.tsx')
 const redesignBrowserSource = readSource(root, 'screenshots/verify-workbench-technical-project-redesign.mjs')
@@ -173,6 +174,20 @@ for (const key of ['wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet', 'keyCo
   assert.equal(machineCreateDefinitions.get(key)?.requiredOnCreate, false, `${key} must remain optional on create`)
 }
 assert.match(projectInfoSectionsSource, /field\.key === 'jiraProjects'[\s\S]*pms-project-info-display-item--full-row/)
+assert.match(
+  projectInfoSectionsSource,
+  /field\.key === 'jiraProjects'[\s\S]*pms-project-info-jira-horizontal/,
+  'JIRA projects must use the dedicated horizontal full-row display class',
+)
+for (const rule of [
+  /\.pms-project-info-jira-horizontal\s*\{[\s\S]*flex-direction:\s*row/,
+  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-label\s*\{[\s\S]*min-width:\s*120px/,
+  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*margin-top:\s*0/,
+  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*text-align:\s*left/,
+  /\.pms-project-info-jira-horizontal\s+\.ant-space\s*\{[\s\S]*flex-wrap:\s*wrap/,
+]) {
+  assert.match(globalsSource, rule, 'JIRA project display must keep label and wrapped linked tags on one horizontal row')
+}
 assert.deepEqual(
   machineSpaceDefinitions.filter(field => field.defaultVisible).map(field => field.key),
   machineSpaceDefaultVisible,
