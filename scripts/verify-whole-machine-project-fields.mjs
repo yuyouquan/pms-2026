@@ -1,13 +1,15 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { projectRoot, readSource } from './lib/source-contract.mjs'
 
-const root = process.cwd()
+const root = projectRoot(import.meta.url)
 const fieldFile = path.join(root, 'src/constants/projectBasicFields.ts')
-const containerFile = path.join(root, 'src/containers/ProjectSpaceContainer.tsx')
 const jiraLibFile = path.join(root, 'src/lib/jiraProject.ts')
-const projectDataFile = path.join(root, 'src/data/projects.ts')
 
 const expectedBasicLabels = [
+  '项目名称',
   '项目名',
   '主板名',
   '市场名',
@@ -15,6 +17,10 @@ const expectedBasicLabels = [
   '产品类型',
   '安卓版本',
   'tOS版本',
+  '首销 tOS 版本',
+  '起步RAM',
+  'STR5时间',
+  '上市时间',
   '研发模式',
   '合作形式',
   '品牌',
@@ -27,12 +33,14 @@ const expectedBasicLabels = [
   '是否二段式',
   '是否为Slim版本',
   '是否外研mini版本',
+  '备注',
   '项目描述',
   'Jira项目',
 ]
 
 const expectedHardwareLabels = [
   '市场项目名',
+  '平台',
   '芯片平台',
   '芯片型号',
   '版本类型',
@@ -128,9 +136,12 @@ if (!fs.existsSync(fieldFile)) fail('Missing src/constants/projectBasicFields.ts
 if (!fs.existsSync(jiraLibFile)) fail('Missing src/lib/jiraProject.ts')
 
 const fieldsSource = fs.readFileSync(fieldFile, 'utf8')
-const containerSource = fs.readFileSync(containerFile, 'utf8')
-const jiraLibSource = fs.readFileSync(jiraLibFile, 'utf8')
-const projectDataSource = fs.readFileSync(projectDataFile, 'utf8')
+const containerSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
+const fieldInputSource = readSource(root, 'src/components/project-info/ProjectInfoFieldInput.tsx')
+const projectInfoSectionsSource = readSource(root, 'src/components/project-info/ProjectInfoSections.tsx')
+const jiraEditorSource = readSource(root, 'src/components/project-info/JiraProjectEditor.tsx')
+const jiraLibSource = readSource(root, 'src/lib/jiraProject.ts')
+const projectDataSource = readSource(root, 'src/data/projects.ts')
 
 assertSameLabels(extractLabels(fieldsSource, 'WHOLE_MACHINE_BASIC_INFO_FIELDS'), expectedBasicLabels, 'WHOLE_MACHINE_BASIC_INFO_FIELDS')
 assertSameLabels(extractLabels(fieldsSource, 'WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS'), expectedHardwareLabels, 'WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS')
@@ -141,30 +152,30 @@ for (const symbol of ['WHOLE_MACHINE_BASIC_INFO_FIELDS']) {
   if (!containerSource.includes(symbol)) fail(`ProjectSpaceContainer.tsx does not use ${symbol}`)
 }
 
-for (const marker of [
-  'JIRA服务器',
-  'JIRA库名',
-  'Affect Projects',
-  '新增一行',
-  'renderJiraProjectInlineEditor',
-  'wideWholeMachineBasicInfoFields',
-  'JIRA_AFFECT_PROJECT_OPTIONS',
-  'column={1}',
-  'span={4}',
-  "field.key === 'projectDescription'",
-  'getJiraProjectUrl(project)',
-  'target="_blank"',
-  'isOutsourcedMini',
-]) {
-  if (!containerSource.includes(marker)) fail(`ProjectSpaceContainer.tsx missing marker: ${marker}`)
+if (!jiraEditorSource) fail('Missing shared component: src/components/project-info/JiraProjectEditor.tsx')
+assert.match(jiraEditorSource, /JiraProjectEditor/, 'shared JIRA editor must define JiraProjectEditor')
+assert.match(fieldInputSource, /JiraProjectEditor/, 'ProjectInfoFieldInput must use JiraProjectEditor')
+assert.match(containerSource, /JiraProjectEditor/, 'ProjectSpaceContainer must use JiraProjectEditor')
+
+const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
+const headerPositions = jiraHeaders.map(header => jiraEditorSource.indexOf(header))
+assert.ok(headerPositions.every(position => position >= 0), 'shared JIRA editor must render all six headers')
+assert.deepEqual([...headerPositions].sort((a, b) => a - b), headerPositions, 'shared JIRA editor must render the six headers in order')
+for (const header of jiraHeaders) {
+  assert.equal(jiraEditorSource.split(header).length - 1, 1, `shared JIRA editor must render exactly one ${header} header`)
 }
+assert.match(projectInfoSectionsSource, /pms-project-info-jira-horizontal/, 'JIRA display must use its dedicated horizontal layout class')
 
 for (const forbiddenMarker of [
-  'showJiraEditor',
-  'jiraDraftRows',
-  "编辑 ${selectedProject?.model || selectedProject?.name || ''} 的JIRA库",
+  'renderJiraProjectInlineEditor',
+  'normalizeJiraProjectRows',
+  'updateJiraProjectRows',
+  'updateJiraProjectRow',
+  'addJiraProjectRow',
+  'copyJiraProjectRow',
+  'removeJiraProjectRow',
 ]) {
-  if (containerSource.includes(forbiddenMarker)) fail(`ProjectSpaceContainer.tsx should not contain modal-only marker: ${forbiddenMarker}`)
+  if (containerSource.includes(forbiddenMarker)) fail(`ProjectSpaceContainer.tsx should not contain duplicated JIRA row helper: ${forbiddenMarker}`)
 }
 
 for (const marker of [
