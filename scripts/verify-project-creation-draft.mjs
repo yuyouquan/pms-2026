@@ -193,7 +193,7 @@ assert.match(
 assert.match(
   hydrateDraftBlock,
   /status:\s*resolveProjectCreationDraftSourceStatus\(\{[\s\S]*projectType:\s*restoredType[\s\S]*draftStatus:\s*draft\.values\.status[\s\S]*sourceStatus:\s*restoredEntry\?\.ipmStatus[\s\S]*\}\)/,
-  'technical hydration must apply the current IPM source status before installing its source-ref guard',
+  'draft hydration must restore the user-selected status before installing its source-ref guard',
 )
 assertOrdered(hydrateDraftBlock, [
   'status: resolveProjectCreationDraftSourceStatus',

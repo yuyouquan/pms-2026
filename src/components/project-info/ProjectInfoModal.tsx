@@ -43,7 +43,6 @@ import {
 import {
   buildInitialProjectStatusPatch,
   getProjectStatusEnumType,
-  mapIpmProjectStatus,
   resolveConfiguredProjectStatus,
 } from '@/lib/projectStatus'
 import { normalizeMachineFamilyName, resolveMachineTosUpdate } from '@/lib/machineTosVersions'
@@ -509,15 +508,12 @@ export default function ProjectInfoModal({
       configuredValues: configuredStatusValues,
       ipmStatus: entry.ipmStatus || '',
     })
-    const sourceStatusPatch = type === PROJECT_CATEGORY_TECH && initializeStatus && entry.ipmStatus
-      ? { status: mapIpmProjectStatus(entry.ipmStatus, type) }
-      : initialStatusPatch
     form.setFieldsValue({
       projectName: entry.name,
       marketName: sourceValues.marketName || '',
       brand: sourceValues.brand || '',
       productLine: sourceValues.productLine || '',
-      ...sourceStatusPatch,
+      ...initialStatusPatch,
       technicalTrack: entry.technicalTrack || '',
       ipmProjectType: entry.ipmProjectCategoryName,
       ...(type === PROJECT_CATEGORY_TECH ? { secondaryCategory: entry.ipmProjectCategoryName } : {}),
@@ -869,10 +865,10 @@ export default function ProjectInfoModal({
       mode,
       originalStatus: typeof project?.status === 'string' ? project.status : '',
     })
-    if (submittedStatus && !resolvedProjectStatus) {
-      const statusError = mode === 'create' && normalizedProjectType === PROJECT_TYPE_TOS_VERSION
-        ? `IPM 映射状态“${submittedStatus}”不在当前配置中，请先维护项目状态配置`
-        : '项目状态不在当前配置中，请重新选择'
+    if (!submittedStatus || !resolvedProjectStatus) {
+      const statusError = submittedStatus
+        ? '项目状态不在当前配置中，请重新选择'
+        : '项目状态不能为空'
       form.setFields([{ name: 'status', errors: [statusError] }])
       messageApi.error(statusError)
       return
@@ -1163,7 +1159,6 @@ export default function ProjectInfoModal({
             {showConfiguredProjectStatus && !isMachineProjectType(projectType) && !isTechnicalProject && (
               <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
                 <Select
-                  disabled={projectType === PROJECT_TYPE_TOS_VERSION}
                   options={projectStatusOptions}
                   placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
                 />

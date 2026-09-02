@@ -284,7 +284,7 @@ assert.ok(headerSource.indexOf('联合项目空间') < headerSource.indexOf('tOS
 assert.match(uiSource, /\| ['"]jointProjectSpace['"]/)
 assert.match(pageSource, /activeModule === ['"]jointProjectSpace['"]/)
 assert.match(jointContainerSource, /tOS&整机1\+N项目计划/)
-for (const label of ['tOS版本号', '项目名称', '1+N版本类型', '停止发版', '停止发版记录']) {
+for (const label of ['tOS版本号', '项目名称', '1+N版本类型']) {
   assert.ok(jointPlanSource.includes(label))
 }
 const jointFixedLabels = ['tOS版本号', '项目名称', '市场名', '产品线', 'SPM', '是否MADA', 'SOC平台', '组包方式', '1+N转测类型']
@@ -414,14 +414,8 @@ assert.deepEqual(historyInput.map(record => record.id), ['b', 'a', 'c'])
 assert.equal(stopReleaseUiRules.formatStopReleaseOperatedAt('2026-08-29T08:00:00.000Z'), '2026-08-29 16:00:00')
 assert.equal(stopReleaseUiRules.formatStopReleaseOperatedAt('legacy-time'), 'legacy-time')
 assert.equal(stopReleaseUiRules.formatStopReleaseOperatedAt(''), '-')
-for (const label of ['停止发版项目名称', '停止发版日期', '操作人', '操作时间', '操作项目']) assert.ok(jointPlanSource.includes(label))
-assert.match(jointPlanSource, /stopRelease\(/)
-assert.match(jointPlanSource, /if\s*\(!stopped\)/)
-assert.doesNotMatch(jointPlanSource, /恢复发版|重新发版|删除记录/)
-assert.match(jointPlanSource, /buildStopReleaseCandidates\(\{[\s\S]*?rows:\s*filteredRows/)
-assert.match(jointPlanSource, /resolveStopReleaseButtonReason\(stopCandidates,\s*visibleMachineRowCount\)/)
-assert.match(jointPlanSource, /render:\s*formatStopReleaseOperatedAt/)
-assert.match(jointPlanSource, /useEffect\(\(\)\s*=>\s*\{[\s\S]*?stopProjectId[\s\S]*?stopCandidates\.some[\s\S]*?setStopProjectId\(undefined\)/)
+for (const label of ['停止发版', '停止发版记录', '停止发版项目名称', '停止发版日期']) assert.equal(jointPlanSource.includes(label), false)
+assert.doesNotMatch(jointPlanSource, /stopRelease\(|buildStopReleaseCandidates|resolveStopReleaseButtonReason/)
 
 // Joint-space deep links mutate selection only inside the guarded action, set
 // the MR tab and intent together, and clear the transient intent only after an
@@ -1274,7 +1268,12 @@ assert.equal(aggregationRules.isPlanExcludedByStopRecord({
   stopRecords: emptyCollectionStop.stopRecords,
 }), true)
 const reconciledStopped = aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, stopRecords: [stopRecord] })
-assert.equal(reconciledStopped.persistedPlans['machine-c09::16.3.0.150'], undefined)
+assert.ok(reconciledStopped.persistedPlans['machine-c09::16.3.0.150'], 'legacy stop records no longer hide releases')
+const eosMachine = { ...machineProjects[0], status: 'EOS', statusChangedAt: '2026-07-12T09:00:00.000+08:00' }
+const reconciledEos = aggregationRules.reconcileJointMachinePlans({ ...reconcileInput, machineProjects: [eosMachine] })
+assert.ok(reconciledEos.persistedPlans['machine-c09::16.3.0.140'])
+assert.ok(reconciledEos.persistedPlans['machine-c09::16.3.0.145'], 'collection start equal to EOS date stays visible')
+assert.equal(reconciledEos.persistedPlans['machine-c09::16.3.0.150'], undefined, 'collection start after EOS date is hidden')
 const stoppedInputsBefore = structuredClone({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140, tos145, tos150], stopRecords: [] })
 assert.throws(() => aggregationRules.applyStopRelease({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140], stopRecords: [], record: { ...stopRecord, stopDate: '2026-02-30' } }), /停止发版日期格式无效/)
 assert.throws(() => aggregationRules.applyStopRelease({ persistedPlans: reconciled.persistedPlans, tosInstances: [tos140], stopRecords: [], record: { ...stopRecord, projectName: '' } }), /停止发版项目名称不能为空/)
@@ -1529,7 +1528,7 @@ assert.deepEqual(aggregationSources.tosProjects, [
   { projectId: 'tos-adapter', tosProjectKey: '16.3', projectName: 'tOS16.3' },
 ])
 assert.deepEqual(aggregationSources.machineProjects, [
-  { id: 'machine-adapter', projectName: 'X6877-D8400_H991', productType: '新品', firstSaleTosVersion: '16.3.0.110', currentTosVersion: '16.3', spm: '李白', spmUsers: ['李白'] },
+  { id: 'machine-adapter', projectName: 'X6877-D8400_H991', productType: '新品', firstSaleTosVersion: '16.3.0.110', currentTosVersion: '16.3', spm: '李白', spmUsers: ['李白'], status: '在研', statusChangedAt: undefined },
 ])
 const legacyMultiSpmProject = { ...machineAdapterProject, spm: '李白，张三; 李白；王五' }
 const legacyMultiSpmMetadata = adapter.projectMachineMrMetadata(legacyMultiSpmProject, machineMarketRows)

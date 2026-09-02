@@ -7,15 +7,12 @@ import {
   DatePicker,
   Empty,
   Input,
-  Modal,
   Select,
   Space,
   Spin,
   Table,
-  Tooltip,
   message,
 } from 'antd'
-import { HistoryOutlined, StopOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
@@ -24,12 +21,6 @@ import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrV
 import { buildMrAggregationSources } from '@/lib/mrPlanSourceAdapters'
 import { reconcileJointMachinePlans } from '@/lib/mrAggregationRules'
 import { validateJointMachineRows } from '@/lib/mrDateRules'
-import {
-  buildStopReleaseCandidates,
-  formatStopReleaseOperatedAt,
-  resolveStopReleaseButtonReason,
-  sortStopReleaseHistory,
-} from '@/lib/mrStopReleaseUiRules'
 import { createShanghaiBusinessDateTicker, getShanghaiBusinessDate } from '@/lib/shanghaiBusinessDate'
 import {
   buildJointMrColumnSchema,
@@ -47,7 +38,6 @@ import type {
   MrJointReferenceRow,
   MrMachineMetadata,
   MrPermissionResult,
-  MrStopReleaseRecord,
   MrTemplateActivity,
   MrTransferType,
   TosMrVersionInstance,
@@ -136,10 +126,6 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   const [versionFilter, setVersionFilter] = useState<string[]>([])
   const [projectFilter, setProjectFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<MrTransferType | undefined>()
-  const [stopModalOpen, setStopModalOpen] = useState(false)
-  const [historyModalOpen, setHistoryModalOpen] = useState(false)
-  const [stopProjectId, setStopProjectId] = useState<string>()
-  const [stopDate, setStopDate] = useState<string>()
 
   const { projects, marketConfigsByProjectId, tosTypeConfigsByProjectId, currentLoginUser } = useProjectStore()
   const {
@@ -152,11 +138,9 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   const templateVersions = useMrVersionPlanStore(state => state.templateVersions)
   const tosInstancesByProjectId = useMrVersionPlanStore(state => state.tosInstancesByProjectId)
   const machinePlansByKey = useMrVersionPlanStore(state => state.machinePlansByKey)
-  const stopReleaseRecords = useMrVersionPlanStore(state => state.stopReleaseRecords)
   const reconcileMachinePlans = useMrVersionPlanStore(state => state.reconcileMachinePlans)
   const updateMachineTransferType = useMrVersionPlanStore(state => state.updateMachineTransferType)
   const updateMachineDate = useMrVersionPlanStore(state => state.updateMachineDate)
-  const stopRelease = useMrVersionPlanStore(state => state.stopRelease)
 
   useEffect(() => {
     let active = true
@@ -196,7 +180,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
       machineProjects: sources.machineProjects,
       latestPublishedLevel1ByProjectId: sources.latestPublishedLevel1ByProjectId,
     })
-  }, [hydrated, reconcileMachinePlans, sources, stopReleaseRecords, today, tosInstancesByProjectId])
+  }, [hydrated, reconcileMachinePlans, sources, today, tosInstancesByProjectId])
 
   const projection = useMemo(() => reconcileJointMachinePlans({
     today,
@@ -205,8 +189,8 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     machineProjects: sources.machineProjects,
     latestPublishedLevel1ByProjectId: sources.latestPublishedLevel1ByProjectId,
     persistedPlans: machinePlansByKey,
-    stopRecords: stopReleaseRecords,
-  }), [machinePlansByKey, sources, stopReleaseRecords, today, tosInstances])
+    stopRecords: [],
+  }), [machinePlansByKey, sources, today, tosInstances])
 
   const tosProjectNames = useMemo(
     () => new Map(sources.tosProjects.map(project => [project.projectId, project.projectName])),
@@ -296,29 +280,6 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
       machineProjectId: project.id,
     }),
   ])), [currentLoginUser, globalAdminUsers, sources.machineProjects])
-  const stopCandidates = useMemo(() => buildStopReleaseCandidates({
-    rows: filteredRows,
-    instances: tosInstances,
-    stopRecords: stopReleaseRecords,
-    permissionsByProjectId: permissionByProjectId,
-    metadataByProjectId: sources.machineMetadataByProjectId,
-  }), [filteredRows, permissionByProjectId, sources.machineMetadataByProjectId, stopReleaseRecords, tosInstances])
-  const enabledStopCandidates = useMemo(
-    () => stopCandidates.filter(candidate => !candidate.disabled),
-    [stopCandidates],
-  )
-  const stopSelectionValid = !!stopProjectId
-    && stopCandidates.some(candidate => candidate.projectId === stopProjectId && !candidate.disabled)
-  const visibleMachineRowCount = filteredRows.filter(row => row.kind === 'machine').length
-  const stopButtonReason = resolveStopReleaseButtonReason(stopCandidates, visibleMachineRowCount)
-  const historyRows = useMemo(() => sortStopReleaseHistory(stopReleaseRecords), [stopReleaseRecords])
-
-  useEffect(() => {
-    if (!stopProjectId) return
-    if (stopCandidates.some(candidate => candidate.projectId === stopProjectId && !candidate.disabled)) return
-    setStopProjectId(undefined)
-  }, [stopCandidates, stopProjectId])
-
   const handleTransferType = (row: MrJointMachineRow, value: MrTransferType, permission: MrPermissionResult) => {
     const updated = updateMachineTransferType(row.key, value, currentLoginUser, permission)
     if (!updated) void messageApi.error('1+N转测类型更新失败，请检查项目权限')
@@ -331,29 +292,6 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     if (onOpenProject) onOpenProject(row.projectId, row.tosVersion)
     else void messageApi.info(`项目跳转将在下一步接入：${metadata.projectName}`)
   }
-  const handleStopRelease = () => {
-    const candidate = stopCandidates.find(item => item.projectId === stopProjectId && !item.disabled)
-    if (!candidate || !stopDate) return
-    const permission = permissionByProjectId.get(candidate.projectId)
-    if (!permission) return
-    const stopped = stopRelease({
-      id: `mr-stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      projectId: candidate.projectId,
-      projectName: candidate.projectName,
-      stopDate,
-      operator: currentLoginUser,
-      operatedAt: new Date().toISOString(),
-    }, permission)
-    if (!stopped) {
-      void messageApi.error('停止发版失败，请检查项目权限或MR版本计划数据')
-      return
-    }
-    setStopModalOpen(false)
-    setStopProjectId(undefined)
-    setStopDate(undefined)
-    void messageApi.success('停止发版成功')
-  }
-
   const fixedColumns: ColumnsType<JointRow> = [
     {
       title: 'tOS版本号', dataIndex: 'tosVersion', key: 'tosVersion', width: 132, fixed: 'left',
@@ -506,18 +444,6 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
             style={{ width: 150 }}
           />
         </Space>
-        <Space>
-          <Tooltip title={stopButtonReason}>
-            <span>
-              <Button
-                icon={<StopOutlined />}
-                disabled={!enabledStopCandidates.length}
-                onClick={() => setStopModalOpen(true)}
-              >停止发版</Button>
-            </span>
-          </Tooltip>
-          <Button icon={<HistoryOutlined />} onClick={() => setHistoryModalOpen(true)}>停止发版记录</Button>
-        </Space>
       </div>
       <Table<JointRow>
         className="pms-joint-mr-table"
@@ -535,70 +461,6 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
           'data-mr-tos-version': row.tosVersion,
         } as any)}
       />
-      <Modal
-        title="停止发版"
-        open={stopModalOpen}
-        okText="确认停止"
-        cancelText="取消"
-        okButtonProps={{ disabled: !stopSelectionValid || !stopDate }}
-        onOk={handleStopRelease}
-        onCancel={() => {
-          setStopModalOpen(false)
-          setStopProjectId(undefined)
-          setStopDate(undefined)
-        }}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" size={14} style={{ width: '100%' }}>
-          <label>
-            <span className="pms-joint-mr-field-label">停止发版项目名称</span>
-            <Select
-              aria-label="停止发版项目名称"
-              value={stopProjectId}
-              placeholder="请选择项目"
-              onChange={setStopProjectId}
-              options={stopCandidates.map(candidate => ({
-                value: candidate.projectId,
-                disabled: candidate.disabled,
-                title: candidate.reason,
-                label: `${candidate.projectName}（${candidate.projectId}）`,
-              }))}
-              style={{ width: '100%' }}
-            />
-          </label>
-          <label>
-            <span className="pms-joint-mr-field-label">停止发版日期</span>
-            <DatePicker
-              aria-label="停止发版日期"
-              value={stopDate ? dayjs(stopDate) : null}
-              format="YYYY-MM-DD"
-              onChange={date => setStopDate(date?.format('YYYY-MM-DD'))}
-              style={{ width: '100%' }}
-            />
-          </label>
-        </Space>
-      </Modal>
-      <Modal
-        title="停止发版记录"
-        open={historyModalOpen}
-        footer={null}
-        width={760}
-        onCancel={() => setHistoryModalOpen(false)}
-        destroyOnHidden
-      >
-        <Table<MrStopReleaseRecord>
-          rowKey="id"
-          dataSource={historyRows}
-          pagination={false}
-          columns={[
-            { title: '操作人', dataIndex: 'operator', key: 'operator' },
-            { title: '操作时间', dataIndex: 'operatedAt', key: 'operatedAt', render: formatStopReleaseOperatedAt },
-            { title: '操作项目', dataIndex: 'projectName', key: 'projectName' },
-            { title: '停止发版日期', dataIndex: 'stopDate', key: 'stopDate' },
-          ]}
-          locale={{ emptyText: '暂无停止发版记录' }}
-        />
-      </Modal>
     </div>
   )
 }

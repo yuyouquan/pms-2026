@@ -34,6 +34,8 @@ export interface ProjectItem {
   type: ProjectCategory;
   secondaryCategory?: string;
   status: string;
+  /** ISO timestamp recorded when the project most recently entered EOS. */
+  statusChangedAt?: string;
   progress: number;
   leader: string;
   markets: string[];

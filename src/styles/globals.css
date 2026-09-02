@@ -4970,6 +4970,12 @@ body {
   background: #fff;
 }
 
+.pms-project-info-display-item--full-row {
+  grid-column: 1 / -1;
+  align-items: stretch;
+  text-align: left;
+}
+
 .pms-project-info-display-label {
   color: #7c8798;
   font-size: 12px;
