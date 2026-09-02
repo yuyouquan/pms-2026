@@ -9,6 +9,7 @@ import {
   JIRA_PROJECT_NAME_OPTIONS,
   JIRA_PROJECT_TYPE_OPTIONS,
   JIRA_SERVER_OPTIONS,
+  JiraProjectValidationError,
   patchJiraProjectConfig,
   type JiraProjectConfig,
 } from '@/lib/jiraProject'
@@ -24,17 +25,10 @@ export const JIRA_PROJECT_EDITOR_COLUMNS = [
 
 type JiraProjectEditorFieldKey = keyof JiraProjectConfig | 'actions'
 
-export interface JiraProjectEditorError {
-  rowId?: string
-  rowIndex?: number
-  fieldKey: JiraProjectEditorFieldKey
-  message: string
-}
-
 interface JiraProjectEditorProps {
   rows: JiraProjectConfig[]
   onChange: (rows: JiraProjectConfig[]) => void
-  errors?: readonly JiraProjectEditorError[]
+  errors?: JiraProjectValidationError[]
   disabled?: boolean
   affectProjectOptions?: Array<{ label: string; value: string }>
 }
