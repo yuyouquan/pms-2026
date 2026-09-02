@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import ts from 'typescript'
 import { projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
@@ -154,23 +155,36 @@ for (const symbol of ['WHOLE_MACHINE_BASIC_INFO_FIELDS']) {
 
 if (!jiraEditorSource) fail('Missing shared component: src/components/project-info/JiraProjectEditor.tsx')
 assert.match(jiraEditorSource, /JiraProjectEditor/, 'shared JIRA editor must define JiraProjectEditor')
-assert.match(fieldInputSource, /JiraProjectEditor/, 'ProjectInfoFieldInput must use JiraProjectEditor')
-assert.match(containerSource, /JiraProjectEditor/, 'ProjectSpaceContainer must use JiraProjectEditor')
+assert.match(fieldInputSource, /<JiraProjectEditor\b/, 'ProjectInfoFieldInput must render JiraProjectEditor')
+assert.match(containerSource, /<JiraProjectEditor\b/, 'ProjectSpaceContainer must render JiraProjectEditor')
 
 const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
 const columnDefinitionStart = jiraEditorSource.indexOf('export const JIRA_PROJECT_EDITOR_COLUMNS = [')
 assert.ok(columnDefinitionStart >= 0, 'shared JIRA editor must export JIRA_PROJECT_EDITOR_COLUMNS')
-const columnDefinition = jiraEditorSource.slice(columnDefinitionStart, jiraEditorSource.indexOf('] as const', columnDefinitionStart) + 9)
 const expectedColumnKeys = ['server', 'projectKey', 'type', 'shared', 'affectProjects', 'actions']
-const columnEntries = [...columnDefinition.matchAll(/\{[\s\S]*?key:\s*'([^']+)'[\s\S]*?label:\s*'([^']+)'[\s\S]*?\}/g)]
-assert.deepEqual(columnEntries.map(entry => entry[1]), expectedColumnKeys, 'JIRA column definition must contain exactly six keys in order')
-assert.deepEqual(columnEntries.map(entry => entry[2]), jiraHeaders, 'JIRA column definition must contain exactly six labels in order')
+const editorAst = ts.createSourceFile('JiraProjectEditor.tsx', jiraEditorSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+let columnEntries = []
+const visitEditorAst = node => {
+  if (ts.isVariableDeclaration(node) && node.name.getText(editorAst) === 'JIRA_PROJECT_EDITOR_COLUMNS' && ts.isArrayLiteralExpression(node.initializer)) {
+    columnEntries = node.initializer.elements.map(element => {
+      if (!ts.isObjectLiteralExpression(element)) return null
+      const readString = propertyName => {
+        const property = element.properties.find(item => item.name?.getText(editorAst) === propertyName)
+        return property && ts.isPropertyAssignment(property) && ts.isStringLiteral(property.initializer) ? property.initializer.text : null
+      }
+      return { key: readString('key'), label: readString('label') }
+    })
+  }
+  ts.forEachChild(node, visitEditorAst)
+}
+visitEditorAst(editorAst)
+assert.deepEqual(columnEntries.map(entry => entry?.key), expectedColumnKeys, 'JIRA column definition must contain exactly six keys in order')
+assert.deepEqual(columnEntries.map(entry => entry?.label), jiraHeaders, 'JIRA column definition must contain exactly six labels in order')
 assert.match(jiraEditorSource, /JIRA_PROJECT_EDITOR_COLUMNS\.map\(/, 'JIRA editor must render from the authoritative column definition')
 assert.match(projectInfoSectionsSource, /pms-project-info-jira-horizontal/, 'JIRA display must use its dedicated horizontal layout class')
 
 for (const forbiddenMarker of [
   'renderJiraProjectInlineEditor',
-  'normalizeJiraProjectRows',
   'updateJiraProjectRows',
   'updateJiraProjectRow',
   'addJiraProjectRow',
@@ -179,6 +193,7 @@ for (const forbiddenMarker of [
 ]) {
   if (containerSource.includes(forbiddenMarker)) fail(`ProjectSpaceContainer.tsx should not contain duplicated JIRA row helper: ${forbiddenMarker}`)
 }
+assert.doesNotMatch(containerSource, /(?:function\s+normalizeJiraProjectRows\s*\(|(?:const|let)\s+normalizeJiraProjectRows\s*=)/, 'ProjectSpaceContainer.tsx must not declare a duplicate JIRA normalizer')
 
 for (const marker of [
   'getJiraRegionLabel',

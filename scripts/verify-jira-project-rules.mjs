@@ -26,24 +26,45 @@ const validRow = {
 
 assert.deepEqual(rules.validateJiraProjectRows([]), [], 'an empty JIRA configuration is valid')
 for (const field of ['server', 'projectKey', 'type']) {
-  const errors = rules.validateJiraProjectRows([{ ...validRow, [field]: '' }])
-  assert.ok(errors.some(error => error.rowIndex === 0 && error.fieldKey === field), `${field} is required when a row exists`)
+  const errors = rules.validateJiraProjectRows([validRow, { ...validRow, id: 'invalid-1', [field]: '' }])
+  const error = errors.find(item => item.rowIndex === 1 && item.fieldKey === field)
+  assert.ok(error, `${field} is required when a row exists`)
+  assert.equal(error.rowId, 'invalid-1', `${field} validation identifies the invalid row`)
+  assert.equal(typeof error.message, 'string', `${field} validation includes a meaningful message`)
+  assert.ok(error.message.trim().length > 0, `${field} validation message is not empty`)
 }
-assert.ok(
-  rules.validateJiraProjectRows([{ ...validRow, shared: true, affectProjects: '' }])
-    .some(error => error.rowIndex === 0 && error.fieldKey === 'affectProjects'),
-  'shared JIRA rows require Affect Projects',
-)
+{
+  const errors = rules.validateJiraProjectRows([validRow, { ...validRow, id: 'invalid-1', shared: true, affectProjects: '' }])
+  const error = errors.find(item => item.rowIndex === 1 && item.fieldKey === 'affectProjects')
+  assert.ok(error, 'shared JIRA rows require Affect Projects')
+  assert.equal(error.rowId, 'invalid-1', 'Affect Projects validation identifies the invalid row')
+  assert.equal(typeof error.message, 'string', 'Affect Projects validation includes a meaningful message')
+  assert.ok(error.message.trim().length > 0, 'Affect Projects validation message is not empty')
+}
 assert.deepEqual(rules.validateJiraProjectRows([{ ...validRow, shared: false, affectProjects: '' }]), [], 'non-shared rows do not require Affect Projects')
 
-assert.equal(rules.patchJiraProjectConfig({ ...validRow }, { shared: false }).affectProjects, '', 'turning off shared clears Affect Projects')
+assert.deepEqual(
+  rules.patchJiraProjectConfig({ ...validRow }, { shared: false }),
+  { ...validRow, shared: false, affectProjects: '' },
+  'turning off shared clears Affect Projects while preserving other fields',
+)
 
 const copied = rules.copyJiraProjectConfig(validRow)
+const copiedAgain = rules.copyJiraProjectConfig(validRow)
+assert.ok(copied.id, 'copy creates a non-empty row id')
+assert.ok(copiedAgain.id, 'a second copy creates a non-empty row id')
 assert.notEqual(copied.id, validRow.id, 'copy creates a unique row id')
+assert.notEqual(copied.id, copiedAgain.id, 'separate copies receive distinct row ids')
+assert.notEqual(copiedAgain.id, validRow.id, 'the second copy also receives a unique row id')
 assert.deepEqual(
   ['server', 'projectKey', 'type', 'shared', 'affectProjects'].map(field => copied[field]),
   ['server', 'projectKey', 'type', 'shared', 'affectProjects'].map(field => validRow[field]),
   'copy preserves all five business fields',
+)
+assert.deepEqual(
+  ['server', 'projectKey', 'type', 'shared', 'affectProjects'].map(field => copiedAgain[field]),
+  ['server', 'projectKey', 'type', 'shared', 'affectProjects'].map(field => validRow[field]),
+  'a second copy preserves all five business fields',
 )
 
 const legacy = { id: 'legacy', server: ' jira.transsion.com ', projectKey: ' KN4-tOS16 ', type: ' sw ' }
