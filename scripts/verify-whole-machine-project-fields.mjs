@@ -200,6 +200,8 @@ const modalClose = projectInfoModalSource.slice(modalCloseStart, modalCloseEnd)
 assert.notEqual(modalCloseStart, -1, 'ProjectInfoModal close handler must exist')
 assert.match(projectInfoModalSource, /const closeProjectInfoModal = \(\) => \{\s*setJiraProjectErrors\(\[\]\)\s*onCancel\(\)/, 'accepted modal cancellation must clear JIRA row errors before closing')
 assert.match(modalClose, /onOk:\s*closeProjectInfoModal/, 'the discard confirmation must clear JIRA row errors only after the user accepts')
+assert.match(projectInfoModalSource, /const infoValues = normalizeProjectInfoModalSubmitValues\(/, 'modal must submit its normalized JIRA row array')
+assert.match(projectInfoModalSource, /const editHydrationKey = getProjectInfoModalEditHydrationKey\(/, 'modal hydration must be keyed by open edit project identity')
 
 const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
 const expectedColumnKeys = ['server', 'projectKey', 'type', 'shared', 'affectProjects', 'actions']

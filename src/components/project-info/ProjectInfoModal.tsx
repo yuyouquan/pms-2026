@@ -63,6 +63,7 @@ import { useEnumStore } from '@/stores/enums'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
 import { useEnumHydration } from '@/hooks/useEnumOptions'
 import {
+  normalizeJiraProjectRows,
   validateJiraProjectRows,
   type JiraProjectConfig,
   type JiraProjectValidationError,
@@ -148,6 +149,28 @@ const GROUP_COLORS: Record<ProjectInfoGroupKey, string> = {
   team: '#14b8a6',
 }
 
+export const normalizeProjectInfoModalSubmitValues = (values: ProjectInfoValues): ProjectInfoValues => {
+  if (!Object.prototype.hasOwnProperty.call(values, 'jiraProjects')) return values
+  return {
+    ...values,
+    jiraProjects: normalizeJiraProjectRows(values.jiraProjects),
+  }
+}
+
+export const getProjectInfoModalEditHydrationKey = ({
+  open,
+  mode,
+  projectId,
+}: {
+  open: boolean
+  mode: 'create' | 'edit'
+  projectId?: string
+}) => (open && mode === 'edit' && projectId ? `edit:${projectId}` : '')
+
+export const shouldHydrateProjectInfoModalEdit = (previousKey: string, nextKey: string) => (
+  Boolean(nextKey) && previousKey !== nextKey
+)
+
 export default function ProjectInfoModal({
   mode,
   open,
@@ -184,9 +207,13 @@ export default function ProjectInfoModal({
   const draftReadStatusRef = useRef<DraftReadStatus>('idle')
   const createDraftSessionGenerationRef = useRef(0)
   const currentCreateDraftSessionRef = useRef<ProjectCreationDraftSession | null>(null)
+  const editHydrationKeyRef = useRef('')
   const createDraftContextRef = useRef({ open, mode, ownerId: draftOwnerId || '' })
   createDraftContextRef.current = { open, mode, ownerId: draftOwnerId || '' }
   const watchedValues = (Form.useWatch([], { form, preserve: true }) || {}) as ProjectInfoFormState
+  const editHydrationKey = getProjectInfoModalEditHydrationKey({ open, mode, projectId: project?.id })
+  const editHydrationSourceRef = useRef({ project, existingProjects, responsiblePersons })
+  editHydrationSourceRef.current = { project, existingProjects, responsiblePersons }
   const projectType = String(watchedValues.type || project?.type || '')
   const watchedBid = String(watchedValues.bid || '')
   const selectedCandidate = mode === 'create'
@@ -363,7 +390,18 @@ export default function ProjectInfoModal({
   }, [activeGroups])
 
   useEffect(() => {
-    if (!open || mode !== 'edit' || !project) return
+    if (!editHydrationKey) {
+      editHydrationKeyRef.current = ''
+      return
+    }
+    if (!shouldHydrateProjectInfoModalEdit(editHydrationKeyRef.current, editHydrationKey)) return
+    const {
+      project: editingProject,
+      existingProjects: hydrationExistingProjects,
+      responsiblePersons: hydrationResponsiblePersons,
+    } = editHydrationSourceRef.current
+    if (!editingProject) return
+    editHydrationKeyRef.current = editHydrationKey
     lastAppliedSourceRef.current = ''
     setAggregateWarnings([])
     setMachineFamilyError('')
@@ -372,44 +410,44 @@ export default function ProjectInfoModal({
     // unmentioned fields before applying the next project's values.
     form.resetFields()
     const classification = resolveProjectClassification(
-      project.type,
-      typeof project.secondaryCategory === 'string' ? project.secondaryCategory : undefined,
+      editingProject.type,
+      typeof editingProject.secondaryCategory === 'string' ? editingProject.secondaryCategory : undefined,
     )
     const normalizedProjectType = classification.projectCategory
     const projectFields = getProjectInfoFields(normalizedProjectType)
-    const storedInfoValues = buildProjectInfoValues(project, projectFields.map(field => field.key))
-    let infoValues = isMachineProjectType(project.type)
+    const storedInfoValues = buildProjectInfoValues(editingProject, projectFields.map(field => field.key))
+    let infoValues = isMachineProjectType(editingProject.type)
       ? {
           ...storedInfoValues,
           firstSaleTosVersion: normalizeTosSnapshot(storedInfoValues.firstSaleTosVersion),
           currentTosVersion: normalizeTosSnapshot(storedInfoValues.currentTosVersion),
         }
       : storedInfoValues
-    if (project.type === PROJECT_TYPE_TOS_VERSION) {
+    if (editingProject.type === PROJECT_TYPE_TOS_VERSION) {
       const selectedIds = Array.isArray(storedInfoValues.firstLaunchProjects)
         ? storedInfoValues.firstLaunchProjects.filter((item): item is string => typeof item === 'string')
         : []
-      const aggregateResult = deriveTosProjectAggregates(selectedIds, existingProjects, project.name)
+      const aggregateResult = deriveTosProjectAggregates(selectedIds, hydrationExistingProjects, editingProject.name)
       infoValues = { ...storedInfoValues, ...aggregateResult.values }
       setAggregateWarnings(aggregateResult.missingSources)
     }
     const initialValues: ProjectInfoFormState = {
       ...infoValues,
-      projectName: project.name,
+      projectName: editingProject.name,
       type: normalizedProjectType,
       secondaryCategory: normalizedProjectType === PROJECT_CATEGORY_MACHINE
         ? classification.secondaryCategory || ''
         : normalizedProjectType === PROJECT_CATEGORY_TECH
-          ? String(project.fieldValues?.ipmProjectType || project.ipmProjectType || project.secondaryCategory || '')
+          ? String(editingProject.fieldValues?.ipmProjectType || editingProject.ipmProjectType || editingProject.secondaryCategory || '')
           : '',
-      responsiblePersons,
-      healthStatus: typeof project.healthStatus === 'string' ? project.healthStatus : '',
-      status: typeof project.status === 'string' ? project.status : '',
-      currentNode: typeof project.currentNode === 'string' ? project.currentNode : '',
-      cancelPauseDate: typeof project.cancelPauseDate === 'string' ? project.cancelPauseDate : '',
-      marketName: typeof project.marketName === 'string' ? project.marketName : '',
-      brand: typeof project.brand === 'string' ? project.brand : '',
-      productLine: typeof project.productLine === 'string' ? project.productLine : '',
+      responsiblePersons: hydrationResponsiblePersons,
+      healthStatus: typeof editingProject.healthStatus === 'string' ? editingProject.healthStatus : '',
+      status: typeof editingProject.status === 'string' ? editingProject.status : '',
+      currentNode: typeof editingProject.currentNode === 'string' ? editingProject.currentNode : '',
+      cancelPauseDate: typeof editingProject.cancelPauseDate === 'string' ? editingProject.cancelPauseDate : '',
+      marketName: typeof editingProject.marketName === 'string' ? editingProject.marketName : '',
+      brand: typeof editingProject.brand === 'string' ? editingProject.brand : '',
+      productLine: typeof editingProject.productLine === 'string' ? editingProject.productLine : '',
     }
     form.setFieldsValue(initialValues)
     const nextActiveGroups = projectFields.length
@@ -417,7 +455,7 @@ export default function ProjectInfoModal({
       : []
     activeGroupsRef.current = nextActiveGroups
     setActiveGroups(nextActiveGroups)
-  }, [existingProjects, form, mode, open, project, responsiblePersons])
+  }, [editHydrationKey, form])
 
   const focusJiraProjects = useCallback(() => {
     setActiveGroups(previous => {
@@ -917,9 +955,10 @@ export default function ProjectInfoModal({
       messageApi.error(normalizedProjectType === PROJECT_CATEGORY_MACHINE ? '项目分类和项目二级分类均为必填项' : '项目分类为必填项')
       return
     }
-    const infoValues = normalizedProjectType === PROJECT_CATEGORY_TECH
+    const rawInfoValues = normalizedProjectType === PROJECT_CATEGORY_TECH
       ? normalizeTechnicalProjectValues(values as Record<string, unknown>) as ProjectInfoValues
       : getProjectInfoModalSubmitValues(normalizedProjectType, values)
+    const infoValues = normalizeProjectInfoModalSubmitValues(rawInfoValues)
     const canonicalJiraProjectErrors = validateJiraProjectRows(infoValues.jiraProjects)
     setJiraProjectErrors(canonicalJiraProjectErrors)
     if (normalizedProjectType === PROJECT_CATEGORY_TECH) {
