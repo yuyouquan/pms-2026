@@ -7208,6 +7208,41 @@ body,
   margin-bottom: 14px;
 }
 
+.pms-joint-mr-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pms-joint-mr-batch-actions {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.pms-joint-mr-project-name-cell {
+  position: relative;
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+}
+
+.pms-joint-mr-lock-icon {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  z-index: 1;
+  color: #6657c8;
+  font-size: 12px;
+}
+
+.pms-joint-mr-confirm-list {
+  max-height: 280px;
+  margin: 12px 0 0;
+  padding-left: 22px;
+  overflow: auto;
+}
+
 .pms-joint-mr-loading {
   display: flex;
   min-height: 220px;

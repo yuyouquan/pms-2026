@@ -18,6 +18,9 @@ import type {
   MrActivityDateMap,
   MrActivityUpdater,
   MrMarketOverride,
+  MrBatchLockResult,
+  MrMachineRowIdentity,
+  MrMachineRowLock,
   MrPermissionResult,
   MrPlanViewMode,
   MrStopReleaseRecord,
@@ -32,7 +35,7 @@ import type {
 } from '@/types/mrVersionPlan'
 
 export const MR_VERSION_PLAN_STORAGE_KEY = 'pms-mr-version-plan-store'
-export const MR_VERSION_PLAN_STORE_VERSION = 3
+export const MR_VERSION_PLAN_STORE_VERSION = 4
 const LEGACY_LEVEL3_STORAGE_KEY = 'pms-level3-plan-store'
 const TRANSFER_TYPES = new Set<MrTransferType>(['N/A', '1', '2', '3', '4', '5', '6', '7', '8'])
 const TEMPLATE_ACTIONS = new Set<MrTemplateChangeLog['action']>([
@@ -48,6 +51,7 @@ export interface MrVersionPlanState {
   marketOverridesByKey: Record<string, MrMarketOverride>
   stopReleaseRecords: MrStopReleaseRecord[]
   viewModeByScope: Record<string, MrPlanViewMode>
+  machineRowLocks: Record<string, MrMachineRowLock>
 }
 
 export interface MrVersionPlanActions {
@@ -60,6 +64,8 @@ export interface MrVersionPlanActions {
   reconcileMachinePlans: (input: Omit<ReconcileJointInput, 'tosInstances' | 'persistedPlans' | 'stopRecords'>) => ReconcileJointResult
   updateMachineTransferType: (key: string, value: MrTransferType, actor: string, permission: MrPermissionResult) => boolean
   updateMachineDate: (key: string, activityId: string, value: string, actor: string, permission: MrPermissionResult) => boolean
+  lockMachineRows: (rows: readonly MrMachineRowIdentity[], actor: string, permission: MrPermissionResult) => MrBatchLockResult
+  unlockMachineRows: (rows: readonly MrMachineRowIdentity[], actor: string, permission: MrPermissionResult) => MrBatchLockResult
   stopRelease: (input: StoreStopReleaseInput, permission: MrPermissionResult) => boolean
   updateMarketDate: (input: {
     projectId: string
@@ -356,6 +362,34 @@ function sanitizeViewModes(value: unknown): Record<string, MrPlanViewMode> {
   return result
 }
 
+export function makeMrMachineRowLockKey(row: Pick<MrMachineRowIdentity, 'projectId' | 'tosProjectId' | 'tosVersion'>): string {
+  const projectId = text(row.projectId)
+  const tosProjectId = text(row.tosProjectId)
+  const tosVersion = canonicalizeTosMrVersion(text(row.tosVersion))
+  return projectId && tosProjectId && tosVersion ? `${projectId}::${tosProjectId}::${tosVersion}` : ''
+}
+
+function sanitizeMachineRowLocks(
+  value: unknown,
+  plans: Readonly<Record<string, JointMachinePlan>>,
+): Record<string, MrMachineRowLock> {
+  if (!isRecord(value)) return {}
+  const result: Record<string, MrMachineRowLock> = {}
+  Object.values(value).forEach(candidate => {
+    if (!isRecord(candidate)) return
+    const projectId = text(candidate.projectId)
+    const tosProjectId = text(candidate.tosProjectId)
+    const tosVersion = canonicalizeTosMrVersion(text(candidate.tosVersion))
+    const lockedBy = text(candidate.lockedBy)
+    const lockedAt = text(candidate.lockedAt)
+    const key = makeMrMachineRowLockKey({ projectId, tosProjectId, tosVersion: tosVersion ?? '' })
+    const plan = plans[`${projectId}::${tosVersion}`]
+    if (!key || !lockedBy || !lockedAt || !plan || plan.tosProjectId !== tosProjectId || result[key]) return
+    result[key] = { key, projectId, tosProjectId, tosVersion: tosVersion!, lockedBy, lockedAt }
+  })
+  return result
+}
+
 function initialMrVersionPlanState(): MrVersionPlanState {
   return createInitialMrVersionPlanState()
 }
@@ -383,6 +417,7 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
     marketOverridesByKey: sanitizeMarketOverrides(persistedState.marketOverridesByKey, machinePlansByKey, tosChildIds),
     stopReleaseRecords: sanitizeStopRecords(persistedState.stopReleaseRecords),
     viewModeByScope: sanitizeViewModes(persistedState.viewModeByScope),
+    machineRowLocks: sanitizeMachineRowLocks(persistedState.machineRowLocks, machinePlansByKey),
   }
   if (_fromVersion !== 1 && _fromVersion !== 2) return migrated
 
@@ -443,6 +478,7 @@ export function partializeMrVersionPlanState(state: MrVersionPlanStore): MrVersi
     marketOverridesByKey: state.marketOverridesByKey,
     stopReleaseRecords: state.stopReleaseRecords,
     viewModeByScope: state.viewModeByScope,
+    machineRowLocks: state.machineRowLocks,
   }, MR_VERSION_PLAN_STORE_VERSION)
 }
 
@@ -451,6 +487,18 @@ function canAccessProject(permission: MrPermissionResult, capability: boolean, p
   if (permission.canEditTemplate) return true
   const ids = scope === 'tos' ? permission.tosProjectIds : permission.machineProjectIds
   return Array.isArray(ids) && ids.map(text).includes(projectId)
+}
+
+function canManageLock(permission: MrPermissionResult, tosProjectId: string): boolean {
+  return permission.canEditTemplate === true
+    || (permission.canManageMachineLocks === true && permission.tosProjectIds?.map(text).includes(tosProjectId) === true)
+}
+
+function canEditMachinePlan(state: MrVersionPlanState, plan: JointMachinePlan, permission: MrPermissionResult): boolean {
+  const lockKey = makeMrMachineRowLockKey(plan)
+  if (lockKey && state.machineRowLocks[lockKey]) return canManageLock(permission, plan.tosProjectId)
+  return canAccessProject(permission, permission.canEditMachine, plan.projectId, 'machine')
+    || canManageLock(permission, plan.tosProjectId)
 }
 
 function sameJson(left: unknown, right: unknown): boolean {
@@ -650,8 +698,9 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       const marketOverridesByKey = Object.fromEntries(Object.entries(state.marketOverridesByKey)
         .filter(([, override]) => retainedPlanKeys.has(`${override.projectId}::${override.tosVersion}`))
         .map(([key, override]) => [key, { ...override, dates: { ...override.dates } }]))
-      if (!sameJson(state.machinePlansByKey, result.persistedPlans) || !sameJson(state.marketOverridesByKey, marketOverridesByKey)) {
-        set({ machinePlansByKey, marketOverridesByKey })
+      const machineRowLocks = sanitizeMachineRowLocks(state.machineRowLocks, machinePlansByKey)
+      if (!sameJson(state.machinePlansByKey, result.persistedPlans) || !sameJson(state.marketOverridesByKey, marketOverridesByKey) || !sameJson(state.machineRowLocks, machineRowLocks)) {
+        set({ machinePlansByKey, marketOverridesByKey, machineRowLocks })
       }
       return result
     },
@@ -659,7 +708,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       const key = text(keyInput)
       const plan = get().machinePlansByKey[key]
       const normalizedActor = text(actor)
-      if (!plan || !TRANSFER_TYPES.has(value) || !normalizedActor || !canAccessProject(permission, permission.canEditMachine, plan.projectId, 'machine')) return false
+      if (!plan || !TRANSFER_TYPES.has(value) || !normalizedActor || !canEditMachinePlan(get(), plan, permission)) return false
       const now = clock()
       set(state => ({ machinePlansByKey: {
         ...state.machinePlansByKey,
@@ -672,7 +721,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       const activityId = text(activityIdInput)
       const plan = get().machinePlansByKey[key]
       const normalizedActor = text(actor)
-      if (!plan || plan.transferType === 'N/A' || !activityId || !normalizedActor || !canAccessProject(permission, permission.canEditMachine, plan.projectId, 'machine')) return false
+      if (!plan || plan.transferType === 'N/A' || !activityId || !normalizedActor || !canEditMachinePlan(get(), plan, permission)) return false
       if (!hasChildActivity(get(), plan, activityId)) return false
       if (value !== '' && canonicalDate(value) !== value) return false
       const now = clock()
@@ -681,6 +730,55 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
         [key]: { ...plan, dates: { ...plan.dates, [activityId]: value }, updatedBy: normalizedActor, updatedAt: now },
       } }))
       return true
+    },
+    lockMachineRows: (rows, actor, permission) => {
+      const normalizedActor = text(actor)
+      if (!normalizedActor) return { processed: 0, skipped: rows.length }
+      const now = clock()
+      let processed = 0
+      let skipped = 0
+      set(state => {
+        const machineRowLocks = { ...state.machineRowLocks }
+        rows.forEach(row => {
+          const projectId = text(row.projectId)
+          const tosProjectId = text(row.tosProjectId)
+          const tosVersion = canonicalizeTosMrVersion(text(row.tosVersion))
+          const plan = state.machinePlansByKey[`${projectId}::${tosVersion}`]
+          const key = makeMrMachineRowLockKey({ projectId, tosProjectId, tosVersion: tosVersion ?? '' })
+          if (!key || !plan || plan.tosProjectId !== tosProjectId || !canManageLock(permission, tosProjectId)) {
+            skipped += 1
+            return
+          }
+          processed += 1
+          if (!machineRowLocks[key]) machineRowLocks[key] = { key, projectId, tosProjectId, tosVersion: tosVersion!, lockedBy: normalizedActor, lockedAt: now }
+        })
+        return { machineRowLocks }
+      })
+      return { processed, skipped }
+    },
+    unlockMachineRows: (rows, actor, permission) => {
+      const normalizedActor = text(actor)
+      if (!normalizedActor) return { processed: 0, skipped: rows.length }
+      let processed = 0
+      let skipped = 0
+      set(state => {
+        const machineRowLocks = { ...state.machineRowLocks }
+        rows.forEach(row => {
+          const projectId = text(row.projectId)
+          const tosProjectId = text(row.tosProjectId)
+          const tosVersion = canonicalizeTosMrVersion(text(row.tosVersion))
+          const plan = state.machinePlansByKey[`${projectId}::${tosVersion}`]
+          const key = makeMrMachineRowLockKey({ projectId, tosProjectId, tosVersion: tosVersion ?? '' })
+          if (!key || !plan || plan.tosProjectId !== tosProjectId || !canManageLock(permission, tosProjectId)) {
+            skipped += 1
+            return
+          }
+          processed += 1
+          delete machineRowLocks[key]
+        })
+        return { machineRowLocks }
+      })
+      return { processed, skipped }
     },
     stopRelease: (input, permission) => {
       const projectId = text(input.projectId)

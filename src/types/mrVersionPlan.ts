@@ -127,6 +127,23 @@ export interface JointMachinePlan {
   updatedAt: string
 }
 
+export interface MrMachineRowIdentity {
+  key: string
+  projectId: string
+  tosProjectId: string
+  tosVersion: string
+}
+
+export interface MrMachineRowLock extends MrMachineRowIdentity {
+  lockedBy: string
+  lockedAt: string
+}
+
+export interface MrBatchLockResult {
+  processed: number
+  skipped: number
+}
+
 export interface MrStopReleaseRecord {
   id: string
   projectId: string
@@ -213,7 +230,7 @@ export interface MrMachineMetadata {
   spm: string
   spmUsers: string[]
   isMada: '是' | '否'
-  socPlatform: string
+  chipCode: string
   packageMode: string
 }
 
@@ -304,6 +321,7 @@ export interface MrPermissionInput {
   machineSpmUsers?: string[]
   tosProjectId?: string
   machineProjectId?: string
+  locked?: boolean
 }
 
 export interface MrPermissionResult {
@@ -313,6 +331,7 @@ export interface MrPermissionResult {
   canEditMachine: boolean
   canStopRelease: boolean
   canEditMarket: boolean
+  canManageMachineLocks?: boolean
   /** Explicit ownership scope for non-admin tOS managers. */
   tosProjectIds?: string[]
   /** Explicit ownership scope for non-admin machine SPMs. */

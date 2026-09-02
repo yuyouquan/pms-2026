@@ -1,6 +1,7 @@
 import type {
   JointMachinePlan,
   MrMarketOverride,
+  MrMachineRowLock,
   MrPlanViewMode,
   MrStopReleaseRecord,
   MrTemplateActivity,
@@ -208,6 +209,7 @@ export interface InitialMrVersionPlanStateSeed {
   marketOverridesByKey: Record<string, MrMarketOverride>
   stopReleaseRecords: MrStopReleaseRecord[]
   viewModeByScope: Record<string, MrPlanViewMode>
+  machineRowLocks: Record<string, MrMachineRowLock>
 }
 
 /** Fresh, deterministic acceptance state; callers may mutate it without sharing references. */
@@ -315,6 +317,7 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
     },
     stopReleaseRecords: stoppedState.stopRecords,
     viewModeByScope: {},
+    machineRowLocks: {},
   }
 }
 

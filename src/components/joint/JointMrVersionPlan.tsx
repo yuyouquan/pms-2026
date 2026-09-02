@@ -7,17 +7,21 @@ import {
   DatePicker,
   Empty,
   Input,
+  Modal,
   Select,
   Space,
   Spin,
   Table,
+  Tooltip,
   message,
 } from 'antd'
+import { LockOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
-import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
+import { makeMrMachineRowLockKey, rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
+import { ensureEnumHydrated, useEnumStore } from '@/stores/enums'
 import { buildMrAggregationSources } from '@/lib/mrPlanSourceAdapters'
 import { reconcileJointMachinePlans } from '@/lib/mrAggregationRules'
 import { validateJointMachineRows } from '@/lib/mrDateRules'
@@ -51,7 +55,7 @@ let jointMrHydrated = false
 function hydrateJointMrStoreOnce(): Promise<void> {
   if (jointMrHydrated) return Promise.resolve()
   if (!jointMrHydrationPromise) {
-    jointMrHydrationPromise = rehydrateMrVersionPlanStore().then(() => {
+    jointMrHydrationPromise = Promise.all([rehydrateMrVersionPlanStore(), ensureEnumHydrated()]).then(() => {
       jointMrHydrated = true
     })
   }
@@ -103,7 +107,7 @@ function findActivity(
 }
 
 function fallbackMetadata(projectName = '/'): MrMachineMetadata {
-  return { projectName, marketName: '/', productLine: '/', spm: '/', spmUsers: [], isMada: '否', socPlatform: '/', packageMode: '/' }
+  return { projectName, marketName: '/', productLine: '/', spm: '/', spmUsers: [], isMada: '否', chipCode: '/', packageMode: '/' }
 }
 
 function display(value: string | undefined): string {
@@ -122,10 +126,12 @@ function buildJointCellErrors(errors: readonly MrCellError[]): Record<string, Re
 
 export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlanProps) {
   const [messageApi, messageContextHolder] = message.useMessage()
+  const [modalApi, modalContextHolder] = Modal.useModal()
   const [hydrated, setHydrated] = useState(jointMrHydrated)
   const [versionFilter, setVersionFilter] = useState<string[]>([])
   const [projectFilter, setProjectFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<MrTransferType | undefined>()
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
 
   const { projects, marketConfigsByProjectId, tosTypeConfigsByProjectId, currentLoginUser } = useProjectStore()
   const {
@@ -135,12 +141,18 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     publishedSnapshots,
   } = usePlanStore()
   const globalRoles = usePermissionStore(state => state.globalRoles)
+  const enumRowsByType = useEnumStore(state => state.rowsByType)
+  const enumHasHydrated = useEnumStore(state => state.hasHydrated)
+  const enumHydrationError = useEnumStore(state => state.hydrationError)
   const templateVersions = useMrVersionPlanStore(state => state.templateVersions)
   const tosInstancesByProjectId = useMrVersionPlanStore(state => state.tosInstancesByProjectId)
   const machinePlansByKey = useMrVersionPlanStore(state => state.machinePlansByKey)
+  const machineRowLocks = useMrVersionPlanStore(state => state.machineRowLocks)
   const reconcileMachinePlans = useMrVersionPlanStore(state => state.reconcileMachinePlans)
   const updateMachineTransferType = useMrVersionPlanStore(state => state.updateMachineTransferType)
   const updateMachineDate = useMrVersionPlanStore(state => state.updateMachineDate)
+  const lockMachineRows = useMrVersionPlanStore(state => state.lockMachineRows)
+  const unlockMachineRows = useMrVersionPlanStore(state => state.unlockMachineRows)
 
   useEffect(() => {
     let active = true
@@ -157,8 +169,12 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     tosTypeVersionsByKey,
     publishedSnapshots,
     fallbackVersions,
+    packageModeRows: enumHasHydrated && !enumHydrationError ? enumRowsByType['package-mode-mapping'] : [],
   }), [
     fallbackVersions,
+    enumHasHydrated,
+    enumHydrationError,
+    enumRowsByType,
     marketConfigsByProjectId,
     marketVersionsByKey,
     projects,
@@ -268,18 +284,46 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     () => globalRoles.find(role => role.name === '管理组')?.members ?? [],
     [globalRoles],
   )
-  const permissionByProjectId = useMemo(() => new Map(sources.machineProjects.map(project => [
-    project.id,
+  const permissionByRowKey = useMemo(() => new Map(projection.rows.flatMap(row => {
+    if (row.kind === 'tos-reference') return []
+    const project = sources.machineProjects.find(candidate => candidate.id === row.projectId)
+    const lockKey = makeMrMachineRowLockKey(row)
+    return [[
+    row.key,
     resolveMrPermissions({
       context: 'joint-machine',
       currentUser: currentLoginUser,
       globalAdminUsers,
-      tosManagerUsers: [],
-      machineSpm: project.spm ?? '',
-      machineSpmUsers: project.spmUsers,
-      machineProjectId: project.id,
+      tosManagerUsers: sources.tosManagerUsersByProjectId[row.tosProjectId] ?? [],
+      machineSpm: project?.spm ?? '',
+      machineSpmUsers: project?.spmUsers,
+      machineProjectId: row.projectId,
+      tosProjectId: row.tosProjectId,
+      locked: Boolean(machineRowLocks[lockKey]),
     }),
-  ])), [currentLoginUser, globalAdminUsers, sources.machineProjects])
+  ] as const]
+  })), [currentLoginUser, globalAdminUsers, machineRowLocks, projection.rows, sources.machineProjects, sources.tosManagerUsersByProjectId])
+  const isGlobalAdmin = globalAdminUsers.some(user => user.trim() === currentLoginUser.trim())
+  const managedTosProjectIds = useMemo(() => sources.tosProjects
+    .filter(project => (sources.tosManagerUsersByProjectId[project.projectId] ?? []).some(user => user.trim() === currentLoginUser.trim()))
+    .map(project => project.projectId), [currentLoginUser, sources.tosManagerUsersByProjectId, sources.tosProjects])
+  const canBatchManage = isGlobalAdmin || managedTosProjectIds.length > 0
+  const batchPermission = useMemo<MrPermissionResult>(() => ({
+    canView: true,
+    canEditTemplate: isGlobalAdmin,
+    canEditTos: false,
+    canEditMachine: isGlobalAdmin,
+    canStopRelease: false,
+    canEditMarket: false,
+    canManageMachineLocks: canBatchManage,
+    tosProjectIds: managedTosProjectIds,
+  }), [canBatchManage, isGlobalAdmin, managedTosProjectIds])
+  useEffect(() => {
+    const selectableKeys = new Set(filteredRows.flatMap(row => (
+      row.kind === 'machine' && (isGlobalAdmin || managedTosProjectIds.includes(row.tosProjectId)) ? [row.key] : []
+    )))
+    setSelectedRowKeys(previous => previous.filter(key => selectableKeys.has(key)))
+  }, [filteredRows, isGlobalAdmin, managedTosProjectIds])
   const handleTransferType = (row: MrJointMachineRow, value: MrTransferType, permission: MrPermissionResult) => {
     const updated = updateMachineTransferType(row.key, value, currentLoginUser, permission)
     if (!updated) void messageApi.error('1+N转测类型更新失败，请检查项目权限')
@@ -292,6 +336,33 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     if (onOpenProject) onOpenProject(row.projectId, row.tosVersion)
     else void messageApi.info(`项目跳转将在下一步接入：${metadata.projectName}`)
   }
+  const selectedMachineRows = useMemo(() => {
+    const selected = new Set(selectedRowKeys)
+    return projection.rows.filter((row): row is MrJointMachineRow => row.kind === 'machine' && selected.has(row.key))
+  }, [projection.rows, selectedRowKeys])
+  const confirmBatch = (action: 'lock' | 'unlock') => {
+    const rows = selectedMachineRows
+    const title = action === 'lock' ? '锁定所选项目' : '解锁所选项目'
+    modalApi.confirm({
+      title,
+      content: <ul className="pms-joint-mr-confirm-list">{rows.map(row => (
+        <li key={row.key}>{row.tosVersion} + {sources.machineMetadataByProjectId[row.projectId]?.projectName ?? row.projectId}</li>
+      ))}</ul>,
+      okText: action === 'lock' ? '锁定' : '解锁',
+      cancelText: '取消',
+      onOk: () => {
+        const result = action === 'lock'
+          ? lockMachineRows(rows, currentLoginUser, batchPermission)
+          : unlockMachineRows(rows, currentLoginUser, batchPermission)
+        if (result.processed > 0) {
+          void messageApi.success(`${action === 'lock' ? '锁定' : '解锁'}成功 ${result.processed} 个项目${result.skipped ? `，${result.skipped} 个项目已过期或无权限` : ''}`)
+          setSelectedRowKeys([])
+        } else {
+          void messageApi.error(`0 个项目处理成功，${result.skipped} 个项目已过期或无权限`)
+        }
+      },
+    })
+  }
   const fixedColumns: ColumnsType<JointRow> = [
     {
       title: 'tOS版本号', dataIndex: 'tosVersion', key: 'tosVersion', width: 132, fixed: 'left',
@@ -303,8 +374,10 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
           return <span className="pms-joint-mr-fixed-cell-content">{display(tosProjectNames.get(row.projectId))}</span>
         }
         const metadata = sources.machineMetadataByProjectId[row.projectId] ?? fallbackMetadata(row.projectId)
+        const locked = Boolean(machineRowLocks[makeMrMachineRowLockKey(row)])
         return (
-          <span className="pms-joint-mr-fixed-cell-content">
+          <span className="pms-joint-mr-fixed-cell-content pms-joint-mr-project-name-cell">
+            {locked ? <Tooltip title="已锁定"><LockOutlined className="pms-joint-mr-lock-icon" aria-label="已锁定" /></Tooltip> : null}
             <Button
               type="link"
               className="pms-joint-mr-project-link"
@@ -317,21 +390,21 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         )
       },
     },
-    ...(['市场名', '产品线', 'SPM', '是否MADA', 'SOC平台', '组包方式'] as const).map((title, index) => ({
+    ...(['市场名', '产品线', 'SPM', '是否MADA', '芯片编码', '组包方式'] as const).map((title, index) => ({
       title,
       key: title,
       width: index === 2 ? 120 : 100,
       render: (_: unknown, row: JointRow) => {
         if (row.kind === 'tos-reference') return '/'
         const metadata = sources.machineMetadataByProjectId[row.projectId] ?? fallbackMetadata()
-        const values = [metadata.marketName, metadata.productLine, metadata.spm, metadata.isMada, metadata.socPlatform, metadata.packageMode]
+        const values = [metadata.marketName, metadata.productLine, metadata.spm, metadata.isMada, metadata.chipCode, metadata.packageMode]
         return display(values[index])
       },
     })),
     {
       title: '1+N转测类型', key: 'transferType', width: 130, render: (_, row) => {
         if (row.kind === 'tos-reference') return '1'
-        const permission = permissionByProjectId.get(row.projectId)
+        const permission = permissionByRowKey.get(row.key)
         return (
           <Select
             aria-label={`${row.projectId}-${row.tosVersion}-1+N版本类型`}
@@ -381,7 +454,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         if (row.plan.transferType === 'N/A') {
           return <MrDateCellContent content={<span aria-label={ariaLabel}>/</span>} errors={errors} ariaLabel={ariaLabel} />
         }
-        const permission = permissionByProjectId.get(row.projectId)
+        const permission = permissionByRowKey.get(row.key)
         const value = row.plan.dates[activity.id] || ''
         const content = !permission?.canEditMachine
           ? <span aria-label={ariaLabel}>{display(value)}</span>
@@ -413,6 +486,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   return (
     <div className="pms-joint-mr-plan">
       {messageContextHolder}
+      {modalContextHolder}
       <div className="pms-joint-mr-toolbar">
         <Space wrap>
           <Select
@@ -444,12 +518,30 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
             style={{ width: 150 }}
           />
         </Space>
+        {canBatchManage && selectedRowKeys.length > 0 ? (
+          <Space className="pms-joint-mr-batch-actions">
+            <span>已勾选 {selectedRowKeys.length} 个项目</span>
+            <Button onClick={() => confirmBatch('lock')}>锁定</Button>
+            <Button onClick={() => confirmBatch('unlock')}>解锁</Button>
+          </Space>
+        ) : null}
       </div>
       <Table<JointRow>
         className="pms-joint-mr-table"
         rowKey="key"
         columns={columns}
         dataSource={filteredRows}
+        rowSelection={canBatchManage ? {
+          selectedRowKeys,
+          fixed: 'left',
+          onChange: keys => setSelectedRowKeys(keys.map(String)),
+          getCheckboxProps: row => ({
+            disabled: row.kind === 'tos-reference' || (!isGlobalAdmin && !managedTosProjectIds.includes(row.tosProjectId)),
+            'aria-label': row.kind === 'tos-reference'
+              ? `tOS基准行-${row.tosVersion}-不可选`
+              : `选择-${row.tosVersion}-${sources.machineMetadataByProjectId[row.projectId]?.projectName ?? row.projectId}`,
+          }),
+        } : undefined}
         pagination={false}
         scroll={{ x: 'max-content', y: 620 }}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无MR版本计划" /> }}

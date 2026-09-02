@@ -32,6 +32,13 @@ const headerSource = readSource(root, 'src/containers/AppShell.tsx')
 const pageSource = readSource(root, 'src/app/page.tsx')
 const jointContainerSource = readSource(root, 'src/containers/JointProjectSpaceContainer.tsx')
 const jointPlanSource = readSource(root, 'src/components/joint/JointMrVersionPlan.tsx')
+assert.doesNotMatch(jointPlanSource, /SOC平台/, '联合计划不再展示 SOC 平台')
+assert.match(jointPlanSource, /芯片编码/, '联合计划固定列展示芯片编码')
+assert.match(jointPlanSource, /LockOutlined/, '联合计划显示锁定标识')
+assert.match(jointPlanSource, /rowSelection/, '联合计划提供管理员批量选择')
+assert.match(jointPlanSource, /已勾选.*个项目/, '联合计划显示批量选择计数')
+assert.match(jointPlanSource, /锁定所选项目/, '联合计划提供锁定确认')
+assert.match(jointPlanSource, /解锁所选项目/, '联合计划提供解锁确认')
 assert.doesNotMatch(jointPlanSource, /<Space\s+direction=/, 'MR joint space must not emit Ant Design Space deprecation errors')
 assert.doesNotMatch(configSource, /<Divider\s+type=/, 'MR template configuration must not emit Ant Design Divider deprecation errors')
 assert.doesNotMatch(configSource, /<Space[^>]*\ssplit=/, 'MR template configuration must not emit Ant Design Space deprecation errors')
@@ -287,7 +294,7 @@ assert.match(jointContainerSource, /tOS&整机1\+N项目计划/)
 for (const label of ['tOS版本号', '项目名称', '1+N版本类型']) {
   assert.ok(jointPlanSource.includes(label))
 }
-const jointFixedLabels = ['tOS版本号', '项目名称', '市场名', '产品线', 'SPM', '是否MADA', 'SOC平台', '组包方式', '1+N转测类型']
+const jointFixedLabels = ['tOS版本号', '项目名称', '市场名', '产品线', 'SPM', '是否MADA', '芯片编码', '组包方式', '1+N转测类型']
 jointFixedLabels.reduce((previousIndex, label) => {
   const index = jointPlanSource.indexOf(label, previousIndex + 1)
   assert.ok(index > previousIndex, `joint fixed column order: ${label}`)
@@ -313,7 +320,7 @@ assert.match(jointPlanSource, /const MR_TRANSFER_OPTIONS[^;]*['"]N\/A['"][\s\S]*
 assert.match(jointPlanSource, /updateMachineTransferType/)
 assert.match(jointPlanSource, /updateMachineDate/)
 assert.match(jointPlanSource, /if\s*\(!updated\)/)
-assert.match(jointPlanSource, /machineProjectId:\s*project\.id/)
+assert.match(jointPlanSource, /machineProjectId:\s*row\.projectId/)
 assert.match(jointPlanSource, /compareTosVersionNumbers/)
 assert.match(jointPlanSource, /leftName\.localeCompare\(rightName/)
 assert.match(jointPlanSource, /kind === ['"]tos-reference['"][\s\S]*disabled/)
@@ -322,7 +329,7 @@ assert.match(jointPlanSource, /useMemo\([\s\S]*sourceInput/)
 assert.match(jointPlanSource, /useShanghaiBusinessDate/)
 assert.match(globalsSource, /\.pms-joint-mr-table/)
 assert.match(globalsSource, /\.pms-joint-mr-table[\s\S]*\.ant-table-cell-fix-left/)
-assert.equal([...jointPlanSource.matchAll(/fixed:\s*['"]left['"]/g)].length, 2)
+assert.equal([...jointPlanSource.matchAll(/fixed:\s*['"]left['"]/g)].length, 3)
 assert.equal([...jointPlanSource.matchAll(/fixed:\s*['"]right['"]/g)].length, 0)
 assert.match(globalsSource, /\.pms-joint-mr-table[\s\S]*background:\s*#fff/)
 assert.match(
@@ -357,8 +364,8 @@ const ownStopPermission = planRules.resolveMrPermissions({ currentUser: '张三'
 const otherStopPermission = planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '李白', machineProjectId: 'other', context: 'joint-machine' })
 const adminStopPermission = planRules.resolveMrPermissions({ currentUser: '管理员', globalAdminUsers: ['管理员'], tosManagerUsers: [], machineSpm: '', machineProjectId: 'other', context: 'joint-machine' })
 const stopUiMetadata = {
-  own: { projectName: '我的项目', marketName: '/', productLine: '/', spm: '张三', spmUsers: ['张三'], isMada: '否', socPlatform: '/', packageMode: '/' },
-  other: { projectName: '其他项目', marketName: '/', productLine: '/', spm: '李白', spmUsers: ['李白'], isMada: '否', socPlatform: '/', packageMode: '/' },
+  own: { projectName: '我的项目', marketName: '/', productLine: '/', spm: '张三', spmUsers: ['张三'], isMada: '否', chipCode: '/', packageMode: '/' },
+  other: { projectName: '其他项目', marketName: '/', productLine: '/', spm: '李白', spmUsers: ['李白'], isMada: '否', chipCode: '/', packageMode: '/' },
 }
 const ownCandidates = stopReleaseUiRules.buildStopReleaseCandidates({
   rows: stopUiRows,
@@ -1457,6 +1464,7 @@ const machineAdapterProject = {
   leader: '张三', markets: ['OP', 'RU'], androidVersion: '', chipPlatform: 'MTK', spm: '李白', updatedAt: '',
   productLine: 'NOTE', tosVersion: 'tOS16.3', planStartDate: '', planEndDate: '', developCycle: 0,
   healthStatus: 'normal', productType: '新品', firstSaleTosVersion: '16.3.0.110', cpu: 'MT6877',
+  fieldValues: { chipCode: ' D8400 ', chipModel: ' MT6877 ', androidVersion: ' Android 16 ' },
 }
 const machineMarketRows = [
   { id: 'ru', market: 'RU', isMain: false, followsMain: false, isMadaControlled: '否' },
@@ -1499,16 +1507,21 @@ assert.equal(adapter.selectLatestPublishedMachineLevel1({
   fallbackVersions: adapterFallbackVersions,
 }), null)
 
-assert.deepEqual(adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows), {
+const packageModeRows = [
+  { id: 'package-exact', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: ' 整包 ' },
+  { id: 'package-other', androidVersion: 'Android 16', chipModel: 'MT6899', packageMode: '分包' },
+]
+assert.deepEqual(adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows, packageModeRows), {
   projectName: 'X6877-D8400_H991',
   marketName: 'OP',
   productLine: 'NOTE',
   spm: '李白',
   spmUsers: ['李白'],
   isMada: '是',
-  socPlatform: 'MT6877',
-  packageMode: '/',
+  chipCode: 'D8400',
+  packageMode: '整包',
 })
+assert.equal(adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows, []).packageMode, '/', '无匹配映射时显示 /')
 assert.equal(adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows.map(row => ({ ...row, isMadaControlled: '否' }))).isMada, '否')
 assert.deepEqual(adapter.getTosManagerUsers(tosAdapterProject), ['李白', '张三'])
 assert.deepEqual(adapter.getTosManagerUsers({ ...tosAdapterProject, fieldValues: {}, versionFiveRoles: undefined, responsiblePersons: undefined, leader: '' }), [])
@@ -1521,6 +1534,7 @@ const adapterInput = {
   tosTypeVersionsByKey: tosVersionsByKey,
   publishedSnapshots: { ...tosPublishedSnapshots, ...machinePublishedSnapshots },
   fallbackVersions: adapterFallbackVersions,
+  packageModeRows,
 }
 const adapterInputBefore = structuredClone(adapterInput)
 const aggregationSources = adapter.buildMrAggregationSources(adapterInput)
@@ -1572,7 +1586,7 @@ assert.throws(() => adapter.buildMrAggregationSources({
   tosTypeConfigsByProjectId: { 'tos-duplicate-a': tosTypeRows, 'tos-duplicate-b': tosTypeRows },
 }), /tOS项目版本键重复：16\.3/)
 assert.deepEqual(Object.keys(aggregationSources.latestPublishedLevel1ByProjectId), ['machine-adapter', 'tos-adapter'])
-assert.deepEqual(aggregationSources.machineMetadataByProjectId['machine-adapter'], adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows))
+assert.deepEqual(aggregationSources.machineMetadataByProjectId['machine-adapter'], adapter.projectMachineMrMetadata(machineAdapterProject, machineMarketRows, packageModeRows))
 assert.deepEqual(aggregationSources.tosManagerUsersByProjectId, { 'tos-adapter': ['李白', '张三'] })
 assert.deepEqual(adapterInput, adapterInputBefore)
 const rebuiltAggregationSources = adapter.buildMrAggregationSources(adapterInput)
@@ -2016,7 +2030,7 @@ for (const screenshot of [
   'joint-invalid.png', 'eos-hidden.png', 'machine-vertical.png', 'machine-horizontal.png',
 ]) assert.match(mrBrowserVerifierSource, new RegExp(screenshot.replace('.', '\\.')))
 assert.match(mrBrowserVerifierSource, /PASS MR version plan browser verification/)
-assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 3)
+assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 4)
 
 const legacyEmptyMrState = mrStore.migrateMrVersionPlanState({
   templateVersions: templateMocks.createInitialMrTemplateVersions(),
@@ -2055,6 +2069,13 @@ const tosManagerPermission = planRules.resolveMrPermissions({ currentUser: '李�
 const machinePermission = planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineProjectId: 'machine-c09', context: 'joint-machine' })
 const otherMachinePermission = planRules.resolveMrPermissions({ currentUser: '王五', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '王五', machineProjectId: 'other-machine', context: 'joint-machine' })
 const marketPermission = planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', machineProjectId: 'machine-c09', context: 'machine-market' })
+const managerLockPermission = planRules.resolveMrPermissions({ currentUser: '李白', globalAdminUsers: [], tosManagerUsers: ['李白'], machineSpm: '张三', tosProjectId: 'tos-project-16.3', machineProjectId: 'machine-c09', context: 'joint-machine', locked: true })
+assert.equal(planRules.resolveMachineRowEditAccess({ locked: false, isMachineSpm: true, isTosManager: false, isGlobalAdmin: false }), true)
+assert.equal(planRules.resolveMachineRowEditAccess({ locked: true, isMachineSpm: true, isTosManager: false, isGlobalAdmin: false }), false)
+assert.equal(planRules.resolveMachineRowEditAccess({ locked: true, isMachineSpm: false, isTosManager: true, isGlobalAdmin: false }), true)
+assert.equal(planRules.resolveMachineRowEditAccess({ locked: true, isMachineSpm: false, isTosManager: false, isGlobalAdmin: true }), true)
+assert.equal(managerLockPermission.canEditMachine, true)
+assert.equal(managerLockPermission.canManageMachineLocks, true)
 
 const freshStore = (initialState, storage = createMemoryStorage()) => mrStore.createMrVersionPlanStore({
   storage,
@@ -2064,6 +2085,35 @@ const freshStore = (initialState, storage = createMemoryStorage()) => mrStore.cr
 })
 
 const lifecycleStore = freshStore()
+const lockPlanEntry = Object.entries(lifecycleStore.getState().machinePlansByKey)[0]
+const lockRow = { key: lockPlanEntry[0], projectId: lockPlanEntry[1].projectId, tosProjectId: lockPlanEntry[1].tosProjectId, tosVersion: lockPlanEntry[1].tosVersion }
+const seededManagerLockPermission = planRules.resolveMrPermissions({ currentUser: '李白', globalAdminUsers: [], tosManagerUsers: ['李白'], machineSpm: '张三', tosProjectId: lockRow.tosProjectId, machineProjectId: lockRow.projectId, context: 'joint-machine', locked: true })
+const seededMachinePermission = planRules.resolveMrPermissions({ currentUser: '张三', globalAdminUsers: [], tosManagerUsers: [], machineSpm: '张三', tosProjectId: lockRow.tosProjectId, machineProjectId: lockRow.projectId, context: 'joint-machine' })
+assert.deepEqual(lifecycleStore.getState().lockMachineRows([lockRow], '李白', seededManagerLockPermission), { processed: 1, skipped: 0 })
+const lockKey = mrStore.makeMrMachineRowLockKey(lockRow)
+assert.equal(lifecycleStore.getState().machineRowLocks[lockKey].lockedBy, '李白')
+assert.deepEqual(lifecycleStore.getState().lockMachineRows([lockRow], '李白', seededManagerLockPermission), { processed: 1, skipped: 0 }, '重复锁定幂等成功')
+assert.equal(lifecycleStore.getState().updateMachineTransferType(lockRow.key, '2', '张三', seededMachinePermission), false, '锁定后 SPM 不可修改转测类型')
+const lockActivityId = Object.values(lifecycleStore.getState().tosInstancesByProjectId).flat()
+  .find(instance => instance.projectId === lockRow.tosProjectId && instance.tosVersion === lockRow.tosVersion)
+  .activities.find(activity => activity.parentId !== null).id
+assert.equal(lifecycleStore.getState().updateMachineDate(lockRow.key, lockActivityId, '2026-05-17', '张三', seededMachinePermission), false, '锁定后 SPM 不可修改任何日期')
+assert.equal(lifecycleStore.getState().updateMachineDate(lockRow.key, lockActivityId, '2026-05-17', '李白', seededManagerLockPermission), true, '对应 tOS 版本项目经理仍可修改锁定行日期')
+assert.deepEqual(lifecycleStore.getState().lockMachineRows([
+  lockRow,
+  { key: 'missing', projectId: 'missing', tosProjectId: lockRow.tosProjectId, tosVersion: lockRow.tosVersion },
+], '李白', seededManagerLockPermission), { processed: 1, skipped: 1 }, '并发缺失行部分处理并返回显式计数')
+assert.deepEqual(lifecycleStore.getState().unlockMachineRows([lockRow], '李白', seededManagerLockPermission), { processed: 1, skipped: 0 })
+assert.equal(lifecycleStore.getState().machineRowLocks[lockKey], undefined)
+const migratedLocks = mrStore.migrateMrVersionPlanState({
+  ...mrStore.partializeMrVersionPlanState(lifecycleStore.getState()),
+  machineRowLocks: {
+    valid: { key: 'stale-key', projectId: lockRow.projectId, tosProjectId: lockRow.tosProjectId, tosVersion: lockRow.tosVersion, lockedBy: ' 李白 ', lockedAt: NOW },
+    orphan: { key: 'orphan', projectId: 'missing', tosProjectId: lockRow.tosProjectId, tosVersion: lockRow.tosVersion, lockedBy: '李白', lockedAt: NOW },
+  },
+}, 3)
+assert.deepEqual(Object.keys(migratedLocks.machineRowLocks), [lockKey])
+assert.equal(migratedLocks.machineRowLocks[lockKey].key, lockKey)
 assert.equal(lifecycleStore.getState().templateVersions[0].status, '已发布')
 const initialLifecycleSnapshot = structuredClone(mrStore.partializeMrVersionPlanState(lifecycleStore.getState()))
 assert.equal(lifecycleStore.getState().createTemplateRevision('张三', allFalsePermission), false)
@@ -2354,7 +2404,7 @@ assert.equal(invalidHistoricalSelection.currentTemplateVersionId, 'draft-v3-sele
 
 const persistedOnly = mrStore.partializeMrVersionPlanState(machineStore.getState())
 assert.deepEqual(Object.keys(persistedOnly).sort(), [
-  'currentTemplateVersionId', 'machinePlansByKey', 'marketOverridesByKey', 'stopReleaseRecords',
+  'currentTemplateVersionId', 'machinePlansByKey', 'machineRowLocks', 'marketOverridesByKey', 'stopReleaseRecords',
   'templateHistory', 'templateVersions', 'tosInstancesByProjectId', 'viewModeByScope',
 ].sort())
 assert.equal(Object.values(persistedOnly).some(value => typeof value === 'function'), false)
@@ -2371,7 +2421,7 @@ await mrStore.rehydrateMrVersionPlanStore(hydrationStore)
 assert.equal(hydrationStore.getState().viewModeByScope.hydrated, 'horizontal')
 assert.equal(hydrationStore.getState().viewModeByScope.bad, undefined)
 assert.equal(hydrationStorage.getItem('pms-level3-plan-store'), null)
-assert.equal(hydrationStore.persist.getOptions().version, 3)
+assert.equal(hydrationStore.persist.getOptions().version, 4)
 const selectedVersionHydrationStorage = createMemoryStorage()
 selectedVersionHydrationStorage.setItem(mrStore.MR_VERSION_PLAN_STORAGE_KEY, JSON.stringify({
   state: mrStore.migrateMrVersionPlanState({ templateVersions: historicalSelectionVersions, currentTemplateVersionId: 'published-v1' }, 0),
