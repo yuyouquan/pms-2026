@@ -25,6 +25,7 @@ const validRow = {
 }
 
 assert.deepEqual(rules.validateJiraProjectRows([]), [], 'an empty JIRA configuration is valid')
+assert.deepEqual(rules.validateJiraProjectRows([validRow]), [], 'a complete shared JIRA row with Affect Projects is valid')
 for (const field of ['server', 'projectKey', 'type']) {
   const errors = rules.validateJiraProjectRows([validRow, { ...validRow, id: 'invalid-1', [field]: '' }])
   const error = errors.find(item => item.rowIndex === 1 && item.fieldKey === field)

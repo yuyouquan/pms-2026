@@ -154,19 +154,32 @@ for (const symbol of ['WHOLE_MACHINE_BASIC_INFO_FIELDS']) {
 }
 
 if (!jiraEditorSource) fail('Missing shared component: src/components/project-info/JiraProjectEditor.tsx')
-assert.match(jiraEditorSource, /JiraProjectEditor/, 'shared JIRA editor must define JiraProjectEditor')
-assert.match(fieldInputSource, /<JiraProjectEditor\b/, 'ProjectInfoFieldInput must render JiraProjectEditor')
-assert.match(containerSource, /<JiraProjectEditor\b/, 'ProjectSpaceContainer must render JiraProjectEditor')
+const hasJiraEditorJsx = source => {
+  const ast = ts.createSourceFile('consumer.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  let found = false
+  const visit = node => {
+    if ((ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) && node.openingElement.tagName.getText(ast) === 'JiraProjectEditor') found = true
+    ts.forEachChild(node, visit)
+  }
+  visit(ast)
+  return found
+}
+assert.ok(hasJiraEditorJsx(fieldInputSource), 'ProjectInfoFieldInput must render JiraProjectEditor')
+assert.ok(hasJiraEditorJsx(containerSource), 'ProjectSpaceContainer must render JiraProjectEditor')
 
 const jiraHeaders = ['JIRA服务器', 'JIRA库名', '类型', '共库', 'Affect Projects', '操作']
-const columnDefinitionStart = jiraEditorSource.indexOf('export const JIRA_PROJECT_EDITOR_COLUMNS = [')
-assert.ok(columnDefinitionStart >= 0, 'shared JIRA editor must export JIRA_PROJECT_EDITOR_COLUMNS')
 const expectedColumnKeys = ['server', 'projectKey', 'type', 'shared', 'affectProjects', 'actions']
 const editorAst = ts.createSourceFile('JiraProjectEditor.tsx', jiraEditorSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 let columnEntries = []
+const unwrapExpression = expression => {
+  while (expression && (ts.isAsExpression(expression) || ts.isSatisfiesExpression(expression) || ts.isParenthesizedExpression(expression))) expression = expression.expression
+  return expression
+}
 const visitEditorAst = node => {
-  if (ts.isVariableDeclaration(node) && node.name.getText(editorAst) === 'JIRA_PROJECT_EDITOR_COLUMNS' && ts.isArrayLiteralExpression(node.initializer)) {
-    columnEntries = node.initializer.elements.map(element => {
+  if (ts.isVariableStatement(node) && node.declarationList.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
+    const declaration = node.declarationList.declarations.find(item => item.name.getText(editorAst) === 'JIRA_PROJECT_EDITOR_COLUMNS')
+    const initializer = declaration && unwrapExpression(declaration.initializer)
+    if (initializer && ts.isArrayLiteralExpression(initializer)) columnEntries = initializer.elements.map(element => {
       if (!ts.isObjectLiteralExpression(element)) return null
       const readString = propertyName => {
         const property = element.properties.find(item => item.name?.getText(editorAst) === propertyName)
@@ -178,9 +191,16 @@ const visitEditorAst = node => {
   ts.forEachChild(node, visitEditorAst)
 }
 visitEditorAst(editorAst)
+assert.equal(columnEntries.length, jiraHeaders.length, 'shared JIRA editor must export one six-entry JIRA project column definition')
 assert.deepEqual(columnEntries.map(entry => entry?.key), expectedColumnKeys, 'JIRA column definition must contain exactly six keys in order')
 assert.deepEqual(columnEntries.map(entry => entry?.label), jiraHeaders, 'JIRA column definition must contain exactly six labels in order')
-assert.match(jiraEditorSource, /JIRA_PROJECT_EDITOR_COLUMNS\.map\(/, 'JIRA editor must render from the authoritative column definition')
+let mapsColumns = false
+const visitMapAst = node => {
+  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'map' && node.expression.expression.getText(editorAst) === 'JIRA_PROJECT_EDITOR_COLUMNS') mapsColumns = true
+  ts.forEachChild(node, visitMapAst)
+}
+visitMapAst(editorAst)
+assert.ok(mapsColumns, 'JIRA editor must render from the authoritative column definition')
 assert.match(projectInfoSectionsSource, /pms-project-info-jira-horizontal/, 'JIRA display must use its dedicated horizontal layout class')
 
 for (const forbiddenMarker of [
