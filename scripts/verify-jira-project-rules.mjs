@@ -80,4 +80,11 @@ assert.deepEqual(normalizedIncompleteRows[0], {
   id: 'incomplete', server: '', projectKey: '', type: 'sw', shared: false, affectProjects: '',
 }, 'batch normalization trims raw incomplete rows and applies legacy defaults')
 
+const omittedType = rules.normalizeJiraProjectConfig({ id: 'missing-type', server: 'jira.transsion.com', projectKey: 'KN4-tOS16' })
+assert.equal(omittedType.type, '', 'an omitted JIRA type remains incomplete instead of defaulting to sw')
+assert.ok(
+  rules.validateJiraProjectRows([omittedType]).some(error => error.fieldKey === 'type'),
+  'an omitted JIRA type is reported as required',
+)
+
 console.log('JIRA project rules are correct.')
