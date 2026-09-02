@@ -232,3 +232,42 @@ Expected: `origin/dev` 指向当前交付提交，生产别名更新。
 - [ ] **Step 4: Verify production**
 
 在线重复快捷筛选、tOS 字段和列宽拖动关键路径，确认线上构建与本地一致。
+
+### Task 6: 调整 JIRA 布局和新建状态来源
+
+**Files:**
+- Modify: `scripts/verify-project-field-order-followup.mjs`
+- Modify: `scripts/verify-tos-project-status.mjs`
+- Modify: `src/constants/projectInfoSchema.ts`
+- Modify: `src/components/project-info/ProjectInfoModal.tsx`
+- Modify: `src/lib/projectInfoRules.ts`
+- Modify: `src/lib/projectStatus.ts`
+- Modify: `src/lib/enumValues.ts`
+
+- [ ] 先增加失败断言：JIRA 为扩展信息最后字段并独占整行；创建状态为空时提交失败；三类枚举值严格匹配已确认集合。
+- [ ] 删除创建时 IPM/首枚举状态回填，技术项目状态改为可选必填，tOS 状态下拉解除禁用。
+- [ ] 更新枚举 Mock，并运行字段顺序、状态、枚举契约测试至通过。
+
+### Task 7: 以 EOS 时间替代停止发版
+
+**Files:**
+- Modify: `scripts/verify-mr-version-plan.mjs`
+- Modify: `scripts/verify-mr-mock-and-info-grid.mjs`
+- Modify: `src/types/app.ts`
+- Modify: `src/types/mrVersionPlan.ts`
+- Modify: `src/stores/project.ts`
+- Modify: `src/lib/mrPlanSourceAdapters.ts`
+- Modify: `src/lib/mrAggregationRules.ts`
+- Modify: `src/components/joint/JointMrVersionPlan.tsx`
+- Modify: `src/data/projects.ts`
+
+- [ ] 先增加失败断言：EOS 日期之前/当天展示，之后隐藏；非 EOS 不隐藏；联合计划源码不存在两个停止按钮与弹窗。
+- [ ] 在项目变更与历史迁移中维护 `statusChangedAt`，并传入 MR 聚合源。
+- [ ] 将重建和投影中的停止记录排除替换为 EOS 排除，移除联合计划停止发版 UI。
+- [ ] 更新 Mock 与旧测试，运行 MR 契约和浏览器回归至通过。
+
+### Task 8: 合并发布
+
+- [ ] 重新运行全部相关契约、`npx tsc --noEmit`、`npm run build` 和真实浏览器验收。
+- [ ] 推送当前提交到 `origin/dev`，创建基于远端 `master` 的干净发布工作区并快进合入。
+- [ ] 验证 `origin/dev` 与 `origin/master` 指向交付提交，执行 Vercel 生产发布并在线抽查。
