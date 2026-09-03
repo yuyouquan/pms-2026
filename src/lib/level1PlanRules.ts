@@ -25,6 +25,7 @@ export interface Level1PlanTask {
   actualStartDate?: string
   actualEndDate?: string
   actualDays?: number | null
+  revisionOrigin?: 'new-template' | 'refilled-template' | 'new-custom' | 'preserved-custom'
 }
 
 export interface Level1FlatMilestoneRow extends Level1PlanTask {
@@ -1174,6 +1175,7 @@ export const insertLevel1BusinessNode = (
       taskName,
       source: 'custom',
       nodeKind: 'business-period',
+      revisionOrigin: 'new-custom',
       responsible: '',
       predecessor: '',
       planStartDate: '',
@@ -1273,6 +1275,146 @@ const assertUniqueStableIds = (tasks: Level1PlanTask[], label: string) => {
     const stableId = getStableId(task)
     if (!stableId || seen.has(stableId)) throw new Error(`${label}存在未知或重复稳定任务ID: ${stableId || '-'}`)
     seen.add(stableId)
+  })
+}
+
+const LEVEL1_REVISION_TIME_FIELDS = [
+  'planStartDate',
+  'planEndDate',
+  'estimatedDays',
+  'actualStartDate',
+  'actualEndDate',
+  'actualDays',
+] as const
+
+const normalizeLevel1TaskName = (value: unknown) => String(value || '').trim()
+
+export const findLevel1TaskByName = <Task extends Pick<Level1PlanTask, 'taskName'>>(
+  tasks: readonly Task[],
+  taskName: string,
+) => tasks.find(task => normalizeLevel1TaskName(task.taskName) === normalizeLevel1TaskName(taskName))
+
+const buildLevel1TasksByName = (tasks: readonly Level1PlanTask[]) => {
+  const tasksByName = new Map<string, Level1PlanTask[]>()
+  tasks.forEach(task => {
+    const taskName = normalizeLevel1TaskName(task.taskName)
+    if (!taskName) return
+    const matches = tasksByName.get(taskName) || []
+    matches.push(task)
+    tasksByName.set(taskName, matches)
+  })
+  return tasksByName
+}
+
+const refillLevel1TemplateTime = (
+  templateTaskValue: Level1PlanTask,
+  previousTask?: Level1PlanTask,
+): Level1PlanTask => {
+  if (!previousTask) {
+    return {
+      ...cloneTask(templateTaskValue),
+      source: 'template',
+      revisionOrigin: 'new-template',
+    }
+  }
+  const timeValues: Partial<Level1PlanTask> = {}
+  LEVEL1_REVISION_TIME_FIELDS.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(previousTask, field)) {
+      ;(timeValues as Record<string, unknown>)[field] = previousTask[field]
+    }
+  })
+  return {
+    ...cloneTask(templateTaskValue),
+    ...timeValues,
+    source: 'template',
+    revisionOrigin: 'refilled-template',
+  }
+}
+
+/**
+ * Creates a level-one revision from the latest published configuration template.
+ * User-entered times are matched only by task name, so renamed stable ids or a
+ * task moving between stages do not discard the dates. Project-created child
+ * nodes stay below a retained major stage; deleting the stage removes them.
+ */
+export const mergeLevel1RevisionWithLatestTemplate = (
+  latestTemplateTasks: readonly Level1PlanTask[],
+  previousProjectTasks: readonly Level1PlanTask[],
+  publishedTemplateHistory: readonly (readonly Level1PlanTask[])[] = [],
+): Level1PlanTask[] => {
+  const templateTasks = latestTemplateTasks.map(cloneTask)
+  const previousTasks = previousProjectTasks.map(cloneTask)
+  const previousByName = buildLevel1TasksByName(previousTasks)
+  const previousById = new Map(previousTasks.map(task => [task.id, task]))
+  const consumedPreviousIds = new Set<string>()
+  const previousIdToNextId = new Map<string, string>()
+  const takePreviousTaskByName = (taskName: string) => {
+    const candidates = previousByName.get(normalizeLevel1TaskName(taskName)) || []
+    const match = candidates.find(task => !consumedPreviousIds.has(task.id))
+    if (!match) return undefined
+    consumedPreviousIds.add(match.id)
+    return match
+  }
+  const knownTemplateTaskNames = new Set(
+    [...publishedTemplateHistory.flatMap(tasks => [...tasks]), ...templateTasks]
+      .map(task => normalizeLevel1TaskName(task.taskName))
+      .filter(Boolean),
+  )
+  const latestStages = templateTasks.filter(task => !task.parentId)
+  const latestStageNames = new Set(latestStages.map(stage => normalizeLevel1TaskName(stage.taskName)))
+  const result: Level1PlanTask[] = []
+
+  latestStages.forEach((stage, stageIndex) => {
+    const previousStage = takePreviousTaskByName(stage.taskName)
+    const nextStage = refillLevel1TemplateTime({ ...stage, order: stageIndex }, previousStage)
+    if (previousStage) previousIdToNextId.set(previousStage.id, nextStage.id)
+    result.push(nextStage)
+
+    const templateChildren = templateTasks
+      .filter(task => task.parentId === stage.id)
+      .sort((left, right) => left.order - right.order)
+    templateChildren.forEach((child, childIndex) => {
+      const previousChild = takePreviousTaskByName(child.taskName)
+      const nextChild = refillLevel1TemplateTime({
+        ...child,
+        parentId: stage.id,
+        order: childIndex,
+      }, previousChild)
+      if (previousChild) previousIdToNextId.set(previousChild.id, nextChild.id)
+      result.push(nextChild)
+    })
+
+    const customChildren = previousTasks.filter(task => {
+      if (!task.parentId || consumedPreviousIds.has(task.id)) return false
+      const previousParent = previousById.get(task.parentId)
+      if (!previousParent) return false
+      const parentName = normalizeLevel1TaskName(previousParent.taskName)
+      if (parentName !== normalizeLevel1TaskName(stage.taskName) || !latestStageNames.has(parentName)) return false
+      return task.source === 'custom' || !knownTemplateTaskNames.has(normalizeLevel1TaskName(task.taskName))
+    })
+    customChildren
+      .sort((left, right) => left.order - right.order)
+      .forEach((customTask, customIndex) => {
+        const nextId = `${stage.id}.${templateChildren.length + customIndex + 1}`
+        consumedPreviousIds.add(customTask.id)
+        previousIdToNextId.set(customTask.id, nextId)
+        result.push({
+          ...cloneTask(customTask),
+          id: nextId,
+          parentId: stage.id,
+          order: templateChildren.length + customIndex,
+          source: 'custom',
+          revisionOrigin: 'preserved-custom',
+        })
+      })
+  })
+
+  return result.map(task => {
+    if (task.source !== 'custom' || !task.predecessor) return task
+    return {
+      ...task,
+      predecessor: previousIdToNextId.get(task.predecessor) || '',
+    }
   })
 }
 
