@@ -12,7 +12,6 @@ import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
 import type { TechnicalSubproject } from '@/types/technicalProject'
 import { mergeTechnicalPlanRevisionTasks } from '@/lib/technicalPlanWorkspace'
-import { applyPlanTaskDatePatch } from '@/lib/planGanttRules'
 
 export type TechnicalPlanScope =
   | { kind: 'tdt'; parentProjectId: string }
@@ -375,8 +374,7 @@ const mutateDraft = (state: TechnicalPlanState, scope: TechnicalPlanScope, mutat
   if (mutation === 'tasks') {
     const currentVersion = instance.versions.find(version => version.id === instance.currentVersionId)
     if (!currentVersion) return { state, result: { ok: false as const, reason: 'missing-draft' as const } }
-    const latestPublished = instance.versions.filter(version => version.status === '已发布').sort(comparePublishedTechnicalPlanVersions)[0]
-    if (currentVersion.status === '已发布' && currentVersion.id !== latestPublished?.id) {
+    if (currentVersion.status === '已发布') {
       return { state, result: { ok: false as const, reason: 'historical-published' as const } }
     }
     try {
@@ -385,42 +383,9 @@ const mutateDraft = (state: TechnicalPlanState, scope: TechnicalPlanScope, mutat
       return { state, result: { ok: false as const, reason: 'max-depth' as const } }
     }
     const requestedTasks = cloneTasks(payload as readonly TechnicalTemplateTask[])
-    const requestedByStableId = new Map(requestedTasks.map(task => [task.stableId || task.id, task]))
-    const nextCurrentTasks = currentVersion.status === '已发布'
-      ? currentVersion.tasks.map(task => ({
-          ...applyPlanTaskDatePatch([task], {
-            taskId: task.id,
-            patch: {
-              actualStartDate: requestedByStableId.get(task.stableId || task.id)?.actualStartDate || '',
-              actualEndDate: requestedByStableId.get(task.stableId || task.id)?.actualEndDate || '',
-            },
-          })[0],
-        }))
-      : requestedTasks
-    const previousByStableId = new Map(currentVersion.tasks.map(task => [task.stableId || task.id, task]))
-    const changedActualDatePatches = new Map<string, Pick<TechnicalTemplateTask, 'actualStartDate' | 'actualEndDate'>>()
-    nextCurrentTasks.forEach(task => {
-      const stableId = task.stableId || task.id
-      const previous = previousByStableId.get(stableId)
-      if (
-        (previous?.actualStartDate || '') !== (task.actualStartDate || '')
-        || (previous?.actualEndDate || '') !== (task.actualEndDate || '')
-      ) {
-        changedActualDatePatches.set(stableId, {
-          actualStartDate: task.actualStartDate || '',
-          actualEndDate: task.actualEndDate || '',
-        })
-      }
-    })
-    const pairedVersionId = currentVersion.status === '修订中' ? latestPublished?.id : instance.versions.find(version => version.status === '修订中')?.id
-    const versions = instance.versions.map(version => {
-      if (version.id === currentVersion.id) return { ...version, tasks: nextCurrentTasks }
-      if (version.id !== pairedVersionId || changedActualDatePatches.size === 0) return version
-      return { ...version, tasks: version.tasks.map(task => {
-        const patch = changedActualDatePatches.get(task.stableId || task.id)
-        return patch === undefined ? task : applyPlanTaskDatePatch([task], { taskId: task.id, patch })[0]
-      }) }
-    })
+    const versions = instance.versions.map(version => (
+      version.id === currentVersion.id ? { ...version, tasks: requestedTasks } : version
+    ))
     return { state: { plansByKey: { ...state.plansByKey, [key]: { ...instance, versions } } }, result: { ok: true as const } }
   }
   const draft = instance.versions.find(version => version.status === '修订中')

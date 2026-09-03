@@ -454,7 +454,7 @@ export default function TechnicalPlanModule({
       action,
     }),
   )
-  const canEditActualDates = canEditTechnicalPlan && (isDraft || currentVersion?.id === latestPublishedVersion?.id)
+  const canEditActualDates = canMaintain
   const hasDeletableCustomTask = tab?.templateKind === 'subproject' && tasks.some(task => canMutateTechnicalTaskStructure(task, 'delete'))
 
   const createSubprojectActionOpening = (): TechnicalSubprojectTransferScopeToken => ({
@@ -1014,7 +1014,7 @@ export default function TechnicalPlanModule({
             versions={visibleVersions}
             currentVersionId={currentVersion.id}
             canEditPlanEnd={isDraft && canEditTechnicalPlan}
-            canEditActualEnd={canEditTechnicalPlan && (isDraft || currentVersion.id === latestPublishedVersion?.id)}
+            canEditActualEnd={canEditActualDates}
             onDateChange={(taskId, field, value) => updateTask(taskId, { [field]: value })}
           />
         ) : viewMode === 'gantt' ? (
