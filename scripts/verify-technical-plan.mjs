@@ -274,6 +274,19 @@ assert.deepEqual(
 
 const technicalModuleSource = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
 const technicalWorkspace = loadTypeScriptModule(root, 'src/lib/technicalPlanWorkspace.ts')
+assert.equal(typeof technicalWorkspace.buildTechnicalTdtTreeRows, 'function', 'technical workspace exposes the TDT tree-row projection')
+const tdtTreeRows = technicalWorkspace.buildTechnicalTdtTreeRows(tdtTasks)
+assert.deepEqual(
+  tdtTreeRows.map(row => [row.id, row.taskName, row.children?.map(child => child.id)]),
+  [
+    ['1', '规划阶段', ['1.1', '1.2']],
+    ['2', '概念阶段', ['2.1']],
+    ['3', '计划阶段', ['3.1', '3.2']],
+    ['4', '开发验证阶段', ['4.1', '4.2']],
+    ['5', '迁移阶段', ['5.1', '5.2']],
+  ],
+  'TDT vertical rows preserve phase parents and ordered milestone children',
+)
 const numberedSubprojectTasks = technicalWorkspace.renumberTechnicalSubprojectTasks([
   ...subprojectTasks,
   {
@@ -502,11 +515,14 @@ assert.match(technicalModuleSource, /maxDepthByKind\[tab\?\.templateKind \|\| 't
 assert.doesNotMatch(technicalModuleSource, /handleAddChildTask/, 'TDT has no structure-add handler')
 assert.match(technicalModuleSource, /const canEditTaskStructure = canMaintain && tab\?\.templateKind === 'subproject' && viewMode === 'vertical'/, 'only editable subproject drafts expose custom-delete structure actions')
 const renderDateStart = technicalModuleSource.indexOf('const renderDate')
-const renderDateEnd = technicalModuleSource.indexOf('const tdtColumns', renderDateStart)
+const renderDateEnd = technicalModuleSource.indexOf('const tdtTreeColumns', renderDateStart)
 assert.ok(renderDateStart >= 0 && renderDateEnd > renderDateStart, 'date renderer is bounded for readonly-error inspection')
 const renderDateSource = technicalModuleSource.slice(renderDateStart, renderDateEnd)
 assert.match(renderDateSource, /const content = editable\(row\)[\s\S]{0,320}return reasons\.length \? <Tooltip title=\{reasons\.join\('；'\)\}>\{content\}<\/Tooltip> : content/, 'invalid date reasons wrap both editable and readonly cells outside the editable branch')
-for (const label of ['阶段', '里程碑点', '活动名称', '添加转测版本', '实际开始时间', '实际完成时间']) assert.match(technicalModuleSource, new RegExp(label), `technical flat plan contains ${label}`)
+for (const label of ['阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期', '活动名称', '添加转测版本']) assert.match(technicalModuleSource, new RegExp(label), `technical plan contains ${label}`)
+assert.match(technicalModuleSource, /dataSource=\{tdtTreeRows\}[\s\S]{0,320}columns=\{tdtTreeColumns\}/, 'TDT vertical view renders the hierarchical projection and tree columns')
+assert.match(technicalModuleSource, /rowClassName=\{row => row\.parentId \? 'pms-level1-row-level-1' : 'pms-level1-row-level-0'\}/, 'TDT vertical view distinguishes phase parents from milestone children')
+assert.match(technicalModuleSource, /expandable=\{\{[\s\S]{0,500}rowExpandable:[\s\S]{0,120}onExpand:/, 'TDT vertical view supports explicit phase expand and collapse')
 assert.match(technicalModuleSource, /validateTechnicalSubprojectDates/, 'subproject validates all four date fields')
 assert.match(technicalModuleSource, /insertNextTechnicalSubprojectTransfer/, 'subproject only supports controlled transfer insertion')
 assert.match(technicalModuleSource, /handleDeleteTask/, 'custom subproject activities can be deleted')
@@ -589,7 +605,7 @@ assert.match(technicalModuleSource, /hasPermission\(latestUser, latestProject\.i
 assert.match(technicalModuleSource, /selectedProject/, 'transfer confirmation resolves the currently selected project rather than a stale project closure')
 assert.match(technicalModuleSource, /onOpenChange=\{open => \{ if \(open\) setDeleteOpening/, 'delete confirmation captures an opening token before the popconfirm can become stale')
 assert.match(technicalModuleSource, /if \(!updated\.ok\) \{ message\.error\('删除活动失败，请重试'\); return \}/, 'delete reports success only after the latest write succeeds')
-assert.match(technicalModuleSource, /viewMode === 'gantt' && tab\?\.templateKind === 'tdt'/, 'expand and collapse controls only appear for hierarchical TDT gantt')
+assert.match(technicalModuleSource, /\(viewMode === 'gantt' \|\| viewMode === 'vertical'\) && tab\?\.templateKind === 'tdt'/, 'expand and collapse controls appear on both hierarchical TDT table and gantt views')
 assert.match(technicalModuleSource, /const filteredHierarchyTasks = useMemo\([\s\S]{0,260}filterTechnicalPlanGanttTasks/, 'all plan visualizations derive a single filtered task hierarchy')
 assert.match(technicalModuleSource, /const horizontalHeaderTasks = useMemo\([\s\S]{0,360}visibleVersions\.find\(version => version\.status === '修订中'\)[\s\S]{0,120}latestPublishedVersion/, 'horizontal plan headers stay aligned to the active draft or latest published template structure')
 assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,120}tasks=\{horizontalHeaderTasks\}/, 'horizontal plan columns use the latest template-aligned hierarchy')

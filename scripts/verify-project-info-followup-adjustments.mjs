@@ -207,6 +207,16 @@ assert.match(modal, /getProjectInfoModalGroups\(projectType\)/, 'the modal must 
 assert.match(modal, /fieldKeys:\s*editableFieldKeys/, 'submission validation must be scoped to modal-editable fields')
 assert.match(modal, /getProjectInfoModalSubmitValues\(normalizedProjectType, values\)/, 'submission must use the modal field projection')
 assert.match(modal, /projectType === PROJECT_TYPE_TOS_VERSION && aggregateWarnings\.length > 0/, 'visible tOS aggregate source warnings must render above grouped fields')
+assert.doesNotMatch(
+  modal,
+  /title="tOS 版本联动失败"/,
+  'machine tOS family validation must not render a persistent global alert while the user is filling the create form',
+)
+assert.equal(
+  (modal.match(/pms-project-info-universal/g) || []).length,
+  1,
+  'project name and mapped classifications must share one universal four-column grid',
+)
 
 const projectSpace = read('src/containers/ProjectSpaceContainer.tsx')
 const wholePlanStart = projectSpace.indexOf('const renderWholeMachinePlanInfo = () => {')

@@ -26,6 +26,7 @@ import {
   type PlanWorkspaceViewMode,
 } from '@/lib/planWorkspace'
 import {
+  buildTechnicalTdtTreeRows,
   buildTechnicalHorizontalRows,
   buildTechnicalHorizontalDateMap,
   canConfirmTechnicalSubprojectMutation,
@@ -40,6 +41,7 @@ import {
   projectTechnicalPlanRows,
   renumberTechnicalSubprojectTasks,
   selectVisibleTechnicalPlanVersions,
+  type TechnicalTdtTreeRow,
 } from '@/lib/technicalPlanWorkspace'
 import { compareVersionsForTable } from '@/lib/versionCompare'
 import { formatPlanPublishedDate, type PlanRevisionKind } from '@/lib/planVersioning'
@@ -428,6 +430,10 @@ export default function TechnicalPlanModule({
     () => filterTechnicalPlanGanttTasks(tasks, tab?.templateKind || 'tdt', filteredTasks),
     [filteredTasks, tab?.templateKind, tasks],
   )
+  const tdtTreeRows = useMemo(
+    () => buildTechnicalTdtTreeRows(filteredHierarchyTasks),
+    [filteredHierarchyTasks],
+  )
   const horizontalHeaderTasks = useMemo(() => {
     if (hasActiveFilters) return filteredHierarchyTasks
     const structureVersion = visibleVersions.find(version => version.status === '修订中')
@@ -553,7 +559,9 @@ export default function TechnicalPlanModule({
     const firstInvalidTaskId = Object.keys(invalidByTaskId)[0]
     if (firstInvalidTaskId) {
       const invalidTask = tasks.find(task => task.id === firstInvalidTaskId)
-      const firstInvalidRowKey = invalidTask ? getTechnicalPlanRowKey(invalidTask) : firstInvalidTaskId
+      const firstInvalidRowKey = invalidTask
+        ? (tab?.templateKind === 'tdt' ? invalidTask.id : getTechnicalPlanRowKey(invalidTask))
+        : firstInvalidTaskId
       setCollapsed(scope, [])
       setFilters([])
       setTempFilters([createFilterCondition()])
@@ -637,28 +645,32 @@ export default function TechnicalPlanModule({
   const collapseAll = () => setCollapsed(scope, filteredHierarchyTasks
     .filter(task => tasks.some(child => child.parentId === task.id))
     .map(task => task.id))
-  const dateErrors = (row: TechnicalPlanRow, field: string) => {
+  const dateErrors = (row: Pick<TechnicalTemplateTask, 'id'>, field: string) => {
     const byTaskId = (tab?.templateKind === 'subproject' ? subprojectValidation.byTaskId : milestoneValidation.byTaskId) as Record<string, Record<string, string[] | undefined>>
     return byTaskId[row.id]?.[field] || []
   }
-  const renderDate = (field: 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate', editable: (row: TechnicalPlanRow) => boolean) => (
-    (value: string, row: TechnicalPlanRow) => {
+  const renderDate = <RowType extends Pick<TechnicalTemplateTask, 'id'>>(
+    field: 'planStartDate' | 'planEndDate' | 'actualStartDate' | 'actualEndDate',
+    editable: (row: RowType) => boolean,
+  ) => (
+    (value: string, row: RowType) => {
       const reasons = dateErrors(row, field)
       const content = editable(row)
-        ? <DatePicker value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { [field]: date?.format('YYYY-MM-DD') || '' })} />
+        ? <DatePicker size="small" format="YYYY-MM-DD" value={value ? dayjs(value) : null} onChange={date => updateTask(row.id, { [field]: date?.format('YYYY-MM-DD') || '' })} />
         : value || '-'
       return reasons.length ? <Tooltip title={reasons.join('；')}>{content}</Tooltip> : content
     }
   )
-  const tdtColumns: ColumnsType<TechnicalPlanRow> = [
-    { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
-    { title: '阶段', dataIndex: 'stageName', key: 'stageName', width: 150, fixed: 'left' },
-    { title: '里程碑点', dataIndex: 'milestoneName', key: 'milestoneName', width: 180, fixed: 'left' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: value => value || '-' },
-    { title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'planEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planEndDate', () => canMaintain) },
-    { title: '计划开发周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 120, render: value => value == null ? '-' : `${value}天` },
-    { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualEndDate', () => canEditActualDates) },
-    { title: '实际开发周期', dataIndex: 'actualDays', key: 'actualDays', width: 120, render: value => value == null ? '-' : `${value}天` },
+  const tdtTreeColumns: ColumnsType<TechnicalTdtTreeRow> = [
+    { title: '序号', dataIndex: 'id', key: 'id', width: 88, fixed: 'left' },
+    { title: '阶段/节点', dataIndex: 'taskName', key: 'taskName', width: 250, fixed: 'left' },
+    { title: '计划开始时间', dataIndex: 'planStartDate', key: 'planStartDate', width: 150, render: renderDate<TechnicalTdtTreeRow>('planStartDate', () => false) },
+    { title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 150, onCell: row => ({ className: dateErrors(row, 'planEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate<TechnicalTdtTreeRow>('planEndDate', row => canMaintain && Boolean(row.parentId)) },
+    { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '实际开始时间', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 150, render: renderDate<TechnicalTdtTreeRow>('actualStartDate', () => false) },
+    { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 150, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate<TechnicalTdtTreeRow>('actualEndDate', row => canEditActualDates && Boolean(row.parentId)) },
+    { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 100, render: (value, row) => row.parentId ? <Tag color={value === '延期' ? 'error' : value === '按时' ? 'success' : 'default'}>{value || '-'}</Tag> : '-' },
   ]
   const subprojectColumns: ColumnsType<TechnicalPlanRow> = [
     { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
@@ -671,7 +683,7 @@ export default function TechnicalPlanModule({
     { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualEndDate', () => canEditActualDates) },
     { title: '实际周期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: value => value == null ? '-' : `${value}天` },
   ]
-  const columns: ColumnsType<TechnicalPlanRow> = tab?.templateKind === 'subproject' ? [...subprojectColumns] : [...tdtColumns]
+  const columns: ColumnsType<TechnicalPlanRow> = [...subprojectColumns]
   if (hasDeletableCustomTask) columns.push({
     key: 'actions', title: '操作', fixed: 'right', width: 88,
     render: (_: unknown, row: TechnicalPlanRow) => canMutateTechnicalTaskStructure(row, 'delete') && (
@@ -684,7 +696,7 @@ export default function TechnicalPlanModule({
       </Popconfirm>
     ),
   })
-  const verticalTableScrollX = columns.reduce((total, column) => (
+  const verticalTableScrollX = (tab?.templateKind === 'tdt' ? tdtTreeColumns : columns).reduce((total, column) => (
     total + (typeof column.width === 'number' ? column.width : 140)
   ), 0)
 
@@ -977,7 +989,7 @@ export default function TechnicalPlanModule({
                 <Button icon={<DownloadOutlined />} style={{ borderRadius: 6 }} disabled={!canExport || !tasks.length} aria-label="导出" />
               </Tooltip>
             </Dropdown>
-            {viewMode === 'gantt' && tab?.templateKind === 'tdt' && <>
+            {(viewMode === 'gantt' || viewMode === 'vertical') && tab?.templateKind === 'tdt' && <>
               <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={expandAll} aria-label="全部展开" /></Tooltip>
               <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} aria-label="全部收起" /></Tooltip>
             </>}
@@ -994,17 +1006,40 @@ export default function TechnicalPlanModule({
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无计划版本，请创建修订" />
         ) : viewMode === 'vertical' ? (
           <div className="technical-plan-vertical-table-shell pms-solid-surface">
-            <Table<TechnicalPlanRow>
-                  className={`pms-table technical-plan-vertical-table ${canMaintain ? 'pms-table-edit' : ''}`}
-                  tableLayout="fixed"
-                  rowKey={getTechnicalPlanRowKey}
-                  size="middle"
-                  pagination={false}
-                  scroll={{ x: verticalTableScrollX }}
-                  dataSource={visibleTasks}
-                  columns={columns}
-                  rowClassName={() => 'technical-plan-flat-row'}
-                />
+            {tab?.templateKind === 'tdt' ? (
+              <Table<TechnicalTdtTreeRow>
+                className={`pms-table pms-level1-tree-table technical-plan-vertical-table ${canMaintain ? 'pms-table-edit' : ''}`}
+                tableLayout="fixed"
+                rowKey="id"
+                size="middle"
+                pagination={false}
+                scroll={{ x: verticalTableScrollX }}
+                dataSource={tdtTreeRows}
+                columns={tdtTreeColumns}
+                rowClassName={row => row.parentId ? 'pms-level1-row-level-1' : 'pms-level1-row-level-0'}
+                expandable={{
+                  expandedRowKeys: tdtTreeRows.filter(row => row.children?.length).map(row => row.id).filter(id => !collapsedIds.has(id)),
+                  rowExpandable: row => Boolean(row.children?.length),
+                  onExpand: (expanded, row) => {
+                    const next = new Set(collapsedIds)
+                    if (expanded) next.delete(row.id); else next.add(row.id)
+                    setCollapsed(scope, [...next])
+                  },
+                }}
+              />
+            ) : (
+              <Table<TechnicalPlanRow>
+                className={`pms-table technical-plan-vertical-table ${canMaintain ? 'pms-table-edit' : ''}`}
+                tableLayout="fixed"
+                rowKey={getTechnicalPlanRowKey}
+                size="middle"
+                pagination={false}
+                scroll={{ x: verticalTableScrollX }}
+                dataSource={visibleTasks}
+                columns={columns}
+                rowClassName={() => 'technical-plan-flat-row'}
+              />
+            )}
           </div>
         ) : viewMode === 'horizontal' ? (
           <TechnicalHorizontalPlanTable
