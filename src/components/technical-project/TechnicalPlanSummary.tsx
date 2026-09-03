@@ -82,9 +82,7 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
   const actualEndDatesByTaskId = Object.fromEntries(
     actualProjection.rows.map(task => [getTechnicalPlanRowKey(task), task.actualEndDate || '']),
   )
-  const canEditActualEnd = canEditPlan && (
-    currentVersion.status === '修订中' || currentVersion.id === latestPublishedVersion?.id
-  )
+  const canEditActualEnd = canEditPlan && currentVersion.status === '修订中'
   const updateActualDate = (taskKey: string, value: string) => {
     if (!canEditActualEnd) return
     updateCurrentTasks(
