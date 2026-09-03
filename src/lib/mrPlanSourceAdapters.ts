@@ -25,6 +25,7 @@ import type {
   MrMachineMetadata,
   MrPlanVersionLike,
   MrPublishedLevel1Source,
+  TosMrVersionInstance,
 } from '@/types/mrVersionPlan'
 
 type SnapshotState = Readonly<Record<string, readonly MrLevel1TaskLike[] | undefined>>
@@ -54,6 +55,23 @@ export interface MrStoreAdapterInput {
   publishedSnapshots: SnapshotState
   fallbackVersions: readonly MrPlanVersionLike[]
   packageModeRows: readonly PackageModeMappingRow[]
+}
+
+type TosMrInstancesByProjectId = Readonly<Record<string, readonly TosMrVersionInstance[] | undefined>>
+
+/**
+ * Both project space and joint space select from the MR store's canonical tOS
+ * instance map. The selector intentionally keeps instance identities intact so
+ * consumers cannot drift by rebuilding reference-row dates elsewhere.
+ */
+export function selectCanonicalTosMrInstances(
+  instancesByProjectId: TosMrInstancesByProjectId,
+  projectId?: string,
+): readonly TosMrVersionInstance[] {
+  const normalizedProjectId = projectId?.trim()
+  if (normalizedProjectId) return instancesByProjectId[normalizedProjectId] ?? []
+  return Object.keys(instancesByProjectId).sort((left, right) => left.localeCompare(right, 'zh-CN'))
+    .flatMap(key => instancesByProjectId[key] ?? [])
 }
 
 function cloneVersions(versions: readonly MrPlanVersionLike[]): MrPlanVersionLike[] {
