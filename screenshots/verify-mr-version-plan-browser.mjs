@@ -7,6 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import puppeteer from 'puppeteer'
 import { waitForApplicationBundles } from './level1-browser-harness.mjs'
+import { loadTypeScriptModule, projectRoot } from '../scripts/lib/source-contract.mjs'
 
 const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 45_000)
@@ -24,6 +25,43 @@ const STEP_MARKERS = [
   'STEP 11 PASS', 'STEP 12 PASS', 'STEP 13 PASS', 'STEP 14 PASS', 'STEP 15 PASS',
 ]
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
+const browserProjectRoot = projectRoot(import.meta.url)
+const browserMrMocks = loadTypeScriptModule(browserProjectRoot, 'src/data/mrVersionPlanMocks.ts')
+
+function createLegacyDualCacheFixtures() {
+  const mrState = browserMrMocks.createInitialMrVersionPlanState()
+  const retainedTosInstance = structuredClone(
+    mrState.tosInstancesByProjectId['6'].find(instance => instance.tosVersion === '17.1.0.120'),
+  )
+  assert.ok(retainedTosInstance, 'legacy MR fixture requires tOS17.1 version 17.1.0.120')
+  retainedTosInstance.dates['mr-node-test-start'] = '2026-02-13'
+  mrState.tosInstancesByProjectId = { '6': [retainedTosInstance] }
+
+  const planSeed = browserMrMocks.createMrAcceptancePlanScopeSeed()
+  const versionsKey = 'project::6::tos-type::Slim::level1::versions'
+  const snapshotKey = 'project::6::tos-type::Slim::level1::v1::snapshot'
+  const userSnapshot = structuredClone(planSeed.publishedSnapshots[snapshotKey])
+  const editedBusinessNode = userSnapshot.find(task => task.taskName === '17.1.0.120')
+  assert.ok(editedBusinessNode, 'legacy Plan fixture requires the tOS17.1 business node')
+  editedBusinessNode.responsible = '李白'
+  const userVersion = {
+    ...planSeed.tosTypeVersionsByKey[versionsKey][0],
+    publishedAt: '2026-01-01T00:00:00.000Z',
+  }
+
+  return {
+    mrCache: { state: mrState, version: 4 },
+    planCache: {
+      state: {
+        publishedSnapshots: { [snapshotKey]: userSnapshot },
+        tosTypeVersionsByKey: { [versionsKey]: [userVersion] },
+      },
+      version: 13,
+    },
+  }
+}
+
+const LEGACY_DUAL_CACHE_FIXTURES = createLegacyDualCacheFixtures()
 
 function validateScreenshotEvidence(directory) {
   const actualFiles = fs.readdirSync(directory, { withFileTypes: true })
@@ -103,6 +141,7 @@ function installDeterministicBrowserEnvironment(fixedNow) {
       window.localStorage.removeItem(preserveNextReloadKey)
     } else {
       window.localStorage.removeItem('pms-mr-version-plan-store')
+      window.localStorage.removeItem('pms-plan-store')
       window.localStorage.removeItem('pms-level3-plan-store')
     }
     window.localStorage.setItem('pms-enum-values', JSON.stringify({
@@ -223,6 +262,10 @@ const screenshot = async name => {
 const bodyText = () => page.$eval('body', node => node.innerText)
 const readMrState = () => page.evaluate(() => {
   const raw = window.localStorage.getItem('pms-mr-version-plan-store')
+  return raw ? JSON.parse(raw).state : null
+})
+const readPlanState = () => page.evaluate(() => {
+  const raw = window.localStorage.getItem('pms-plan-store')
   return raw ? JSON.parse(raw).state : null
 })
 
@@ -465,14 +508,15 @@ async function clickMrTemplatePublishButton() {
         toolbarText: document.querySelector('.pms-mr-toolbar')?.textContent?.trim() ?? '',
       }
     }
-    button.click()
+    const rect = button.getBoundingClientRect()
     return {
-      activated: true,
+      box: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
       matches: buttons.length,
       toolbarText: '',
     }
   })
-  assert.equal(result.activated, true, `MR模板工具栏发布按钮必须唯一且可操作：${JSON.stringify(result)}`)
+  assert.ok(result.box && result.matches === 1, `MR模板工具栏发布按钮必须唯一且可操作：${JSON.stringify(result)}`)
+  await page.mouse.click(result.box.x, result.box.y)
   await wait(350)
 }
 
@@ -678,17 +722,24 @@ async function switchUser(user) {
   await wait(300)
 }
 
-async function openProjectFromList(categoryPrefix, projectName, rowSuffix = '') {
+async function openProjectFromList(categoryPrefix, projectName, rowSuffix = '', projectId = '') {
   await openMainMenu('projectList')
   await clickButtonStarting(categoryPrefix)
-  const box = await page.evaluate(({ projectName, rowSuffix }) => {
+  await page.waitForFunction(({ projectId, projectName, rowSuffix }) => [...document.querySelectorAll('tbody tr')]
+    .some(candidate => projectId
+      ? candidate.getAttribute('data-row-key') === projectId
+      : candidate.innerText.includes(projectName) && (!rowSuffix || candidate.innerText.includes(rowSuffix))),
+  { timeout: TIMEOUT }, { projectId, projectName, rowSuffix })
+  const box = await page.evaluate(({ projectId, projectName, rowSuffix }) => {
     const row = [...document.querySelectorAll('tbody tr')]
-      .find(candidate => candidate.innerText.includes(projectName) && (!rowSuffix || candidate.innerText.includes(rowSuffix)))
+      .find(candidate => projectId
+        ? candidate.getAttribute('data-row-key') === projectId
+        : candidate.innerText.includes(projectName) && (!rowSuffix || candidate.innerText.includes(rowSuffix)))
     if (!row) return null
     const cell = [...row.querySelectorAll('td')].find(candidate => candidate.innerText.trim() === projectName) || row
     const rect = cell.getBoundingClientRect()
     return { x: rect.x + Math.min(rect.width / 2, 24), y: rect.y + rect.height / 2 }
-  }, { projectName, rowSuffix })
+  }, { projectId, projectName, rowSuffix })
   if (!box) throw new Error(`project row missing: ${projectName}`)
   await page.mouse.click(box.x, box.y)
   await page.waitForSelector('.pms-project-space', { visible: true })
@@ -931,6 +982,61 @@ try {
   await screenshot('machine-horizontal.png')
   pass(13, 'initial market normal, late, and missing-main scenarios render before edits')
 
+  await clickButtonStarting('返回')
+  await page.evaluate(fixtures => {
+    window.localStorage.setItem('pms-mr-browser-preserve-next-reload', 'true')
+    window.localStorage.setItem('pms-mr-version-plan-store', JSON.stringify(fixtures.mrCache))
+    window.localStorage.setItem('pms-plan-store', JSON.stringify(fixtures.planCache))
+  }, LEGACY_DUAL_CACHE_FIXTURES)
+  await page.reload({ waitUntil: 'networkidle2', timeout: TIMEOUT })
+  await wait(2_000)
+  await waitForMainMenu('workbench')
+  await openProjectFromList('tOS版本项目', 'tOS17.1', '', '6')
+  await clickVisibleText('计划')
+  await clickVisibleText('三级计划-MR版本计划', '[role="tab"],button,span')
+  await page.waitForSelector('.pms-mr-project-card', { visible: true })
+  await page.waitForFunction(() => {
+    const mrCache = JSON.parse(window.localStorage.getItem('pms-mr-version-plan-store') || 'null')
+    const planCache = JSON.parse(window.localStorage.getItem('pms-plan-store') || 'null')
+    return mrCache?.version === 5 && planCache?.version === 14
+  })
+  assert.deepEqual(
+    await page.$$eval('[data-mr-tos-version]', rows => [...new Set(rows.map(row => row.getAttribute('data-mr-tos-version')))]),
+    ['17.1.0.120', '17.1.0.125'],
+    'MR V4 cache migration restores the missing standard tOS17.1 version row',
+  )
+  assert.equal(
+    await page.$eval('input[aria-label="17.1.0.120-测试开始时间-日期"]', input => input.value),
+    '2026-02-13',
+    'MR V4 cache migration preserves a valid user-edited date',
+  )
+  const migratedMrState = await readMrState()
+  assert.equal(
+    migratedMrState.tosInstancesByProjectId['6'].find(instance => instance.tosVersion === '17.1.0.120')
+      .dates['mr-node-test-start'],
+    '2026-02-13',
+  )
+  const migratedPlanState = await readPlanState()
+  const tos17PlanVersionsKey = 'project::6::tos-type::Slim::level1::versions'
+  const tos17V1SnapshotKey = 'project::6::tos-type::Slim::level1::v1::snapshot'
+  const tos17V3SnapshotKey = 'project::6::tos-type::Slim::level1::v3::snapshot'
+  assert.deepEqual(
+    migratedPlanState.tosTypeVersionsByKey[tos17PlanVersionsKey].map(version => version.id),
+    ['v1', 'v2', 'v3', 'v4'],
+    'Plan V13 cache migration restores missing standard version rows',
+  )
+  assert.equal(
+    migratedPlanState.tosTypeVersionsByKey[tos17PlanVersionsKey][0].publishedAt,
+    '2026-01-01T00:00:00.000Z',
+    'Plan V13 cache migration preserves a valid user-edited version record',
+  )
+  assert.equal(
+    migratedPlanState.publishedSnapshots[tos17V1SnapshotKey]
+      .find(task => task.taskName === '17.1.0.120').responsible,
+    '李白',
+    'Plan V13 cache migration preserves a valid user-edited published snapshot',
+  )
+  assert.ok(migratedPlanState.publishedSnapshots[tos17V3SnapshotKey])
   await clickButtonStarting('返回')
   await openProjectFromList('tOS版本项目', 'tOS16.3', '张三,李白')
   await clickVisibleText('计划')

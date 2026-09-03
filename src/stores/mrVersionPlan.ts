@@ -11,6 +11,7 @@ import {
   validateMrTemplateForPublish,
 } from '@/lib/mrTemplateRules'
 import { applyStopRelease, canonicalizeTosMrVersion, reconcileJointMachinePlans } from '@/lib/mrAggregationRules'
+import { selectCanonicalTosMrInstances } from '@/lib/mrPlanSourceAdapters'
 import { normalizeMrBusinessDate, createTosMrVersionInstance } from '@/lib/mrVersionPlanRules'
 import type {
   AddTosInstanceInput,
@@ -35,7 +36,7 @@ import type {
 } from '@/types/mrVersionPlan'
 
 export const MR_VERSION_PLAN_STORAGE_KEY = 'pms-mr-version-plan-store'
-export const MR_VERSION_PLAN_STORE_VERSION = 4
+export const MR_VERSION_PLAN_STORE_VERSION = 5
 const LEGACY_LEVEL3_STORAGE_KEY = 'pms-level3-plan-store'
 const TRANSFER_TYPES = new Set<MrTransferType>(['N/A', '1', '2', '3', '4', '5', '6', '7', '8'])
 const TEMPLATE_ACTIONS = new Set<MrTemplateChangeLog['action']>([
@@ -394,9 +395,29 @@ function initialMrVersionPlanState(): MrVersionPlanState {
   return createInitialMrVersionPlanState()
 }
 
+function mergeTosInstancesByStableKey(
+  standard: Readonly<Record<string, TosMrVersionInstance[]>>,
+  persisted: Readonly<Record<string, TosMrVersionInstance[]>>,
+): Record<string, TosMrVersionInstance[]> {
+  return Object.fromEntries(
+    [...new Set([...Object.keys(standard), ...Object.keys(persisted)])].map(projectId => {
+      const byVersion = new Map<string, TosMrVersionInstance>()
+      for (const instance of [...(standard[projectId] ?? []), ...(persisted[projectId] ?? [])]) {
+        byVersion.set(instance.tosVersion, {
+          ...instance,
+          activities: cloneMrTemplateSnapshot(instance.activities),
+          dates: { ...instance.dates },
+        })
+      }
+      return [projectId, [...byVersion.values()]]
+    }),
+  )
+}
+
 export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion: number): MrVersionPlanState {
   const fallback = initialMrVersionPlanState()
   if (!isRecord(persistedState)) return fallback
+  const shouldMergeStandardSeeds = _fromVersion >= 1 && _fromVersion < MR_VERSION_PLAN_STORE_VERSION
   const templateVersions = sanitizeTemplateVersions(persistedState.templateVersions)
   const safeTemplateVersions = templateVersions.length ? templateVersions : fallback.templateVersions
   const draft = safeTemplateVersions.find(version => version.status === '修订中')
@@ -405,7 +426,10 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
   const currentTemplateVersionId = safeTemplateVersions.some(version => version.id === persistedCurrentId)
     ? persistedCurrentId
     : draft?.id ?? latestPublished.id
-  const tosInstancesByProjectId = sanitizeTosInstances(persistedState.tosInstancesByProjectId)
+  const sanitizedTosInstances = sanitizeTosInstances(persistedState.tosInstancesByProjectId)
+  const tosInstancesByProjectId = shouldMergeStandardSeeds
+    ? mergeTosInstancesByStableKey(fallback.tosInstancesByProjectId, sanitizedTosInstances)
+    : sanitizedTosInstances
   const tosChildIds = buildTosChildIds(tosInstancesByProjectId)
   const machinePlansByKey = sanitizeMachinePlans(persistedState.machinePlansByKey, tosChildIds)
   const migrated: MrVersionPlanState = {
@@ -419,23 +443,9 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
     viewModeByScope: sanitizeViewModes(persistedState.viewModeByScope),
     machineRowLocks: sanitizeMachineRowLocks(persistedState.machineRowLocks, machinePlansByKey),
   }
-  if (_fromVersion !== 1 && _fromVersion !== 2) return migrated
+  if (!shouldMergeStandardSeeds) return migrated
 
-  const mergedTosInstancesByProjectId = Object.fromEntries(
-    [...new Set([
-      ...Object.keys(fallback.tosInstancesByProjectId),
-      ...Object.keys(migrated.tosInstancesByProjectId),
-    ])].map(projectId => {
-      const byVersion = new Map<string, TosMrVersionInstance>()
-      for (const instance of fallback.tosInstancesByProjectId[projectId] ?? []) {
-        byVersion.set(instance.tosVersion, instance)
-      }
-      for (const instance of migrated.tosInstancesByProjectId[projectId] ?? []) {
-        byVersion.set(instance.tosVersion, instance)
-      }
-      return [projectId, [...byVersion.values()]]
-    }),
-  )
+  const mergedTosInstancesByProjectId = tosInstancesByProjectId
   const mergedStopRecords = [...new Map([
     ...fallback.stopReleaseRecords.map(record => [record.projectId, record] as const),
     ...migrated.stopReleaseRecords.map(record => [record.projectId, record] as const),
@@ -458,6 +468,10 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
     ...fallback.marketOverridesByKey,
     ...migrated.marketOverridesByKey,
   }).filter(([, override]) => Boolean(stopped.persistedPlans[`${override.projectId}::${override.tosVersion}`])))
+  const mergedMachineRowLocks = {
+    ...sanitizeMachineRowLocks(fallback.machineRowLocks, stopped.persistedPlans),
+    ...sanitizeMachineRowLocks(migrated.machineRowLocks, stopped.persistedPlans),
+  }
 
   return {
     ...migrated,
@@ -465,6 +479,7 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
     machinePlansByKey: stopped.persistedPlans,
     marketOverridesByKey: mergedMarketOverrides,
     stopReleaseRecords: stopped.stopRecords,
+    machineRowLocks: mergedMachineRowLocks,
   }
 }
 
@@ -686,7 +701,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
     },
     reconcileMachinePlans: input => {
       const state = get()
-      const tosInstances = Object.values(state.tosInstancesByProjectId).flat()
+      const tosInstances = selectCanonicalTosMrInstances(state.tosInstancesByProjectId)
       const result = reconcileJointMachinePlans({
         ...input,
         tosInstances,

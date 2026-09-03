@@ -39,6 +39,18 @@ export const DEFAULT_MR_TEMPLATE_ACTIVITIES: readonly Readonly<MrTemplateActivit
 )
 
 export const MR_MOCK_SCENARIOS = Object.freeze({
+  normal: Object.freeze({
+    tosInstanceKey: '19::16.3.0.135',
+    machinePlanKey: '1::16.3.0.145',
+  }),
+  invalid: Object.freeze({
+    tosInstanceKey: '6::17.1.0.125',
+    machinePlanKey: '3::16.3.0.145',
+  }),
+  locked: Object.freeze({
+    machinePlanKey: '1::16.3.0.155',
+    machineRowLockKey: '1::19::16.3.0.155',
+  }),
   tos: Object.freeze(['normal', 'boundary-valid', 'before-plan-start', 'after-plan-end'] as const),
   joint: Object.freeze(['normal-type-1', 'normal-type-2-plus', 'same-type-mismatch', 'one-week-gap', 'tos-baseline', 'mp-deadline', 'next-version-boundary'] as const),
   market: Object.freeze(['normal-follow', 'later-than-main', 'missing-main-boundary'] as const),
@@ -61,6 +73,29 @@ export function createInitialMrTemplateVersions(): MrTemplateVersion[] {
 const MR_ACCEPTANCE_CREATED_AT = '2026-08-29T00:00:00.000Z'
 
 const MR_ACCEPTANCE_DATES: Record<string, Record<string, string>> = {
+  '17.1.0.120': {
+    'mr-node-change-collection': '2026-02-01',
+    'mr-node-change-lock': '2026-02-03',
+    'mr-node-mp-intake-start': '2026-02-05',
+    'mr-node-mp-intake-deadline': '2026-02-07',
+    'mr-node-version-transfer': '2026-02-10',
+    'mr-node-test-start': '2026-02-12',
+    'mr-node-test-complete': '2026-02-20',
+    'mr-node-review': '2026-02-22',
+    'mr-node-archive': '2026-02-25',
+    'mr-node-ota-deploy': '2026-03-01',
+  },
+  '17.1.0.125': {
+    'mr-node-change-collection': '2026-03-02',
+    'mr-node-change-lock': '2026-03-04',
+    'mr-node-mp-intake-start': '2026-03-06',
+    'mr-node-mp-intake-deadline': '2026-03-08',
+    'mr-node-version-transfer': '2026-03-11',
+    'mr-node-test-start': '2026-03-13',
+    'mr-node-test-complete': '2026-03-22',
+    'mr-node-archive': '2026-03-26',
+    'mr-node-ota-deploy': '2026-04-02',
+  },
   '16.3.0.135': {
     'mr-node-change-collection': '2026-04-17',
     'mr-node-change-lock': '2026-04-18',
@@ -144,12 +179,17 @@ const MR_ACCEPTANCE_TOS_VERSIONS = Object.freeze([
   '16.3.0.160',
 ] as const)
 
+const MR_SECONDARY_TOS_VERSIONS = Object.freeze([
+  '17.1.0.120',
+  '17.1.0.125',
+] as const)
+
 const cloneActivities = () => DEFAULT_MR_TEMPLATE_ACTIVITIES.map(activity => ({ ...activity }))
 const cloneDates = (dates: Readonly<Record<string, string>>) => ({ ...dates })
 
-function createTosInstance(tosVersion: string): TosMrVersionInstance {
+function createTosInstance(projectId: string, tosVersion: string): TosMrVersionInstance {
   return {
-    projectId: '19',
+    projectId,
     tosVersion,
     templateVersionId: 'mr-template-v1',
     activities: cloneActivities(),
@@ -215,7 +255,8 @@ export interface InitialMrVersionPlanStateSeed {
 /** Fresh, deterministic acceptance state; callers may mutate it without sharing references. */
 export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed {
   const templateVersions = createInitialMrTemplateVersions()
-  const tosInstances = MR_ACCEPTANCE_TOS_VERSIONS.map(createTosInstance)
+  const tosInstances = MR_ACCEPTANCE_TOS_VERSIONS.map(tosVersion => createTosInstance('19', tosVersion))
+  const secondaryTosInstances = MR_SECONDARY_TOS_VERSIONS.map(tosVersion => createTosInstance('6', tosVersion))
   const mismatchedTypeTwoA = createMachinePlan('1', '16.3.0.140', '2', {
     ...withoutDate(MR_ACCEPTANCE_DATES['16.3.0.140'], 'mr-node-archive'),
     'mr-node-version-transfer': '2026-05-29',
@@ -298,7 +339,7 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
     templateVersions,
     currentTemplateVersionId: templateVersions[0].id,
     templateHistory: [],
-    tosInstancesByProjectId: { '19': tosInstances },
+    tosInstancesByProjectId: { '6': secondaryTosInstances, '19': tosInstances },
     machinePlansByKey: stoppedState.persistedPlans,
     marketOverridesByKey: {
       '1::16.3.0.140::TR': createMarketOverride('1', '16.3.0.140', 'TR', {
@@ -317,7 +358,16 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
     },
     stopReleaseRecords: stoppedState.stopRecords,
     viewModeByScope: {},
-    machineRowLocks: {},
+    machineRowLocks: {
+      '1::19::16.3.0.155': {
+        key: '1::19::16.3.0.155',
+        projectId: '1',
+        tosProjectId: '19',
+        tosVersion: '16.3.0.155',
+        lockedBy: '李白',
+        lockedAt: '2026-09-03T02:00:00.000Z',
+      },
+    },
   }
 }
 
@@ -367,7 +417,33 @@ const machineSnapshot = (dayOffset = 0): Level1PlanTask[] => (
   withAcceptanceMilestoneDates(buildMachineLevel1Tasks(false), dayOffset)
 )
 
-const tosSnapshot = (dayOffset = 0): Level1PlanTask[] => {
+interface TosBusinessNodeFixture {
+  id: string
+  stage: 'launch' | 'maintenance'
+  order: number
+  taskName: string
+  planStartDate: string
+  planEndDate: string
+}
+
+const MR_ACCEPTANCE_TOS_BUSINESS_NODES: readonly TosBusinessNodeFixture[] = [
+  { id: 'tos-mr-135', stage: 'launch', order: 0, taskName: '16.3.0.135', planStartDate: '2026-04-16', planEndDate: '2026-05-15' },
+  { id: 'tos-mr-140', stage: 'launch', order: 1, taskName: '16.3.0.140', planStartDate: '2026-05-16', planEndDate: '2026-06-15' },
+  { id: 'tos-mr-145', stage: 'maintenance', order: 0, taskName: '16.3.0.145', planStartDate: '2026-06-16', planEndDate: '2026-07-15' },
+  { id: 'tos-mr-150', stage: 'maintenance', order: 1, taskName: '16.3.0.150', planStartDate: '2026-07-16', planEndDate: '2026-08-15' },
+  { id: 'tos-mr-155', stage: 'maintenance', order: 2, taskName: '16.3.0.155', planStartDate: '2026-08-16', planEndDate: '2026-09-15' },
+  { id: 'tos-mr-160', stage: 'maintenance', order: 3, taskName: '16.3.0.160', planStartDate: '2026-09-16', planEndDate: '' },
+]
+
+const MR_SECONDARY_TOS_BUSINESS_NODES: readonly TosBusinessNodeFixture[] = [
+  { id: 'tos-17-1-mr-120', stage: 'launch', order: 0, taskName: '17.1.0.120', planStartDate: '2026-02-01', planEndDate: '2026-03-01' },
+  { id: 'tos-17-1-mr-125', stage: 'maintenance', order: 0, taskName: '17.1.0.125', planStartDate: '2026-03-02', planEndDate: '2026-04-01' },
+]
+
+const tosSnapshot = (
+  dayOffset = 0,
+  businessNodes: readonly TosBusinessNodeFixture[] = MR_ACCEPTANCE_TOS_BUSINESS_NODES,
+): Level1PlanTask[] => {
   const tasks = withAcceptanceMilestoneDates(buildTosLevel1Tasks(false), dayOffset)
   const launchStage = tasks.find(task => task.stableId === 'tos-stage-launch-iteration')!
   const maintenanceStage = tasks.find(task => task.stableId === 'tos-stage-maintenance')!
@@ -398,12 +474,14 @@ const tosSnapshot = (dayOffset = 0): Level1PlanTask[] => {
   })
   return [
     ...tasks,
-    businessNode('tos-mr-135', launchStage, 0, '16.3.0.135', '2026-04-16', '2026-05-15'),
-    businessNode('tos-mr-140', launchStage, 1, '16.3.0.140', '2026-05-16', '2026-06-15'),
-    businessNode('tos-mr-145', maintenanceStage, 0, '16.3.0.145', '2026-06-16', '2026-07-15'),
-    businessNode('tos-mr-150', maintenanceStage, 1, '16.3.0.150', '2026-07-16', '2026-08-15'),
-    businessNode('tos-mr-155', maintenanceStage, 2, '16.3.0.155', '2026-08-16', '2026-09-15'),
-    businessNode('tos-mr-160', maintenanceStage, 3, '16.3.0.160', '2026-09-16', ''),
+    ...businessNodes.map(node => businessNode(
+      node.id,
+      node.stage === 'launch' ? launchStage : maintenanceStage,
+      node.order,
+      node.taskName,
+      node.planStartDate,
+      node.planEndDate,
+    )),
   ]
 }
 
@@ -427,6 +505,10 @@ export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
   }
   for (const version of tosVersions.filter(candidate => candidate.status === '已发布')) {
     publishedSnapshots[`project::19::tos-type::Full::level1::${version.id}::snapshot`] = tosSnapshot(versionOffset(version.versionNo))
+    publishedSnapshots[`project::6::tos-type::Slim::level1::${version.id}::snapshot`] = tosSnapshot(
+      versionOffset(version.versionNo),
+      MR_SECONDARY_TOS_BUSINESS_NODES,
+    )
   }
   return {
     publishedSnapshots,
@@ -435,6 +517,7 @@ export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
       machineVersions.map(version => ({ ...version })),
     ])),
     tosTypeVersionsByKey: {
+      'project::6::tos-type::Slim::level1::versions': tosVersions.map(version => ({ ...version })),
       'project::19::tos-type::Full::level1::versions': tosVersions.map(version => ({ ...version })),
     },
   }

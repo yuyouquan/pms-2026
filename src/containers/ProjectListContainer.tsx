@@ -124,17 +124,9 @@ export default function ProjectListContainer() {
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
   const statusEnumType = getProjectStatusEnumType(projectTypeFilter)
-  const statusHistory = useMemo(() => [...new Set(projects
-    .filter(project => projectTypeFilter !== 'all' && matchesProjectTypeFilter(
-      project.type,
-      projectTypeFilter,
-      project.secondaryCategory,
-    ))
-    .map(project => project.status)
-    .filter(Boolean))], [projectTypeFilter, projects])
   const configuredStatusOptions = useSingleEnumOptions(
     statusEnumType,
-    statusHistory,
+    [],
     projectTypeFilter !== 'all',
   )
   const {

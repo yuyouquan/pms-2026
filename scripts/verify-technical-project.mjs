@@ -465,7 +465,9 @@ assert.doesNotMatch(technicalPlanSummary, /stage\.manpowerPercent[\s\S]{0,180}%/
 assert.match(technicalPlanSummary, /technical-plan-summary-sticky-version[\s\S]*technical-plan-summary-sticky-cycle/, 'technical plan summary keeps version and cycle columns fixed like whole-machine plan information')
 assert.doesNotMatch(technicalPlanSummary, /<Tag[^>]*color="green"|已发布<\/Tag>/, 'technical plan summary does not add status tags absent from the whole-machine summary')
 assert.match(technicalPlanSummary, /const displayCycle = \(days: number \| null\) => days === null \? '-' : days/, 'technical plan summary displays cycle values without a divergent unit suffix')
-assert.match(technicalPlanSummary, /canEditPlanEnd[\s\S]*canEditActualEnd[\s\S]*ClickToEditDate/, 'technical plan summary edits draft and actual completion dates when authorized')
+assert.match(technicalPlanSummary, /const canEditActualEnd = canEditPlan[\s\S]{0,120}currentVersion\.status === '修订中'/, 'technical plan summary only enables actual completion editing on a revision draft')
+assert.doesNotMatch(technicalPlanSummary, /currentVersion\.id === latestPublishedVersion\?\.id/, 'technical plan summary never makes the latest published version writable')
+assert.match(technicalPlanSummary, /canEditActualEnd[\s\S]*ClickToEditDate/, 'technical plan summary exposes actual completion date editing for an authorized revision draft')
 const projectInformationFrame = readSource(root, 'src/components/project-info/ProjectInformationFrame.tsx')
 assert.match(projectInformationFrame, /resolveProjectInformationCoreColumnCount\(coreFields\)/, 'the live shared frame derives columns from non-full-width fields')
 assert.match(projectInformationFrame, /Math\.min\(8, Math\.max\(1, fields\.filter\(field => !field\.fullWidth\)\.length\)\)/, 'the live shared frame excludes full-width fields and bounds desktop columns at eight')
@@ -491,14 +493,14 @@ const configModalMount = liveJsxMounts(technicalInformationReachableNodes, techn
 assert.ok(staticJsxAttributeText(jsxAttribute(configModalMount, 'open')).includes('configuringChild'), 'mounted configuration modal consumes the state opened by its button')
 const createFields = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
 assert.match(createFields, /fields:\s*readonly ProjectInfoFieldDefinition\[\]/, 'technical create fields receive the ordered create projection')
-assert.match(createFields, /fields\.map\(field =>/, 'technical create Form.Items preserve projection order')
+assert.match(createFields, /groupFields\.map\(renderField\)/, 'technical create Form.Items preserve projection order within each configured group')
 assert.match(
   createFields,
   /const isRequired = !field\.readOnly[\s\S]{0,160}validateRequiredOnCreate \? field\.requiredOnCreate : field\.required/,
   'create uses requiredOnCreate while edit uses required, and source snapshots are never revalidated as user input',
 )
 assert.match(createFields, /TECHNICAL_SOURCE_SNAPSHOT_KEYS\.has\(field\.key\)[\s\S]{0,160}<Input disabled/, 'project category, track, child name, and status stay disabled source snapshots')
-assert.match(modal, /fields=\{technicalCreateFields\}/, 'project modal forwards the technical create projection')
+assert.match(modal, /fields=\{technicalGroupedFields\}/, 'project modal forwards only the grouped technical projection')
 assert.match(themeProvider, /<ConfigProvider[\s\S]*<App>[\s\S]*\{children\}[\s\S]*<\/App>[\s\S]*<\/ConfigProvider>/, 'the application mounts one persistent AntD App context inside the theme provider')
 assert.match(modal, /const \{ message: messageApi, modal: modalApi \} = App\.useApp\(\)/, 'project modal feedback consumes the persistent application context')
 assert.doesNotMatch(modal, /\bmessage\.error\(/, 'project modal must not emit static-context message warnings')
@@ -506,9 +508,11 @@ assert.doesNotMatch(modal, /Modal\.confirm\(/, 'project modal must not emit stat
 assert.match(addProjectModal, /const \{ message \} = App\.useApp\(\)/, 'project creation feedback survives navigation through the persistent application context')
 assert.match(
   modal,
-  /projectType: type[\s\S]{0,200}ipmStatus: entry\.ipmStatus[\s\S]{0,240}type === PROJECT_CATEGORY_TECH[\s\S]{0,160}mapIpmProjectStatus\(entry\.ipmStatus/,
-  'technical source selection must override the generic configured default with the mapped IPM status snapshot',
+  /buildInitialProjectStatusPatch\([\s\S]{0,240}ipmStatus: entry\.ipmStatus/,
+  'technical source selection delegates status initialization to the shared user-selection-only rule',
 )
+assert.doesNotMatch(modal, /mapIpmProjectStatus\(entry\.ipmStatus/, 'technical source selection never copies the IPM status into the editable project status')
+assert.match(modal, /resolveConfiguredProjectStatus\([\s\S]{0,280}submittedStatus/, 'technical submission validates the user-selected status against the configured enum')
 assert.equal((createFields.match(/<Form\.Item/g) || []).length, 1, 'technical create fields use one generic Form.Item renderer without duplicate test representatives')
 assert.match(createFields, /useSingleEnumOptions\(['"]core-value['"]/, 'project value consumes the shared core-value configuration')
 assert.match(createFields, /useTmgOptions|getTmgSubdomainState/, 'technical create/edit fields consume live TMG rows')
@@ -527,12 +531,12 @@ for (const source of [technicalBasicInfoSource, subprojectConfigSource]) {
 const technicalStoreSource = readSource(root, 'src/stores/technicalProject.ts')
 assert.doesNotMatch(technicalStoreSource, /TECHNICAL_CORE_VALUES|TECHNICAL_DEVELOPMENT_MODES/, 'technical store validates string shape rather than closed option membership')
 const technicalPlan = readSource(root, 'src/components/technical-project/TechnicalPlanModule.tsx')
-assert.match(technicalPlan, /const \{ message, modal \} = App\.useApp\(\)/, 'technical-plan feedback consumes the persistent App context')
-assert.doesNotMatch(technicalPlan, /Modal\.confirm\(/, 'technical-plan clone confirmation must use the mounted modal instance')
+assert.match(technicalPlan, /const \{ message \} = App\.useApp\(\)/, 'technical-plan feedback consumes the persistent App context')
+assert.doesNotMatch(technicalPlan, /Modal\.confirm\(/, 'technical-plan workspace has no static modal confirmation path')
 assert.doesNotMatch(technicalPlan, /\bmessage\s*\} from ['"]antd['"]/, 'technical-plan feedback must not import the static message API')
 assert.doesNotMatch(technicalPlan, /显示已停用|showInactive|Switch/, 'technical plan scope tabs also omit inactive subprojects')
 assert.doesNotMatch(technicalPlan, /aria-label=["']导入["']/, 'current technical-plan workspace intentionally exposes no import entry')
-assert.doesNotMatch(technicalPlan, /aria-label=["']分享计划["']/, 'current technical-plan workspace intentionally exposes no share entry')
+assert.match(technicalPlan, /aria-label=["']分享计划["']/, 'technical-plan workspace exposes the level-one share entry')
 assert.doesNotMatch(technicalPlan, /aria-label=[^\n]{0,80}新增二级任务/, 'current technical TDT workspace exposes no add-child control')
 assert.match(technicalPlan, /rowClassName=\{\(\) => ['"]technical-plan-flat-row['"]\}/, 'current technical vertical plan uses the explicit flat-row structure')
 assert.doesNotMatch(technicalPlan, /technical-plan-child-row/, 'current technical vertical plan does not render the retired nested-row class')

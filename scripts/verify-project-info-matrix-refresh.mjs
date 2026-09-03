@@ -216,7 +216,7 @@ assert.doesNotMatch(schema, /'tOS15\.0\.1'[\s\S]*'tOS17\.2'/, 'first-sale tOS op
 assert.match(modal, /useEnumStore\(state\s*=>\s*state\.rowsByType\)/, 'the project form reads the unified enum row registry')
 assert.match(modal, /findProjectCategoryMapping/, 'the project form resolves IPM classification from configured mapping rows')
 assert.doesNotMatch(modal, /mapIpmProjectClassification/, 'the project form does not call the removed hard-coded IPM mapping')
-assert.match(modal, /projectType\s*===\s*PROJECT_CATEGORY_MACHINE[\s\S]*项目二级分类/, 'only whole-machine projects render PMS secondary classification')
+assert.match(modal, /isMachineProjectType\(projectType\)[\s\S]*项目二级分类/, 'only whole-machine projects render PMS secondary classification')
 assert.match(modal, /暂无可用配置，请先在配置中心维护/, 'empty configured option sets provide maintenance guidance')
 assert.match(modal, /buildChipOptions|useChipOptions/, 'chip selection consumes atomic chip mapping rows')
 assert.match(schema, /label:\s*'首发项目芯片'/, 'the tOS launch chip label must match the reference document')

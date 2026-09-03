@@ -6,7 +6,11 @@ import { AppstoreOutlined, PlusOutlined, TableOutlined } from '@ant-design/icons
 import type { ProjectItem } from '@/types/app'
 import type { TosTypeConfigRow, TosTypeVersionsState } from '@/lib/tosTypeRules'
 import type { MrLevel1TaskLike, MrPlanVersionLike, MrPlanViewMode, MrTemplateVersion } from '@/types/mrVersionPlan'
-import { getTosManagerUsers, selectLatestPublishedTosLevel1 } from '@/lib/mrPlanSourceAdapters'
+import {
+  getTosManagerUsers,
+  selectCanonicalTosMrInstances,
+  selectLatestPublishedTosLevel1,
+} from '@/lib/mrPlanSourceAdapters'
 import {
   compareTosVersionNumbers,
   resolveMrPermissions,
@@ -67,7 +71,9 @@ export default function TosMrVersionPlan({
   const [selectedVersion, setSelectedVersion] = useState<string>()
   const [versionQuery, setVersionQuery] = useState('')
   const templateVersions = useMrVersionPlanStore(state => state.templateVersions)
-  const instances = useMrVersionPlanStore(state => state.tosInstancesByProjectId[project.id] ?? [])
+  const instances = useMrVersionPlanStore(state => (
+    selectCanonicalTosMrInstances(state.tosInstancesByProjectId, project.id)
+  ))
   const viewModeByScope = useMrVersionPlanStore(state => state.viewModeByScope)
   const addTosVersionInstance = useMrVersionPlanStore(state => state.addTosVersionInstance)
   const updateTosDate = useMrVersionPlanStore(state => state.updateTosDate)

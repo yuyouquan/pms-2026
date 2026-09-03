@@ -1,13 +1,18 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Card, Empty, Space, Tag, Tooltip } from 'antd'
+import { App, Card, Empty, Space, Tag, Tooltip } from 'antd'
 import { CalendarOutlined, EditOutlined } from '@ant-design/icons'
 import { ClickToEditDate } from '@/components/shared/PlanHelpers'
 import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
 import { formatPlanPublishedDate } from '@/lib/planVersioning'
 import { selectLevel1HorizontalVersions } from '@/lib/projectSpaceLevel1Rules'
-import { getTechnicalPlanRowKey } from '@/lib/technicalPlanWorkspace'
+import {
+  buildTechnicalHorizontalDateMap,
+  getTechnicalPlanRowKey,
+  normalizeTechnicalTaskName,
+  selectTechnicalPlanActualVersion,
+} from '@/lib/technicalPlanWorkspace'
 import { getTechnicalPlanKey, useTechnicalPlanStore, type TechnicalPlanScope } from '@/stores/technicalPlan'
 import type { TechnicalTemplateTask } from '@/types/technicalPlan'
 
@@ -29,6 +34,7 @@ const normalizeTasks = (tasks: readonly TechnicalTemplateTask[]) => tasks.map(ta
 }))
 
 export default function TechnicalPlanSummary({ scope, label, canEditPlan }: TechnicalPlanSummaryProps) {
+  const { message } = App.useApp()
   const instance = useTechnicalPlanStore(state => state.plansByKey[getTechnicalPlanKey(scope)])
   const updateCurrentTasks = useTechnicalPlanStore(state => state.updateCurrentTasks)
   const visibleVersions = selectLevel1HorizontalVersions(instance?.versions || [], { surface: 'basic-info' })
@@ -70,28 +76,32 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
     return {
       version,
       cycleDays: sumLevel1EstimatedDays(projection.rows),
-      endDatesByTaskId: Object.fromEntries(projection.rows.map(task => [getTechnicalPlanRowKey(task), task.planEndDate || ''])),
+      endDatesByTaskId: buildTechnicalHorizontalDateMap(columns, projection.rows, 'planEndDate'),
     }
   })
-  const actualProjection = projectLevel1Plan(normalizeTasks(latestPublishedVersion?.tasks || []), { mode: projectionMode })
+  const actualVersion = selectTechnicalPlanActualVersion(currentVersion, latestPublishedVersion)
+  const actualProjection = projectLevel1Plan(normalizeTasks(actualVersion?.tasks || []), { mode: projectionMode })
   const actualStarts = actualProjection.rows.map(row => Date.parse(row.actualStartDate)).filter(Number.isFinite)
   const actualEnds = actualProjection.rows.map(row => Date.parse(row.actualEndDate)).filter(Number.isFinite)
   const actualCycleDays = actualStarts.length && actualEnds.length
     ? Math.max(0, Math.ceil((Math.max(...actualEnds) - Math.min(...actualStarts)) / 86_400_000))
     : null
-  const actualEndDatesByTaskId = Object.fromEntries(
-    actualProjection.rows.map(task => [getTechnicalPlanRowKey(task), task.actualEndDate || '']),
-  )
-  const canEditActualEnd = canEditPlan && (
-    currentVersion.status === '修订中' || currentVersion.id === latestPublishedVersion?.id
-  )
+  const actualEndDatesByTaskId = buildTechnicalHorizontalDateMap(columns, actualProjection.rows, 'actualEndDate')
+  const canEditActualEnd = canEditPlan
+    && currentVersion.status === '修订中'
+    && instance?.currentVersionId === currentVersion.id
   const updateActualDate = (taskKey: string, value: string) => {
     if (!canEditActualEnd) return
-    updateCurrentTasks(
+    const result = updateCurrentTasks(
       scope,
       currentVersion.tasks.map(task => getTechnicalPlanRowKey(task) === taskKey ? { ...task, actualEndDate: value } : task),
       scope.kind === 'subproject' ? 1 : 2,
     )
+    if (!result.ok) {
+      message.error('实际完成时间保存失败，请确认当前修订版本')
+      return
+    }
+    message.success('已保存')
   }
 
   return planCard(
@@ -172,12 +182,14 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
             <td className="technical-plan-summary-sticky-cycle">{displayCycle(actualCycleDays)}</td>
             {columns.map(column => {
               const taskKey = getTechnicalPlanRowKey(column)
-              const actualTask = actualProjection.rows.find(task => getTechnicalPlanRowKey(task) === taskKey)
+              const actualTask = actualProjection.rows.find(task => (
+                normalizeTechnicalTaskName(task.taskName) === normalizeTechnicalTaskName(column.taskName)
+              ))
               const actualEndDate = actualTask ? actualEndDatesByTaskId[taskKey] || '' : ''
               return (
                 <td key={taskKey}>
                   {actualTask && canEditActualEnd
-                    ? <ClickToEditDate align="center" value={actualEndDate} onChange={value => updateActualDate(taskKey, value)} />
+                    ? <ClickToEditDate align="center" value={actualEndDate} onChange={value => updateActualDate(taskKey, value)} onSaved={() => undefined} />
                     : actualEndDate || '-'}
                 </td>
               )

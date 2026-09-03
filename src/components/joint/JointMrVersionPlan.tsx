@@ -22,7 +22,7 @@ import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { makeMrMachineRowLockKey, rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { ensureEnumHydrated, useEnumStore } from '@/stores/enums'
-import { buildMrAggregationSources } from '@/lib/mrPlanSourceAdapters'
+import { buildMrAggregationSources, selectCanonicalTosMrInstances } from '@/lib/mrPlanSourceAdapters'
 import { reconcileJointMachinePlans } from '@/lib/mrAggregationRules'
 import { validateJointMachineRows } from '@/lib/mrDateRules'
 import { createShanghaiBusinessDateTicker, getShanghaiBusinessDate } from '@/lib/shanghaiBusinessDate'
@@ -221,7 +221,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   ])
   const sources = useMemo(() => buildMrAggregationSources(sourceInput), [sourceInput])
   const tosInstances = useMemo(
-    () => Object.values(tosInstancesByProjectId).flat(),
+    () => selectCanonicalTosMrInstances(tosInstancesByProjectId),
     [tosInstancesByProjectId],
   )
 

@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactElement } from 'react'
 import {
   DownOutlined,
+  DownloadOutlined,
   FilterOutlined,
   FullscreenExitOutlined,
   FullscreenOutlined,
@@ -37,6 +38,7 @@ interface RoadmapToolbarProps {
   onToggleFullscreen: () => void
   onOpenTosMaintenance: () => void
   onCreatePlannedProject: () => void
+  onExport: () => void
   onOpenFilters: () => void
   onOpenColumnSettings: () => void
   renderFilters: (trigger: ReactElement) => ReactElement
@@ -84,6 +86,7 @@ export default function RoadmapToolbar({
   onToggleFullscreen,
   onOpenTosMaintenance,
   onCreatePlannedProject,
+  onExport,
   onOpenFilters,
   onOpenColumnSettings,
   renderFilters,
@@ -195,6 +198,12 @@ export default function RoadmapToolbar({
               </Button>
             </Tooltip>,
           )}
+
+          <Tooltip title="导出当前路标数据">
+            <Button aria-label="导出" icon={<DownloadOutlined />} disabled={!canView} onClick={onExport} style={compactControlStyle}>
+              导出
+            </Button>
+          </Tooltip>
 
           {canEdit ? (
             <>

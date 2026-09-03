@@ -11,6 +11,7 @@ import {
   normalizeLegacyRoadmapProductType,
   normalizeRoadmapTosReference,
 } from '@/lib/roadmapValidation'
+import { formatPrimaryChipCode } from '@/lib/enumConsumers'
 import type { ProjectItem } from '@/types/app'
 import type {
   PlannedRoadmapProject,
@@ -36,6 +37,19 @@ function firstNonBlank(...values: unknown[]): string {
     if (trimmed) return trimmed
   }
   return ''
+}
+
+function extractNamedChipCode(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value.trim().match(/-([^_\s]+)_(?:[^_\s]+)$/)?.[1]?.trim() ?? ''
+}
+
+export function resolveNormalProjectChipCode(project: ProjectItem): string {
+  return firstNonBlank(
+    formatPrimaryChipCode(project.fieldValues?.chipCode),
+    extractNamedChipCode(project.projectCode),
+    extractNamedChipCode(project.name),
+  )
 }
 
 function normalizeNormalProductType(value: unknown): RoadmapProductType | null {
@@ -173,7 +187,7 @@ export function adaptNormalProject(
     productSeries: firstNonBlank(project.productSeries),
     marketName: firstNonBlank(project.marketName),
     productType,
-    platform: firstNonBlank(project.platform, project.cpu, project.chipPlatform),
+    chipCode: resolveNormalProjectChipCode(project),
     startRam,
     versionType,
     str5Date: firstNonBlank(project.str5Date),

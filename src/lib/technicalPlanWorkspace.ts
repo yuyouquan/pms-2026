@@ -1,5 +1,6 @@
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
 import type { FilterFieldDefinition } from '@/lib/filterConditions'
+import { comparePlanVersions } from '@/lib/planVersioning'
 import {
   projectLevel1FlatMilestones,
   projectLevel1Plan,
@@ -69,6 +70,19 @@ export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
 export const getTechnicalPlanExportColumns = (templateKind: TechnicalTemplateKind) => (
   templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_EXPORT_COLUMNS : TECHNICAL_TDT_EXPORT_COLUMNS
 )
+
+export const selectLatestPublishedTechnicalTemplateVersion = <T extends { versionNo: string; status: string }>(
+  versions: readonly T[],
+): T | undefined => [...versions]
+  .filter(version => version.status === '已发布')
+  .sort((left, right) => comparePlanVersions(right, left))[0]
+
+export const selectTechnicalPlanActualVersion = <T extends { status: string }>(
+  currentVersion: T | undefined,
+  latestPublishedVersion: T | undefined,
+): T | undefined => currentVersion?.status === '修订中'
+  ? currentVersion
+  : latestPublishedVersion || currentVersion
 
 const DEFAULT_TECHNICAL_STATUS_OPTIONS = ['未开始', '进行中', '已完成'].map(value => ({ label: value, value }))
 
@@ -230,6 +244,158 @@ export function renumberTechnicalSubprojectTasks<T extends { id: string; stableI
   return tasks.map((task, index) => ({ ...task, id: String(index + 1), order: index }))
 }
 
+const TECHNICAL_REVISION_TIME_FIELDS = [
+  'planStartDate',
+  'planEndDate',
+  'estimatedDays',
+  'actualStartDate',
+  'actualEndDate',
+  'actualDays',
+] as const
+
+export const normalizeTechnicalTaskName = (value: unknown) => String(value || '').trim()
+
+const clearTechnicalTemplateDates = (task: TechnicalTemplateTask): TechnicalTemplateTask => ({
+  ...task,
+  planStartDate: '',
+  planEndDate: '',
+  actualStartDate: '',
+  actualEndDate: '',
+})
+
+const refillTechnicalTemplateTime = (
+  templateTask: TechnicalTemplateTask,
+  previousTask?: TechnicalTemplateTask,
+): TechnicalTemplateTask => {
+  const next = clearTechnicalTemplateDates(templateTask)
+  if (!previousTask) return { ...next, source: 'template' }
+  TECHNICAL_REVISION_TIME_FIELDS.forEach(field => {
+    if (Object.prototype.hasOwnProperty.call(previousTask, field)) {
+      ;(next as unknown as Record<string, unknown>)[field] = previousTask[field]
+    }
+  })
+  return { ...next, source: 'template' }
+}
+
+const mergeTechnicalSubprojectRevisionTasks = (
+  latestTemplateTasks: readonly TechnicalTemplateTask[],
+  previousPublishedTasks: readonly TechnicalTemplateTask[],
+): TechnicalTemplateTask[] => {
+  const previousTasks = [...previousPublishedTasks].sort((left, right) => left.order - right.order)
+  const previousByName = new Map<string, TechnicalTemplateTask[]>()
+  previousTasks.forEach(task => {
+    const name = normalizeTechnicalTaskName(task.taskName)
+    if (!name) return
+    previousByName.set(name, [...(previousByName.get(name) || []), task])
+  })
+  const consumedIds = new Set<string>()
+  const takePreviousByName = (taskName: string) => {
+    const candidates = previousByName.get(normalizeTechnicalTaskName(taskName)) || []
+    const match = candidates.find(task => !consumedIds.has(task.stableId || task.id))
+    if (match) consumedIds.add(match.stableId || match.id)
+    return match
+  }
+  const orderedTemplate = [...latestTemplateTasks].sort((left, right) => left.order - right.order)
+  const latestTemplateNames = new Set(orderedTemplate.map(task => normalizeTechnicalTaskName(task.taskName)))
+  const customBeforeTemplate = new Map<string, TechnicalTemplateTask[]>()
+  const trailingCustom: TechnicalTemplateTask[] = []
+  previousTasks.forEach((task, index) => {
+    if (task.source !== 'custom' || latestTemplateNames.has(normalizeTechnicalTaskName(task.taskName))) return
+    const anchor = previousTasks.slice(index + 1).find(candidate => (
+      candidate.source !== 'custom'
+      && latestTemplateNames.has(normalizeTechnicalTaskName(candidate.taskName))
+    ))
+    const target = anchor
+      ? customBeforeTemplate.get(normalizeTechnicalTaskName(anchor.taskName)) || []
+      : trailingCustom
+    target.push({ ...task, parentId: undefined, source: 'custom' })
+    if (anchor) customBeforeTemplate.set(normalizeTechnicalTaskName(anchor.taskName), target)
+  })
+  const merged = orderedTemplate.flatMap(templateTask => [
+    ...(customBeforeTemplate.get(normalizeTechnicalTaskName(templateTask.taskName)) || []),
+    refillTechnicalTemplateTime(templateTask, takePreviousByName(templateTask.taskName)),
+  ])
+  return renumberTechnicalSubprojectTasks([...merged, ...trailingCustom])
+}
+
+const mergeTechnicalTdtRevisionTasks = (
+  latestTemplateTasks: readonly TechnicalTemplateTask[],
+  previousPublishedTasks: readonly TechnicalTemplateTask[],
+): TechnicalTemplateTask[] => {
+  const previousByName = new Map<string, TechnicalTemplateTask[]>()
+  previousPublishedTasks.forEach(task => {
+    const name = normalizeTechnicalTaskName(task.taskName)
+    if (!name) return
+    previousByName.set(name, [...(previousByName.get(name) || []), task])
+  })
+  const previousById = new Map(previousPublishedTasks.map(task => [task.id, task]))
+  const consumedIds = new Set<string>()
+  const previousIdToNextId = new Map<string, string>()
+  const takePreviousByName = (taskName: string) => {
+    const candidates = previousByName.get(normalizeTechnicalTaskName(taskName)) || []
+    const match = candidates.find(task => !consumedIds.has(task.id))
+    if (match) consumedIds.add(match.id)
+    return match
+  }
+  const latestStages = latestTemplateTasks
+    .filter(task => !task.parentId)
+    .sort((left, right) => left.order - right.order)
+  const result: TechnicalTemplateTask[] = []
+
+  latestStages.forEach(stage => {
+    const previousStage = takePreviousByName(stage.taskName)
+    const nextStage = refillTechnicalTemplateTime({ ...stage, parentId: undefined }, previousStage)
+    if (previousStage) previousIdToNextId.set(previousStage.id, nextStage.id)
+    result.push(nextStage)
+
+    const templateChildren = latestTemplateTasks
+      .filter(task => task.parentId === stage.id)
+      .sort((left, right) => left.order - right.order)
+    templateChildren.forEach(child => {
+      const previousChild = takePreviousByName(child.taskName)
+      const nextChild = refillTechnicalTemplateTime({ ...child, parentId: stage.id }, previousChild)
+      if (previousChild) previousIdToNextId.set(previousChild.id, nextChild.id)
+      result.push(nextChild)
+    })
+
+    const matchingCustomChildren = previousPublishedTasks
+      .filter(task => {
+        if (task.source !== 'custom' || !task.parentId || consumedIds.has(task.id)) return false
+        const previousParent = previousById.get(task.parentId)
+        return normalizeTechnicalTaskName(previousParent?.taskName) === normalizeTechnicalTaskName(stage.taskName)
+      })
+      .sort((left, right) => left.order - right.order)
+    matchingCustomChildren.forEach((customTask, customIndex) => {
+      const nextId = `${stage.id}.${templateChildren.length + customIndex + 1}`
+      consumedIds.add(customTask.id)
+      previousIdToNextId.set(customTask.id, nextId)
+      result.push({
+        ...customTask,
+        id: nextId,
+        parentId: stage.id,
+        order: templateChildren.length + customIndex + 1,
+        source: 'custom',
+      })
+    })
+  })
+
+  return result.map(task => task.source === 'custom' && task.predecessor
+    ? { ...task, predecessor: previousIdToNextId.get(task.predecessor) || '' }
+    : task)
+}
+
+/** Builds every technical-plan revision from the latest published configuration template. */
+export const mergeTechnicalPlanRevisionTasks = (
+  templateKind: TechnicalTemplateKind,
+  latestTemplateTasks: readonly TechnicalTemplateTask[],
+  previousPublishedTasks: readonly TechnicalTemplateTask[],
+): TechnicalTemplateTask[] => {
+  if (templateKind === 'subproject') {
+    return mergeTechnicalSubprojectRevisionTasks(latestTemplateTasks, previousPublishedTasks)
+  }
+  return mergeTechnicalTdtRevisionTasks(latestTemplateTasks, previousPublishedTasks)
+}
+
 export function reorderTechnicalSubprojectCustomTasks<
   T extends { id: string; stableId?: string; source?: 'template' | 'custom'; parentId?: string; order: number },
 >(tasks: readonly T[], activeId: string, overId: string): T[] {
@@ -325,9 +491,27 @@ export type TechnicalHorizontalRow = {
   endDatesByTaskId: Record<string, string>
 }
 
+type TechnicalHorizontalDateTask = Pick<
+  TechnicalTemplateTask,
+  'id' | 'stableId' | 'taskName' | 'planEndDate' | 'actualEndDate'
+>
+
+export function buildTechnicalHorizontalDateMap(
+  headerTasks: readonly TechnicalHorizontalDateTask[],
+  versionTasks: readonly TechnicalHorizontalDateTask[],
+  field: 'planEndDate' | 'actualEndDate',
+): Record<string, string> {
+  const versionByName = new Map(versionTasks.map(task => [normalizeTechnicalTaskName(task.taskName), task]))
+  return Object.fromEntries(headerTasks.map(header => [
+    getTechnicalPlanRowKey(header),
+    versionByName.get(normalizeTechnicalTaskName(header.taskName))?.[field] || '',
+  ]))
+}
+
 export function buildTechnicalHorizontalRows(
   versions: readonly { id: string; versionNo: string; status: string; tasks: TechnicalTemplateTask[] }[],
   currentVersionId: string,
+  headerTasks?: readonly TechnicalTemplateTask[],
 ): TechnicalHorizontalRow[] {
   const versionRows = versions.map(version => ({
     id: version.id,
@@ -335,7 +519,9 @@ export function buildTechnicalHorizontalRows(
     versionNo: version.versionNo,
     status: version.status,
     cycleDays: sumTechnicalEstimatedDays(version.tasks),
-    endDatesByTaskId: Object.fromEntries(version.tasks.map(task => [getTechnicalPlanRowKey(task), task.planEndDate || ''])),
+    endDatesByTaskId: headerTasks
+      ? buildTechnicalHorizontalDateMap(headerTasks, version.tasks, 'planEndDate')
+      : Object.fromEntries(version.tasks.map(task => [getTechnicalPlanRowKey(task), task.planEndDate || ''])),
   }))
   const currentVersion = versions.find(version => version.id === currentVersionId)
   return [
@@ -346,7 +532,9 @@ export function buildTechnicalHorizontalRows(
       versionNo: '实际',
       status: '',
       cycleDays: currentVersion ? cycleDays(currentVersion.tasks, 'actualStartDate', 'actualEndDate') : null,
-      endDatesByTaskId: Object.fromEntries((currentVersion?.tasks || []).map(task => [getTechnicalPlanRowKey(task), task.actualEndDate || ''])),
+      endDatesByTaskId: headerTasks
+        ? buildTechnicalHorizontalDateMap(headerTasks, currentVersion?.tasks || [], 'actualEndDate')
+        : Object.fromEntries((currentVersion?.tasks || []).map(task => [getTechnicalPlanRowKey(task), task.actualEndDate || ''])),
     },
   ]
 }

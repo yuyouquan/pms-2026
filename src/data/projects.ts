@@ -23,21 +23,15 @@ export const mapIpmStatus = mapIpmProjectStatus
 // 项目状态颜色配置
 export const PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: string }> = {
   '待立项': { color: '#faad14', tagColor: 'warning' },
-  '待立议': { color: '#faad14', tagColor: 'warning' },
   '在研': { color: '#1890ff', tagColor: 'processing' },
   '进行中': { color: '#1890ff', tagColor: 'processing' },
   '已完成': { color: '#52c41a', tagColor: 'success' },
   '上市': { color: '#722ed1', tagColor: 'purple' },
-  '已上市': { color: '#722ed1', tagColor: 'purple' },
   '转维': { color: '#13c2c2', tagColor: 'cyan' },
-  '维护': { color: '#13c2c2', tagColor: 'cyan' },
   'EOS': { color: '#64748b', tagColor: 'default' },
   '暂停': { color: '#d9d9d9', tagColor: 'default' },
   '已暂停': { color: '#d9d9d9', tagColor: 'default' },
   '已取消': { color: '#ff4d4f', tagColor: 'error' },
-  '已迁移': { color: '#06b6d4', tagColor: 'cyan' },
-  '待验': { color: '#faad14', tagColor: 'warning' },
-  '筹备中': { color: '#faad14', tagColor: 'warning' },
 }
 
 // 项目数据
