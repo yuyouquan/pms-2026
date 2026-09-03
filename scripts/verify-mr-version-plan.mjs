@@ -314,6 +314,8 @@ jointFixedLabels.reduce((previousIndex, label) => {
 assert.match(headerSource, /navigateWithEditGuard\([\s\S]*setTransferView\(null\)/)
 assert.match(jointPlanSource, /rehydrateMrVersionPlanStore/)
 assert.match(jointPlanSource, /buildMrAggregationSources/)
+assert.match(jointPlanSource, /selectCanonicalTosMrInstances\(tosInstancesByProjectId\)/)
+assert.doesNotMatch(jointPlanSource, /Object\.values\(tosInstancesByProjectId\)\.flat\(\)/)
 assert.match(jointPlanSource, /reconcileMachinePlans/)
 assert.match(jointPlanSource, /const today = useShanghaiBusinessDate\(\)/)
 assert.match(jointPlanSource, /buildJointMrColumnSchema/)
@@ -564,6 +566,7 @@ assert.match(tosMrVersionPlanSource, /aria-label=['"]竖版视图['"]/)
 assert.match(tosMrVersionPlanSource, /aria-label=['"]横版视图['"]/)
 assert.match(tosMrVersionPlanSource, /addTosVersionInstance/)
 assert.match(tosMrVersionPlanSource, /updateTosDate/)
+assert.match(tosMrVersionPlanSource, /selectCanonicalTosMrInstances\(state\.tosInstancesByProjectId,\s*project\.id\)/)
 assert.match(tosMrVersionPlanSource, /if\s*\(!updated\)/)
 
 // tOS version search is display-only: filtering never narrows add candidates or write access.
@@ -2011,7 +2014,12 @@ assert.doesNotMatch(templateMocksSource, /MR_ACCEPTANCE_FIXED_MILESTONE_DATES\[t
 
 assert.match(mrBrowserVerifierSource, /setViewport\(\{\s*width:\s*1600,\s*height:\s*1000\s*\}\)/)
 assert.match(mrBrowserVerifierSource, /pms-mr-version-plan-store/)
+assert.match(mrBrowserVerifierSource, /pms-plan-store/)
 assert.match(mrBrowserVerifierSource, /pms-level3-plan-store/)
+assert.match(mrBrowserVerifierSource, /createLegacyDualCacheFixtures/)
+assert.match(mrBrowserVerifierSource, /tOS17\.1/)
+assert.match(mrBrowserVerifierSource, /version:\s*4[\s\S]*version:\s*13/)
+assert.match(mrBrowserVerifierSource, /readPlanState/)
 assert.doesNotMatch(mrBrowserVerifierSource, /localStorage\.clear\s*\(/)
 for (const helper of [
   'installDeterministicBrowserEnvironment',
@@ -2131,7 +2139,9 @@ assert.equal(
   'V2 browser storage backfills missing N/A acceptance rows after the plan-source eligibility migration',
 )
 const v4UserState = structuredClone(acceptanceStateA)
-delete v4UserState.tosInstancesByProjectId['6']
+v4UserState.tosInstancesByProjectId['6'] = v4UserState.tosInstancesByProjectId['6']
+  .filter(instance => instance.tosVersion === '17.1.0.120')
+v4UserState.tosInstancesByProjectId['6'][0].dates['mr-node-test-start'] = '2026-02-13'
 v4UserState.tosInstancesByProjectId['19'] = v4UserState.tosInstancesByProjectId['19']
   .filter(instance => instance.tosVersion !== '16.3.0.155')
 v4UserState.tosInstancesByProjectId['19']
@@ -2145,6 +2155,11 @@ assert.deepEqual(
   migratedV4UserState.tosInstancesByProjectId['6'].map(instance => instance.tosVersion),
   ['17.1.0.120', '17.1.0.125'],
   'V4 storage receives a missing standard tOS project by project and version key',
+)
+assert.equal(
+  migratedV4UserState.tosInstancesByProjectId['6'][0].dates['mr-node-test-start'],
+  '2026-02-13',
+  'V4 storage keeps an existing valid tOS edit while adding the missing sibling version',
 )
 assert.equal(
   migratedV4UserState.tosInstancesByProjectId['19'].filter(instance => instance.tosVersion === '16.3.0.155').length,
@@ -2648,7 +2663,7 @@ legacyPlanFixture.publishedSnapshots['project::tos::tos-type::Full::level3::v1::
 legacyPlanFixture.publishedSnapshots['project::machine::level3::level1::v1'] = [{ id: 'literal-level3-market' }]
 legacyPlanFixture.publishedSnapshots['project::level3::level1::v1'] = [{ id: 'literal-level3-project' }]
 const planStore = loadTypeScriptModule(root, 'src/stores/plan.ts')
-assert.equal(planStore.PLAN_STORE_VERSION, 13)
+assert.equal(planStore.PLAN_STORE_VERSION, 14)
 const migratedPlanFixture = planStore.migratePlanStoreState(structuredClone(legacyPlanFixture), 9)
 assert.equal('level3TemplateTasksByType' in migratedPlanFixture, false)
 assert.equal('level3ScopesByKey' in migratedPlanFixture, false)
@@ -2683,3 +2698,46 @@ assert.deepEqual(migratedPlanFixture.configTemplateVersionScopes['config-templat
 assert.deepEqual(migratedPlanFixture.configTemplateCompareScopes['config-template::整机产品项目::level1'], legacyPlanFixture.configTemplateCompareScopes['config-template::整机产品项目::level1'])
 assert.equal('legacyLevel3' in migratedPlanFixture.configTemplateVersionScopes, false)
 assert.equal('legacyLevel3' in migratedPlanFixture.configTemplateCompareScopes, false)
+
+const tos17PlanVersionsKey = 'project::6::tos-type::Slim::level1::versions'
+const tos17V1SnapshotKey = 'project::6::tos-type::Slim::level1::v1::snapshot'
+const tos17V3SnapshotKey = 'project::6::tos-type::Slim::level1::v3::snapshot'
+const userEditedTos17V1Snapshot = structuredClone(acceptancePlanScopeA.publishedSnapshots[tos17V1SnapshotKey])
+userEditedTos17V1Snapshot.find(task => task.taskName === '17.1.0.120').responsible = '李白'
+const userEditedTos17V1 = {
+  ...acceptancePlanScopeA.tosTypeVersionsByKey[tos17PlanVersionsKey][0],
+  publishedAt: '2026-01-01T00:00:00.000Z',
+}
+const planV13UserState = {
+  ...structuredClone(legacyPlanFixture),
+  publishedSnapshots: {
+    ...structuredClone(legacyPlanFixture.publishedSnapshots),
+    [tos17V1SnapshotKey]: userEditedTos17V1Snapshot,
+  },
+  tosTypeVersionsByKey: {
+    ...structuredClone(legacyPlanFixture.tosTypeVersionsByKey),
+    [tos17PlanVersionsKey]: [userEditedTos17V1],
+  },
+}
+const migratedPlanV13UserState = planStore.migratePlanStoreState(planV13UserState, 13)
+assert.deepEqual(
+  migratedPlanV13UserState.tosTypeVersionsByKey[tos17PlanVersionsKey].map(version => version.id),
+  ['v1', 'v2', 'v3', 'v4'],
+  'Plan V13 storage receives missing tOS17.1 versions by stable version id',
+)
+assert.equal(
+  migratedPlanV13UserState.tosTypeVersionsByKey[tos17PlanVersionsKey][0].publishedAt,
+  '2026-01-01T00:00:00.000Z',
+  'Plan V13 migration preserves an existing valid version record',
+)
+assert.deepEqual(
+  migratedPlanV13UserState.publishedSnapshots[tos17V1SnapshotKey],
+  userEditedTos17V1Snapshot,
+  'Plan V13 migration preserves an existing valid published snapshot',
+)
+assert.ok(migratedPlanV13UserState.publishedSnapshots[tos17V3SnapshotKey])
+assert.deepEqual(
+  migratedV4UserState.tosInstancesByProjectId['6'].map(instance => instance.tosVersion),
+  ['17.1.0.120', '17.1.0.125'],
+  'MR V4 and Plan V13 cache migrations both restore the tOS17.1 acceptance scope',
+)

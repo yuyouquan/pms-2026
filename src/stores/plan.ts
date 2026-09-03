@@ -46,7 +46,7 @@ import type {
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 13
+export const PLAN_STORE_VERSION = 14
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -723,7 +723,7 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   const marketVersionsByKey = { ...(migrated.marketVersionsByKey || {}) }
   const tosTypeVersionsByKey = { ...(migrated.tosTypeVersionsByKey || {}) }
   const marketCurrentVersionByKey = { ...(migrated.marketCurrentVersionByKey || {}) }
-  if (persistedVersion < 13) {
+  if (persistedVersion < 14) {
     Object.entries(workbenchAcceptanceSeed.publishedSnapshots).forEach(([key, tasks]) => {
       if (!migratedSnapshots[key]) migratedSnapshots[key] = tasks.map(task => ({ ...task }))
     })

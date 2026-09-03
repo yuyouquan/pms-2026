@@ -29,7 +29,21 @@ assert.ok(plans.filter(plan => plan.transferType === 'N/A').length >= 4, 'the ac
 assert.ok(plans.filter(plan => plan.transferType === 'N/A').every(plan => Object.keys(plan.dates).length === 0), 'N/A rows must persist no dates')
 assert.deepEqual(stateA, stateB, 'MR acceptance seed must be deterministic')
 
-assert.deepEqual(Object.keys(mocks.MR_MOCK_SCENARIOS), ['tos', 'joint', 'market', 'na', 'stopped'])
+assert.deepEqual(Object.keys(mocks.MR_MOCK_SCENARIOS), [
+  'normal', 'invalid', 'locked', 'tos', 'joint', 'market', 'na', 'stopped',
+])
+assert.deepEqual(mocks.MR_MOCK_SCENARIOS.normal, {
+  tosInstanceKey: '19::16.3.0.135',
+  machinePlanKey: '1::16.3.0.145',
+})
+assert.deepEqual(mocks.MR_MOCK_SCENARIOS.invalid, {
+  tosInstanceKey: '6::17.1.0.125',
+  machinePlanKey: '3::16.3.0.145',
+})
+assert.deepEqual(mocks.MR_MOCK_SCENARIOS.locked, {
+  machinePlanKey: '1::16.3.0.155',
+  machineRowLockKey: '1::19::16.3.0.155',
+})
 assert.ok(mocks.MR_MOCK_SCENARIOS.joint.includes('mp-deadline'))
 assert.ok(mocks.MR_MOCK_SCENARIOS.na.includes('slash-dates'))
 assert.ok(mocks.MR_MOCK_SCENARIOS.stopped.includes('future-rows-removed'))
