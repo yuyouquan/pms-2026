@@ -27,42 +27,24 @@ const version = (id, versionNo, templateType, status, tasks) => ({
   ...(status === '已发布' ? { publishedAt: `2026-0${versionNo.replace(/\D/g, '') || '1'}-01T00:00:00Z` } : {}),
 })
 
-const initialPlans = {
-  'project-a:tdt': instance('project-a:tdt', 'tdt', [
-    version('project-a-v2', 'V2', 'tdt', '已发布', [{ ...task('a-task', '指定源任务'), children: [{ marker: 'nested' }] }]),
-    version('project-a-v7', 'V7', 'tdt', '已发布', [task('a-latest', '更高历史版本')]),
-  ]),
-  'project-b:tdt': instance('project-b:tdt', 'tdt', [
-    version('project-b-v3', 'V3', 'tdt', '已发布', [task('b-task', '其他TDT')]),
-  ]),
-  'project-a:subproject:child-1': instance('project-a:subproject:child-1', 'subproject', [
-    version('child-v4', 'V4', 'subproject', '已发布', [task('child-task', '其他子项目')]),
-  ]),
-}
-const store = technicalPlan.createTechnicalPlanStore({ plansByKey: initialPlans })
-const untouchedProjectB = store.getState().plansByKey['project-b:tdt']
-const untouchedChild = store.getState().plansByKey['project-a:subproject:child-1']
-
+const store = technicalPlan.createTechnicalPlanStore({ plansByKey: {} })
+assert.equal(store.clonePublishedVersion, undefined, 'the standalone technical-plan store removes the clone operation')
+assert.equal(technicalPlan.useTechnicalPlanStore.getState().clonePublishedVersion, undefined, 'the persisted technical-plan store removes the clone operation')
+const firstRevisionStore = technicalPlan.createTechnicalPlanStore({ plansByKey: {} })
 assert.deepEqual(
-  store.clonePublishedVersion({
-    scope: { kind: 'tdt', parentProjectId: 'project-a' },
-    sourceVersionId: 'project-a-v2',
+  firstRevisionStore.createRevision({
+    scope: { kind: 'tdt', parentProjectId: 'first-revision' },
+    templateKind: 'tdt',
+    templateTasks: [{ ...task('first-template-task', '首次模板节点'), source: 'template' }],
   }),
-  { ok: true, versionId: 'V8-draft' },
-  'cloning a selected publication creates the next scope-local draft',
+  { ok: true, versionId: 'V1-draft' },
+  'a first TDT revision is created directly from the latest template',
 )
-const clonedState = store.getState()
-const clonedInstance = clonedState.plansByKey['project-a:tdt']
-const clonedDraft = clonedInstance.versions.find(item => item.id === 'V8-draft')
-assert.ok(clonedDraft, 'the cloned draft is stored in the requested scope')
-assert.equal(clonedDraft.status, '修订中')
-assert.equal(clonedInstance.currentVersionId, 'V8-draft', 'the cloned draft becomes current')
-assert.deepEqual(clonedDraft.tasks, initialPlans['project-a:tdt'].versions[0].tasks, 'the selected publication tasks are copied exactly')
-assert.notStrictEqual(clonedDraft.tasks, initialPlans['project-a:tdt'].versions[0].tasks, 'the task array is isolated')
-assert.notStrictEqual(clonedDraft.tasks[0], initialPlans['project-a:tdt'].versions[0].tasks[0], 'task records are isolated')
-assert.notStrictEqual(clonedDraft.tasks[0].children, initialPlans['project-a:tdt'].versions[0].tasks[0].children, 'nested task data is deeply isolated')
-assert.deepEqual(clonedState.plansByKey['project-b:tdt'], untouchedProjectB, 'another TDT scope is unchanged')
-assert.deepEqual(clonedState.plansByKey['project-a:subproject:child-1'], untouchedChild, 'a child scope is unchanged')
+assert.deepEqual(
+  firstRevisionStore.getState().plansByKey['first-revision:tdt'].versions[0].tasks.map(item => [item.planStartDate, item.planEndDate, item.actualStartDate, item.actualEndDate]),
+  [['', '', '', '']],
+  'a first revision also starts template date fields empty',
+)
 assert.equal(technicalPlan.TECHNICAL_PLAN_STORE_VERSION, 8, 'flat milestone and technical-subproject columns advance the persisted technical-plan shape')
 const migratedVersionTwoColumns = technicalPlan.migrateTechnicalPlanState({
   plansByKey: {
@@ -103,19 +85,71 @@ assert.deepEqual(
   'technical plans can create the next formal revision independently of gray revisions',
 )
 
-technicalPlan.useTechnicalPlanStore.setState({ plansByKey: initialPlans })
+const previousTdtTasks = [
+  { ...task('old-stage-retained', ' 规划阶段 '), stableId: 'old-stage-retained', parentId: undefined, order: 0, source: 'template' },
+  { ...task('old-moved-node', ' 共享节点 '), stableId: 'old-moved-node', parentId: 'old-stage-retained', order: 0, source: 'template', planStartDate: '2026-03-01', planEndDate: '2026-03-08', estimatedDays: 8, actualStartDate: '2026-03-02', actualEndDate: '2026-03-07', actualDays: 6 },
+  { ...task('old-custom-retained', 'MR1'), stableId: 'custom-mr1', parentId: 'old-stage-retained', order: 1, source: 'custom', planStartDate: '2026-03-09', planEndDate: '2026-03-15' },
+  { ...task('old-template-deleted', '已移除模板节点'), stableId: 'old-template-deleted', parentId: 'old-stage-retained', order: 2, source: 'template' },
+  { ...task('old-renamed-node', '旧节点名'), stableId: 'same-stable-renamed-node', parentId: 'old-stage-retained', order: 3, source: 'template', planEndDate: '2026-03-20' },
+  { ...task('old-stage-deleted', '删除阶段'), stableId: 'old-stage-deleted', parentId: undefined, order: 1, source: 'template' },
+  { ...task('old-custom-deleted', 'MR2'), stableId: 'custom-mr2', parentId: 'old-stage-deleted', order: 0, source: 'custom' },
+]
+const latestTdtTemplate = [
+  { ...task('new-stage-retained', '规划阶段'), stableId: 'new-stage-retained', parentId: undefined, order: 0, source: 'template' },
+  { ...task('new-renamed-node', '新节点名'), stableId: 'same-stable-renamed-node', parentId: 'new-stage-retained', order: 0, source: 'template' },
+  { ...task('new-stage-added', '新增阶段'), stableId: 'new-stage-added', parentId: undefined, order: 1, source: 'template' },
+  { ...task('new-moved-node', '共享节点'), stableId: 'new-moved-node', parentId: 'new-stage-added', order: 0, source: 'template' },
+  { ...task('new-template-node', '全新节点'), stableId: 'new-template-node', parentId: 'new-stage-added', order: 1, source: 'template' },
+]
+const taskNameRevisionPlans = {
+  'task-name:tdt': instance('task-name:tdt', 'tdt', [
+    version('task-name-v7', 'V7', 'tdt', '已发布', previousTdtTasks),
+  ]),
+  'untouched:tdt': instance('untouched:tdt', 'tdt', [
+    version('untouched-v1', 'V1', 'tdt', '已发布', [task('untouched-task', '其他TDT')]),
+  ]),
+}
+const taskNameRevisionStore = technicalPlan.createTechnicalPlanStore({ plansByKey: taskNameRevisionPlans })
 assert.deepEqual(
-  technicalPlan.useTechnicalPlanStore.getState().clonePublishedVersion({
-    scope: { kind: 'tdt', parentProjectId: 'project-a' }, sourceVersionId: 'project-a-v2',
+  taskNameRevisionStore.createRevision({
+    scope: { kind: 'tdt', parentProjectId: 'task-name' },
+    templateKind: 'tdt',
+    templateTasks: latestTdtTemplate,
   }),
   { ok: true, versionId: 'V8-draft' },
-  'the persisted Zustand store exposes the same clone operation',
+  'TDT creates the next revision from the latest published template',
 )
+const taskNameDraft = taskNameRevisionStore.getState().plansByKey['task-name:tdt'].versions.at(-1)
 assert.deepEqual(
-  technicalPlan.useTechnicalPlanStore.getState().plansByKey['project-a:tdt'].versions.slice(0, 2).map(item => item.id),
-  ['project-a-v2', 'project-a-v7'],
-  'the Zustand action appends without clearing published history',
+  taskNameDraft.tasks.filter(item => item.source === 'template').map(item => [item.id, item.parentId, item.taskName]),
+  [
+    ['new-stage-retained', undefined, '规划阶段'],
+    ['new-renamed-node', 'new-stage-retained', '新节点名'],
+    ['new-stage-added', undefined, '新增阶段'],
+    ['new-moved-node', 'new-stage-added', '共享节点'],
+    ['new-template-node', 'new-stage-added', '全新节点'],
+  ],
+  'latest template ids, order, labels, and parent structure become the revision structure',
 )
+const movedNode = taskNameDraft.tasks.find(item => item.taskName === '共享节点')
+assert.deepEqual(
+  [movedNode.planStartDate, movedNode.planEndDate, movedNode.estimatedDays, movedNode.actualStartDate, movedNode.actualEndDate, movedNode.actualDays],
+  ['2026-03-01', '2026-03-08', 8, '2026-03-02', '2026-03-07', 6],
+  'normalized task-name matching refills all user dates even when stable id and parent stage changed',
+)
+const retainedCustom = taskNameDraft.tasks.find(item => item.stableId === 'custom-mr1')
+assert.ok(retainedCustom, 'a custom task is preserved while its normalized parent stage still exists')
+assert.equal(retainedCustom.parentId, 'new-stage-retained', 'a preserved custom task is attached to the latest stage id')
+assert.equal(taskNameDraft.tasks.some(item => item.stableId === 'old-template-deleted'), false, 'a template node removed from the latest structure is not retained as a custom task')
+assert.equal(taskNameDraft.tasks.some(item => item.stableId === 'custom-mr2'), false, 'custom tasks are dropped when their parent stage was deleted from the template')
+assert.equal(taskNameDraft.tasks.find(item => item.taskName === '新节点名').planEndDate, '', 'a renamed template node does not inherit dates merely because its stable id stayed the same')
+const newTemplateNode = taskNameDraft.tasks.find(item => item.stableId === 'new-template-node')
+assert.deepEqual(
+  [newTemplateNode.planStartDate, newTemplateNode.planEndDate, newTemplateNode.actualStartDate, newTemplateNode.actualEndDate],
+  ['', '', '', ''],
+  'new template nodes start with empty date fields',
+)
+assert.deepEqual(taskNameRevisionStore.getState().plansByKey['untouched:tdt'], taskNameRevisionPlans['untouched:tdt'], 'another technical plan scope remains unchanged')
 
 const configuredChild = {
   id: 'child-1', parentProjectId: 'project-a', name: '子项目', active: true, ipmOrder: 1,
@@ -123,14 +157,14 @@ const configuredChild = {
 }
 const childOnlyPlans = {
   'project-a:subproject:child-1': instance('project-a:subproject:child-1', 'subproject', [
-    version('child-published', 'V1', 'subproject', '已发布', [task('child-task', '子项目发布任务')]),
+    version('child-published', 'V1', 'subproject', '已发布', [task('old-child-task', ' 子项目模板任务 ')]),
   ]),
 }
 const subprojectRevisionStore = technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans })
 assert.deepEqual(
   subprojectRevisionStore.createRevision({
     scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
-    templateKind: 'subproject', templateTasks: [task('child-task', '模板任务')], subproject: configuredChild,
+    templateKind: 'subproject', templateTasks: [task('new-child-task', '子项目模板任务')], subproject: configuredChild,
   }),
   { ok: true, versionId: 'V2-draft' },
   'subproject creates a draft from its latest published version',
@@ -141,144 +175,43 @@ assert.deepEqual(
   ['2026-01-01', '2026-01-02'],
   'subproject revision retains planned start and end dates for gantt task move and resize',
 )
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans }).clonePublishedVersion({
-    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
-    sourceVersionId: 'child-published',
-    subproject: { ...configuredChild, active: false },
-  }),
-  { ok: false, reason: 'inactive' },
-  'inactive child plans are history-only and cannot be cloned',
-)
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans }).clonePublishedVersion({
-    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
-    sourceVersionId: 'child-published',
-    subproject: {
-      ...configuredChild,
-      active: false,
-      configuration: { ...configuredChild.configuration, coreValue: '' },
-    },
-  }),
-  { ok: false, reason: 'inactive' },
-  'inactive takes precedence because the whole child scope is history-only',
-)
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans }).clonePublishedVersion({
-    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
-    sourceVersionId: 'child-published',
-    subproject: { ...configuredChild, configuration: { ...configuredChild.configuration, coreValue: '' } },
-  }),
-  { ok: false, reason: 'incomplete-configuration' },
-  'unconfigured child plans cannot be cloned',
-)
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans }).clonePublishedVersion({
-    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
-    sourceVersionId: 'child-published',
-    subproject: { ...configuredChild, id: 'another-child' },
-  }),
-  { ok: false, reason: 'incomplete-configuration' },
-  'configuration from a different child cannot authorize this scope',
-)
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: childOnlyPlans }).clonePublishedVersion({
-    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
-    sourceVersionId: 'child-published',
-  }),
-  { ok: false, reason: 'incomplete-configuration' },
-  'child cloning requires configuration for the exact requested scope',
-)
-
-const draftStore = technicalPlan.createTechnicalPlanStore({ plansByKey: {
-  'project-a:tdt': instance('project-a:tdt', 'tdt', [
-    version('published', 'V1', 'tdt', '已发布', [task('published-task', '发布任务')]),
-    version('draft', 'V2', 'tdt', '修订中', [task('draft-task', '草稿任务')]),
+const transferRevisionStore = technicalPlan.createTechnicalPlanStore({ plansByKey: {
+  'project-a:subproject:transfer-child': instance('project-a:subproject:transfer-child', 'subproject', [
+    version('transfer-child-v1', 'V1', 'subproject', '已发布', [
+      { ...task('old-transfer-1', '第1版转测'), order: 1, source: 'template' },
+      { ...task('old-transfer-custom', '第3版转测'), stableId: 'custom-transfer-3', order: 2, source: 'custom' },
+      { ...task('old-transfer-tdr3', 'TDR3'), order: 3, source: 'template' },
+    ]),
   ]),
 } })
-assert.deepEqual(
-  draftStore.clonePublishedVersion({ scope: { kind: 'tdt', parentProjectId: 'project-a' }, sourceVersionId: 'published' }),
-  { ok: false, reason: 'draft-exists' },
-  'a scope with a draft rejects another clone',
-)
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: {} }).clonePublishedVersion({
-    scope: { kind: 'tdt', parentProjectId: 'missing' }, sourceVersionId: 'published',
-  }),
-  { ok: false, reason: 'missing-instance' },
-  'a missing scope returns a non-sensitive missing-instance result',
-)
-const unpublishedStore = technicalPlan.createTechnicalPlanStore({ plansByKey: {
-  'project-a:tdt': instance('project-a:tdt', 'tdt', [
-    version('retired', 'V1', 'tdt', '已废弃', [task('retired-task', '非发布任务')]),
-  ]),
-} })
-assert.deepEqual(
-  unpublishedStore.clonePublishedVersion({ scope: { kind: 'tdt', parentProjectId: 'project-a' }, sourceVersionId: 'retired' }),
-  { ok: false, reason: 'missing-source' },
-  'only a published source version may be cloned',
-)
-
-const malformedScopePlans = {
-  'project-a:subproject:undefined': instance('project-a:subproject:undefined', 'subproject', [
-    version('trap', 'V1', 'subproject', '已发布', [task('trap-task', '不应访问')]),
-  ]),
-}
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: malformedScopePlans }).clonePublishedVersion({
-    scope: { kind: 'subproject', parentProjectId: 'project-a' }, sourceVersionId: 'trap', subproject: configuredChild,
-  }),
-  { ok: false, reason: 'missing-instance' },
-  'a child scope without subprojectId is rejected before key lookup',
-)
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: malformedScopePlans }).clonePublishedVersion({
-    scope: { kind: 'unsupported', parentProjectId: 'project-a' }, sourceVersionId: 'trap', subproject: configuredChild,
-  }),
-  { ok: false, reason: 'missing-instance' },
-  'an illegal kind is rejected before key lookup',
-)
-
+const transferChild = { ...configuredChild, id: 'transfer-child' }
+assert.equal(transferRevisionStore.createRevision({
+  scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'transfer-child' },
+  templateKind: 'subproject',
+  templateTasks: [
+    { ...task('new-transfer-1', '第1版转测'), order: 1, source: 'template' },
+    { ...task('new-transfer-tdr3', 'TDR3'), order: 2, source: 'template' },
+  ],
+  subproject: transferChild,
+}).ok, true, 'a subproject revision is created from its latest template')
+const transferDraftTasks = transferRevisionStore.getState().plansByKey['project-a:subproject:transfer-child'].versions.at(-1).tasks
+assert.deepEqual(transferDraftTasks.map(item => item.taskName), ['第1版转测', '第3版转测', 'TDR3'], 'custom transfer versions remain before TDR3 across template-based revisions')
+assert.equal(transferDraftTasks[1].stableId, 'custom-transfer-3', 'a preserved transfer version keeps its durable identity')
 const wrongInstanceKindPlans = {
   'project-a:tdt': instance('project-a:tdt', 'subproject', [
     version('wrong-instance-source', 'V1', 'subproject', '已发布', [task('wrong-instance-task', '错配实例')]),
   ]),
 }
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: wrongInstanceKindPlans }).clonePublishedVersion({
-    scope: { kind: 'tdt', parentProjectId: 'project-a' }, sourceVersionId: 'wrong-instance-source',
-  }),
-  { ok: false, reason: 'missing-instance' },
-  'a TDT key containing a subproject instance is rejected as a missing instance',
-)
-
 const wrongSourceKindPlans = {
   'project-a:tdt': instance('project-a:tdt', 'tdt', [
     version('wrong-source-kind', 'V1', 'subproject', '已发布', [task('wrong-source-task', '错配来源')]),
   ]),
 }
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: wrongSourceKindPlans }).clonePublishedVersion({
-    scope: { kind: 'tdt', parentProjectId: 'project-a' }, sourceVersionId: 'wrong-source-kind',
-  }),
-  { ok: false, reason: 'missing-source' },
-  'a TDT instance cannot clone a published subproject source',
-)
-
 const reverseWrongKindPlans = {
   'project-a:subproject:child-1': instance('project-a:subproject:child-1', 'subproject', [
     version('reverse-wrong-source', 'V1', 'tdt', '已发布', [task('reverse-wrong-task', '反向错配来源')]),
   ]),
 }
-assert.deepEqual(
-  technicalPlan.createTechnicalPlanStore({ plansByKey: reverseWrongKindPlans }).clonePublishedVersion({
-    scope: { kind: 'subproject', parentProjectId: 'project-a', subprojectId: 'child-1' },
-    sourceVersionId: 'reverse-wrong-source', subproject: configuredChild,
-  }),
-  { ok: false, reason: 'missing-source' },
-  'a subproject instance cannot clone a published TDT source',
-)
-
 const sharePlans = {
   'project-a:tdt': instance('project-a:tdt', 'tdt', [
     version('tdt-v9', 'V9', 'tdt', '已发布', [task('tdt-v9-task', 'TDT V9')]),

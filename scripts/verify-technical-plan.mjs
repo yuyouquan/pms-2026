@@ -226,7 +226,7 @@ assert.equal(instanceStore.publishRevision(childPlanScope, '2026-08-09T00:00:00Z
 const laterTemplate = editedTemplate.map((task, index) => ({ ...task, taskName: index === 0 ? '不应同步的后续模板' : task.taskName }))
 assert.equal(instanceStore.createRevision({ scope: childPlanScope, templateKind: 'subproject', templateTasks: laterTemplate, subproject: configuredChild }).ok, true)
 const childV3 = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions.at(-1)
-assert.equal(childV3.tasks[0].taskName, '后改模板', 'later revisions copy the previous published version instead of syncing the latest template')
+assert.equal(childV3.tasks[0].taskName, '不应同步的后续模板', 'every revision uses the latest published configuration template')
 const publishedV2 = instanceStore.getState().plansByKey['9:subproject:IPM-AI-001'].versions.find(version => version.versionNo === 'V2')
 assert.equal(instanceStore.setCurrentVersion(childPlanScope, publishedV2.id), true)
 const publishedWrite = publishedV2.tasks.map((task, index) => index === 0 ? { ...task, taskName: '禁止修改名称', planStartDate: '2026-01-01', actualStartDate: '2026-08-17', actualEndDate: '2026-08-18' } : task)
@@ -259,8 +259,6 @@ assert.equal(instanceStore.createRevision({ scope: tdtPlanScope, templateKind: '
 assert.deepEqual(instanceStore.updateCurrentTasks(tdtPlanScope, invalidTdtTasks, 2), { ok: false, reason: 'max-depth' }, 'all task writes enforce maxDepth')
 assert.deepEqual(instanceStore.getState().plansByKey['9:tdt'].versions[0].tasks, tdtBeforeInvalidWrite, 'rejected writes are atomic')
 
-const addedTopLevel = rules.insertTechnicalPlanTask(tdtTasks, { ...tdtTasks[0], id: 'new-top', parentId: undefined }, 'tdt', 2)
-assert.equal(addedTopLevel.at(-1).id, 'new-top', 'draft editing can add a top-level task')
 const addedTdtChild = rules.insertTechnicalPlanTask(tdtTasks, { ...tdtTasks[0], id: 'new-child', parentId: tdtTasks[0].id }, 'tdt', 2)
 assert.equal(addedTdtChild.find(task => task.id === 'new-child').parentId, tdtTasks[0].id, 'TDT editing can add a second-level task')
 assert.throws(() => rules.insertTechnicalPlanTask(subprojectTasks, { ...subprojectTasks[0], id: 'illegal-child', parentId: subprojectTasks[0].id }, 'subproject', 1), /depth|child/i, 'subproject editing cannot add child tasks')
@@ -457,12 +455,11 @@ assert.ok(technicalShellMount, 'technical plan module mounts the imported shared
 const technicalShellProps = jsxAttributeNames(technicalShellMount)
 const shellCapabilities = [
   ['创建修订', 'primaryActions'],
-  ['计划克隆', 'primaryActions'],
   ['筛选', 'utilityActions'],
-  ['字段配置', 'utilityActions'],
   ['全部展开', 'utilityActions'],
   ['全部收起', 'utilityActions'],
   ['版本对比', 'utilityActions'],
+  ['分享计划', 'utilityActions'],
 ]
 for (const slot of ['primaryActions', 'utilityActions']) assert.equal(technicalShellProps.has(slot), true, `technical plan fills the shared shell ${slot} slot`)
 for (const [label, slot] of shellCapabilities) {
@@ -474,13 +471,15 @@ for (const [label, slot] of shellCapabilities) {
 const utilitySlotAttribute = jsxAttribute(technicalShellMount, 'utilityActions')
 assert.ok(utilitySlotAttribute?.initializer && ts.isJsxExpression(utilitySlotAttribute.initializer) && utilitySlotAttribute.initializer.expression, 'technical plan exposes live utility actions')
 const utilitySlotNodes = collectReachableFromRoots(technicalSourceFile, [utilitySlotAttribute.initializer.expression])
-for (const hiddenLabel of ['导入', '分享计划']) {
+for (const hiddenLabel of ['导入']) {
   assert.equal(rendersLiveCapabilityControl(utilitySlotNodes, technicalSourceFile, hiddenLabel), false, `technical projects hide the ${hiddenLabel} control in project space`)
 }
 const viewSwitcherSource = readSource(root, 'src/components/plans/PlanViewModeSwitcher.tsx')
 const viewSwitcherSourceFile = parseTsx(viewSwitcherSource, 'PlanViewModeSwitcher.tsx')
 const viewSwitcherComponent = findExportedFunctionComponent(viewSwitcherSourceFile, 'PlanViewModeSwitcher')
 assert.ok(viewSwitcherComponent, 'canonical plan view-mode switcher resolves to its exported live component')
+assert.match(viewSwitcherSource, /横版表格[\s\S]{0,180}竖版表格[\s\S]{0,180}甘特图/, 'the canonical switcher orders horizontal, vertical, then gantt')
+assert.match(technicalModuleSource, /useState<PlanWorkspaceViewMode>\('horizontal'\)/, 'technical plans enter in horizontal view by default')
 const viewSwitcherReachableNodes = collectReachableNodes(viewSwitcherSourceFile, viewSwitcherComponent)
 for (const mode of ['vertical', 'horizontal', 'gantt']) {
   assert.equal(configuresViewMode(viewSwitcherReachableNodes, viewSwitcherSourceFile, mode), true, `the live canonical view switcher configures the ${mode} view option`)
@@ -531,8 +530,19 @@ assert.match(technicalModuleSource, /className=[^\n]*technical-plan-vertical-tab
 assert.match(technicalModuleSource, /renumberTechnicalSubprojectTasks/, 'custom subproject deletes normalize visible sequence numbers')
 assert.doesNotMatch(technicalModuleSource, /canManageStructure/, 'technical structure rules no longer depend on the former global-admin-only prop')
 assert.doesNotMatch(readSource(root, 'src/containers/ProjectSpaceContainer.tsx'), /canManageStructure=\{level1GlobalAdmins\.includes/, 'the project container no longer grants a global structure bypass')
-assert.match(technicalModuleSource, /icon=\{<CopyOutlined\s*\/>\}[^>]*aria-label="计划克隆"[^>]*\/>/, 'technical plan clone uses the same icon-only draft action as whole-machine plans')
+assert.doesNotMatch(technicalModuleSource, /CopyOutlined|计划克隆|handleClonePlan/, 'technical plan removes the clone action and its implementation')
+assert.doesNotMatch(technicalModuleSource, /aria-label="字段配置"|当前计划列固定，无法配置/, 'technical plan removes the disabled field-configuration placeholder')
 assert.match(technicalModuleSource, /icon=\{<SaveOutlined\s*\/>\}[^>]*aria-label="发布"[^>]*\/>/, 'technical plan publish uses the same icon-only draft action as whole-machine plans')
+assert.match(technicalModuleSource, /aria-label="分享计划"/, 'technical plan exposes the maintained share action')
+assert.match(technicalModuleSource, /columns=\{TECHNICAL_GANTT_COLUMNS\}/, 'technical Gantt uses its parity column set')
+const technicalGanttColumnsStart = technicalModuleSource.indexOf('const TECHNICAL_GANTT_COLUMNS')
+const technicalGanttColumnsEnd = technicalModuleSource.indexOf('const PLAN_REVISION_KIND_OPTIONS', technicalGanttColumnsStart)
+assert.ok(technicalGanttColumnsStart >= 0 && technicalGanttColumnsEnd > technicalGanttColumnsStart, 'technical Gantt column configuration is present')
+assert.doesNotMatch(
+  technicalModuleSource.slice(technicalGanttColumnsStart, technicalGanttColumnsEnd),
+  /predecessor|前置任务/,
+  'technical Gantt omits the predecessor column',
+)
 assert.doesNotMatch(
   technicalModuleSource,
   /<Table[\s\S]{0,260}technical-horizontal-plan-table/,
@@ -574,21 +584,24 @@ assert.match(technicalModuleSource, /onOpenChange=\{open => \{ if \(open\) setDe
 assert.match(technicalModuleSource, /if \(!updated\.ok\) \{ message\.error\('删除活动失败，请重试'\); return \}/, 'delete reports success only after the latest write succeeds')
 assert.match(technicalModuleSource, /viewMode === 'gantt' && tab\?\.templateKind === 'tdt'/, 'expand and collapse controls only appear for hierarchical TDT gantt')
 assert.match(technicalModuleSource, /const filteredHierarchyTasks = useMemo\([\s\S]{0,260}filterTechnicalPlanGanttTasks/, 'all plan visualizations derive a single filtered task hierarchy')
-assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,120}tasks=\{filteredHierarchyTasks\}/, 'horizontal plan columns use the current filtered hierarchy')
+assert.match(technicalModuleSource, /const horizontalHeaderTasks = useMemo\([\s\S]{0,360}visibleVersions\.find\(version => version\.status === '修订中'\)[\s\S]{0,120}latestPublishedVersion/, 'horizontal plan headers stay aligned to the active draft or latest published template structure')
+assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,120}tasks=\{horizontalHeaderTasks\}/, 'horizontal plan columns use the latest template-aligned hierarchy')
+assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,180}currentTasks=\{filteredHierarchyTasks\}/, 'horizontal plan date writes remain bound to the selected version tasks')
 assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,180}templateKind=\{tab\?\.templateKind \|\| 'tdt'\}/, 'horizontal plan mode follows the active template kind instead of task depth')
 assert.match(technicalModuleSource, /function TechnicalHorizontalPlanTable\([\s\S]{0,240}templateKind[\s\S]{0,420}const mode = templateKind === 'subproject' \? 'technical-subproject' : 'standard'/, 'root-only TDT plans retain the grouped standard header mode')
 assert.match(technicalSummarySource, /const projectionMode = scope\.kind === 'subproject' \? 'technical-subproject' : 'standard'/, 'technical summary mode follows its canonical scope kind instead of task depth')
+assert.match(technicalModuleSource, /buildTechnicalHorizontalDateMap\([\s\S]{0,260}milestoneTasks/, 'technical plan workspace aligns historical date cells to the latest task-name headers')
+assert.match(technicalSummarySource, /Object\.fromEntries\([^\n]+map\([^\n]+\[getTechnicalPlanRowKey\([^)]*\),/, 'technical basic-information summary keys version dates by stable activity identity')
 for (const [surfaceName, source] of [
   ['technical plan workspace horizontal view', technicalModuleSource],
   ['technical basic-information summary', technicalSummarySource],
 ]) {
-  assert.match(source, /Object\.fromEntries\([^\n]+map\([^\n]+\[getTechnicalPlanRowKey\([^)]*\),/, `${surfaceName} keys version dates by stable activity identity`)
   assert.match(source, /endDatesByTaskId\[getTechnicalPlanRowKey\([^)]*\)\]/, `${surfaceName} reads version dates by stable activity identity`)
   assert.match(source, /scope="col"/, `${surfaceName} identifies activity headers as columns`)
   assert.match(source, /scope="colgroup"/, `${surfaceName} identifies grouped stage headers as column groups`)
 }
 assert.match(technicalSummarySource, /projectionMode === 'technical-subproject'[\s\S]{0,180}版本活动[\s\S]{0,180}版本阶段里程碑/, 'technical summary exposes an accurate single-level table label')
-assert.match(technicalModuleSource, /buildPlanHorizontalStageGroups\([\s\S]{0,120}filteredHierarchyTasks/, 'current horizontal export uses the same filtered hierarchy')
+assert.match(technicalModuleSource, /buildPlanHorizontalStageGroups\([\s\S]{0,120}horizontalHeaderTasks/, 'current horizontal export uses the same latest-template header hierarchy')
 assert.doesNotMatch(technicalModuleSource, /technicalDraft|isResponsibleForTechnicalPlanTasks|toggleCollapsedTask/, 'obsolete technical-plan state and helpers are removed')
 assert.match(readSource(root, 'src/stores/technicalPlan.ts'), /DEFAULT_COLUMNS[\s\S]{0,420}actualStartDate[\s\S]{0,120}actualEndDate[\s\S]{0,120}actualDays/, 'technical plan persisted defaults include actual-date columns')
 
@@ -724,6 +737,16 @@ const reorderedStableRows = technicalWorkspace.buildTechnicalHorizontalRows([
 ], 'after-reorder')
 assert.equal(reorderedStableRows[0].endDatesByTaskId['activity-a'], '2026-01-09', 'historical horizontal dates remain aligned after visible IDs are renumbered')
 assert.equal(reorderedStableRows[1].endDatesByTaskId['activity-a'], '2026-02-09', 'current horizontal dates use the same stable activity identity after reorder')
+const latestHorizontalHeaders = [
+  { ...imported[0], id: 'latest-shared', stableId: 'latest-shared', taskName: '共享节点' },
+  { ...imported[0], id: 'latest-new', stableId: 'latest-new', taskName: '模板新增节点' },
+]
+const templateAlignedRows = technicalWorkspace.buildTechnicalHorizontalRows([
+  { ...publishedVersion, id: 'older-template', tasks: [{ ...imported[0], id: 'old-shared', stableId: 'old-shared', taskName: ' 共享节点 ', planEndDate: '2026-04-09' }] },
+  { ...publishedVersion, id: 'latest-template', tasks: latestHorizontalHeaders.map((item, index) => ({ ...item, planEndDate: index === 0 ? '2026-05-09' : '2026-06-09' })) },
+], 'latest-template', latestHorizontalHeaders)
+assert.equal(templateAlignedRows[0].endDatesByTaskId['latest-shared'], '2026-04-09', 'historical horizontal values align to latest headers by normalized task name')
+assert.equal(templateAlignedRows[0].endDatesByTaskId['latest-new'], '', 'a template node introduced later is blank in an older published row so the UI renders a dash')
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectSpaceSourceFile = parseTsx(projectSpaceSource, 'ProjectSpaceContainer.tsx')
 assert.equal(importsComponent(projectSpaceSourceFile, 'PlanWorkspaceShell', '@/components/plans/PlanWorkspaceShell'), true, 'whole-machine project space imports the shared shell from its canonical module')

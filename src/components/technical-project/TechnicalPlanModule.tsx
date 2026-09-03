@@ -8,7 +8,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import {
-  CopyOutlined, DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined,
+  DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined, ShareAltOutlined,
   EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined,
   StopOutlined,
 } from '@ant-design/icons'
@@ -19,7 +19,7 @@ import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareMo
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
-import { ClickToEditDate, DHTMLXGantt } from '@/components/shared/PlanHelpers'
+import { ClickToEditDate, DHTMLXGantt, type DHTMLXGanttColumn } from '@/components/shared/PlanHelpers'
 import {
   applyPlanWorkspaceFilters,
   buildPlanHorizontalStageGroups,
@@ -27,12 +27,14 @@ import {
 } from '@/lib/planWorkspace'
 import {
   buildTechnicalHorizontalRows,
+  buildTechnicalHorizontalDateMap,
   canConfirmTechnicalSubprojectMutation,
   canConfirmTechnicalSubprojectTransfer,
   filterTechnicalPlanGanttTasks,
   getTechnicalPlanExportColumns,
   getTechnicalPlanFilterFields,
   getTechnicalPlanRowKey,
+  normalizeTechnicalTaskName,
   parseTechnicalPlanImportRows,
   projectTechnicalPlanRows,
   renumberTechnicalSubprojectTasks,
@@ -78,6 +80,13 @@ import type { TechnicalSubproject } from '@/types/technicalProject'
 const { Text } = Typography
 const FIXED_TDT_LABEL = 'TDT项目计划'
 const TECHNICAL_STAGE_COLORS = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2'] as const
+const TECHNICAL_GANTT_COLUMNS: DHTMLXGanttColumn[] = [
+  { name: 'text', label: '任务名称', width: 180, tree: true },
+  { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
+  { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
+  { name: 'duration', label: '计划周期', align: 'center', width: 60, template: task => `${task.duration}天` },
+  { name: 'progress', label: '进度', align: 'center', width: 60, template: task => `${Math.round(task.progress * 100)}%` },
+]
 const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [
   { key: 'gray', label: '创建非正式版本' },
   { key: 'formal', label: '创建正式版本' },
@@ -88,6 +97,7 @@ type TechnicalPlanRow = Level1FlatMilestoneRow & TechnicalTemplateTask
 
 function TechnicalHorizontalPlanTable({
   tasks,
+  currentTasks,
   templateKind,
   versions,
   currentVersionId,
@@ -96,6 +106,7 @@ function TechnicalHorizontalPlanTable({
   onDateChange,
 }: {
   tasks: readonly TechnicalTemplateTask[]
+  currentTasks: readonly TechnicalTemplateTask[]
   templateKind: TechnicalTemplateKind
   versions: readonly { id: string; versionNo: string; status: string; publishedAt?: string; tasks: TechnicalTemplateTask[] }[]
   currentVersionId: string
@@ -104,14 +115,15 @@ function TechnicalHorizontalPlanTable({
   onDateChange: (taskId: string, field: 'planEndDate' | 'actualEndDate', value: string) => void
 }) {
   const mode = templateKind === 'subproject' ? 'technical-subproject' : 'standard'
-  const currentProjection = projectLevel1Plan(tasks, { mode })
-  const groups = currentProjection.stageGroups.map(group => ({
+  const headerProjection = projectLevel1Plan(tasks, { mode })
+  const currentProjection = projectLevel1Plan(currentTasks, { mode })
+  const groups = headerProjection.stageGroups.map(group => ({
     ...group,
     colSpan: Math.max(1, group.milestones.length),
   }))
   if (!tasks.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无横版计划数据" />
   const milestoneTasks = mode === 'technical-subproject'
-    ? currentProjection.rows
+    ? headerProjection.rows
     : groups.flatMap(group => group.milestones.length > 0 ? group.milestones : [group.stage])
   type TechnicalHorizontalRow = {
     id: string
@@ -130,7 +142,11 @@ function TechnicalHorizontalPlanTable({
       status: version.status,
       publishedAt: version.publishedAt,
       rowType: 'version' as const,
-      endDatesByTaskId: Object.fromEntries(versionProjection.rows.map(row => [getTechnicalPlanRowKey(row), row.planEndDate || ''])),
+      endDatesByTaskId: buildTechnicalHorizontalDateMap(
+        milestoneTasks,
+        versionProjection.rows,
+        'planEndDate',
+      ),
       cycleDays: sumLevel1EstimatedDays(versionProjection.rows),
     }
   })
@@ -141,7 +157,11 @@ function TechnicalHorizontalPlanTable({
     versionNo: '实际',
     status: '',
     rowType: 'actual',
-    endDatesByTaskId: Object.fromEntries(currentProjection.rows.map(row => [getTechnicalPlanRowKey(row), row.actualEndDate || ''])),
+    endDatesByTaskId: buildTechnicalHorizontalDateMap(
+      milestoneTasks,
+      currentProjection.rows,
+      'actualEndDate',
+    ),
     cycleDays: actualStarts.length > 0 && actualEnds.length > 0
       ? Math.max(0, Math.ceil((Math.max(...actualEnds) - Math.min(...actualStarts)) / 86_400_000))
       : null,
@@ -270,10 +290,13 @@ function TechnicalHorizontalPlanTable({
               </td>
               {milestoneTasks.map(milestone => {
                 const value = row.endDatesByTaskId[getTechnicalPlanRowKey(milestone)] || ''
+                const actualTask = currentProjection.rows.find(task => (
+                  normalizeTechnicalTaskName(task.taskName) === normalizeTechnicalTaskName(milestone.taskName)
+                ))
                 return (
                   <td key={getTechnicalPlanRowKey(milestone)} style={{ ...tdStyle, color: '#d48806' }}>
-                    {canEditActualEnd
-                      ? <ClickToEditDate align="center" value={value} onChange={nextValue => onDateChange(milestone.id, 'actualEndDate', nextValue)} />
+                    {canEditActualEnd && actualTask
+                      ? <ClickToEditDate align="center" value={value} onChange={nextValue => onDateChange(actualTask.id, 'actualEndDate', nextValue)} />
                       : value || '-'}
                   </td>
                 )
@@ -315,7 +338,7 @@ export default function TechnicalPlanModule({
   projectId, currentLoginUser, canEdit, canPublish, canImport, canExport, canViewTechnicalPlan, canShareTechnicalPlan,
   maxDepthByKind = DEFAULT_MAX_DEPTH,
 }: TechnicalPlanModuleProps) {
-  const { message, modal } = App.useApp()
+  const { message } = App.useApp()
   const [activeKey, setActiveKey] = useState(`${projectId}:tdt`)
   const [viewMode, setViewMode] = useState<PlanWorkspaceViewMode>('horizontal')
   const [compareOpen, setCompareOpen] = useState(false)
@@ -406,6 +429,13 @@ export default function TechnicalPlanModule({
     () => filterTechnicalPlanGanttTasks(tasks, tab?.templateKind || 'tdt', filteredTasks),
     [filteredTasks, tab?.templateKind, tasks],
   )
+  const horizontalHeaderTasks = useMemo(() => {
+    if (hasActiveFilters) return filteredHierarchyTasks
+    const structureVersion = visibleVersions.find(version => version.status === '修订中')
+      || latestPublishedVersion
+      || currentVersion
+    return structureVersion?.tasks || templateTasks
+  }, [currentVersion, filteredHierarchyTasks, hasActiveFilters, latestPublishedVersion, templateTasks, visibleVersions])
   const visibleTasks = filteredTasks
   const publishedVersions = useMemo(
     () => canViewTechnicalPlan
@@ -514,29 +544,6 @@ export default function TechnicalPlanModule({
 
   const handleCreateRevisionMenuClick: MenuProps['onClick'] = ({ key }) => {
     handleCreateRevision(key as PlanRevisionKind)
-  }
-
-  const handleClonePlan = () => {
-    if (!tab || !canMaintain) return
-    const source = [...publishedVersions]
-      .sort((left, right) => right.versionNo.localeCompare(left.versionNo, undefined, { numeric: true }))[0]
-    if (!source) { message.warning('暂无可克隆的已发布版本'); return }
-    modal.confirm({
-      title: '确认克隆计划',
-      content: `确认将 ${source.versionNo} 的计划信息克隆到当前修订版本？实际开始和实际完成时间不会被克隆。`,
-      okText: '确认克隆',
-      cancelText: '取消',
-      onOk: () => {
-        const clonedTasks = source.tasks.map(task => ({
-          ...task,
-          actualStartDate: '',
-          actualEndDate: '',
-        }))
-        const result = updateCurrentTasks(scope, clonedTasks, maxDepth)
-        if (!result.ok) { message.error('计划克隆失败，请检查任务层级'); return }
-        message.success(`已克隆 ${source.versionNo}，实际开始和实际完成时间已清空`)
-      },
-    })
   }
 
   const handlePublish = () => {
@@ -684,7 +691,7 @@ export default function TechnicalPlanModule({
 
   const exportHorizontalPlan = () => {
     const groups = buildPlanHorizontalStageGroups(
-      filteredHierarchyTasks.map(task => ({ ...task })),
+      horizontalHeaderTasks.map(task => ({ ...task })),
     )
     const milestoneTasks = groups.flatMap(group => group.milestones.length ? group.milestones : [group.stage])
     const headerMatrix: (string | null)[][] = [
@@ -700,7 +707,7 @@ export default function TechnicalPlanModule({
       if (group.colSpan > 1) merges.push({ s: { r: 0, c: columnIndex }, e: { r: 0, c: columnIndex + group.colSpan - 1 } })
       columnIndex += group.colSpan
     })
-    const rows = buildTechnicalHorizontalRows(visibleVersions, currentVersion?.id || '').map(row => [
+    const rows = buildTechnicalHorizontalRows(visibleVersions, currentVersion?.id || '', milestoneTasks).map(row => [
       row.versionNo,
       row.cycleDays == null ? '-' : `${row.cycleDays}天`,
       ...milestoneTasks.map(task => row.endDatesByTaskId[getTechnicalPlanRowKey(task)] || '-'),
@@ -848,8 +855,7 @@ export default function TechnicalPlanModule({
               onChange={handleVersionChange}
               options={visibleVersions.map(version => ({ value: version.id, label: `${version.versionNo}${version.status === '修订中' ? '（修订中）' : ''}` }))}
             />
-            {isDraft && viewMode === 'vertical' && <Tag color="green">自动保存</Tag>}
-            {isDraft && viewMode === 'gantt' && <Tag>甘特图日期调整自动保存</Tag>}
+            {isDraft && <Tag color="green">{viewMode === 'gantt' ? '甘特图日期调整自动保存' : '自动保存'}</Tag>}
           </Space>
         )}
         primaryActions={(
@@ -865,11 +871,6 @@ export default function TechnicalPlanModule({
                   <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} aria-label="创建修订">创建修订</Button>
                 </Tooltip>
               </Dropdown>
-            )}
-            {isDraft && (
-              <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : !publishedVersions.length ? '暂无已发布版本' : '计划克隆'}>
-                <Button icon={<CopyOutlined />} style={{ borderRadius: 6 }} disabled={!canMaintain || !publishedVersions.length} onClick={handleClonePlan} aria-label="计划克隆" />
-              </Tooltip>
             )}
             {tab?.templateKind === 'subproject' && canMaintain && (
               <Tooltip title="添加转测版本"><Button icon={<PlusOutlined />} aria-label="添加转测版本" onClick={confirmAddTechnicalSubprojectTransfer}>添加转测版本</Button></Tooltip>
@@ -976,12 +977,14 @@ export default function TechnicalPlanModule({
                 <Button icon={<DownloadOutlined />} style={{ borderRadius: 6 }} disabled={!canExport || !tasks.length} aria-label="导出" />
               </Tooltip>
             </Dropdown>
-            <Tooltip title="当前计划列固定，无法配置"><Button icon={<SettingOutlined />} style={{ borderRadius: 6 }} disabled aria-label="字段配置" /></Tooltip>
             {viewMode === 'gantt' && tab?.templateKind === 'tdt' && <>
               <Tooltip title="全部展开"><Button icon={<PlusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={expandAll} aria-label="全部展开" /></Tooltip>
               <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} aria-label="全部收起" /></Tooltip>
             </>}
             <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} style={{ borderRadius: 6 }} disabled={visibleVersions.length < 2} onClick={openVersionCompare} /></Tooltip>
+            <Tooltip title={!canViewTechnicalPlan || !canShareTechnicalPlan ? '无计划分享权限' : !publishedVersions.length ? '暂无已发布版本' : '复制分享链接，无需权限即可查看'}>
+              <Button aria-label="分享计划" icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} disabled={!canViewTechnicalPlan || !canShareTechnicalPlan || !publishedVersions.length} onClick={handleShare} />
+            </Tooltip>
           </Space>
         )}
         viewMode={viewMode}
@@ -1005,7 +1008,8 @@ export default function TechnicalPlanModule({
           </div>
         ) : viewMode === 'horizontal' ? (
           <TechnicalHorizontalPlanTable
-            tasks={filteredHierarchyTasks}
+            tasks={horizontalHeaderTasks}
+            currentTasks={filteredHierarchyTasks}
             templateKind={tab?.templateKind || 'tdt'}
             versions={visibleVersions}
             currentVersionId={currentVersion.id}
@@ -1019,6 +1023,7 @@ export default function TechnicalPlanModule({
               mode: tab?.templateKind === 'subproject' ? 'technical-subproject' : 'hierarchical',
               editable: canMaintain,
             })}
+            columns={TECHNICAL_GANTT_COLUMNS}
             readOnly={!canMaintain}
             collapsedIds={collapsedIds}
             onCollapsedChange={updater => setCollapsed(scope, [...updater(collapsedIds)])}
