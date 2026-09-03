@@ -76,51 +76,46 @@ const modalFields = Array.from(rulesModule.getProjectInfoModalFields('tOS版本�
 const modalGroups = Array.from(rulesModule.getProjectInfoModalGroups('tOS版本项目'))
 assert.deepEqual(
   modalGroups.map(group => group.key),
-  ['team'],
-  'the tOS create/edit modal must only show the team group',
+  ['basic', 'team'],
+  'the tOS create/edit modal must show the basic and team groups',
 )
 assert.equal(
-  modalFields.some(field => field.group === 'basic' || field.key === 'firstLaunchProjects'),
-  false,
-  'the tOS create/edit modal must not expose basic fields or first-launch projects',
-)
-assert.equal(
-  schemaModule.TOS_PROJECT_INFO_FIELDS.some(field => field.key === 'firstLaunchProjects'),
+  modalFields.some(field => field.group === 'basic' && field.key === 'firstLaunchProjects'),
   true,
-  'the display/storage schema must retain first-launch project metadata',
+  'the tOS create/edit modal must expose first-launch projects in basic information',
 )
 
 const editableFieldKeys = new Set(modalFields.filter(field => !field.readOnly).map(field => field.key))
-const expectedRequiredTeamKeys = Array.from(schemaModule.TOS_PROJECT_INFO_FIELDS)
-  .filter(field => field.group === 'team' && field.requiredOnCreate)
+const expectedRequiredModalKeys = Array.from(schemaModule.TOS_PROJECT_INFO_FIELDS)
+  .filter(field => !field.readOnly && field.requiredOnCreate)
   .map(field => field.key)
 const emptyCreateErrors = Array.from(rulesModule.validateProjectInfoValues(
   'tOS版本项目',
   {},
   {
     fieldKeys: editableFieldKeys,
-    tosAggregateMissingSources: ['隐藏的首发项目来源缺字段'],
+    tosAggregateMissingSources: [],
     validateRequiredOnCreate: true,
   },
 ))
 assert.deepEqual(
   emptyCreateErrors.map(error => error.fieldKey),
-  expectedRequiredTeamKeys,
-  'tOS creation must require the original team fields without requiring hidden basic fields',
+  expectedRequiredModalKeys,
+  'tOS creation must require first-launch projects and the configured team fields',
 )
 assert.equal(
   emptyCreateErrors.some(error => error.fieldKey === 'firstLaunchProjects'),
-  false,
-  'hidden first-launch aggregate warnings must not block tOS creation',
+  true,
+  'visible first-launch projects remain required for tOS creation',
 )
-const completedTeamValues = Object.fromEntries(expectedRequiredTeamKeys.map(key => [key, ['测试用户']]))
+const completedTeamValues = Object.fromEntries(expectedRequiredModalKeys.map(key => [key, ['测试用户']]))
 assert.equal(
   rulesModule.validateProjectInfoValues('tOS版本项目', completedTeamValues, {
     fieldKeys: editableFieldKeys,
     validateRequiredOnCreate: true,
   }).length,
   0,
-  'tOS creation must pass once its visible required team fields are complete',
+  'tOS creation must pass once its visible required basic and team fields are complete',
 )
 const historicalBasicValues = {
   firstLaunchProjects: ['machine-1'],
@@ -131,25 +126,21 @@ const historicalBasicValues = {
 }
 const editedTosValues = {
   ...historicalBasicValues,
-  firstLaunchProjectChips: '',
-  applicableBrands: '',
-  applicableProductLines: '',
-  applicableChipPlatforms: '',
   tosVersionProjectManager: ['新版本经理'],
 }
 const tosSubmitValues = rulesModule.getProjectInfoModalSubmitValues('tOS版本项目', editedTosValues)
 assert.deepEqual(
   Object.keys(tosSubmitValues),
-  ['tosVersionProjectManager'],
-  'the tOS modal payload must contain maintained team fields only',
+  [...Object.keys(historicalBasicValues), 'tosVersionProjectManager'],
+  'the tOS modal payload must contain visible basic aggregate and team fields',
 )
 assert.deepEqual(
   Array.from(tosSubmitValues.tosVersionProjectManager),
   ['新版本经理'],
   'the tOS modal payload must retain edited visible team values',
 )
-for (const hiddenKey of Object.keys(historicalBasicValues)) {
-  assert.equal(hiddenKey in tosSubmitValues, false, `hidden tOS field ${hiddenKey} must not enter the modal payload`)
+for (const basicKey of Object.keys(historicalBasicValues)) {
+  assert.equal(basicKey in tosSubmitValues, true, `visible tOS basic field ${basicKey} must enter the modal payload`)
 }
 
 const projectInfoValuesModule = evaluateTypeScriptModule(
@@ -166,11 +157,11 @@ const mergedTosProject = projectInfoValuesModule.mergeProjectInfoValues({
   type: 'tOS版本项目',
   fieldValues: historicalBasicValues,
 }, tosSubmitValues)
-for (const [hiddenKey, historicalValue] of Object.entries(historicalBasicValues)) {
+for (const [basicKey, historicalValue] of Object.entries(historicalBasicValues)) {
   assert.equal(
-    JSON.stringify(mergedTosProject.fieldValues[hiddenKey]),
+    JSON.stringify(mergedTosProject.fieldValues[basicKey]),
     JSON.stringify(historicalValue),
-    `merging the modal payload must preserve historical ${hiddenKey}`,
+    `merging the modal payload must preserve submitted ${basicKey}`,
   )
 }
 assert.deepEqual(
@@ -215,6 +206,7 @@ assert.match(modal, /getProjectInfoModalFields\(projectType\)/, 'the modal must 
 assert.match(modal, /getProjectInfoModalGroups\(projectType\)/, 'the modal must omit empty tOS groups')
 assert.match(modal, /fieldKeys:\s*editableFieldKeys/, 'submission validation must be scoped to modal-editable fields')
 assert.match(modal, /getProjectInfoModalSubmitValues\(normalizedProjectType, values\)/, 'submission must use the modal field projection')
+assert.match(modal, /projectType === PROJECT_TYPE_TOS_VERSION && aggregateWarnings\.length > 0/, 'visible tOS aggregate source warnings must render above grouped fields')
 
 const projectSpace = read('src/containers/ProjectSpaceContainer.tsx')
 const wholePlanStart = projectSpace.indexOf('const renderWholeMachinePlanInfo = () => {')

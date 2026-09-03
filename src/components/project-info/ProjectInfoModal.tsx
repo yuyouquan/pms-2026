@@ -28,6 +28,7 @@ import {
   deriveMachineProjectInfoValues,
   deriveProjectResponsiblePersons,
   deriveTosProjectAggregates,
+  getDefaultActiveProjectInfoGroups,
   getProjectInfoCreateFields,
   getProjectInfoModalFields,
   getProjectInfoModalGroups,
@@ -232,10 +233,6 @@ export default function ProjectInfoModal({
     || projectType === PROJECT_TYPE_TOS_VERSION
   const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
   const createFields = useMemo(() => getProjectInfoCreateFields(projectType), [projectType])
-  const machineCreateFields = useMemo(
-    () => mode === 'create' && isMachineProjectType(projectType) ? createFields : [],
-    [createFields, mode, projectType],
-  )
   const technicalCreateFields = useMemo(
     () => isTechnicalProject ? createFields : [],
     [createFields, isTechnicalProject],
@@ -451,7 +448,7 @@ export default function ProjectInfoModal({
     }
     form.setFieldsValue(initialValues)
     const nextActiveGroups = projectFields.length
-      ? getProjectInfoModalGroups(normalizedProjectType).map(group => group.key)
+      ? getDefaultActiveProjectInfoGroups(normalizedProjectType)
       : []
     activeGroupsRef.current = nextActiveGroups
     setActiveGroups(nextActiveGroups)
@@ -620,7 +617,7 @@ export default function ProjectInfoModal({
       secondaryCategory: classification?.pmsSecondaryCategory,
     })
     activeGroupsRef.current = mappedType
-      ? getProjectInfoModalGroups(mappedType).map(group => group.key)
+      ? getDefaultActiveProjectInfoGroups(mappedType)
       : []
     setActiveGroups(activeGroupsRef.current)
     if (!classification) {
@@ -1263,13 +1260,7 @@ export default function ProjectInfoModal({
           </div>
         )}
 
-        {machineCreateFields.length > 0 && (
-          <div className="pms-project-info-form-grid pms-project-create-fields" aria-label="整机项目新建字段">
-            {machineCreateFields.map(renderProjectInfoField)}
-          </div>
-        )}
-
-        {projectType !== PROJECT_TYPE_TOS_VERSION && aggregateWarnings.length > 0 && (
+        {projectType === PROJECT_TYPE_TOS_VERSION && aggregateWarnings.length > 0 && (
           <Alert type="warning" showIcon style={{ marginBottom: 12 }} title="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
         )}
 
@@ -1286,10 +1277,17 @@ export default function ProjectInfoModal({
             historicalDomain={mode === 'edit' ? String(project?.fieldValues?.tmg || project?.tmg || '') : undefined}
             historicalSubdomain={mode === 'edit' ? String(project?.fieldValues?.subdomain || project?.subdomain || '') : undefined}
             validateRequiredOnCreate={mode === 'create'}
+            groups={groups}
+            activeGroups={activeGroups}
+            onActiveGroupsChange={(nextActiveGroups) => {
+              if (isCreateDraftInteractionBlocked) return
+              activeGroupsRef.current = nextActiveGroups
+              setActiveGroups(nextActiveGroups)
+            }}
           />
         )}
 
-        {machineCreateFields.length === 0 && groups.length > 0 && (
+        {!isTechnicalProject && groups.length > 0 && (
           <Collapse
             className="pms-project-info-form-groups"
             activeKey={activeGroups}
@@ -1302,13 +1300,13 @@ export default function ProjectInfoModal({
             items={groups.map(group => {
               const groupFields = fields.filter(field => (
                 field.group === group.key
-                && (!field.readOnly || ['chipModel', 'chipPlatform'].includes(field.key))
+                && (!field.visibleWhen || field.visibleWhen(watchedValues))
               ))
               return {
                 key: group.key,
                 label: <Space><span className="pms-project-info-group-dot" style={{ background: GROUP_COLORS[group.key] }} /><strong>{group.label}</strong><Tag>{groupFields.length} 项</Tag></Space>,
                 children: (
-                  <div className="pms-project-info-form-grid">
+                  <div className="pms-project-info-form-grid" data-project-info-group={group.key}>
                     {groupFields.map(renderProjectInfoField)}
                   </div>
                 ),

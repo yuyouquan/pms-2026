@@ -263,6 +263,21 @@ assert.deepEqual(
   technicalCreateKeys,
   'technical create rules must expose the approved create projection',
 )
+assert.deepEqual(
+  Array.from(projectInfoRules.getProjectInfoModalGroups('整机产品项目'), group => group.label),
+  ['基础信息', '扩展信息', '团队信息'],
+  'machine create/edit keeps the approved three groups',
+)
+assert.deepEqual(
+  Array.from(projectInfoRules.getProjectInfoModalGroups('tOS版本项目'), group => group.label),
+  ['基础信息', '团队信息'],
+  'tOS create/edit keeps the approved two groups',
+)
+assert.deepEqual(
+  Array.from(projectInfoRules.getProjectInfoModalGroups('技术项目'), group => group.label),
+  ['技术信息', '团队人员', '交付物'],
+  'technical create/edit keeps the approved three groups',
+)
 
 const newMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整机产品-手机', {
   firstSaleTosVersion: 'tOS17.0',
@@ -328,14 +343,17 @@ assert.equal(
 assert.match(modalSource, /getProjectInfoCreateFields/, 'create pages must consume the ordered create projection')
 assert.match(
   modalSource,
-  /aria-label="IPM项目来源"[\s\S]*aria-label="整机项目新建字段"/,
-  'the IPM source selector must render before the machine business fields',
+  /aria-label="IPM项目来源"[\s\S]*data-project-info-group/,
+  'the IPM source selector must render before grouped project fields',
 )
 assert.match(
   modalSource,
-  /machineCreateFields\.map\(renderProjectInfoField\)/,
-  'all machine business Form.Items must be rendered directly from the ordered create projection',
+  /groupFields\.map\(renderProjectInfoField\)/,
+  'machine and tOS Form.Items must render inside their schema group',
 )
+assert.match(modalSource, /!field\.visibleWhen \|\| field\.visibleWhen\(watchedValues\)/, 'group counts and fields include only currently visible conditional fields')
+assert.doesNotMatch(modalSource, /machineCreateFields/, 'machine fields must not bypass the grouped renderer')
+assert.match(modalSource, /getDefaultActiveProjectInfoGroups/, 'fresh create and edit sessions open only the first configured group')
 assert.match(modalSource, /data-project-create-field=\{field\.key\}/, 'rendered create fields must expose their source key in the live DOM')
 assert.doesNotMatch(
   modalSource,
@@ -352,11 +370,7 @@ assert.match(
   /const isRequired = !renderedField\.readOnly[\s\S]{0,160}field\.requiredOnCreate/,
   'read-only source snapshots must stay disabled without participating in create validation',
 )
-assert.doesNotMatch(
-  modalSource,
-  /machineCreateFields\.filter\([^\n]*readOnly/,
-  'read-only machine fields must not be removed from the 34-field page projection',
-)
+assert.doesNotMatch(modalSource, /groupFields = fields\.filter\([\s\S]{0,180}!field\.readOnly/, 'read-only snapshots stay visible inside their group')
 assert.match(
   modalSource,
   /fields=\{technicalCreateFields\}/,
@@ -364,9 +378,11 @@ assert.match(
 )
 assert.match(
   technicalCreateSource,
-  /fields\.map\(field =>/,
-  'the technical page must render its Form.Items from the ordered create projection',
+  /groupFields\.map\(renderField\)/,
+  'the technical page must render each ordered group projection through one field renderer',
 )
+assert.match(technicalCreateSource, /data-project-info-group/, 'technical form exposes each configured group in the live DOM')
+assert.match(technicalCreateSource, /fields\.filter\(field => field\.group === group\.key\)/, 'technical fields are partitioned by their configured group')
 assert.match(
   technicalCreateSource,
   /TECHNICAL_SOURCE_SNAPSHOT_KEYS\.has\(field\.key\)[\s\S]{0,160}<Input disabled/,
@@ -477,8 +493,8 @@ const tosKeySnapshot = [
 assert.deepEqual(Array.from(schema.TOS_PROJECT_INFO_FIELDS, field => field.key), tosKeySnapshot)
 assert.deepEqual(
   Array.from(projectInfoRules.getProjectInfoModalFields('tOS版本项目'), field => field.key),
-  tosKeySnapshot.slice(8),
-  'tOS modal rules must continue to exclude read-only basic aggregate fields',
+  tosKeySnapshot,
+  'tOS modal rules must expose basic aggregate fields and team fields in their groups',
 )
 
 assert.equal(schema.PROJECT_INFO_SCHEMA_VERSION, 3, 'field preference schema version must advance exactly once')

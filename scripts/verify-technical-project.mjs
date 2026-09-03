@@ -491,7 +491,7 @@ const configModalMount = liveJsxMounts(technicalInformationReachableNodes, techn
 assert.ok(staticJsxAttributeText(jsxAttribute(configModalMount, 'open')).includes('configuringChild'), 'mounted configuration modal consumes the state opened by its button')
 const createFields = readSource(root, 'src/components/technical-project/TechnicalProjectCreateFields.tsx')
 assert.match(createFields, /fields:\s*readonly ProjectInfoFieldDefinition\[\]/, 'technical create fields receive the ordered create projection')
-assert.match(createFields, /fields\.map\(field =>/, 'technical create Form.Items preserve projection order')
+assert.match(createFields, /groupFields\.map\(renderField\)/, 'technical create Form.Items preserve projection order within each configured group')
 assert.match(
   createFields,
   /const isRequired = !field\.readOnly[\s\S]{0,160}validateRequiredOnCreate \? field\.requiredOnCreate : field\.required/,

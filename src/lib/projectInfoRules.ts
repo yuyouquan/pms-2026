@@ -93,16 +93,9 @@ export const resolveProjectCreationDraftSourceStatus = ({
   return String(draftStatus || '').trim()
 }
 
-/**
- * tOS basic information is still part of the display/storage schema, but it is
- * no longer maintained in the create/edit modal. Keeping this as a modal-only
- * projection prevents the UI change from deleting historical aggregate data.
- */
 export const getProjectInfoModalFields = (type: string) => {
   if (isMachineProjectType(type)) return MACHINE_PROJECT_CREATE_FIELDS
-  return getProjectInfoFields(type).filter(field => (
-    type !== PROJECT_TYPE_TOS_VERSION || field.group !== 'basic'
-  ))
+  return getProjectInfoFields(type)
 }
 
 export const getProjectInfoCreateFields = (type: string) => {
@@ -118,9 +111,13 @@ export const getProjectInfoSpaceFields = (type: string) => {
 }
 
 export const getProjectInfoModalGroups = (type: string) => {
-  if (type === PROJECT_CATEGORY_TECH) return []
   const visibleGroupKeys = new Set(getProjectInfoModalFields(type).map(field => field.group))
   return getProjectInfoGroups(type).filter(group => visibleGroupKeys.has(group.key))
+}
+
+export const getDefaultActiveProjectInfoGroups = (type: string): string[] => {
+  const firstGroup = getProjectInfoModalGroups(type)[0]
+  return firstGroup ? [firstGroup.key] : []
 }
 
 const MACHINE_PROJECT_MODAL_CREATE_ONLY_STORAGE_FIELDS = MACHINE_PROJECT_CREATE_FIELDS

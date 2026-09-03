@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { FileOutlined, LinkOutlined, UploadOutlined } from '@ant-design/icons'
-import { Button, DatePicker, Form, Input, Radio, Select, Space, Tag, Upload, type FormInstance } from 'antd'
+import { Button, Collapse, DatePicker, Form, Input, Radio, Select, Space, Tag, Upload, type FormInstance } from 'antd'
 import dayjs from 'dayjs'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import {
@@ -15,12 +15,17 @@ import { getPreProjectCandidates, switchDeliverableMode } from '@/lib/technicalP
 import { useEnumStore } from '@/stores/enums'
 import type { ProjectInfoProject } from '@/lib/projectInfoValues'
 import type { DeliverableValue } from '@/types/technicalProject'
-import type { ProjectInfoFieldDefinition } from '@/constants/projectInfoSchema'
+import type { ProjectInfoFieldDefinition, ProjectInfoGroupDefinition, ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
 
 const personOptions = ALL_USERS.map(user => ({ label: user, value: user }))
 const TECHNICAL_SOURCE_SNAPSHOT_KEYS = new Set(['secondaryCategory', 'technicalTrack', 'projectName'])
 const technicalTeamFieldsByKey = new Map(TECHNICAL_TEAM_FIELDS.map(field => [field.key, field]))
 const technicalDeliverableFieldsByKey = new Map(TECHNICAL_DELIVERABLE_FIELDS.map(field => [field.key, field]))
+const TECHNICAL_GROUP_COLORS: Record<ProjectInfoGroupKey, string> = {
+  basic: 'var(--pms-brand)',
+  extended: '#f59e0b',
+  team: '#14b8a6',
+}
 
 function DeliverableControl({ label, value, onChange }: { label: string; value?: DeliverableValue; onChange?: (value: DeliverableValue) => void }) {
   const [kind, setKind] = useState<'url' | 'file'>(value?.kind || 'url')
@@ -92,6 +97,9 @@ export default function TechnicalProjectCreateFields({
   historicalDomain,
   historicalSubdomain,
   validateRequiredOnCreate,
+  groups,
+  activeGroups,
+  onActiveGroupsChange,
 }: {
   form: FormInstance
   fields: readonly ProjectInfoFieldDefinition[]
@@ -100,6 +108,9 @@ export default function TechnicalProjectCreateFields({
   historicalDomain?: string
   historicalSubdomain?: string
   validateRequiredOnCreate: boolean
+  groups: readonly ProjectInfoGroupDefinition[]
+  activeGroups: string[]
+  onActiveGroupsChange: (keys: string[]) => void
 }) {
   const tmg = String(Form.useWatch('tmg', form) || '')
   const projectValue = String(Form.useWatch('projectValue', form) || '')
@@ -110,10 +121,8 @@ export default function TechnicalProjectCreateFields({
     historicalDomain,
   )
   const projectValueHistory = useMemo(() => projectValue ? [projectValue] : [], [projectValue])
-  const status = String(Form.useWatch('status', form) || '')
-  const statusHistory = useMemo(() => status ? [status] : [], [status])
   const projectValueOptions = useSingleEnumOptions('core-value', projectValueHistory)
-  const projectStatusOptions = useSingleEnumOptions('technical-project-status', statusHistory)
+  const projectStatusOptions = useSingleEnumOptions('technical-project-status', [])
   const preProjectOptions = getPreProjectCandidates(existingProjects, currentProjectId).map(project => ({
     value: project.id,
     label: `${project.name}（${project.type}）`,
@@ -190,43 +199,64 @@ export default function TechnicalProjectCreateFields({
     return <Input disabled />
   }
 
+  const renderField = (field: ProjectInfoFieldDefinition) => {
+    const isRequired = !field.readOnly
+      && (validateRequiredOnCreate ? field.requiredOnCreate : field.required)
+    const label = fieldLabel(field)
+    const requiredRule = isRequired ? [{ required: true, message: `请选择${label}` }] : []
+    const rules = field.key === 'subdomain'
+      ? [
+          {
+            validator: async (_: unknown, value: unknown) => {
+              if (tmg && !subdomainOptions.some(option => !option.disabled) && !String(value || '').trim()) {
+                throw new Error('暂无可用配置，请先在配置中心维护')
+              }
+            },
+          },
+          ...requiredRule,
+        ]
+      : field.key === 'projectYear'
+        ? [...requiredRule, { pattern: /^\d{4}$/, message: '请选择四位项目年份' }]
+        : requiredRule.length ? requiredRule : undefined
+    return (
+      <Form.Item
+        key={field.key}
+        data-project-create-field={field.key}
+        label={label}
+        name={field.key}
+        className={field.inputType === 'deliverable' ? 'pms-project-info-form-span' : undefined}
+        rules={rules}
+      >
+        {renderTechnicalControl(field)}
+      </Form.Item>
+    )
+  }
+
   return (
     <div className="pms-technical-project-fields">
-      <div className="pms-technical-section-heading"><span>技术项目信息</span><small>项目分类、技术赛道和子项目名称来自 IPM 项目快照；项目状态需手动选择</small></div>
-      <div className="pms-project-info-form-grid">
-        {fields.map(field => {
-          const isRequired = !field.readOnly
-            && (validateRequiredOnCreate ? field.requiredOnCreate : field.required)
-          const label = fieldLabel(field)
-          const requiredRule = isRequired ? [{ required: true, message: `请选择${label}` }] : []
-          const rules = field.key === 'subdomain'
-            ? [
-                {
-                  validator: async (_: unknown, value: unknown) => {
-                    if (tmg && !subdomainOptions.some(option => !option.disabled) && !String(value || '').trim()) {
-                      throw new Error('暂无可用配置，请先在配置中心维护')
-                    }
-                  },
-                },
-                ...requiredRule,
-              ]
-            : field.key === 'projectYear'
-              ? [...requiredRule, { pattern: /^\d{4}$/, message: '请选择四位项目年份' }]
-              : requiredRule.length ? requiredRule : undefined
-          return (
-            <Form.Item
-              key={field.key}
-              data-project-create-field={field.key}
-              label={label}
-              name={field.key}
-              className={field.inputType === 'deliverable' ? 'pms-project-info-form-span' : undefined}
-              rules={rules}
-            >
-              {renderTechnicalControl(field)}
-            </Form.Item>
-          )
+      <Collapse
+        className="pms-project-info-form-groups"
+        activeKey={activeGroups}
+        onChange={keys => onActiveGroupsChange(keys as string[])}
+        items={groups.map(group => {
+          const groupFields = fields.filter(field => field.group === group.key)
+          return {
+            key: group.key,
+            label: (
+              <Space>
+                <span className="pms-project-info-group-dot" style={{ background: TECHNICAL_GROUP_COLORS[group.key] }} />
+                <strong>{group.label}</strong>
+                <Tag>{groupFields.length} 项</Tag>
+              </Space>
+            ),
+            children: (
+              <div className="pms-project-info-form-grid" data-project-info-group={group.key}>
+                {groupFields.map(renderField)}
+              </div>
+            ),
+          }
         })}
-      </div>
+      />
     </div>
   )
 }
