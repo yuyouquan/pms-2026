@@ -7,6 +7,7 @@ import {
   projectTechnicalSubprojectRows,
   sumLevel1EstimatedDays,
   type Level1FlatMilestoneRow,
+  type Level1PlanViewRow,
 } from '@/lib/level1PlanRules'
 
 export const TECHNICAL_TDT_EXPORT_COLUMNS = [
@@ -112,6 +113,35 @@ export const projectTechnicalPlanRows = (
     ? projectTechnicalSubprojectRows(tasks)
     : projectLevel1FlatMilestones(tasks)
 )
+
+export type TechnicalTdtTreeRow = Level1PlanViewRow & {
+  children?: TechnicalTdtTreeRow[]
+}
+
+/** Projects the two-level TDT template into the same phase -> milestone tree used by standard L1 plans. */
+export const buildTechnicalTdtTreeRows = (
+  tasks: readonly TechnicalTemplateTask[],
+): TechnicalTdtTreeRow[] => {
+  const rows = projectLevel1Plan(tasks, { mode: 'standard' }).rows as TechnicalTdtTreeRow[]
+  const byId = new Map(rows.map(row => [row.id, row]))
+  const byStableId = new Map(rows.map(row => [row.stableId || row.id, row]))
+  const childrenByParent = new Map<string, TechnicalTdtTreeRow[]>()
+
+  rows.forEach(row => {
+    if (!row.parentId) return
+    const parent = byId.get(row.parentId) || byStableId.get(row.parentId)
+    if (!parent) return
+    const parentKey = parent.stableId || parent.id
+    childrenByParent.set(parentKey, [...(childrenByParent.get(parentKey) || []), row])
+  })
+
+  return rows
+    .filter(row => !row.parentId || (!byId.has(row.parentId) && !byStableId.has(row.parentId)))
+    .map(row => {
+      const children = childrenByParent.get(row.stableId || row.id)
+      return children?.length ? { ...row, children } : { ...row }
+    })
+}
 
 export const filterTechnicalPlanGanttTasks = <T extends { id: string; parentId?: string }>(
   tasks: readonly T[],

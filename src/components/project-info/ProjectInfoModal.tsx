@@ -1233,66 +1233,60 @@ export default function ProjectInfoModal({
           }
         }}
       >
-        {mode === 'create' && (
+        {(mode === 'create' || projectType) && (
           <div className="pms-project-info-form-grid pms-project-info-universal" aria-label="IPM项目来源">
-            <Form.Item label="项目名" name="bid" rules={[{ required: true, message: '请选择项目名' }]}>
-              <Select
-                showSearch
-                optionFilterProp="label"
-                placeholder="搜索并选择项目"
-                options={candidateProjects.map(item => ({ label: `${item.name}（${item.bid}）`, value: item.bid }))}
-              />
-            </Form.Item>
-          </div>
-        )}
-
-        {projectType && (
-          <div className="pms-project-info-form-grid pms-project-info-universal">
-            {mode === 'edit' && (
+            {mode === 'create' ? (
+              <Form.Item label="项目名" name="bid" rules={[{ required: true, message: '请选择项目名' }]}>
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder="搜索并选择项目"
+                  options={candidateProjects.map(item => ({ label: `${item.name}（${item.bid}）`, value: item.bid }))}
+                />
+              </Form.Item>
+            ) : (
               <Form.Item label="项目名" name="projectName"><Input disabled /></Form.Item>
             )}
-            {isTechnicalProject ? (
-              <Form.Item label="项目分类" name="secondaryCategory"><Input disabled /></Form.Item>
-            ) : (
-              <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>
-                <Select disabled options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
-              </Form.Item>
-            )}
-            {isMachineProjectType(projectType) && (
-              <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
-                <Select disabled options={secondaryCategoryOptions} />
-              </Form.Item>
-            )}
-            {showConfiguredProjectStatus && !isMachineProjectType(projectType) && !isTechnicalProject && (
-              <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
-                <Select
-                  options={projectStatusOptions}
-                  placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
-                />
-              </Form.Item>
-            )}
-            {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (
-              <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
-                <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
-              </Form.Item>
-            )}
-            {isTargetProjectInfoType(projectType) && (mode === 'edit' || !isMachineProjectType(projectType)) && (
-              <Form.Item label="健康状态" name="healthStatus" rules={[{ required: true, message: '请选择健康状态' }]}>
-                <Select
-                  options={healthOptions}
-                  placeholder={healthOptions.length ? '请选择健康状态' : '暂无可用配置，请先在配置中心维护'}
-                />
-              </Form.Item>
-            )}
+            {projectType && (<>
+              {isTechnicalProject ? (
+                <Form.Item label="项目分类" name="secondaryCategory"><Input disabled /></Form.Item>
+              ) : (
+                <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>
+                  <Select disabled options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
+                </Form.Item>
+              )}
+              {isMachineProjectType(projectType) && (
+                <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
+                  <Select disabled options={secondaryCategoryOptions} />
+                </Form.Item>
+              )}
+              {showConfiguredProjectStatus && !isMachineProjectType(projectType) && !isTechnicalProject && (
+                <Form.Item label="项目状态" name="status" rules={[{ required: true, message: '项目状态不能为空' }]}>
+                  <Select
+                    options={projectStatusOptions}
+                    placeholder={projectStatusOptions.length ? '请选择项目状态' : '暂无可用状态配置，请先在配置中心维护'}
+                  />
+                </Form.Item>
+              )}
+              {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (
+                <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
+                  <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
+                </Form.Item>
+              )}
+              {isTargetProjectInfoType(projectType) && (mode === 'edit' || !isMachineProjectType(projectType)) && (
+                <Form.Item label="健康状态" name="healthStatus" rules={[{ required: true, message: '请选择健康状态' }]}>
+                  <Select
+                    options={healthOptions}
+                    placeholder={healthOptions.length ? '请选择健康状态' : '暂无可用配置，请先在配置中心维护'}
+                  />
+                </Form.Item>
+              )}
+            </>)}
           </div>
         )}
 
         {projectType === PROJECT_TYPE_TOS_VERSION && aggregateWarnings.length > 0 && (
           <Alert type="warning" showIcon style={{ marginBottom: 12 }} title="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
-        )}
-
-        {machineFamilyError && (
-          <Alert type="error" showIcon style={{ marginBottom: 12 }} title="tOS 版本联动失败" description={machineFamilyError} />
         )}
 
         {isTechnicalProject && (
