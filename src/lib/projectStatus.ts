@@ -1,5 +1,44 @@
 import type { SingleEnumTypeKey } from '@/lib/enumConsumers'
 
+export const ACTIVE_PROJECT_STATUSES = {
+  machine: ['待立项', '在研', '上市', 'EOS', '转维', '已取消', '已暂停'],
+  tos: ['在研', '已完成'],
+  technical: ['进行中', '已完成', '暂停', '已取消'],
+} as const
+
+const isMachineStatusProjectType = (projectType: string) => (
+  projectType === '整机产品项目'
+  || projectType.startsWith('整机-')
+  || projectType.startsWith('整机产品-')
+)
+
+export function getActiveProjectStatuses(projectType: string): readonly string[] {
+  if (isMachineStatusProjectType(projectType)) {
+    return ACTIVE_PROJECT_STATUSES.machine
+  }
+  if (projectType === '技术项目') return ACTIVE_PROJECT_STATUSES.technical
+  return ACTIVE_PROJECT_STATUSES.tos
+}
+
+export function normalizeLegacyProjectStatus(projectType: string, status: string): string {
+  const value = status.trim()
+  if (!value) return value
+  if (isMachineStatusProjectType(projectType)) {
+    if (value === '暂停') return '已暂停'
+    if (value === '规划中' || value === '筹备中') return '待立项'
+    return value
+  }
+  if (projectType === '技术项目') {
+    if (value === '在研' || value === '筹备中') return '进行中'
+    if (value === '已迁移' || value === 'EOS') return '已完成'
+    return value
+  }
+  if (projectType === 'tOS版本项目' || projectType === '能力建设项目') {
+    return ['已完成', '已迁移', 'EOS'].includes(value) ? '已完成' : '在研'
+  }
+  return value
+}
+
 export function getProjectStatusEnumType(category: string): SingleEnumTypeKey {
   if (category === '整机产品项目') return 'machine-project-status'
   if (category === '技术项目') return 'technical-project-status'

@@ -37,6 +37,7 @@ import {
   usePermissionStore,
 } from '@/stores/permission'
 import { mergeResponsiblePersonsIntoVisibleMembers } from '@/lib/projectResponsibility'
+import { normalizeLegacyProjectStatus } from '@/lib/projectStatus'
 
 // Default login user (mock)
 export const DEFAULT_LOGIN_USER = '张三'
@@ -82,7 +83,7 @@ type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 export type ProjectListViewMode = 'list' | 'card' | 'calendar'
 type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode }
 
-export const PROJECT_STORE_VERSION = 8
+export const PROJECT_STORE_VERSION = 9
 
 const withEosTransitionTime = (project: Project, previous?: Project, now = new Date().toISOString()): Project => {
   if (project.status !== 'EOS') return project
@@ -196,7 +197,10 @@ function migrateProjectSourceIdentity(project: Project): Project {
 }
 
 const migrateProjectHistory = (project: Project): Project => (
-  migrateProjectSourceIdentity(migrateMachineTosHistory(project))
+  migrateProjectSourceIdentity(migrateMachineTosHistory({
+    ...project,
+    status: normalizeLegacyProjectStatus(project.type, project.status),
+  }))
 )
 
 const initialProjectState = (initialProjects as Project[]).map(migrateProjectHistory)

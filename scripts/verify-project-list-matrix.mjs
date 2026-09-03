@@ -2,7 +2,24 @@
 import assert from 'node:assert/strict'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
-const matrix = loadTypeScriptModule(projectRoot(import.meta.url), 'src/lib/projectListMatrix.ts')
+const root = projectRoot(import.meta.url)
+const matrix = loadTypeScriptModule(root, 'src/lib/projectListMatrix.ts')
+const projectStatus = loadTypeScriptModule(root, 'src/lib/projectStatus.ts')
+const projectSeedSource = readSource(root, 'src/data/projects.ts')
+const projectListContainerSource = readSource(root, 'src/containers/ProjectListContainer.tsx')
+
+assert.deepEqual(projectStatus.getActiveProjectStatuses('整机产品项目'), ['待立项', '在研', '上市', 'EOS', '转维', '已取消', '已暂停'])
+assert.deepEqual(projectStatus.getActiveProjectStatuses('tOS版本项目'), ['在研', '已完成'])
+assert.deepEqual(projectStatus.getActiveProjectStatuses('能力建设项目'), ['在研', '已完成'])
+assert.deepEqual(projectStatus.getActiveProjectStatuses('技术项目'), ['进行中', '已完成', '暂停', '已取消'])
+assert.equal(projectStatus.normalizeLegacyProjectStatus('整机产品项目', '暂停'), '已暂停')
+assert.equal(projectStatus.normalizeLegacyProjectStatus('整机产品项目', '规划中'), '待立项')
+assert.equal(projectStatus.normalizeLegacyProjectStatus('技术项目', '已迁移'), '已完成')
+assert.equal(projectStatus.normalizeLegacyProjectStatus('技术项目', '在研'), '进行中')
+assert.match(projectListContainerSource, /useSingleEnumOptions\(\s*statusEnumType,\s*\[\]/)
+for (const retiredStatus of ["status: '规划中'", "status: '筹备中'", "status: '已迁移'"]) {
+  assert.doesNotMatch(projectSeedSource, new RegExp(retiredStatus), `project mocks must not keep retired status ${retiredStatus}`)
+}
 assert.equal(typeof matrix.getProjectListMatrix, 'function', 'missing getProjectListMatrix')
 assert.equal(typeof matrix.buildGroupedMilestoneColumns, 'function', 'missing grouped milestone builder')
 assert.equal(typeof matrix.buildTechnicalProjectListRows, 'function', 'missing technical row builder')
