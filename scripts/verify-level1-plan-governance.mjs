@@ -596,6 +596,7 @@ const machineInsert = rules.insertLevel1BusinessNode(machineBusinessInput, {
 })
 assert.equal(machineInsert.ok, true, 'whole-machine business periods can be inserted under the launch stage')
 assert.equal(machineInsert.task.nodeKind, 'business-period')
+assert.equal(machineInsert.task.revisionOrigin, 'new-custom', 'new project-created business nodes are marked so older horizontal rows stay blank')
 assert.deepEqual(
   {
     source: machineInsert.task.source,
@@ -1382,6 +1383,96 @@ assert.equal(firstRevision.some(task => task.stableId === 'machine-ms-str1'), tr
 const nextRevision = rules.buildNextLevel1RevisionTasks(firstRevision)
 nextRevision[0].taskName = '仅修改副本'
 assert.notEqual(firstRevision[0].taskName, nextRevision[0].taskName)
+
+const latestTemplateByName = [
+  { ...makeTask('latest-plan', null, 0, '计划阶段'), stableId: 'latest-plan' },
+  {
+    ...makeTask('latest-str2', 'latest-plan', 0, 'STR2'),
+    stableId: 'latest-str2',
+    planStartDate: '',
+    estimatedDays: null,
+    actualStartDate: '',
+    actualDays: null,
+    status: '未开始',
+    progress: 0,
+  },
+  { ...makeTask('latest-review', 'latest-plan', 1, '新增评审点'), stableId: 'latest-review' },
+  { ...makeTask('latest-maintenance', null, 1, '维护阶段'), stableId: 'latest-maintenance' },
+  { ...makeTask('latest-eos', 'latest-maintenance', 0, 'EOS'), stableId: 'latest-eos' },
+]
+const previousTemplateByName = [
+  { ...makeTask('previous-concept', null, 0, '概念阶段'), stableId: 'previous-concept' },
+  { ...makeTask('previous-plan', null, 1, '计划阶段'), stableId: 'previous-plan' },
+  { ...makeTask('previous-str2', 'previous-plan', 0, 'STR2'), stableId: 'previous-str2' },
+  { ...makeTask('previous-removed', 'previous-plan', 1, '已删除模板节点'), stableId: 'previous-removed' },
+  { ...makeTask('previous-maintenance', null, 2, '维护阶段'), stableId: 'previous-maintenance' },
+  { ...makeTask('previous-eos', 'previous-maintenance', 0, 'EOS'), stableId: 'previous-eos' },
+  { ...makeTask('removed-stage', null, 3, '已删除大阶段'), stableId: 'removed-stage' },
+]
+const previousProjectByName = [
+  { ...makeTask('project-concept', null, 0, '概念阶段'), stableId: 'project-concept' },
+  { ...makeTask('project-plan', null, 1, '计划阶段'), stableId: 'project-plan' },
+  {
+    ...makeTask('project-str2', 'project-plan', 0, 'STR2', '2026-02-06', '2026-02-05'),
+    stableId: 'project-str2',
+    planStartDate: '2026-02-02',
+    estimatedDays: 5,
+    actualStartDate: '2026-02-03',
+    actualDays: 3,
+    status: '已完成',
+    progress: 100,
+  },
+  { ...makeTask('project-removed', 'project-plan', 1, '已删除模板节点', '2026-02-08'), stableId: 'project-removed' },
+  { ...makeTask('project-maintenance', null, 2, '维护阶段'), stableId: 'project-maintenance' },
+  { ...makeTask('project-eos', 'project-maintenance', 0, 'EOS', '2026-06-02'), stableId: 'project-eos' },
+  {
+    ...makeTask('project-mr1', 'project-maintenance', 1, 'MR1', '2026-06-11'),
+    stableId: 'project-mr1',
+    source: 'custom',
+    nodeKind: 'business-period',
+  },
+  { ...makeTask('project-removed-stage', null, 3, '已删除大阶段'), stableId: 'project-removed-stage' },
+  {
+    ...makeTask('project-mr2', 'project-removed-stage', 0, 'MR2', '2026-08-11'),
+    stableId: 'project-mr2',
+    source: 'custom',
+    nodeKind: 'business-period',
+  },
+]
+const mergedLatestRevision = rules.mergeLevel1RevisionWithLatestTemplate(
+  latestTemplateByName,
+  previousProjectByName,
+  [previousTemplateByName, latestTemplateByName],
+)
+assert.deepEqual(
+  mergedLatestRevision.map(task => task.taskName),
+  ['计划阶段', 'STR2', '新增评审点', '维护阶段', 'EOS', 'MR1'],
+  'every revision uses the latest published template and preserves custom nodes only below retained stages',
+)
+const refilledStr2 = mergedLatestRevision.find(task => task.taskName === 'STR2')
+assert.equal(refilledStr2.planStartDate, '2026-02-02', 'revision refills plan start by task name even when stable ids changed')
+assert.equal(refilledStr2.planEndDate, '2026-02-06', 'revision refills plan end by task name even when stable ids changed')
+assert.equal(refilledStr2.actualStartDate, '2026-02-03', 'revision refills actual start by task name')
+assert.equal(refilledStr2.actualEndDate, '2026-02-05', 'revision refills actual end by task name')
+assert.equal(refilledStr2.status, '未开始', 'revision does not carry execution status from the previous project version')
+assert.equal(refilledStr2.progress, 0, 'revision does not carry execution progress from the previous project version')
+const newReviewNode = mergedLatestRevision.find(task => task.taskName === '新增评审点')
+assert.equal(newReviewNode.planEndDate, '', 'new template nodes start without project time')
+assert.equal(newReviewNode.revisionOrigin, 'new-template', 'new template nodes are marked for historical horizontal blanks')
+const retainedMr1 = mergedLatestRevision.find(task => task.taskName === 'MR1')
+assert.equal(retainedMr1.parentId, 'latest-maintenance', 'a custom node follows its retained stage into the latest template structure')
+assert.equal(retainedMr1.planEndDate, '2026-06-11', 'a retained custom node keeps the user-entered time')
+assert.equal(mergedLatestRevision.some(task => task.taskName === 'MR2'), false, 'deleting a major stage also removes its custom children')
+assert.equal(
+  rules.findLevel1TaskByName([{ id: 'old-str2', taskName: 'STR2', planEndDate: '2026-02-06' }], ' STR2 ')?.id,
+  'old-str2',
+  'horizontal rows resolve historical cells by normalized task name',
+)
+assert.equal(
+  rules.findLevel1TaskByName([{ id: 'old-str2', taskName: 'STR2' }], '新增评审点'),
+  undefined,
+  'an old published row has no value for a node introduced by the latest template',
+)
 
 const synced = rules.synchronizeLevel1ActualEndDate(firstRevision, nextRevision, firstRevision[1].id, '2026-03-01')
 assert.equal(synced.sourceTasks.find(task => task.stableId === 'machine-ms-concept-kickoff').actualEndDate, '2026-03-01')

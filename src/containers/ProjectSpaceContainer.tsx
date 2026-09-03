@@ -33,7 +33,7 @@ import {
   AuditOutlined, DownloadOutlined, CloseCircleOutlined,
   SafetyOutlined, SendOutlined, DeploymentUnitOutlined, ShareAltOutlined,
   PlusSquareOutlined, MinusSquareOutlined, CaretDownOutlined, StopOutlined,
-  FilterOutlined, CopyOutlined,
+  FilterOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -182,8 +182,6 @@ import {
 } from '@/lib/enumConsumers'
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import {
-  buildFirstLevel1RevisionTasks,
-  buildNextLevel1RevisionTasks,
   canAddLevel1CustomChild,
   canMaintainLevel1Plan,
   canMutateLevel1TaskStructure,
@@ -193,6 +191,7 @@ import {
   getLevel1StructurePermissions,
   insertLevel1BusinessNode,
   isBusinessStage,
+  mergeLevel1RevisionWithLatestTemplate,
   projectLevel1Plan,
   renameLevel1BusinessNode,
   renumberLevel1Tasks,
@@ -201,6 +200,7 @@ import {
   parseTosProjectVersionPrefix,
   type Level1PlanTask,
 } from '@/lib/level1PlanRules'
+import { getTemplateConfigScopeKey } from '@/lib/technicalPlanRules'
 import {
   applyPlanGanttDateChangeResult,
   applyPlanTaskDatePatch,
@@ -329,15 +329,6 @@ const getSoftwareProductSeriesValue = (project: any) => {
   }
   return project.productSeries || project.osSeries || inferOsSeriesFromProjectName(project.name)
 }
-const PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS = ['V2', 'V1'] as const
-const PROJECT_PLAN_CLONE_MARKET_VERSION_MAP = {
-  OP: ['V3', 'V2', 'V1'],
-  TR: ['V2', 'V1'],
-} as const
-const PROJECT_PLAN_CLONE_MARKET_GROUPS = [
-  { label: 'OP', market: 'OP', versions: PROJECT_PLAN_CLONE_MARKET_VERSION_MAP.OP },
-  { label: 'TR', market: 'TR', versions: PROJECT_PLAN_CLONE_MARKET_VERSION_MAP.TR },
-] as const
 const PLAN_TEMPLATE_ROLE_TO_PROJECT_PERMISSION_ROLE = {
   SPM: '项目经理',
 } as const
@@ -361,6 +352,38 @@ const getLatestPublishedPlanVersion = (versions: PlanVersionLike[]) => (
     .filter(version => parsePlanVersionNo(version.versionNo))
     .sort((a, b) => comparePlanVersions(b, a))[0]
 )
+
+const resolvePublishedLevel1Template = ({
+  projectType,
+  configTemplateVersionScopes,
+  publishedSnapshots,
+  configTemplateTasksByType,
+}: {
+  projectType: string
+  configTemplateVersionScopes: Record<string, { versions: PlanVersionLike[] }>
+  publishedSnapshots: Record<string, any[]>
+  configTemplateTasksByType: Record<string, any[]>
+}) => {
+  const canonicalProjectType = getProjectTypeFamilyKey(projectType)
+  const scope = configTemplateVersionScopes[getTemplateConfigScopeKey(canonicalProjectType, 'level1')]
+  const publishedVersions = [...(scope?.versions || [])]
+    .filter(version => version.status === '已发布')
+    .sort((left, right) => comparePlanVersions(right, left))
+  const fallbackTasks = getTemplateTasksForProjectType(configTemplateTasksByType, canonicalProjectType)
+    || LEVEL1_TEMPLATE_TASKS
+  const publishedHistory = publishedVersions
+    .map(version => getTemplateSnapshotForProjectType(
+      publishedSnapshots,
+      canonicalProjectType,
+      version.id,
+      'level1',
+    ))
+    .filter((snapshot): snapshot is any[] => Array.isArray(snapshot))
+  return {
+    latestTasks: publishedHistory[0] || fallbackTasks,
+    publishedHistory: publishedHistory.length > 0 ? publishedHistory : [fallbackTasks],
+  }
+}
 
 const clearTosTypeExecutionFields = (task: any) => ({
   ...task,
@@ -503,10 +526,14 @@ export const mergeLevel1HorizontalStageGroups = <Row extends {
 export const resolveLevel1HorizontalVersionCells = <Row extends {
   id: string
   stableId?: string
+  taskName: string
 }>(
   headers: readonly Row[],
   versionRows: readonly Row[],
 ): Array<Row | null> => headers.map(header => {
+  const normalizedTaskName = String(header.taskName || '').trim()
+  const taskNameMatch = versionRows.find(row => String(row.taskName || '').trim() === normalizedTaskName)
+  if (taskNameMatch) return taskNameMatch
   const identity = header.stableId || header.id
   return versionRows.find(row => (row.stableId || row.id) === identity) || null
 })
@@ -705,12 +732,6 @@ const getPlanRevisionKindFromVersion = (version?: PlanVersionLike): PlanRevision
 }
 
 type PlanFilterCondition = AnyFilterCondition
-type PlanCloneSource = {
-  type: 'template' | 'market'
-  label: string
-  versionNo: string
-  market?: string
-}
 
 // 计划时间合法性校验：每个违规任务对应字段返回具体原因列表（用于 Tooltip 展示）
 // 规则：
@@ -870,7 +891,7 @@ export default function ProjectSpaceContainer() {
     selectedLevel2PlanType, setSelectedLevel2PlanType,
     selectedMilestones, setSelectedMilestones, selectedMRVersion, setSelectedMRVersion,
     columnSettingsByView, setColumnSettingsByView, collapsedNodes, setCollapsedNodes,
-    publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType,
+    publishedSnapshots, setPublishedSnapshots, configTemplateTasksByType, configTemplateVersionScopes,
     compareVersionA, setCompareVersionA, compareVersionB, setCompareVersionB,
     compareResult, setCompareResult,
     marketPlanData, setMarketPlanData,
@@ -1066,10 +1087,24 @@ export default function ProjectSpaceContainer() {
   const canCreateCurrentRevision = canMaintainCurrentPlan && (
     !isMarketScopedLevel1 || canCreateRevisionForMarket(marketConfigRows, selectedMarketTab, scopedPlanLevel)
   )
-  const latestTemplateVersion = useMemo(
-    () => baseVersions.filter(version => version.status === '已发布').sort((left, right) => comparePlanVersions(right, left))[0],
-    [baseVersions],
-  )
+  const tosLevel1TemplateResolution = useMemo(() => resolvePublishedLevel1Template({
+    projectType: PROJECT_TYPE_TOS_VERSION,
+    configTemplateVersionScopes,
+    publishedSnapshots,
+    configTemplateTasksByType,
+  }), [configTemplateTasksByType, configTemplateVersionScopes, publishedSnapshots])
+  const currentLevel1TemplateResolution = useMemo(() => resolvePublishedLevel1Template({
+    projectType: selectedProject?.type || selectedPlanType,
+    configTemplateVersionScopes,
+    publishedSnapshots,
+    configTemplateTasksByType,
+  }), [
+    configTemplateTasksByType,
+    configTemplateVersionScopes,
+    publishedSnapshots,
+    selectedPlanType,
+    selectedProject?.type,
+  ])
   const projectLinkedLevel1MockTasks = useMemo(() => {
     if (!selectedProject) return LEVEL1_TASKS
     const projectTemplateTasks = getTemplateTasksForProjectType(configTemplateTasksByType, selectedProject.type)
@@ -1080,17 +1115,7 @@ export default function ProjectSpaceContainer() {
     })
   }, [configTemplateTasksByType, selectedProject])
   const tosTypeSeedEntry = useMemo<TosTypePlanEntry>(() => {
-    const templateSnapshot = latestTemplateVersion
-      ? getTemplateSnapshotForProjectType(
-          publishedSnapshots,
-          PROJECT_TYPE_TOS_VERSION,
-          latestTemplateVersion.id,
-          'level1',
-        )
-      : undefined
-    const templateTasks = templateSnapshot
-      || getTemplateTasksForProjectType(configTemplateTasksByType, PROJECT_TYPE_TOS_VERSION)
-      || LEVEL1_TEMPLATE_TASKS
+    const templateTasks = tosLevel1TemplateResolution.latestTasks
     const projectSeedTasks = selectedProject
       ? buildProjectListMockPlanTasks(selectedProject.id, templateTasks, {
           projectType: selectedProject.type,
@@ -1126,7 +1151,7 @@ export default function ProjectSpaceContainer() {
       level2PlanMeta: {},
       versionTrainRecords: INITIAL_VERSION_TRAIN_DATA,
     })
-  }, [configTemplateTasksByType, latestTemplateVersion, publishedSnapshots, roles, selectedProject])
+  }, [roles, selectedProject, tosLevel1TemplateResolution.latestTasks])
   const currentTosTypeData = isTosTypeScoped && selectedProject
     ? (
         tosTypePlanDataByProjectId[selectedProject.id]?.[selectedTosTypeTab]
@@ -1718,124 +1743,6 @@ export default function ProjectSpaceContainer() {
       }
     })
   )
-
-  const versionNoToVersionId = getPlanVersionId
-
-  const cloneTasksWithoutActualDates = (sourceTasks: any[]) => (
-    JSON.parse(JSON.stringify(sourceTasks || [])).map((task: any) => ({
-      ...task,
-      actualStartDate: '',
-      actualEndDate: '',
-    }))
-  )
-
-  const getCloneSourceTasks = (source: PlanCloneSource) => {
-    const versionId = versionNoToVersionId(source.versionNo)
-
-    if (source.type === 'template') {
-      const projectType = getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)
-      return (
-        getTemplateSnapshotForProjectType(publishedSnapshots, projectType, versionId, 'level1')
-        || getTemplateTasksForProjectType(configTemplateTasksByType, projectType)
-        || LEVEL1_TEMPLATE_TASKS
-      )
-    }
-
-    if (!source.market) return []
-    const marketSnapshotKey = selectedProject
-      ? getProjectMarketSnapshotKey(selectedProject.id, source.market, versionId)
-      : ''
-    return (
-      (marketSnapshotKey ? publishedSnapshots[marketSnapshotKey] : undefined)
-      || marketPlanData[source.market]?.tasks
-      || []
-    )
-  }
-
-  const handleClonePlanSource = (source: PlanCloneSource) => {
-    if (!canMaintainCurrentPlan) {
-      void message.warning(
-        machineMarketPlanUnavailable
-          ? '请先配置并选择有效市场'
-          : followedTosLevel1ReadOnly
-            ? tosLevel1FollowSourceText
-            : `无${currentPlanPermissionLabel}编辑权限`,
-      )
-      return
-    }
-    const sourceTasks = getCloneSourceTasks(source)
-    if (!sourceTasks.length) {
-      message.warning(`未找到 ${source.label} 的计划数据`)
-      return
-    }
-    const resolvedTasks = source.type === 'template'
-      ? initializeProjectPlanTasksFromTemplate(sourceTasks)
-      : sourceTasks
-    setEffectiveTasks(cloneTasksWithoutActualDates(resolvedTasks))
-    setIsEditMode(true)
-    message.success(`已克隆 ${source.label}，实际开始和实际完成时间已清空`)
-  }
-
-  const confirmClonePlanSource = (source: PlanCloneSource) => {
-    containerModalApi.confirm({
-      title: '确认克隆计划',
-      content: `确认将 ${source.label} 的计划信息克隆到当前修订版本？实际开始和实际完成时间不会被克隆。`,
-      okText: '确认克隆',
-      cancelText: '取消',
-      onOk: () => handleClonePlanSource(source),
-    })
-  }
-
-  const buildPlanCloneMenuItems = (): MenuProps['items'] => [
-    {
-      key: 'template',
-      label: '模板',
-      children: PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS.map(versionNo => ({
-        key: `template::${versionNo}`,
-        label: versionNo,
-      })),
-    },
-    ...PROJECT_PLAN_CLONE_MARKET_GROUPS.map(group => ({
-      key: `market::${group.market}`,
-      label: group.label,
-      children: group.versions.map(versionNo => ({
-        key: `market::${group.market}::${versionNo}`,
-        label: versionNo,
-      })),
-    })),
-  ]
-
-  const handlePlanCloneMenuClick: MenuProps['onClick'] = ({ key }) => {
-    const parts = String(key).split('::')
-    if (parts[0] === 'template' && parts[1]) {
-      confirmClonePlanSource({ type: 'template', label: `模板 ${parts[1]}`, versionNo: parts[1] })
-      return
-    }
-    if (parts[0] === 'market' && parts[1] && parts[2]) {
-      confirmClonePlanSource({ type: 'market', label: `${parts[1]} ${parts[2]}`, market: parts[1], versionNo: parts[2] })
-    }
-  }
-
-  const renderPlanCloneButton = (style?: CSSProperties) => {
-    if (!isCurrentDraft || projectPlanLevel !== 'level1') return null
-    const buttonStyle = style || { borderRadius: 6 }
-    if (!canMaintainCurrentPlan) {
-      return (
-        <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : '无一级计划编辑权限'}>
-          <Button icon={<CopyOutlined />} style={buttonStyle} disabled aria-label="克隆计划" />
-        </Tooltip>
-      )
-    }
-    return (
-      <Dropdown
-        menu={{ items: buildPlanCloneMenuItems(), onClick: handlePlanCloneMenuClick }}
-        trigger={['click']}
-        placement="bottomLeft"
-      >
-        <Button icon={<CopyOutlined />} style={buttonStyle} aria-label="克隆计划" title="克隆计划" />
-      </Dropdown>
-    )
-  }
 
   const buildCreateRevisionMenuItems = (): MenuProps['items'] => (
     PLAN_REVISION_KIND_OPTIONS.map(option => ({
@@ -2574,20 +2481,25 @@ export default function ProjectSpaceContainer() {
     }
     const versionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
     const nid = getPlanVersionId(versionNo)
-    const projectType = getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)
-    const templateTasks = getTemplateTasksForProjectType(configTemplateTasksByType, projectType) || LEVEL1_TEMPLATE_TASKS
-    const initializedTemplateTasks = initializeProjectPlanTasksFromTemplate(templateTasks)
-    const isFirstLevel1Revision = projectPlanLevel === 'level1'
-      && versions.filter(version => version.status === '已发布').length <= 1
-    let clonedTasks = initializedTemplateTasks
+    let clonedTasks = effectiveTasks
     try {
       if (projectPlanLevel === 'level1') {
-        clonedTasks = isFirstLevel1Revision
-          ? buildFirstLevel1RevisionTasks(effectiveTasks, initializedTemplateTasks)
-          : buildNextLevel1RevisionTasks(effectiveTasks)
+        const latestProjectPublishedVersion = getLatestPublishedPlanVersion(versions)
+        const latestProjectTasks = latestProjectPublishedVersion
+          ? getLevel1SurfacePublishedSnapshot(latestProjectPublishedVersion.id)
+            || level1SurfaceLiveTasks
+          : level1SurfaceLiveTasks
+        const initializedLatestTemplate = initializeProjectPlanTasksFromTemplate(
+          currentLevel1TemplateResolution.latestTasks,
+        )
+        clonedTasks = mergeLevel1RevisionWithLatestTemplate(
+          initializedLatestTemplate,
+          latestProjectTasks,
+          currentLevel1TemplateResolution.publishedHistory,
+        )
       }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '模板同步失败，请检查稳定任务ID')
+      message.error(error instanceof Error ? error.message : '最新模板同步失败')
       return
     }
     const kindLabel = getPlanRevisionKindLabel(revisionKind)
@@ -2602,7 +2514,11 @@ export default function ProjectSpaceContainer() {
         setVersionTrainRecords(JSON.parse(JSON.stringify(sourceTrainRecords)))
       }
     }
-    message.success(`已创建${kindLabel}修订版本 ${versionNo}`)
+    message.success(
+      projectPlanLevel === 'level1'
+        ? `已创建${kindLabel}修订版本 ${versionNo}，已同步最新模板并按任务名回填时间`
+        : `已创建${kindLabel}修订版本 ${versionNo}`,
+    )
   }
 
   const readCurrentLevel1FocusToken = (): Level1FocusScopeToken | null => {
@@ -3255,15 +3171,22 @@ export default function ProjectSpaceContainer() {
       surface: 'project-plan',
       includeDraft: level1SurfaceCanMaintain,
     })
+    const level1HorizontalHeaderProjection = projectLevel1Plan(
+      mergeLevel1RevisionWithLatestTemplate(
+        currentLevel1TemplateResolution.latestTasks,
+        level1SurfaceLiveTasks,
+        currentLevel1TemplateResolution.publishedHistory,
+      ),
+      { mode: 'standard' },
+    )
     const versionProjections = displayVersions.map(version => ({
       version,
       projection: projectLevel1Plan(getLevel1SurfaceVersionTasks(version), { mode: 'standard' }),
     }))
     const recencyVersionProjections = [...versionProjections]
       .sort((left, right) => comparePlanVersions(right.version, left.version))
-    const stageGroups = mergeLevel1HorizontalStageGroups(
-      recencyVersionProjections.map(entry => entry.projection),
-    ).map(group => ({ ...group, colSpan: group.milestones.length || 1 }))
+    const stageGroups = level1HorizontalHeaderProjection.stageGroups
+      .map(group => ({ ...group, colSpan: group.milestones.length || 1 }))
     const allMilestones = stageGroups.flatMap(({ stage, milestones }) => milestones.length > 0 ? milestones : [stage])
     if (allMilestones.length === 0) { message.warning('暂无可导出数据'); return }
     const headerRow0: (string | null)[] = ['版本', '开发周期']; const headerRow1: (string | null)[] = [null, null]
@@ -4404,6 +4327,14 @@ export default function ProjectSpaceContainer() {
       surface,
       includeDraft: surface === 'project-plan' && level1SurfaceCanMaintain,
     })
+    const level1HorizontalHeaderProjection = projectLevel1Plan(
+      mergeLevel1RevisionWithLatestTemplate(
+        currentLevel1TemplateResolution.latestTasks,
+        level1SurfaceLiveTasks,
+        currentLevel1TemplateResolution.publishedHistory,
+      ),
+      { mode: 'standard' },
+    )
     const versionProjections = displayVersions.map(version => ({
       version,
       projection: projectLevel1Plan(getLevel1SurfaceVersionTasks(version), { mode: 'standard' }),
@@ -4411,9 +4342,7 @@ export default function ProjectSpaceContainer() {
     const recencyVersionProjections = [...versionProjections]
       .sort((left, right) => comparePlanVersions(right.version, left.version))
     const latestDisplayVersionId = recencyVersionProjections[0]?.version.id
-    const stageGroups = mergeLevel1HorizontalStageGroups(
-      recencyVersionProjections.map(entry => entry.projection),
-    ).map(group => ({
+    const stageGroups = level1HorizontalHeaderProjection.stageGroups.map(group => ({
       ...group,
       colSpan: Math.max(group.milestones.length, 1),
     }))
@@ -4561,7 +4490,6 @@ export default function ProjectSpaceContainer() {
       <Space>
         <Tag color="blue" style={{ fontSize: 14, padding: '4px 12px' }}>{currentVersionData?.versionNo}({currentVersionData?.status})</Tag>
         <Tag color="green" style={{ fontSize: 12 }}>自动保存</Tag>
-        {renderPlanCloneButton()}
         <Tooltip title={canMaintainCurrentPlan ? '发布' : currentPlanMaintenanceDisabledReason}><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish} disabled={!canMaintainCurrentPlan} aria-label="发布" /></Tooltip>
         <Tooltip title={canMaintainCurrentPlan ? '取消修订' : currentPlanMaintenanceDisabledReason}><Button danger icon={<StopOutlined />} onClick={handleCancelRevision} disabled={!canMaintainCurrentPlan} aria-label="取消修订" /></Tooltip>
       </Space>
@@ -5458,7 +5386,6 @@ export default function ProjectSpaceContainer() {
                 {(followedTosLevel1ReadOnly || !hasDraftVersion) && (canEditCurrentPlan
                   ? renderCreateRevisionButton({ borderRadius: 6 })
                   : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
-                {renderPlanCloneButton({ borderRadius: 6 })}
                 {isCurrentDraft && (canMaintainCurrentPlan
                   ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish} aria-label="发布" /></Tooltip>
                   : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}

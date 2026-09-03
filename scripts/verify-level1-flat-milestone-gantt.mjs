@@ -1224,6 +1224,11 @@ const horizontalHeaders = [...horizontalV4Rows]
 const horizontalV3Cells = projectSpaceHorizontalCells.resolveLevel1HorizontalVersionCells(horizontalHeaders, horizontalV3Rows)
 assert.equal(horizontalV3Cells[0], horizontalV3Rows[0], 'a historical horizontal cell resolves its own snapshot row by stable identity')
 assert.equal(horizontalV3Cells[1], null, 'V3 keeps the V4-only MR4 column empty instead of falling back to the merged header row')
+const taskNameMatchedCells = projectSpaceHorizontalCells.resolveLevel1HorizontalVersionCells(
+  [{ id: 'latest-str2', stableId: 'latest-str2', taskName: 'STR2' }],
+  [{ id: 'old-str2', stableId: 'old-str2', taskName: 'STR2', planEndDate: '2026-03-01' }],
+)
+assert.equal(taskNameMatchedCells[0]?.id, 'old-str2', 'horizontal history refills a moved or re-keyed task by task name')
 assert.deepEqual(
   [horizontalV3Cells[1]?.planEndDate || '-', horizontalV3Cells[1]?.status || '-', horizontalV3Cells[1]?.estimatedDays ?? '-'],
   ['-', '-', '-'],
