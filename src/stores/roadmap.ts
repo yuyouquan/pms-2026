@@ -59,12 +59,19 @@ import { useEnumStore } from '@/stores/enums'
 
 const INITIAL_TIMESTAMP = '2026-01-01T00:00:00.000Z'
 const ROADMAP_STORAGE_KEY = 'pms-project-roadmap'
-export const ROADMAP_STORE_VERSION = 7
+export const ROADMAP_STORE_VERSION = 8
 
 const KNOWN_COLUMN_KEYS = new Set<RoadmapColumnKey>(ROADMAP_COLUMNS.map(column => column.key))
 const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
 const ROADMAP_PRODUCT_TYPES = new Set<RoadmapProductType>(['新品', '老品'])
 const ROADMAP_AUDIT_FIELD_SET = new Set<string>(ROADMAP_AUDIT_FIELDS)
+
+function normalizePersistedColumnKey(value: unknown): RoadmapColumnKey | null {
+  const candidate = value === 'platform' ? 'chipCode' : value
+  return typeof candidate === 'string' && KNOWN_COLUMN_KEYS.has(candidate as RoadmapColumnKey)
+    ? candidate as RoadmapColumnKey
+    : null
+}
 
 type PersistedRoadmapState = Pick<
   RoadmapStoreState,
@@ -213,7 +220,7 @@ export function createInitialPlannedProjects(
     productSeries: 'NOTE 60',
     marketName: 'NOTE 60 Pro',
     productType: '新品',
-    platform: 'MT6877',
+    chipCode: 'MT6877',
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-10-15',
@@ -252,7 +259,7 @@ export function createInitialRoadmapChangeLogs(
     productSeries: 'CAMON 50',
     marketName: 'NOTE 50',
     productType: '新品',
-    platform: 'MT6877',
+    chipCode: 'MT6877',
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-05-15',
@@ -381,9 +388,7 @@ export function createInitialRoadmapMockState(
 
 function sanitizeSort(value: unknown): RoadmapSortState {
   if (!isRecord(value)) return { field: null, direction: null }
-  const field = typeof value.field === 'string' && KNOWN_COLUMN_KEYS.has(value.field as RoadmapColumnKey)
-    ? value.field as RoadmapColumnKey
-    : null
+  const field = normalizePersistedColumnKey(value.field)
   const direction = value.direction === 'ascend' || value.direction === 'descend' ? value.direction : null
   return field && direction ? { field, direction } : { field: null, direction: null }
 }
@@ -393,12 +398,8 @@ function preserveKnownColumnOrder(value: unknown): RoadmapColumnKey[] | undefine
   const seen = new Set<RoadmapColumnKey>()
   const order: RoadmapColumnKey[] = []
   for (const candidate of value) {
-    if (
-      typeof candidate !== 'string'
-      || !KNOWN_COLUMN_KEYS.has(candidate as RoadmapColumnKey)
-      || seen.has(candidate as RoadmapColumnKey)
-    ) continue
-    const key = candidate as RoadmapColumnKey
+    const key = normalizePersistedColumnKey(candidate)
+    if (!key || seen.has(key)) continue
     seen.add(key)
     order.push(key)
   }
@@ -459,7 +460,7 @@ function normalizeProjectInput(input: PlannedRoadmapProjectMutationInput): Plann
     productLine: trimStringValue(input.productLine),
     productSeries: trimStringValue(input.productSeries),
     marketName: trimStringValue(input.marketName),
-    platform: trimStringValue(input.platform),
+    chipCode: trimStringValue(input.chipCode),
     str5Date: trimStringValue(input.str5Date),
     str5Estimated: input.str5Estimated === true,
     launchDate: trimStringValue(input.launchDate),
@@ -481,7 +482,7 @@ function toProjectFields(input: PlannedRoadmapProjectMutationInput): RoadmapProj
     productSeries: input.productSeries,
     marketName: input.marketName,
     productType: input.productType,
-    platform: input.platform,
+    chipCode: input.chipCode,
     startRam: input.startRam,
     versionType: input.versionType,
     str5Date: input.str5Date,
@@ -513,6 +514,9 @@ function migratePlannedProjects(value: unknown, versions: readonly TosVersionCon
       machineProjectType,
       productType,
       firstSaleTosVersionId: tosVersionId,
+      chipCode: typeof entry.chipCode === 'string' && entry.chipCode.trim()
+        ? entry.chipCode
+        : entry.platform,
       remark: typeof entry.remark === 'string' ? entry.remark : '',
       actor: typeof entry.updatedBy === 'string' ? entry.updatedBy : '系统',
     } as PlannedRoadmapProjectMutationInput
@@ -573,9 +577,32 @@ function migrateChangeLogs(value: unknown): RoadmapChangeLog[] | null {
   for (const [index, entry] of value.entries()) {
     if (!isRecord(entry)) continue
     const fallbackId = `roadmap-log-migrated-${index + 1}`
+    const hasCurrentChipChange = Array.isArray(entry.changes)
+      && entry.changes.some(change => isRecord(change) && change.field === 'chipCode')
+    const migratedChanges = Array.isArray(entry.changes)
+      ? entry.changes.flatMap(change => {
+          if (!isRecord(change)) return change
+          if (change.field === 'platform' && hasCurrentChipChange) return []
+          return [{
+            ...change,
+            field: change.field === 'platform' ? 'chipCode' : change.field,
+          }]
+        })
+      : entry.changes
+    const migratedSnapshot = isRecord(entry.snapshot)
+      ? {
+          ...Object.fromEntries(Object.entries(entry.snapshot).filter(([field]) => field !== 'platform')),
+          ...(!Object.prototype.hasOwnProperty.call(entry.snapshot, 'chipCode')
+            && Object.prototype.hasOwnProperty.call(entry.snapshot, 'platform')
+            ? { chipCode: entry.snapshot.platform }
+            : {}),
+        }
+      : entry.snapshot
     const candidate = {
       ...entry,
       id: typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : fallbackId,
+      changes: migratedChanges,
+      snapshot: migratedSnapshot,
     }
     if (!isValidChangeLog(candidate)) continue
     logs.push({
@@ -869,6 +896,26 @@ function currentFirstSaleTosEnumValues(): string[] {
     .filter(Boolean)
 }
 
+function currentChipCodeEnumValues(): string[] {
+  return useEnumStore.getState().rowsByType['chip-mapping']
+    .map(row => row.chipCode.trim())
+    .filter(Boolean)
+}
+
+function validateChipCodeSelection(
+  chipCode: string,
+  existingChipCode?: string,
+): Record<string, string> {
+  const activeChipCodes = currentChipCodeEnumValues()
+  if (!activeChipCodes.length) return { chipCode: '请先在配置中心维护芯片编码' }
+  const allowedChipCodes = new Set(activeChipCodes)
+  const historicalChipCode = existingChipCode?.trim()
+  if (historicalChipCode) allowedChipCodes.add(historicalChipCode)
+  return allowedChipCodes.has(chipCode)
+    ? {}
+    : { chipCode: '请选择配置中心中有效的芯片编码' }
+}
+
 function currentTosEnumVersions(): TosVersionConfig[] {
   return currentRoadmapTosEnumValues().map(value => {
     const [major, minor] = value.split('.').map(Number)
@@ -1037,6 +1084,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
       createPlannedProject: (rawInput, comparison) => {
         const input = normalizeProjectInput(rawInput)
         const errors = validatePlannedProject(input, [], undefined, new Set(currentFirstSaleTosEnumValues()))
+        Object.assign(errors, validateChipCodeSelection(input.chipCode))
         if (!input.actor) errors.actor = '操作人不能为空'
         if (Object.keys(errors).length) return mutationFailure(errors)
         const fields = toProjectFields(input)
@@ -1067,6 +1115,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const existingTosSnapshot = normalizeRoadmapTosReference(existing.firstSaleTosVersionId)
         if (existingTosSnapshot) allowedTosValues.add(existingTosSnapshot)
         const errors = validatePlannedProject(input, [], undefined, allowedTosValues)
+        Object.assign(errors, validateChipCodeSelection(input.chipCode, existing.chipCode))
         if (!input.actor) errors.actor = '操作人不能为空'
         if (Object.keys(errors).length) return mutationFailure(errors)
         const fields = toProjectFields(input)

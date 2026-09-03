@@ -51,7 +51,7 @@ const COLUMN_WIDTHS: Record<RoadmapColumnKey, number> = {
   marketName: 140,
   displayName: 220,
   productType: 100,
-  platform: 120,
+  chipCode: 120,
   startRam: 110,
   versionType: 110,
   str5Date: 176,

@@ -129,7 +129,9 @@ export default function RoadmapProjectCard({
               : null
             return (
               <div key={column.key} className="pms-roadmap-evolution-card-detail">
-                {column.key === 'str5Date' || column.key === 'launchDate' ? <dt>{column.title}</dt> : null}
+                {column.key === 'chipCode' || column.key === 'str5Date' || column.key === 'launchDate'
+                  ? <dt>{column.title}</dt>
+                  : null}
                 <dd title={value}>
                   {cellVersion ? (
                     <Tooltip title={formatTosVersionFull(cellVersion)}>{value}</Tooltip>

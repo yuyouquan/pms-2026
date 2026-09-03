@@ -40,7 +40,7 @@ export const ROADMAP_EVOLUTION_LOCKED_COLUMNS: RoadmapColumnKey[] = [
 
 export const DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS: RoadmapColumnKey[] = ensureRoadmapLockedColumns([
   'marketName',
-  'platform',
+  'chipCode',
   'versionType',
   'str5Date',
   'launchDate',
@@ -92,6 +92,13 @@ export function ensureRoadmapLockedColumns(
 ): RoadmapColumnKey[] {
   const requested = new Set([...columns, ...lockedColumns])
   return ROADMAP_COLUMNS.flatMap(column => requested.has(column.key) ? [column.key] : [])
+}
+
+function normalizeRoadmapColumnKey(value: unknown): RoadmapColumnKey | null {
+  const candidate = value === 'platform' ? 'chipCode' : value
+  return typeof candidate === 'string' && ROADMAP_COLUMNS.some(column => column.key === candidate)
+    ? candidate as RoadmapColumnKey
+    : null
 }
 
 export type RoadmapQuickFilterField = 'brand' | 'productType'
@@ -195,6 +202,7 @@ export function buildRoadmapFilterFieldDefinitions(
   versions: readonly TosVersionConfig[],
   savedTosVersionValues: readonly string[] = [],
   configurableOptions: Readonly<{
+    chipCode?: readonly { label: string; value: string; disabled?: boolean }[]
     startRam?: readonly { label: string; value: string; disabled?: boolean }[]
     versionType?: readonly { label: string; value: string; disabled?: boolean }[]
     developMode?: readonly { label: string; value: string; disabled?: boolean }[]
@@ -231,7 +239,7 @@ export function buildRoadmapFilterFieldDefinitions(
     { key: 'marketName', label: '市场名', kind: 'text' },
     { key: 'displayName', label: '项目名', kind: 'text' },
     { key: 'productType', label: '产品类型', kind: 'enum', options: ['新品', '老品'].map(option) },
-    { key: 'platform', label: '平台', kind: 'text' },
+    { key: 'chipCode', label: '芯片编码', kind: 'enum', options: [...(configurableOptions.chipCode ?? [])] },
     { key: 'startRam', label: '起步RAM', kind: 'enum', options: [...(configurableOptions.startRam ?? [])] },
     { key: 'versionType', label: '版本类型', kind: 'enum', options: [...(configurableOptions.versionType ?? [])] },
     { key: 'str5Date', label: 'STR5时间', kind: 'date' },
@@ -251,7 +259,7 @@ function normalizeEnumFilterValue(
     const normalized = normalizeRoadmapTosReference(rawValue, versions)
     return normalized || null
   }
-  if (field === 'startRam' || field === 'versionType' || field === 'developMode') {
+  if (field === 'chipCode' || field === 'startRam' || field === 'versionType' || field === 'developMode') {
     return rawValue.trim() || null
   }
   return definition.options?.find(candidate => candidate.value === rawValue)?.value ?? null
@@ -267,10 +275,16 @@ export function sanitizeRoadmapFilterConditions(
   const usedFields = new Set<string>()
   const usedIds = new Set<string>()
   const sanitized: RoadmapFilterCondition[] = []
+  const hasCurrentChipCodeFilter = value.some(candidate => (
+    isRecord(candidate) && candidate.field === 'chipCode'
+  ))
 
   value.forEach((candidate, index) => {
-    if (!isRecord(candidate) || typeof candidate.field !== 'string' || usedFields.has(candidate.field)) return
-    const definition = definitionsByKey.get(candidate.field)
+    if (!isRecord(candidate) || typeof candidate.field !== 'string') return
+    if (candidate.field === 'platform' && hasCurrentChipCodeFilter) return
+    const field = candidate.field === 'platform' ? 'chipCode' : candidate.field
+    if (usedFields.has(field)) return
+    const definition = definitionsByKey.get(field)
     if (!definition || typeof candidate.operator !== 'string') return
     const requestedOperator = candidate.operator as RoadmapFilterOperator
     const operator = requestedOperator === 'equals'
@@ -288,7 +302,7 @@ export function sanitizeRoadmapFilterConditions(
         const rawValues = Array.isArray(candidate.value) ? candidate.value : [candidate.value]
         const enumValues = rawValues.flatMap(rawValue => {
           if (typeof rawValue !== 'string' || !rawValue.trim()) return []
-          const enumValue = normalizeEnumFilterValue(candidate.field as string, rawValue.trim(), definition, versions)
+          const enumValue = normalizeEnumFilterValue(field, rawValue.trim(), definition, versions)
           return enumValue ? [enumValue] : []
         })
         const uniqueValues = [...new Set(enumValues)]
@@ -308,10 +322,10 @@ export function sanitizeRoadmapFilterConditions(
       }
     }
 
-    usedFields.add(candidate.field)
+    usedFields.add(field)
     sanitized.push({
       id: claimFilterId(candidate.id, index, usedIds),
-      field: candidate.field as RoadmapColumnKey,
+      field: field as RoadmapColumnKey,
       operator,
       value: normalizedValue,
     })
@@ -325,7 +339,10 @@ export function sanitizeRoadmapVisibleColumns(
   fallback: readonly RoadmapColumnKey[] = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
 ): RoadmapColumnKey[] {
   if (!Array.isArray(value)) return [...fallback]
-  const requested = new Set(value.filter((key): key is string => typeof key === 'string'))
+  const requested = new Set(value.flatMap(key => {
+    const normalized = normalizeRoadmapColumnKey(key)
+    return normalized ? [normalized] : []
+  }))
   const approved = ROADMAP_COLUMNS.flatMap(column => requested.has(column.key) ? [column.key] : [])
   return approved.length ? approved : [fallback[0] ?? ROADMAP_COLUMNS[0].key]
 }

@@ -24,6 +24,7 @@ import { useRoadmapStore } from '@/stores/roadmap'
 import { useEnumStore } from '@/stores/enums'
 import { useUiStore } from '@/stores/ui'
 import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
+import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import {
   formatRoadmapTosValue,
   normalizeRoadmapTosReference,
@@ -53,6 +54,23 @@ import RoadmapToolbar, { RoadmapViewModeSwitch } from './RoadmapToolbar'
 import TosVersionMaintenanceModal from './TosVersionMaintenanceModal'
 
 const isPresent = <T,>(value: T | null): value is T => value !== null
+
+const ROADMAP_EXPORT_COLUMNS: Record<RoadmapColumnKey, ExportColumn> = {
+  firstSaleTosVersionId: { key: 'firstSaleTosVersionId', title: 'tOS版本' },
+  brand: { key: 'brand', title: '品牌' },
+  productLine: { key: 'productLine', title: '产品线' },
+  productSeries: { key: 'productSeries', title: '产品系列' },
+  marketName: { key: 'marketName', title: '市场名' },
+  displayName: { key: 'displayName', title: '项目名' },
+  productType: { key: 'productType', title: '产品类型' },
+  chipCode: { key: 'chipCode', title: '芯片编码' },
+  startRam: { key: 'startRam', title: '起步RAM' },
+  versionType: { key: 'versionType', title: '版本类型' },
+  str5Date: { key: 'str5Date', title: 'STR5时间' },
+  launchDate: { key: 'launchDate', title: '上市时间' },
+  developMode: { key: 'developMode', title: '开发模式' },
+  remark: { key: 'remark', title: '备注' },
+}
 
 export interface RoadmapViewRenderContext {
   rows: readonly RoadmapProjectRow[]
@@ -105,6 +123,15 @@ export default function ProjectRoadmapModule({
     retryHydration,
   } = useEnumHydration()
   const configurableHistory = useMemo(() => ({
+    chipCode: [
+      ...plannedProjects.map(project => project.chipCode),
+      ...projects.map(project => {
+        const fieldValue = project.fieldValues?.chipCode
+        return typeof fieldValue === 'string'
+          ? fieldValue
+          : project.platform || project.cpu || ''
+      }),
+    ].filter(value => Boolean(value.trim())),
     startRam: [...plannedProjects.map(project => project.startRam), ...projects.map(project => project.startRam)]
       .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
     versionType: [...plannedProjects.map(project => project.versionType), ...projects.map(project => project.versionType)]
@@ -116,6 +143,17 @@ export default function ProjectRoadmapModule({
   const filterVersionTypeOptions = useSingleEnumOptions('version-type', configurableHistory.versionType)
   const filterDevelopModeOptions = useSingleEnumOptions('machine-development-mode', configurableHistory.developMode)
   const setSelectedType = useEnumStore(state => state.setSelectedType)
+  const rowsByType = useEnumStore(state => state.rowsByType)
+  const filterChipCodeOptions = useMemo(() => {
+    const activeValues = [...new Set(rowsByType['chip-mapping'].map(row => row.chipCode.trim()).filter(Boolean))]
+    const activeValueSet = new Set(activeValues)
+    const historicalValues = [...new Set(configurableHistory.chipCode.map(value => value.trim()).filter(Boolean))]
+      .filter(value => !activeValueSet.has(value))
+    return [
+      ...activeValues.map(value => ({ label: value, value })),
+      ...historicalValues.map(value => ({ label: `${value}（已停用）`, value, disabled: true })),
+    ]
+  }, [configurableHistory.chipCode, rowsByType])
   const setActiveModule = useUiStore(state => state.setActiveModule)
   const setConfigTab = useUiStore(state => state.setConfigTab)
   const navigateWithEditGuard = useUiStore(state => state.navigateWithEditGuard)
@@ -218,11 +256,12 @@ export default function ProjectRoadmapModule({
 
   const filterFieldDefinitions = useMemo(
     () => buildRoadmapFilterFieldDefinitions(versions, savedTosFilterValues, {
+      chipCode: filterChipCodeOptions,
       startRam: filterRamOptions,
       versionType: filterVersionTypeOptions,
       developMode: filterDevelopModeOptions,
     }),
-    [filterDevelopModeOptions, filterRamOptions, filterVersionTypeOptions, savedTosFilterValues, versions],
+    [filterChipCodeOptions, filterDevelopModeOptions, filterRamOptions, filterVersionTypeOptions, savedTosFilterValues, versions],
   )
   const filterDefinitionsByKey = useMemo(
     () => new Map(filterFieldDefinitions.map(definition => [definition.key, definition])),
@@ -458,6 +497,23 @@ export default function ProjectRoadmapModule({
       },
     })
   }
+  const handleExport = () => {
+    const visibleSet = new Set(visibleColumns)
+    const exportColumns = columnOrder
+      .filter(key => visibleSet.has(key))
+      .map(key => ROADMAP_EXPORT_COLUMNS[key])
+    const exportRows = filteredRows.map(row => ({
+      ...row,
+      firstSaleTosVersionId: versions.find(version => version.id === row.firstSaleTosVersionId)?.name
+        ?? formatRoadmapTosValue(row.firstSaleTosVersionId),
+    }))
+    exportSheet(
+      exportRows,
+      exportColumns,
+      `tOS路标_${exportTimestamp()}.xlsx`,
+      'tOS路标',
+    )
+  }
 
   if (!canView) {
     return (
@@ -562,6 +618,7 @@ export default function ProjectRoadmapModule({
         onToggleFullscreen={() => void toggleFullscreen()}
         onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
         onCreatePlannedProject={openCreatePlannedProject}
+        onExport={handleExport}
         onOpenFilters={() => {
           setColumnDrawerOpen(false)
           setFilterDrawerOpen(true)

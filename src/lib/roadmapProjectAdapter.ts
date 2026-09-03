@@ -38,6 +38,11 @@ function firstNonBlank(...values: unknown[]): string {
   return ''
 }
 
+function getNormalProjectChipCode(project: ProjectItem): string {
+  const directChipCode = (project as ProjectItem & { chipCode?: string }).chipCode
+  return firstNonBlank(project.fieldValues?.chipCode, directChipCode, project.platform, project.cpu)
+}
+
 function normalizeNormalProductType(value: unknown): RoadmapProductType | null {
   if (value === '切换') return '老品'
   return normalizeLegacyRoadmapProductType(value)
@@ -173,7 +178,7 @@ export function adaptNormalProject(
     productSeries: firstNonBlank(project.productSeries),
     marketName: firstNonBlank(project.marketName),
     productType,
-    platform: firstNonBlank(project.platform, project.cpu, project.chipPlatform),
+    chipCode: getNormalProjectChipCode(project),
     startRam,
     versionType,
     str5Date: firstNonBlank(project.str5Date),

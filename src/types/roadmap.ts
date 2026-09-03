@@ -34,7 +34,7 @@ export interface RoadmapProjectFields {
   productSeries: string
   marketName: string
   productType: RoadmapProductType
-  platform: string
+  chipCode: string
   startRam: RoadmapRam
   versionType: RoadmapVersionType
   str5Date: string
@@ -99,7 +99,7 @@ export type RoadmapAuditField =
   | 'marketName'
   | 'projectCode'
   | 'productType'
-  | 'platform'
+  | 'chipCode'
   | 'startRam'
   | 'versionType'
   | 'str5Date'
@@ -136,7 +136,7 @@ export type RoadmapColumnKey =
   | 'marketName'
   | 'displayName'
   | 'productType'
-  | 'platform'
+  | 'chipCode'
   | 'startRam'
   | 'versionType'
   | 'str5Date'
@@ -161,7 +161,7 @@ export const ROADMAP_COLUMNS: readonly RoadmapColumnDefinition[] = [
   { key: 'marketName', label: '市场名', kind: 'text', defaultVisible: true },
   { key: 'displayName', label: '项目名', kind: 'text', defaultVisible: true },
   { key: 'productType', label: '产品类型', kind: 'enum', defaultVisible: true },
-  { key: 'platform', label: '平台', kind: 'text', defaultVisible: true },
+  { key: 'chipCode', label: '芯片编码', kind: 'text', defaultVisible: true },
   { key: 'startRam', label: '起步RAM', kind: 'ram', defaultVisible: true },
   { key: 'versionType', label: '版本类型', kind: 'enum', defaultVisible: true },
   { key: 'str5Date', label: 'STR5时间', kind: 'date', defaultVisible: true },

@@ -52,7 +52,7 @@ export default function RoadmapProjectDetailsModal({
     ['市场名', row.marketName],
     ['项目名', row.projectCode],
     ['产品类型', row.productType],
-    ['芯片平台', row.platform],
+    ['芯片编码', row.chipCode],
     ['起步RAM', row.startRam],
     ['版本类型', row.versionType],
     ['STR5时间', <EstimatedDate key="str5" value={row.str5Date} estimated={row.str5Estimated} />],

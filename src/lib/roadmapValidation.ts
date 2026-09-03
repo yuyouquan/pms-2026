@@ -31,7 +31,7 @@ const REQUIRED_PLANNED_FIELDS: readonly (Exclude<keyof PlannedRoadmapProjectInpu
   'productSeries',
   'marketName',
   'productType',
-  'platform',
+  'chipCode',
   'startRam',
   'versionType',
   'str5Date',

@@ -27,6 +27,7 @@ import {
 import {
   findRoadmapHistoryMatches,
 } from '@/lib/roadmapProjectAdapter'
+import { buildChipOptions, resolveChipRow } from '@/lib/enumConsumers'
 import { buildRoadmapDuplicateKey, formatRoadmapTosValue, getProductLineOptions } from '@/lib/roadmapValidation'
 import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
 import { useEnumStore } from '@/stores/enums'
@@ -100,6 +101,7 @@ export default function PlannedProjectModal({
   const androidVersion = Form.useWatch('androidVersion', form)
   const productType = Form.useWatch('productType', form)
   const brand = Form.useWatch('brand', form)
+  const chipCode = Form.useWatch('chipCode', form) || editingProject?.chipCode || ''
 
   const tosVersionOptions = useSingleEnumOptions(
     'first-sale-tos',
@@ -111,6 +113,21 @@ export default function PlannedProjectModal({
   const productSeriesOptions = useSingleEnumOptions('product-series', editingProject?.productSeries ? [editingProject.productSeries] : [], open)
   const developModeOptions = useSingleEnumOptions('machine-development-mode', editingProject?.developMode ? [editingProject.developMode] : [], open)
   const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
+  const rowsByType = useEnumStore(state => state.rowsByType)
+  const liveChipRow = useMemo(
+    () => rowsByType['chip-mapping'].find(row => row.chipCode.trim() === chipCode.trim()),
+    [chipCode, rowsByType],
+  )
+  const chipOptions = useMemo(() => {
+    if (!enumReady) return []
+    const historical = editingProject?.chipCode && !liveChipRow
+      ? [{ chipCode: editingProject.chipCode, chipModel: '', chipPlatform: '' }]
+      : []
+    return buildChipOptions(rowsByType, historical)
+  }, [editingProject?.chipCode, enumReady, liveChipRow, rowsByType])
+  const selectedChipOptionId = liveChipRow?.id ?? chipOptions.find(option => option.historical)?.value
+  const hasActiveChipCodes = enumReady && rowsByType['chip-mapping'].some(row => Boolean(row.chipCode.trim()))
+  const hasInactiveChipCode = Boolean(editingProject?.chipCode && !liveChipRow)
   const hasInactiveTosVersion = Boolean(tosVersionOptions.find(option => (
     option.value === editingProject?.firstSaleTosVersionId && option.disabled
   )))
@@ -201,6 +218,13 @@ export default function PlannedProjectModal({
         }
         return
       }
+      if (!enumState.rowsByType['chip-mapping'].some(row => Boolean(row.chipCode.trim()))) {
+        const chipConfigMessage = '请先在配置中心维护芯片编码'
+        form.setFields([{ name: 'chipCode', errors: [chipConfigMessage] }])
+        message.error(chipConfigMessage)
+        focusField(['chipCode'])
+        return
+      }
       let values: PlannedProjectFormValues
       try {
         values = await form.validateFields()
@@ -216,7 +240,7 @@ export default function PlannedProjectModal({
         projectCode: values.projectCode.trim(),
         productSeries: values.productSeries.trim(),
         marketName: values.marketName.trim(),
-        platform: values.platform.trim(),
+        chipCode: values.chipCode.trim(),
         remark: values.remark?.trim() ?? '',
         str5Date: values.str5Date.format('YYYY-MM-DD'),
         launchDate: values.launchDate.format('YYYY-MM-DD'),
@@ -319,7 +343,7 @@ export default function PlannedProjectModal({
                 type="primary"
                 onClick={handleSubmit}
                 loading={submitting}
-                disabled={!enumReady || duplicateExists || submitting}
+                disabled={!enumReady || !hasActiveChipCodes || duplicateExists || submitting}
               >
                 {editingProject ? '保存修改' : '创建项目'}
               </Button>
@@ -347,6 +371,14 @@ export default function PlannedProjectModal({
               message="加载枚举配置失败"
               description={hydrationError}
               action={<Button size="small" onClick={() => void retryHydration()}>重试</Button>}
+            />
+          ) : null}
+          {enumReady && !hasActiveChipCodes ? (
+            <Alert
+              type="warning"
+              showIcon
+              message="暂无可用芯片编码"
+              description="请先在配置中心维护芯片编码后再保存。"
             />
           ) : null}
           <Card size="small" title="项目分类与识别" style={sectionStyle}>
@@ -454,9 +486,28 @@ export default function PlannedProjectModal({
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item label="平台" name="platform" rules={[{ required: true, whitespace: true, message: '请输入平台' }]}>
-                  <Input placeholder="请输入平台" maxLength={80} />
+                <Form.Item
+                  label="芯片编码"
+                  name="chipCode"
+                  getValueProps={() => ({ value: selectedChipOptionId })}
+                  getValueFromEvent={(rowId: string) => resolveChipRow(rowsByType, rowId)?.chipCode || ''}
+                  rules={[{ required: true, message: '请选择芯片编码' }]}
+                >
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    options={chipOptions}
+                    placeholder={hasActiveChipCodes ? '请选择芯片编码' : '请先在配置中心维护芯片编码'}
+                  />
                 </Form.Item>
+                {hasInactiveChipCode ? (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    title={`${editingProject?.chipCode}（已停用）`}
+                    description="当前历史值仅用于展示；重新选择时只能使用配置中心仍启用的芯片编码。"
+                  />
+                ) : null}
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="起步 RAM" name="startRam" rules={[{ required: true, message: '请选择起步 RAM' }]}>

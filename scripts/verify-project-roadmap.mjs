@@ -467,7 +467,7 @@ registerAssertion('roadmap contracts expose the approved column order and defaul
     ['marketName', '市场名'],
     ['displayName', '项目名'],
     ['productType', '产品类型'],
-    ['platform', '平台'],
+    ['chipCode', '芯片编码'],
     ['startRam', '起步RAM'],
     ['versionType', '版本类型'],
     ['str5Date', 'STR5时间'],
@@ -577,7 +577,7 @@ registerAssertion('roadmap product-line and planned-project validation enforce o
     productSeries: 'SPARK 60',
     marketName: 'SPARK 60',
     productType: '新品',
-    platform: 'G100',
+    chipCode: 'G100',
     startRam: '4GB',
     versionType: 'Slim',
     str5Date: '2027-02-01',
@@ -594,9 +594,9 @@ registerAssertion('roadmap product-line and planned-project validation enforce o
   if (validation.isExactRoadmapDuplicate(validInput, existing, 'planned-1')) throw new Error('edit duplicate check did not exclude self')
 
   const missingRequired = { ...validInput }
-  delete missingRequired.platform
+  delete missingRequired.chipCode
   const requiredErrors = validation.validatePlannedProject(missingRequired, [], undefined, validTosIds)
-  if (!requiredErrors.platform || requiredErrors.remark) throw new Error(`required-field errors are wrong: ${JSON.stringify(requiredErrors)}`)
+  if (!requiredErrors.chipCode || requiredErrors.remark) throw new Error(`required-field errors are wrong: ${JSON.stringify(requiredErrors)}`)
 
   const badBrandLineErrors = validation.validatePlannedProject({ ...validInput, productLine: 'ZERO' }, [], undefined, validTosIds)
   if (!badBrandLineErrors.productLine) throw new Error('brand/product-line mismatch must be rejected')
@@ -616,7 +616,7 @@ const validPlannedRoadmapInput = {
   productSeries: 'SPARK 60',
   marketName: 'SPARK 60',
   productType: '新品',
-  platform: 'G100',
+  chipCode: 'G100',
   startRam: '4GB',
   versionType: 'Slim',
   str5Date: '2027-02-01',
@@ -679,7 +679,7 @@ registerAssertion('roadmap persistence migrates the envelope once and current-st
   }
   const legacy = store.migrateRoadmapState(store.partializeRoadmapState(currentState), 1)
   if (JSON.stringify(legacy.visibleColumnsByView.evolution) === JSON.stringify(expected)
-    || !legacy.visibleColumnsByView.evolution.includes('platform')
+    || !legacy.visibleColumnsByView.evolution.includes('chipCode')
     || !legacy.visibleColumnsByView.evolution.includes('str5Date')
     || !legacy.visibleColumnsByView.evolution.includes('launchDate')) {
     throw new Error('legacy version 1 no longer receives the evolution-column upgrades')
@@ -793,7 +793,7 @@ registerAssertion('roadmap audit snapshots have a display-value contract distinc
 
 registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, and true changes only', () => {
   const audit = loadTypeScriptModule(path.join(root, 'src/lib/roadmapAudit.ts'))
-  const expectedFields = 'firstSaleTosVersionId,brand,productLine,marketName,projectCode,productType,platform,startRam,versionType,str5Date,launchDate,developMode,remark'
+  const expectedFields = 'firstSaleTosVersionId,brand,productLine,marketName,projectCode,productType,chipCode,startRam,versionType,str5Date,launchDate,developMode,remark'
   if (audit.ROADMAP_AUDIT_FIELDS.join(',') !== expectedFields) throw new Error('audit field whitelist or order is wrong')
 
   const versions = [
@@ -803,7 +803,7 @@ registerAssertion('roadmap audit uses the fixed whitelist, resolved tOS names, a
   const before = {
     machineProjectType: '整机-手机', projectCode: 'X6877', displayName: 'X6877', androidVersion: 'Android 16',
     firstSaleTosVersionId: 'tos-17-2', brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 60', marketName: 'SPARK 60',
-    productType: '新品', platform: 'G100', startRam: '4GB', versionType: 'Slim', str5Date: '2027-01-01', launchDate: '2027-02-01',
+    productType: '新品', chipCode: 'G100', startRam: '4GB', versionType: 'Slim', str5Date: '2027-01-01', launchDate: '2027-02-01',
     developMode: '自研', remark: '',
   }
   const after = { ...before, androidVersion: 'Android 17', productSeries: 'SPARK 70', firstSaleTosVersionId: 'tos-18-0', brand: 'Infinix', remark: 'updated' }
@@ -885,7 +885,29 @@ registerAssertion('roadmap STR5 estimate and canonical project-name contracts st
 const roadmapStorePath = path.join(root, 'src/stores/roadmap.ts')
 
 function loadIsolatedRoadmapStore() {
-  return createTypeScriptModuleLoader()(roadmapStorePath)
+  const loader = createTypeScriptModuleLoader()
+  const storeModule = loader(roadmapStorePath)
+  const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+  const previousWindow = globalThis.window
+  if (previousWindow === undefined) {
+    globalThis.window = {
+      localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    }
+  }
+  try {
+    enumModule.useEnumStore.setState(state => ({
+      hasHydrated: true,
+      hydrationError: null,
+      rowsByType: {
+        ...state.rowsByType,
+        'chip-mapping': [{ id: 'chip-g100', chipCode: 'G100', chipModel: 'MT6899', chipPlatform: 'MTK' }],
+      },
+    }))
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+  return storeModule
 }
 
 function resetRoadmapStore(storeModule) {
@@ -904,7 +926,7 @@ function createPlannedInput(overrides = {}) {
 
 registerAssertion('roadmap store declares the exact persistence boundary', () => {
   const source = fs.readFileSync(roadmapStorePath, 'utf8')
-  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'ROADMAP_STORE_VERSION = 7', 'version: ROADMAP_STORE_VERSION', 'migrate:', 'partialize:']) {
+  for (const token of ['persist(', "name: 'pms-project-roadmap'", 'ROADMAP_STORE_VERSION = 8', 'version: ROADMAP_STORE_VERSION', 'migrate:', 'partialize:']) {
     if (!source.includes(token)) throw new Error(`Roadmap store is missing ${token}`)
   }
   const mergeBody = source.slice(source.indexOf('export function mergeRoadmapPersistedState'), source.indexOf('const safeRoadmapStorage'))
@@ -1007,9 +1029,9 @@ registerAssertion('planned project validation uses the current tOS catalog and c
   const storeModule = loadIsolatedRoadmapStore()
   const store = resetRoadmapStore(storeModule)
   const malformedInput = { ...createPlannedInput() }
-  delete malformedInput.platform
+  delete malformedInput.chipCode
   const malformed = store.getState().createPlannedProject(malformedInput)
-  if (malformed.ok || malformed.reason !== 'invalid' || !malformed.errors.platform) {
+  if (malformed.ok || malformed.reason !== 'invalid' || !malformed.errors.chipCode) {
     throw new Error(`malformed runtime input needs a validation result: ${JSON.stringify(malformed)}`)
   }
   const invalid = store.getState().createPlannedProject(createPlannedInput({ firstSaleTosVersionId: 'tos-99-0' }))
@@ -1039,6 +1061,7 @@ registerAssertion('planned-project edit preserves an unchanged deleted tOS snaps
       rowsByType: {
         ...state.rowsByType,
         'first-sale-tos': [{ id: 'first-preview', value: '18.preview' }],
+        'chip-mapping': [{ id: 'chip-g100', chipCode: 'G100', chipModel: 'MT6899', chipPlatform: 'MTK' }],
       },
     }))
     const created = store.getState().createPlannedProject(createPlannedInput({
@@ -1048,7 +1071,11 @@ registerAssertion('planned-project edit preserves an unchanged deleted tOS snaps
     const project = store.getState().plannedProjects[0]
 
     enumStore.setState(state => ({
-      rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+      rowsByType: {
+        ...state.rowsByType,
+        'first-sale-tos': [],
+        'chip-mapping': [{ id: 'chip-g100', chipCode: 'G100', chipModel: 'MT6899', chipPlatform: 'MTK' }],
+      },
     }))
     store.setState({
       plannedProjects: [{ ...project, firstSaleTosVersionId: 'tOS 18.preview' }],
@@ -1158,7 +1185,11 @@ registerAssertion('configured tOS bodies round-trip through options planned stor
     enumStore.setState(state => ({
       hasHydrated: true,
       hydrationError: null,
-      rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
+      rowsByType: {
+        ...state.rowsByType,
+        'first-sale-tos': [],
+        'chip-mapping': [{ id: 'chip-g100', chipCode: 'G100', chipModel: 'MT6899', chipPlatform: 'MTK' }],
+      },
     }))
 
     for (const value of ['TOSbeta', 'tosbeta', '技术预览', 'tOS18.preview']) {
@@ -1285,7 +1316,7 @@ registerAssertion('roadmap migration repairs legacy names, references, UI contro
     || migrated.filters.find(condition => condition.field === 'brand')?.value !== 'TECNO'
     || migrated.filters.find(condition => condition.field === 'productType')?.value !== '老品'
     || JSON.stringify(migrated.visibleColumns) !== JSON.stringify([
-      'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
+      'marketName', 'displayName', 'chipCode', 'versionType', 'str5Date', 'launchDate',
     ])
   ) throw new Error(`filters/columns were not sanitized or synchronized: ${JSON.stringify({
     filters: migrated.filters,
@@ -1723,7 +1754,7 @@ function roadmapRow(overrides = {}) {
     productSeries: 'SPARK 60',
     marketName: 'SPARK 60',
     productType: '新品',
-    platform: 'G100',
+    chipCode: 'G100',
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2027-01-01',
@@ -1755,7 +1786,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     || normal.displayName !== 'X6877(Android 16)'
     || normal.firstSaleTosVersionId !== '16.3'
     || normal.productType !== '老品'
-    || normal.platform !== 'explicit-platform'
+    || normal.chipCode !== 'explicit-platform'
     || normal.startRam !== '8GB'
     || normal.developMode !== '外研'
     || normal.remark !== 'explicit remark'
@@ -2408,7 +2439,7 @@ registerAssertion('planned-project overlay exposes the complete accessible maint
     'productSeries',
     'marketName',
     'productType',
-    'platform',
+    'chipCode',
     'startRam',
     'versionType',
     'str5Date',
@@ -3128,7 +3159,7 @@ registerAssertion('evolution cards keep locked titles and approved colors', () =
     throw new Error('evolution structural columns are not locked')
   }
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'chipCode', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(filters.DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS) !== JSON.stringify(expectedEvolution)) {
     throw new Error('evolution defaults do not include both structural title fields')
@@ -3412,11 +3443,11 @@ registerAssertion('table and evolution views keep the approved independent defau
   const filterModule = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
   const expectedTable = [
     'firstSaleTosVersionId', 'brand', 'productLine', 'marketName', 'displayName',
-    'productType', 'platform', 'startRam', 'versionType', 'str5Date', 'launchDate',
+    'productType', 'chipCode', 'startRam', 'versionType', 'str5Date', 'launchDate',
     'developMode', 'remark',
   ]
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'chipCode', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(filterModule.DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS) !== JSON.stringify(expectedTable)) {
     throw new Error('table default columns do not match the approved matrix')
@@ -3459,7 +3490,7 @@ registerAssertion('roadmap migration canonicalizes locked evolution columns with
     },
   }, 1)
   const expectedEvolution = [
-    'marketName', 'displayName', 'platform', 'versionType', 'str5Date', 'launchDate',
+    'marketName', 'displayName', 'chipCode', 'versionType', 'str5Date', 'launchDate',
   ]
   if (JSON.stringify(migrated.visibleColumns) !== JSON.stringify(expectedEvolution)
     || JSON.stringify(migrated.visibleColumnsByView.evolution) !== JSON.stringify(expectedEvolution)) {
@@ -3871,6 +3902,206 @@ registerAssertion('task 9 consumers use the flat enum registry and preserve snap
     if (!new RegExp(`type\\s+${typeName}\\s*=\\s*string\\b`).test(typesSource)) {
       throw new Error(`${typeName} is not a string snapshot type`)
     }
+  }
+})
+
+registerAssertion('tOS roadmap normalizes the chip-code domain and migrates legacy platform state once', () => {
+  const types = loadTypeScriptModule(path.join(root, 'src/types/roadmap.ts'))
+  const audit = loadTypeScriptModule(path.join(root, 'src/lib/roadmapAudit.ts'))
+  const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
+  const storeModule = loadIsolatedRoadmapStore()
+
+  const chipColumn = types.ROADMAP_COLUMNS.find(column => column.key === 'chipCode')
+  if (chipColumn?.label !== '芯片编码' || types.ROADMAP_COLUMNS.some(column => column.key === 'platform')) {
+    throw new Error(`roadmap columns do not use chipCode exclusively: ${JSON.stringify(types.ROADMAP_COLUMNS)}`)
+  }
+  if (!audit.ROADMAP_AUDIT_FIELDS.includes('chipCode')
+    || audit.ROADMAP_AUDIT_FIELDS.includes('platform')
+    || audit.ROADMAP_AUDIT_FIELD_LABELS.chipCode !== '芯片编码') {
+    throw new Error('roadmap audit does not use the chip-code field and label exclusively')
+  }
+
+  const versions = [{
+    id: '17.2', name: 'tOS17.2', major: 17, minor: 2,
+    periodStartDate: '', periodEndDate: '', targets: [], createdAt: '', updatedAt: '',
+  }]
+  const normal = adapter.adaptNormalProject({
+    id: 'normal-chip', name: 'X9000', type: '整机-手机', status: '在研',
+    androidVersion: 'Android 17', firstSaleTosVersionId: '17.2', projectCode: 'X9000',
+    brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 90', marketName: 'SPARK 90',
+    productType: '新品', platform: 'D8600', cpu: 'MT6899', chipPlatform: 'MTK', startRam: '8GB',
+    versionType: 'Full', str5Date: '2027-03-01', launchDate: '2027-04-01', developMode: '自研', remark: '',
+  }, versions)
+  if (!normal || normal.chipCode !== 'D8600' || Object.prototype.hasOwnProperty.call(normal, 'platform')) {
+    throw new Error(`normal source compatibility did not normalize platform into chipCode: ${JSON.stringify(normal)}`)
+  }
+
+  const seed = storeModule.createInitialPlannedProjects(versions)[0]
+  const legacyProject = { ...seed, platform: 'LEGACY-D9000' }
+  delete legacyProject.chipCode
+  const legacyLog = {
+    id: 'legacy-chip-log', projectId: legacyProject.id, projectDisplayName: legacyProject.displayName,
+    source: 'planned', action: 'create', actor: '系统', occurredAt: '2026-01-01T00:00:00.000Z',
+    tosVersionName: 'tOS17.2', changes: [], snapshot: { platform: 'LEGACY-D9000' },
+  }
+  const migrated = storeModule.migrateRoadmapState({
+    ...storeModule.partializeRoadmapState(storeModule.createInitialRoadmapState()),
+    tosVersions: versions,
+    plannedProjects: [legacyProject],
+    changeLogs: [legacyLog],
+    filters: [{ id: 'legacy-platform-filter', field: 'platform', operator: 'contains', value: 'D9000' }],
+    columnOrder: ['firstSaleTosVersionId', 'platform', 'brand'],
+    columnOrderByView: {
+      table: ['firstSaleTosVersionId', 'platform', 'brand'],
+      evolution: ['marketName', 'displayName', 'platform'],
+    },
+    visibleColumns: ['firstSaleTosVersionId', 'platform'],
+    visibleColumnsByView: {
+      table: ['firstSaleTosVersionId', 'platform'],
+      evolution: ['marketName', 'displayName', 'platform'],
+    },
+    sort: { field: 'platform', direction: 'ascend' },
+  }, 7)
+  const migratedProject = migrated.plannedProjects[0]
+  if (migratedProject?.chipCode !== 'LEGACY-D9000'
+    || Object.prototype.hasOwnProperty.call(migratedProject ?? {}, 'platform')) {
+    throw new Error(`legacy planned platform was not migrated once: ${JSON.stringify(migratedProject)}`)
+  }
+  if (migrated.filters[0]?.field !== 'chipCode'
+    || !migrated.columnOrderByView.table.includes('chipCode')
+    || migrated.columnOrderByView.table.includes('platform')
+    || migrated.sort.field !== 'chipCode'
+    || migrated.changeLogs[0]?.snapshot?.chipCode !== 'LEGACY-D9000'
+    || Object.prototype.hasOwnProperty.call(migrated.changeLogs[0]?.snapshot ?? {}, 'platform')) {
+    throw new Error(`legacy platform metadata was not normalized: ${JSON.stringify(migrated)}`)
+  }
+
+  const normalizedSeed = {
+    ...seed,
+    id: 'planned-current-chip',
+    projectCode: 'CURRENT-CHIP',
+    chipCode: 'CURRENT-D8000',
+    platform: 'STALE-D7000',
+  }
+  const currentWins = storeModule.migrateRoadmapState({
+    ...storeModule.partializeRoadmapState(storeModule.createInitialRoadmapState()),
+    tosVersions: versions,
+    plannedProjects: [normalizedSeed],
+    changeLogs: [{
+      ...legacyLog,
+      id: 'mixed-chip-log',
+      projectId: normalizedSeed.id,
+      snapshot: { chipCode: 'CURRENT-D8000', platform: 'STALE-D7000' },
+    }],
+  }, 7)
+  if (currentWins.plannedProjects[0]?.chipCode !== 'CURRENT-D8000'
+    || currentWins.changeLogs[0]?.snapshot?.chipCode !== 'CURRENT-D8000') {
+    throw new Error(`current chipCode did not win over stale platform data: ${JSON.stringify(currentWins)}`)
+  }
+
+  const filters = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const normalizedFilters = filters.sanitizeRoadmapFilterConditions([
+    { id: 'legacy-first', field: 'platform', operator: 'equals', value: 'STALE-D7000' },
+    { id: 'current-second', field: 'chipCode', operator: 'equals', value: 'CURRENT-D8000' },
+  ], versions)
+  if (normalizedFilters.length !== 1 || normalizedFilters[0].value !== 'CURRENT-D8000') {
+    throw new Error(`current chip-code filter did not win over legacy platform: ${JSON.stringify(normalizedFilters)}`)
+  }
+})
+
+registerAssertion('planned tOS roadmap projects require an active configured chip code', () => {
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  }
+  try {
+    const loader = createTypeScriptModuleLoader()
+    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+    const store = resetRoadmapStore(storeModule)
+    const enumStore = enumModule.useEnumStore
+    const input = { ...createPlannedInput(), chipCode: 'D8600' }
+    delete input.platform
+
+    enumStore.setState(state => ({
+      hasHydrated: true,
+      hydrationError: null,
+      rowsByType: {
+        ...state.rowsByType,
+        'first-sale-tos': [{ id: 'first-17-2', value: '17.2' }],
+        'chip-mapping': [],
+      },
+    }))
+    const missingConfig = store.getState().createPlannedProject(input)
+    if (missingConfig.ok
+      || missingConfig.reason !== 'invalid'
+      || missingConfig.errors.chipCode !== '请先在配置中心维护芯片编码') {
+      throw new Error(`missing chip configuration did not block save clearly: ${JSON.stringify(missingConfig)}`)
+    }
+
+    enumStore.setState(state => ({
+      rowsByType: {
+        ...state.rowsByType,
+        'chip-mapping': [{ id: 'chip-d8600', chipCode: 'D8600', chipModel: 'MT6899', chipPlatform: 'MTK' }],
+      },
+    }))
+    const created = store.getState().createPlannedProject(input)
+    if (!created.ok || store.getState().plannedProjects[0]?.chipCode !== 'D8600') {
+      throw new Error(`configured chip code was not saved: ${JSON.stringify(created)}`)
+    }
+    const project = store.getState().plannedProjects[0]
+    enumStore.setState(state => ({
+      rowsByType: {
+        ...state.rowsByType,
+        'chip-mapping': [{ id: 'chip-d8700', chipCode: 'D8700', chipModel: 'MT6888', chipPlatform: 'MTK' }],
+      },
+    }))
+    const historical = store.getState().updatePlannedProject(project.id, { ...input, remark: '保留历史值' })
+    if (!historical.ok) throw new Error(`unchanged retired chip code could not be preserved: ${JSON.stringify(historical)}`)
+    const invalidReplacement = store.getState().updatePlannedProject(project.id, { ...input, chipCode: 'D9999' })
+    if (invalidReplacement.ok
+      || invalidReplacement.reason !== 'invalid'
+      || !invalidReplacement.errors.chipCode) {
+      throw new Error(`unknown replacement chip code was accepted: ${JSON.stringify(invalidReplacement)}`)
+    }
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
+registerAssertion('tOS roadmap UI uses searchable chip-code selection and chip-code export labels', () => {
+  const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
+  const modal = read('src/components/roadmap/PlannedProjectModal.tsx')
+  const details = read('src/components/roadmap/RoadmapProjectDetailsModal.tsx')
+  const card = read('src/components/roadmap/RoadmapProjectCard.tsx')
+  const toolbar = read('src/components/roadmap/RoadmapToolbar.tsx')
+  const moduleSource = read('src/components/roadmap/ProjectRoadmapModule.tsx')
+  const filters = loadTypeScriptModule(path.join(root, 'src/lib/roadmapFilters.ts'))
+  const chipFilter = filters.buildRoadmapFilterFieldDefinitions([], [], {
+    chipCode: [{ label: 'D8600', value: 'D8600' }],
+  }).find(field => field.key === 'chipCode')
+
+  for (const token of ['buildChipOptions', 'resolveChipRow', 'name="chipCode"', 'label="芯片编码"', 'showSearch', '（已停用）']) {
+    if (!modal.includes(token)) throw new Error(`planned-project chip selector is missing ${token}`)
+  }
+  if (modal.includes('name="platform"') || modal.includes('label="平台"') || modal.includes('请输入平台')) {
+    throw new Error('planned-project modal still exposes free-text platform')
+  }
+  if (!details.includes("['芯片编码', row.chipCode]") || details.includes("['芯片平台', row.platform]")) {
+    throw new Error('project details do not display chip code exclusively')
+  }
+  if (!card.includes("column.key === 'chipCode'")) {
+    throw new Error('evolution cards do not render the chip-code field label')
+  }
+  if (chipFilter?.label !== '芯片编码' || chipFilter.kind !== 'enum') {
+    throw new Error(`chip-code filter is not enum-backed: ${JSON.stringify(chipFilter)}`)
+  }
+  for (const token of ['onExport', 'DownloadOutlined', '导出']) {
+    if (!toolbar.includes(token)) throw new Error(`roadmap toolbar export is missing ${token}`)
+  }
+  for (const token of ['exportSheet', 'exportTimestamp', "key: 'chipCode'", "title: '芯片编码'"]) {
+    if (!moduleSource.includes(token)) throw new Error(`roadmap export is missing ${token}`)
   }
 })
 
