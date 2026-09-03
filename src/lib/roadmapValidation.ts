@@ -42,7 +42,7 @@ export function resolveLegacyRoadmapPlatform(
   const snapshot = unwrapLegacyPlatform(value)
   const normalizedSnapshot = snapshot.toLocaleUpperCase('en-US')
   const matchingCodes = new Set(mappings.flatMap(mapping => {
-    const matches = [mapping.chipCode, mapping.chipModel, mapping.chipPlatform]
+    const matches = [mapping.chipCode, mapping.chipModel]
       .some(candidate => candidate.trim().toLocaleUpperCase('en-US') === normalizedSnapshot)
     const chipCode = mapping.chipCode.trim()
     return matches && chipCode ? [chipCode] : []

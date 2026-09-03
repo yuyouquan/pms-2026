@@ -3905,6 +3905,30 @@ registerAssertion('task 9 consumers use the flat enum registry and preserve snap
   }
 })
 
+registerAssertion('normal roadmap adapter collapses compound historical chip tuples to a literal chip code', () => {
+  const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
+  const chipCode = adapter.resolveNormalProjectChipCode({
+    name: 'X6835',
+    projectCode: 'X6835',
+    fieldValues: { chipCode: 'D6300 / MT6835 / MTK' },
+  })
+  if (chipCode !== 'D6300') {
+    throw new Error(`normal source leaked a historical chip model/platform tuple: ${JSON.stringify(chipCode)}`)
+  }
+})
+
+registerAssertion('legacy roadmap migration never guesses a chip code from a platform vendor', () => {
+  const validation = loadTypeScriptModule(path.join(root, 'src/lib/roadmapValidation.ts'))
+  const singleVendorMapping = [
+    { id: 'chip-only-mtk', chipCode: 'D8400', chipModel: 'MT6877', chipPlatform: 'MTK' },
+  ]
+  const unresolvedVendor = '历史平台：MTK（待重选芯片编码）'
+  const resolved = validation.resolveLegacyRoadmapPlatform('MTK', singleVendorMapping)
+  if (resolved !== unresolvedVendor) {
+    throw new Error(`legacy vendor was guessed as chip code: ${JSON.stringify(resolved)}`)
+  }
+})
+
 registerAssertion('tOS roadmap normalizes the chip-code domain and migrates legacy platform state once', () => {
   const types = loadTypeScriptModule(path.join(root, 'src/types/roadmap.ts'))
   const audit = loadTypeScriptModule(path.join(root, 'src/lib/roadmapAudit.ts'))

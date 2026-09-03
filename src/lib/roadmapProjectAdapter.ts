@@ -11,6 +11,7 @@ import {
   normalizeLegacyRoadmapProductType,
   normalizeRoadmapTosReference,
 } from '@/lib/roadmapValidation'
+import { formatPrimaryChipCode } from '@/lib/enumConsumers'
 import type { ProjectItem } from '@/types/app'
 import type {
   PlannedRoadmapProject,
@@ -45,7 +46,7 @@ function extractNamedChipCode(value: unknown): string {
 
 export function resolveNormalProjectChipCode(project: ProjectItem): string {
   return firstNonBlank(
-    project.fieldValues?.chipCode,
+    formatPrimaryChipCode(project.fieldValues?.chipCode),
     extractNamedChipCode(project.projectCode),
     extractNamedChipCode(project.name),
   )
