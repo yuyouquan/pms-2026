@@ -508,14 +508,15 @@ async function clickMrTemplatePublishButton() {
         toolbarText: document.querySelector('.pms-mr-toolbar')?.textContent?.trim() ?? '',
       }
     }
-    button.click()
+    const rect = button.getBoundingClientRect()
     return {
-      activated: true,
+      box: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },
       matches: buttons.length,
       toolbarText: '',
     }
   })
-  assert.equal(result.activated, true, `MR模板工具栏发布按钮必须唯一且可操作：${JSON.stringify(result)}`)
+  assert.ok(result.box && result.matches === 1, `MR模板工具栏发布按钮必须唯一且可操作：${JSON.stringify(result)}`)
+  await page.mouse.click(result.box.x, result.box.y)
   await wait(350)
 }
 
@@ -721,17 +722,24 @@ async function switchUser(user) {
   await wait(300)
 }
 
-async function openProjectFromList(categoryPrefix, projectName, rowSuffix = '') {
+async function openProjectFromList(categoryPrefix, projectName, rowSuffix = '', projectId = '') {
   await openMainMenu('projectList')
   await clickButtonStarting(categoryPrefix)
-  const box = await page.evaluate(({ projectName, rowSuffix }) => {
+  await page.waitForFunction(({ projectId, projectName, rowSuffix }) => [...document.querySelectorAll('tbody tr')]
+    .some(candidate => projectId
+      ? candidate.getAttribute('data-row-key') === projectId
+      : candidate.innerText.includes(projectName) && (!rowSuffix || candidate.innerText.includes(rowSuffix))),
+  { timeout: TIMEOUT }, { projectId, projectName, rowSuffix })
+  const box = await page.evaluate(({ projectId, projectName, rowSuffix }) => {
     const row = [...document.querySelectorAll('tbody tr')]
-      .find(candidate => candidate.innerText.includes(projectName) && (!rowSuffix || candidate.innerText.includes(rowSuffix)))
+      .find(candidate => projectId
+        ? candidate.getAttribute('data-row-key') === projectId
+        : candidate.innerText.includes(projectName) && (!rowSuffix || candidate.innerText.includes(rowSuffix)))
     if (!row) return null
     const cell = [...row.querySelectorAll('td')].find(candidate => candidate.innerText.trim() === projectName) || row
     const rect = cell.getBoundingClientRect()
     return { x: rect.x + Math.min(rect.width / 2, 24), y: rect.y + rect.height / 2 }
-  }, { projectName, rowSuffix })
+  }, { projectId, projectName, rowSuffix })
   if (!box) throw new Error(`project row missing: ${projectName}`)
   await page.mouse.click(box.x, box.y)
   await page.waitForSelector('.pms-project-space', { visible: true })
@@ -983,15 +991,15 @@ try {
   await page.reload({ waitUntil: 'networkidle2', timeout: TIMEOUT })
   await wait(2_000)
   await waitForMainMenu('workbench')
+  await openProjectFromList('tOS版本项目', 'tOS17.1', '', '6')
+  await clickVisibleText('计划')
+  await clickVisibleText('三级计划-MR版本计划', '[role="tab"],button,span')
+  await page.waitForSelector('.pms-mr-project-card', { visible: true })
   await page.waitForFunction(() => {
     const mrCache = JSON.parse(window.localStorage.getItem('pms-mr-version-plan-store') || 'null')
     const planCache = JSON.parse(window.localStorage.getItem('pms-plan-store') || 'null')
     return mrCache?.version === 5 && planCache?.version === 14
   })
-  await openProjectFromList('tOS版本项目', 'tOS17.1')
-  await clickVisibleText('计划')
-  await clickVisibleText('三级计划-MR版本计划', '[role="tab"],button,span')
-  await page.waitForSelector('.pms-mr-project-card', { visible: true })
   assert.deepEqual(
     await page.$$eval('[data-mr-tos-version]', rows => [...new Set(rows.map(row => row.getAttribute('data-mr-tos-version')))]),
     ['17.1.0.120', '17.1.0.125'],
