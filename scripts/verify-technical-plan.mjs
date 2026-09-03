@@ -102,8 +102,12 @@ assert.deepEqual(
 )
 assert.match(technicalSummarySource, /const activeDraft = visibleVersions\.find[\s\S]{0,180}const currentVersion = activeDraft/, 'technical basic-information prioritizes the visible active revision independently of permission')
 assert.equal((technicalSummarySource.match(/<ClickToEditDate/g) || []).length, 1, 'technical basic-information keeps all version plan dates read-only and exposes only the actual-date editor')
-assert.match(technicalSummarySource, /const canEditActualEnd = canEditPlan &&/, 'technical basic-information gates actual-date edits on plan-maintenance permission')
-assert.match(technicalSummarySource, /actualTask && canEditActualEnd[\s\S]{0,240}<ClickToEditDate/, 'technical basic-information actual-date editor also requires a matching published task')
+assert.match(technicalSummarySource, /const canEditActualEnd = canEditPlan[\s\S]{0,120}currentVersion\.status === '修订中'/, 'technical basic-information gates actual-date edits on plan-maintenance permission and active draft state')
+assert.match(technicalSummarySource, /selectTechnicalPlanActualVersion\(currentVersion, latestPublishedVersion\)/, 'technical basic-information reads actual dates from the draft while the draft is active')
+assert.match(technicalSummarySource, /buildTechnicalHorizontalDateMap\([\s\S]{0,100}columns,[\s\S]{0,100}projection\.rows,[\s\S]{0,40}'planEndDate'/, 'technical basic-information aligns historical plan dates to the latest columns by normalized task name')
+assert.match(technicalSummarySource, /const result = updateCurrentTasks\([\s\S]{0,260}if \(!result\.ok\)/, 'technical basic-information checks the store result before reporting an actual-date save')
+assert.match(technicalSummarySource, /<ClickToEditDate[\s\S]{0,260}onSaved=\{\(\) => undefined\}/, 'technical basic-information suppresses the generic success message and reports save status itself')
+assert.match(technicalSummarySource, /actualTask && canEditActualEnd[\s\S]{0,320}<ClickToEditDate/, 'technical basic-information actual-date editor requires a task in the selected draft')
 assert.match(technicalInformationSource, /<TechnicalPlanSummary[\s\S]{0,220}canEditPlan=/, 'technical information forwards plan-maintenance permission to the summary')
 assert.match(projectSpaceContainerSource, /<TechnicalProjectInformationView[\s\S]{0,420}canEditPlan=\{canGovernLevel1Plan\}/, 'project space uses technical plan permission instead of basic-information permission for plan dates')
 
@@ -491,6 +495,7 @@ assert.match(technicalModuleSource, /TDT项目计划/, 'technical plan UI render
 assert.doesNotMatch(technicalModuleSource, /显示已停用|showInactive|Switch/, 'technical plan UI hides inactive subprojects instead of exposing history mode')
 assert.match(technicalModuleSource, /SettingOutlined/, 'child plan tabs expose configuration')
 assert.match(technicalModuleSource, /compareVersionsForTable/, 'technical plans reuse version comparison')
+assert.match(technicalModuleSource, /compareVersionsForTable\([\s\S]{0,420}task => normalizeTechnicalTaskName\(task\.taskName\)/, 'technical version comparison aligns rows by normalized task name instead of template ids')
 assert.match(technicalModuleSource, /exportSheet/, 'technical plans reuse Excel export')
 assert.match(technicalModuleSource, /maxDepthByKind:\s*Readonly<Record<TechnicalTemplateKind, number>>/, 'technical plan exposes the max-depth input')
 assert.match(technicalModuleSource, /maxDepthByKind\[tab\?\.templateKind \|\| 'tdt'\]/, 'technical plan derives writes from the active template max depth')
@@ -593,12 +598,12 @@ assert.match(technicalModuleSource, /<TechnicalHorizontalPlanTable[\s\S]{0,180}t
 assert.match(technicalModuleSource, /function TechnicalHorizontalPlanTable\([\s\S]{0,240}templateKind[\s\S]{0,420}const mode = templateKind === 'subproject' \? 'technical-subproject' : 'standard'/, 'root-only TDT plans retain the grouped standard header mode')
 assert.match(technicalSummarySource, /const projectionMode = scope\.kind === 'subproject' \? 'technical-subproject' : 'standard'/, 'technical summary mode follows its canonical scope kind instead of task depth')
 assert.match(technicalModuleSource, /buildTechnicalHorizontalDateMap\([\s\S]{0,260}milestoneTasks/, 'technical plan workspace aligns historical date cells to the latest task-name headers')
-assert.match(technicalSummarySource, /Object\.fromEntries\([^\n]+map\([^\n]+\[getTechnicalPlanRowKey\([^)]*\),/, 'technical basic-information summary keys version dates by stable activity identity')
+assert.match(technicalSummarySource, /buildTechnicalHorizontalDateMap\(columns, projection\.rows, 'planEndDate'\)/, 'technical basic-information summary aligns historical dates by normalized task name')
 for (const [surfaceName, source] of [
   ['technical plan workspace horizontal view', technicalModuleSource],
   ['technical basic-information summary', technicalSummarySource],
 ]) {
-  assert.match(source, /endDatesByTaskId\[getTechnicalPlanRowKey\([^)]*\)\]/, `${surfaceName} reads version dates by stable activity identity`)
+  assert.match(source, /endDatesByTaskId\[getTechnicalPlanRowKey\([^)]*\)\]/, `${surfaceName} reads version dates through the latest header identity`)
   assert.match(source, /scope="col"/, `${surfaceName} identifies activity headers as columns`)
   assert.match(source, /scope="colgroup"/, `${surfaceName} identifies grouped stage headers as column groups`)
 }

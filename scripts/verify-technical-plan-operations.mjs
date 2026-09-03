@@ -11,6 +11,8 @@ globalThis.localStorage = {
 }
 
 const technicalPlan = loadTypeScriptModule(root, 'src/stores/technicalPlan.ts')
+const technicalWorkspace = loadTypeScriptModule(root, 'src/lib/technicalPlanWorkspace.ts')
+const versionCompare = loadTypeScriptModule(root, 'src/lib/versionCompare.ts')
 const columns = { order: ['taskName'], visible: ['taskName'] }
 const task = (id, taskName) => ({
   id, order: 1, taskName, responsible: '负责人', predecessor: '',
@@ -26,6 +28,39 @@ const version = (id, versionNo, templateType, status, tasks) => ({
   id, versionNo, templateType, status, tasks,
   ...(status === '已发布' ? { publishedAt: `2026-0${versionNo.replace(/\D/g, '') || '1'}-01T00:00:00Z` } : {}),
 })
+
+assert.equal(
+  technicalWorkspace.selectLatestPublishedTechnicalTemplateVersion([
+    { id: 'v1', versionNo: 'V1', status: '已发布' },
+    { id: 'v1.1', versionNo: 'V1.1', status: '已发布' },
+    { id: 'v2', versionNo: 'V2', status: '已发布' },
+    { id: 'v3-draft', versionNo: 'V3', status: '修订中' },
+  ])?.id,
+  'v2',
+  'technical revisions select the latest published template by formal/nonformal semantic version order',
+)
+const summaryPublishedVersion = { id: 'summary-published', versionNo: 'V1', status: '已发布', tasks: [task('summary-published-task', '共享节点')] }
+const summaryDraftVersion = { id: 'summary-draft', versionNo: 'V2', status: '修订中', tasks: [task('summary-draft-task', '共享节点')] }
+assert.equal(
+  technicalWorkspace.selectTechnicalPlanActualVersion(summaryDraftVersion, summaryPublishedVersion)?.id,
+  'summary-draft',
+  'technical basic-information actual dates read from the editable draft while a draft is active',
+)
+assert.equal(
+  technicalWorkspace.selectTechnicalPlanActualVersion(summaryPublishedVersion, summaryPublishedVersion)?.id,
+  'summary-published',
+  'technical basic-information actual dates read from the published version in published read-only state',
+)
+const normalizedNameCompareRows = versionCompare.compareVersionsForTable(
+  [{ ...task('compare-old', '共享节点'), stableId: 'compare-old-stable' }],
+  [{ ...task('compare-new', '共享节点'), stableId: 'compare-new-stable' }],
+  item => technicalWorkspace.normalizeTechnicalTaskName(item.taskName),
+)
+assert.deepEqual(
+  normalizedNameCompareRows.map(row => row.changeType),
+  ['未变更'],
+  'technical version comparison treats normalized same-name tasks as one row even when template ids change',
+)
 
 const store = technicalPlan.createTechnicalPlanStore({ plansByKey: {} })
 assert.equal(store.clonePublishedVersion, undefined, 'the standalone technical-plan store removes the clone operation')
@@ -61,6 +96,49 @@ assert.deepEqual(
   'legacy plan columns migrate to the current flat-plan column contract without resetting the plan',
 )
 assert.equal(migratedVersionTwoColumns.plansByKey['custom:tdt'].versions[0].tasks[0].taskName, '保留任务')
+
+const migratedActiveDraft = technicalPlan.migrateTechnicalPlanState({
+  plansByKey: {
+    'draft-pointer:tdt': {
+      ...instance('draft-pointer:tdt', 'tdt', [
+        version('draft-pointer-v1', 'V1', 'tdt', '已发布', [task('published-task', '已发布任务')]),
+        version('draft-pointer-v2', 'V2', 'tdt', '修订中', [task('draft-task', '修订任务')]),
+      ]),
+      currentVersionId: 'draft-pointer-v1',
+    },
+  },
+}, technicalPlan.TECHNICAL_PLAN_STORE_VERSION)
+assert.equal(
+  migratedActiveDraft.plansByKey['draft-pointer:tdt'].currentVersionId,
+  'draft-pointer-v2',
+  'hydration selects an existing technical-plan draft even when the persisted pointer targets a published version',
+)
+const initializedActiveDraftStore = technicalPlan.createTechnicalPlanStore({
+  plansByKey: {
+    'initialized-draft:tdt': {
+      ...instance('initialized-draft:tdt', 'tdt', [
+        version('initialized-v1', 'V1', 'tdt', '已发布', [task('initialized-published', '已发布任务')]),
+        version('initialized-v2', 'V2', 'tdt', '修订中', [task('initialized-draft', '修订任务')]),
+      ]),
+      currentVersionId: 'initialized-v1',
+    },
+  },
+})
+assert.equal(
+  initializedActiveDraftStore.getState().plansByKey['initialized-draft:tdt'].currentVersionId,
+  'initialized-v2',
+  'standalone technical-plan initialization also selects its existing draft',
+)
+assert.equal(
+  initializedActiveDraftStore.setCurrentVersion({ kind: 'tdt', parentProjectId: 'initialized-draft' }, 'initialized-v1'),
+  true,
+  'an initialized store still permits an explicit historical version selection',
+)
+assert.equal(
+  initializedActiveDraftStore.getState().plansByKey['initialized-draft:tdt'].currentVersionId,
+  'initialized-v1',
+  'detached store reads preserve an explicit post-initialization version selection',
+)
 
 const revisionKindStore = technicalPlan.createTechnicalPlanStore({ plansByKey: {
   'revision-kind:tdt': instance('revision-kind:tdt', 'tdt', [

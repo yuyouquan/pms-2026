@@ -1,5 +1,6 @@
 import type { TechnicalTemplateKind, TechnicalTemplateTask } from '@/types/technicalPlan'
 import type { FilterFieldDefinition } from '@/lib/filterConditions'
+import { comparePlanVersions } from '@/lib/planVersioning'
 import {
   projectLevel1FlatMilestones,
   projectLevel1Plan,
@@ -69,6 +70,19 @@ export const TECHNICAL_PLAN_EXPORT_COLUMNS = [
 export const getTechnicalPlanExportColumns = (templateKind: TechnicalTemplateKind) => (
   templateKind === 'subproject' ? TECHNICAL_SUBPROJECT_EXPORT_COLUMNS : TECHNICAL_TDT_EXPORT_COLUMNS
 )
+
+export const selectLatestPublishedTechnicalTemplateVersion = <T extends { versionNo: string; status: string }>(
+  versions: readonly T[],
+): T | undefined => [...versions]
+  .filter(version => version.status === '已发布')
+  .sort((left, right) => comparePlanVersions(right, left))[0]
+
+export const selectTechnicalPlanActualVersion = <T extends { status: string }>(
+  currentVersion: T | undefined,
+  latestPublishedVersion: T | undefined,
+): T | undefined => currentVersion?.status === '修订中'
+  ? currentVersion
+  : latestPublishedVersion || currentVersion
 
 const DEFAULT_TECHNICAL_STATUS_OPTIONS = ['未开始', '进行中', '已完成'].map(value => ({ label: value, value }))
 

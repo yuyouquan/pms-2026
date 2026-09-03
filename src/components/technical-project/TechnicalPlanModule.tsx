@@ -35,6 +35,7 @@ import {
   getTechnicalPlanFilterFields,
   getTechnicalPlanRowKey,
   normalizeTechnicalTaskName,
+  selectLatestPublishedTechnicalTemplateVersion,
   parseTechnicalPlanImportRows,
   projectTechnicalPlanRows,
   renumberTechnicalSubprojectTasks,
@@ -328,9 +329,7 @@ const latestPublishedTemplate = (
   fallback: readonly TechnicalTemplateTask[],
 ) => {
   const scope = scopes[getTemplateConfigScopeKey('技术项目', kind)]
-  const published = (scope?.versions || [])
-    .filter(version => version.status === '已发布')
-    .sort((left, right) => (Number.parseInt(right.versionNo.replace(/\D/g, ''), 10) || 0) - (Number.parseInt(left.versionNo.replace(/\D/g, ''), 10) || 0))[0]
+  const published = selectLatestPublishedTechnicalTemplateVersion(scope?.versions || [])
   return (published && getTemplateSnapshotForProjectType<TechnicalTemplateTask[]>(snapshots, '技术项目', published.id, kind)) || fallback
 }
 
@@ -761,6 +760,7 @@ export default function TechnicalPlanModule({
     return compareVersionsForTable(
       (isSubproject ? projectTechnicalSubprojectRows(left.tasks) : projectLevel1FlatMilestones(left.tasks)) as any,
       (isSubproject ? projectTechnicalSubprojectRows(right.tasks) : projectLevel1FlatMilestones(right.tasks)) as any,
+      task => normalizeTechnicalTaskName(task.taskName),
     )
   }, [compareBaseId, compareTargetId, hasCompared, instance, tab?.templateKind, visibleVersions])
 

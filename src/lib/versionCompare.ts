@@ -63,6 +63,8 @@ export type CompareTask = PlanTask & {
   delayStatus?: string;
 }
 
+export type CompareTaskIdentitySelector = (task: CompareTask) => string
+
 const formatDuration = (value: number | null) => value === null ? '-' : `${value}天`
 const normalizeDuration = (value: number | null | undefined): number | null => typeof value === 'number' ? value : null
 
@@ -89,11 +91,17 @@ const getCompareDisplayFields = (task: CompareTask) => ({
 /**
  * 比较两个版本，生成表格行数据
  */
-export function compareVersionsForTable(oldTasks: CompareTask[], newTasks: CompareTask[]): CompareTableRow[] {
+export function compareVersionsForTable(
+  oldTasks: CompareTask[],
+  newTasks: CompareTask[],
+  identitySelector?: CompareTaskIdentitySelector,
+): CompareTableRow[] {
   const rows: CompareTableRow[] = [];
-  const identity = (task: CompareTask) => task.stableId
-    ? ['stable', task.stableId] as const
-    : ['id', task.id] as const
+  const identity = (task: CompareTask) => identitySelector
+    ? ['selected', identitySelector(task)] as const
+    : task.stableId
+      ? ['stable', task.stableId] as const
+      : ['id', task.id] as const
   const toUniqueMap = (tasks: CompareTask[]) => {
     const occurrences = new Map<string, number>()
     return new Map(tasks.map(task => {

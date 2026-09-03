@@ -176,6 +176,14 @@ const clonePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.f
   }]),
 )
 
+const initializePlans = (plans: TechnicalPlansByKey): TechnicalPlansByKey => Object.fromEntries(
+  Object.entries(clonePlans(plans)).map(([key, plan]) => [key, {
+    ...plan,
+    currentVersionId: plan.versions.find(version => version.status === '修订中')?.id
+      || (plan.versions.some(version => version.id === plan.currentVersionId) ? plan.currentVersionId : plan.versions[0]?.id || ''),
+  }]),
+)
+
 export const TECHNICAL_PLAN_STORE_VERSION = 8
 
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -205,9 +213,10 @@ export const migrateTechnicalPlanState = (persistedState: unknown, fromVersion: 
       }]
     })
     if (!versions.length) return
-    const currentVersionId = versions.some(version => version.id === candidate.currentVersionId)
+    const activeDraft = versions.find(version => version.status === '修订中')
+    const currentVersionId = activeDraft?.id || (versions.some(version => version.id === candidate.currentVersionId)
       ? String(candidate.currentVersionId)
-      : versions[0].id
+      : versions[0].id)
     const columns = isRecord(candidate.columnSettings) ? candidate.columnSettings : {}
     const storedOrder = Array.isArray(columns.order) ? columns.order.map(String) : [...DEFAULT_COLUMNS.order]
     const storedVisible = Array.isArray(columns.visible) ? columns.visible.map(String) : [...DEFAULT_COLUMNS.visible]
@@ -402,7 +411,7 @@ const mutateDraft = (state: TechnicalPlanState, scope: TechnicalPlanScope, mutat
 }
 
 export function createTechnicalPlanStore(initial: Partial<TechnicalPlanState> = {}) {
-  let state: TechnicalPlanState = { plansByKey: clonePlans(initial.plansByKey ?? INITIAL_TECHNICAL_PLANS) }
+  let state: TechnicalPlanState = { plansByKey: initializePlans(initial.plansByKey ?? INITIAL_TECHNICAL_PLANS) }
   const update = (next: TechnicalPlanState) => { state = next }
   return {
     getState: () => ({ plansByKey: clonePlans(state.plansByKey) }),
@@ -427,7 +436,7 @@ const zustandActions = (set: (value: Partial<TechnicalPlanState> | ((state: Tech
 })
 
 export const useTechnicalPlanStore = create<TechnicalPlanState & TechnicalPlanActions>()(persist(
-  (set, get) => ({ plansByKey: clonePlans(INITIAL_TECHNICAL_PLANS), ...zustandActions(set, get) }),
+  (set, get) => ({ plansByKey: initializePlans(INITIAL_TECHNICAL_PLANS), ...zustandActions(set, get) }),
   {
     name: 'pms-technical-plans',
     version: TECHNICAL_PLAN_STORE_VERSION,

@@ -465,7 +465,7 @@ assert.doesNotMatch(technicalPlanSummary, /stage\.manpowerPercent[\s\S]{0,180}%/
 assert.match(technicalPlanSummary, /technical-plan-summary-sticky-version[\s\S]*technical-plan-summary-sticky-cycle/, 'technical plan summary keeps version and cycle columns fixed like whole-machine plan information')
 assert.doesNotMatch(technicalPlanSummary, /<Tag[^>]*color="green"|已发布<\/Tag>/, 'technical plan summary does not add status tags absent from the whole-machine summary')
 assert.match(technicalPlanSummary, /const displayCycle = \(days: number \| null\) => days === null \? '-' : days/, 'technical plan summary displays cycle values without a divergent unit suffix')
-assert.match(technicalPlanSummary, /const canEditActualEnd = canEditPlan && currentVersion\.status === '修订中'/, 'technical plan summary only enables actual completion editing on a revision draft')
+assert.match(technicalPlanSummary, /const canEditActualEnd = canEditPlan[\s\S]{0,120}currentVersion\.status === '修订中'/, 'technical plan summary only enables actual completion editing on a revision draft')
 assert.doesNotMatch(technicalPlanSummary, /currentVersion\.id === latestPublishedVersion\?\.id/, 'technical plan summary never makes the latest published version writable')
 assert.match(technicalPlanSummary, /canEditActualEnd[\s\S]*ClickToEditDate/, 'technical plan summary exposes actual completion date editing for an authorized revision draft')
 const projectInformationFrame = readSource(root, 'src/components/project-info/ProjectInformationFrame.tsx')
