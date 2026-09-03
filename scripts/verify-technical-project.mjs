@@ -500,7 +500,7 @@ assert.match(
   'create uses requiredOnCreate while edit uses required, and source snapshots are never revalidated as user input',
 )
 assert.match(createFields, /TECHNICAL_SOURCE_SNAPSHOT_KEYS\.has\(field\.key\)[\s\S]{0,160}<Input disabled/, 'project category, track, child name, and status stay disabled source snapshots')
-assert.match(modal, /fields=\{technicalCreateFields\}/, 'project modal forwards the technical create projection')
+assert.match(modal, /fields=\{technicalGroupedFields\}/, 'project modal forwards only the grouped technical projection')
 assert.match(themeProvider, /<ConfigProvider[\s\S]*<App>[\s\S]*\{children\}[\s\S]*<\/App>[\s\S]*<\/ConfigProvider>/, 'the application mounts one persistent AntD App context inside the theme provider')
 assert.match(modal, /const \{ message: messageApi, modal: modalApi \} = App\.useApp\(\)/, 'project modal feedback consumes the persistent application context')
 assert.doesNotMatch(modal, /\bmessage\.error\(/, 'project modal must not emit static-context message warnings')

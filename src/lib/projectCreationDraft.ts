@@ -1,4 +1,4 @@
-export const PROJECT_CREATION_DRAFT_SCHEMA_VERSION = 1
+export const PROJECT_CREATION_DRAFT_SCHEMA_VERSION = 2
 
 export interface ProjectCreationDraft {
   schemaVersion: number
@@ -45,7 +45,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isValidDraft = (value: unknown, ownerId: string): value is ProjectCreationDraft => {
   if (!isRecord(value)) return false
 
-  return value.schemaVersion === PROJECT_CREATION_DRAFT_SCHEMA_VERSION
+  return (value.schemaVersion === 1 || value.schemaVersion === PROJECT_CREATION_DRAFT_SCHEMA_VERSION)
     && value.ownerId === ownerId
     && isRecord(value.values)
     && Array.isArray(value.activeGroups)

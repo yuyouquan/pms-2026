@@ -104,6 +104,14 @@ export const getProjectInfoCreateFields = (type: string) => {
   return getProjectInfoModalFields(type)
 }
 
+const TECHNICAL_PROJECT_COMMON_MODAL_FIELD_KEYS = new Set(['secondaryCategory', 'projectName'])
+
+export const getProjectInfoGroupedFields = (type: string) => (
+  getProjectInfoCreateFields(type).filter(field => (
+    type !== PROJECT_CATEGORY_TECH || !TECHNICAL_PROJECT_COMMON_MODAL_FIELD_KEYS.has(field.key)
+  ))
+)
+
 export const getProjectInfoSpaceFields = (type: string) => {
   if (isMachineProjectType(type)) return MACHINE_PROJECT_SPACE_INFO_FIELDS
   if (type === PROJECT_CATEGORY_TECH) return TECHNICAL_PROJECT_SPACE_FIELDS
@@ -111,13 +119,26 @@ export const getProjectInfoSpaceFields = (type: string) => {
 }
 
 export const getProjectInfoModalGroups = (type: string) => {
-  const visibleGroupKeys = new Set(getProjectInfoModalFields(type).map(field => field.group))
+  const visibleGroupKeys = new Set(getProjectInfoGroupedFields(type).map(field => field.group))
   return getProjectInfoGroups(type).filter(group => visibleGroupKeys.has(group.key))
 }
 
 export const getDefaultActiveProjectInfoGroups = (type: string): string[] => {
   const firstGroup = getProjectInfoModalGroups(type)[0]
   return firstGroup ? [firstGroup.key] : []
+}
+
+export const resolveRestoredActiveProjectInfoGroups = (
+  type: string,
+  restoredGroups: readonly string[],
+  draftSchemaVersion: number,
+  currentSchemaVersion: number,
+): string[] => {
+  const validKeys = new Set<string>(getProjectInfoModalGroups(type).map(group => group.key))
+  const restored = [...new Set(restoredGroups.filter(group => validKeys.has(group)))]
+  return draftSchemaVersion < currentSchemaVersion && restored.length === 0
+    ? getDefaultActiveProjectInfoGroups(type)
+    : restored
 }
 
 const MACHINE_PROJECT_MODAL_CREATE_ONLY_STORAGE_FIELDS = MACHINE_PROJECT_CREATE_FIELDS

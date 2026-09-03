@@ -38,7 +38,7 @@ const createMemoryStorage = () => {
   }
 }
 
-assert.equal(PROJECT_CREATION_DRAFT_SCHEMA_VERSION, 1)
+assert.equal(PROJECT_CREATION_DRAFT_SCHEMA_VERSION, 2, 'grouped draft schema must distinguish legacy flat activeGroups state')
 assert.ok(defaultProjectCreationDraftRepository)
 
 const storage = createMemoryStorage()
@@ -50,6 +50,7 @@ const draft = {
   activeGroups: ['basic'],
   updatedAt: '2026-07-20T00:00:00.000Z',
 }
+
 const liSiDraft = {
   schemaVersion: PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
   ownerId: '李四',
@@ -73,6 +74,12 @@ assert.equal(storage.keys().length, 2)
 
 const storedKey = storage.keys().find((key) => key.includes(encodeURIComponent('张三')))
 assert.ok(storedKey, 'storage key should encode the owner ID')
+storage.setItem(storedKey, JSON.stringify({ ...draft, schemaVersion: 1, activeGroups: [] }))
+assert.deepEqual(
+  await repository.get('张三'),
+  { ...draft, schemaVersion: 1, activeGroups: [] },
+  'v1 draft values remain readable so the modal can upgrade legacy group state',
+)
 storage.setItem(storedKey, '{malformed')
 assert.equal(await repository.get('张三'), null, 'malformed JSON should be ignored')
 
@@ -214,10 +221,10 @@ assertOrdered(requestCloseBlock, [
   "draftReadStatusRef.current === 'loading'",
   "startCreateDraftSession(draftOwnerId || '')",
   "draftReadStatusRef.current !== 'ready'",
-  'onCancel()',
+  'closeProjectInfoModal()',
 ], 'close must invalidate the prior session and bypass persistence after read failure')
 assert.match(requestCloseBlock, /if \(draftReadStatusRef\.current === 'loading' \|\| draftReadStatusRef\.current === 'idle'\) \{\s*return\s*\}/)
-assert.match(unreadCloseBlock, /onCancel\(\)/)
+assert.match(unreadCloseBlock, /closeProjectInfoModal\(\)/)
 assert.doesNotMatch(unreadCloseBlock, /persistCreateDraft|draftRepository\.(save|clear)/)
 assertOrdered(clearAndResetBlock, [
   'startCreateDraftSession(draftOwnerId)',
@@ -237,13 +244,13 @@ assertOrdered(handleSubmitBlock, [
   'await clearSubmittedCreateDraft(submitSession)',
   'isCurrentCreateDraftSession(submitSession)',
   'resetCreateForm()',
-  'onCancel()',
+  'closeProjectInfoModal()',
   'onAfterCreate?.()',
 ], 'submit must capture its session before submit and gate post-clear UI changes')
 const postSubmitBlock = handleSubmitBlock.slice(handleSubmitBlock.indexOf('await onSubmit('))
 assert.doesNotMatch(postSubmitBlock, /startCreateDraftSession/)
 assert.match(postSubmitBlock, /catch\s*{\s*messageApi\.error\('项目草稿清空失败'\)/, 'draft clear failure must use the mounted App message instance without bypassing the session guard')
-assert.match(postSubmitBlock, /if \(!isCurrentCreateDraftSession\(submitSession\)\) return[\s\S]*if \(!draftClearFailed\) \{[\s\S]*resetCreateForm\(\)[\s\S]*onCancel\(\)/)
+assert.match(postSubmitBlock, /if \(!isCurrentCreateDraftSession\(submitSession\)\) return[\s\S]*if \(!draftClearFailed\) \{[\s\S]*resetCreateForm\(\)[\s\S]*closeProjectInfoModal\(\)/)
 assert.match(handleSubmitBlock, /finally \{[\s\S]*setSubmitting\(false\)/)
 assert.doesNotMatch(addProjectSubmitBlock, /onCancel\(\)/)
 assert.doesNotMatch(addProjectSubmitBlock, /setActiveModule|setProjectSpaceModule|项目创建成功/)

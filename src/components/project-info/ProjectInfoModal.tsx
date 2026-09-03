@@ -30,9 +30,11 @@ import {
   deriveTosProjectAggregates,
   getDefaultActiveProjectInfoGroups,
   getProjectInfoCreateFields,
+  getProjectInfoGroupedFields,
   getProjectInfoModalFields,
   getProjectInfoModalGroups,
   getProjectInfoModalSubmitValues,
+  resolveRestoredActiveProjectInfoGroups,
   resolveProjectCreationDraftSourceStatus,
   resolveProjectHealthStatus,
   resolveTechnicalProjectSecondaryCategory,
@@ -236,6 +238,10 @@ export default function ProjectInfoModal({
   const technicalCreateFields = useMemo(
     () => isTechnicalProject ? createFields : [],
     [createFields, isTechnicalProject],
+  )
+  const technicalGroupedFields = useMemo(
+    () => isTechnicalProject ? getProjectInfoGroupedFields(projectType) : [],
+    [isTechnicalProject, projectType],
   )
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
@@ -529,7 +535,12 @@ export default function ProjectInfoModal({
         } as ProjectInfoFormState)
         lastAppliedSourceRef.current = `${restoredBid}::${restoredType}`
         const modalGroupKeys = new Set<string>(getProjectInfoModalGroups(restoredType).map(group => group.key))
-        const restoredActiveGroups = draft.activeGroups.filter(groupKey => modalGroupKeys.has(groupKey))
+        const restoredActiveGroups = resolveRestoredActiveProjectInfoGroups(
+          restoredType,
+          draft.activeGroups.filter(groupKey => modalGroupKeys.has(groupKey)),
+          draft.schemaVersion,
+          PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
+        )
         activeGroupsRef.current = restoredActiveGroups
         setActiveGroups(restoredActiveGroups)
       }
@@ -908,8 +919,14 @@ export default function ProjectInfoModal({
     } catch (error) {
       const failed = error as { errorFields?: Array<{ name: Array<string | number> }> }
       const firstName = String(failed.errorFields?.[0]?.name?.[0] || '')
-      const firstField = fields.find(field => field.key === firstName)
-      if (firstField) setActiveGroups(previous => [...new Set([...previous, firstField.group])])
+      const firstField = (isTechnicalProject ? technicalCreateFields : fields).find(field => field.key === firstName)
+      if (firstField) {
+        setActiveGroups(previous => {
+          const nextActiveGroups = [...new Set([...previous, firstField.group])]
+          activeGroupsRef.current = nextActiveGroups
+          return nextActiveGroups
+        })
+      }
       if (firstName) setTimeout(() => form.scrollToField(firstName, { block: 'center' }), 0)
       return
     }
@@ -982,8 +999,16 @@ export default function ProjectInfoModal({
         const deliverableLabel = TECHNICAL_DELIVERABLE_FIELDS.find(item => item.key === field)?.label
         messageApi.error(`请检查${labels[field] || deliverableLabel || '技术项目信息'}`)
         if (field !== 'deliverable') {
+          const invalidTechnicalField = technicalGroupedFields.find(candidate => candidate.key === field)
           form.setFields([{ name: field, errors: [`请填写有效的${deliverableLabel || labels[field] || '字段值'}`] }])
-          form.scrollToField(field, { block: 'center' })
+          if (invalidTechnicalField) {
+            setActiveGroups(previous => {
+              const nextActiveGroups = [...new Set([...previous, invalidTechnicalField.group])]
+              activeGroupsRef.current = nextActiveGroups
+              return nextActiveGroups
+            })
+          }
+          setTimeout(() => form.scrollToField(field, { block: 'center' }), 0)
         }
         return
       }
@@ -1221,17 +1246,19 @@ export default function ProjectInfoModal({
           </div>
         )}
 
-        {(mode === 'edit' || (!isMachineProjectType(projectType) && !isTechnicalProject)) && (
+        {projectType && (
           <div className="pms-project-info-form-grid pms-project-info-universal">
-            {mode === 'edit' && !isTechnicalProject && (
+            {mode === 'edit' && (
               <Form.Item label="项目名" name="projectName"><Input disabled /></Form.Item>
             )}
-            {!isTechnicalProject && (
+            {isTechnicalProject ? (
+              <Form.Item label="项目分类" name="secondaryCategory"><Input disabled /></Form.Item>
+            ) : (
               <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>
                 <Select disabled options={PROJECT_TYPES.map(type => ({ label: type, value: type }))} />
               </Form.Item>
             )}
-            {mode === 'edit' && projectType === PROJECT_CATEGORY_MACHINE && (
+            {isMachineProjectType(projectType) && (
               <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
                 <Select disabled options={secondaryCategoryOptions} />
               </Form.Item>
@@ -1271,7 +1298,7 @@ export default function ProjectInfoModal({
         {isTechnicalProject && (
           <TechnicalProjectCreateFields
             form={form}
-            fields={technicalCreateFields}
+            fields={technicalGroupedFields}
             existingProjects={existingProjects}
             currentProjectId={project?.id}
             historicalDomain={mode === 'edit' ? String(project?.fieldValues?.tmg || project?.tmg || '') : undefined}

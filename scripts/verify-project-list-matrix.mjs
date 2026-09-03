@@ -5,6 +5,9 @@ import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-cont
 const root = projectRoot(import.meta.url)
 const matrix = loadTypeScriptModule(root, 'src/lib/projectListMatrix.ts')
 const projectStatus = loadTypeScriptModule(root, 'src/lib/projectStatus.ts')
+const enumStore = loadTypeScriptModule(root, 'src/stores/enums.ts')
+const enumValues = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
+const projectStore = loadTypeScriptModule(root, 'src/stores/project.ts')
 const projectSeedSource = readSource(root, 'src/data/projects.ts')
 const projectListContainerSource = readSource(root, 'src/containers/ProjectListContainer.tsx')
 
@@ -16,6 +19,60 @@ assert.equal(projectStatus.normalizeLegacyProjectStatus('整机产品项目', '�
 assert.equal(projectStatus.normalizeLegacyProjectStatus('整机产品项目', '规划中'), '待立项')
 assert.equal(projectStatus.normalizeLegacyProjectStatus('技术项目', '已迁移'), '已完成')
 assert.equal(projectStatus.normalizeLegacyProjectStatus('技术项目', '在研'), '进行中')
+for (const [type, mappings] of Object.entries({
+  整机产品项目: {
+    暂停: '已暂停', 规划中: '待立项', 筹备中: '待立项', 进行中: '在研',
+    已上市: '上市', 已完成: '转维', 维护: '转维', 维护期: '转维', 已迁移: '转维',
+  },
+  技术项目: {
+    待立项: '进行中', 待立议: '进行中', 规划中: '进行中', 筹备中: '进行中', 在研: '进行中',
+    上市: '已完成', 已上市: '已完成', 转维: '已完成', 维护: '已完成', 维护期: '已完成', EOS: '已完成', 已迁移: '已完成',
+  },
+})) {
+  for (const [legacy, active] of Object.entries(mappings)) {
+    assert.equal(projectStatus.normalizeLegacyProjectStatus(type, legacy), active, `${type} ${legacy} must migrate to ${active}`)
+  }
+}
+for (const type of ['整机产品项目', '技术项目', 'tOS版本项目', '能力建设项目']) {
+  assert.ok(
+    projectStatus.getActiveProjectStatuses(type).includes(projectStatus.normalizeLegacyProjectStatus(type, '未知旧状态')),
+    `${type} unknown persisted status must fall back into its active catalog`,
+  )
+}
+const legacyEnumRows = enumValues.createInitialEnumRows()
+legacyEnumRows['machine-project-status'] = [
+  { id: 'legacy-machine-planning', value: '规划中' },
+  { id: 'legacy-machine-paused', value: '暂停' },
+]
+legacyEnumRows['technical-project-status'] = [{ id: 'legacy-tech-migrated', value: '已迁移' }]
+legacyEnumRows['tos-capability-project-status'] = [{ id: 'legacy-tos-cancelled', value: '已取消' }]
+const migratedEnumRows = enumStore.migrateEnumState({ rowsByType: legacyEnumRows }, 3).rowsByType
+for (const [enumType, projectType] of [
+  ['machine-project-status', '整机产品项目'],
+  ['technical-project-status', '技术项目'],
+  ['tos-capability-project-status', 'tOS版本项目'],
+]) {
+  assert.deepEqual(
+    migratedEnumRows[enumType].map(row => row.value),
+    projectStatus.getActiveProjectStatuses(projectType),
+    `v3 ${enumType} cache must migrate to the exact active catalog`,
+  )
+  assert.equal(new Set(migratedEnumRows[enumType].map(row => row.id)).size, migratedEnumRows[enumType].length, `${enumType} migrated ids stay unique`)
+}
+const legacyProjectStatuses = [
+  ['machine-maintenance', '整机产品项目', '维护'],
+  ['machine-complete', '整机产品项目', '已完成'],
+  ['machine-unknown', '整机产品项目', '未知旧状态'],
+  ['tech-proposed', '技术项目', '待立议'],
+  ['tech-migrated', '技术项目', '已迁移'],
+  ['tech-unknown', '技术项目', '未知旧状态'],
+  ['tos-cancelled', 'tOS版本项目', '已取消'],
+  ['capability-unknown', '能力建设项目', '未知旧状态'],
+].map(([id, type, status]) => ({ id, name: id, type, status }))
+const migratedProjects = projectStore.migrateProjectState({ projects: legacyProjectStatuses, projectListView: 'list' }, 8).projects
+for (const project of migratedProjects.filter(project => legacyProjectStatuses.some(legacy => legacy.id === project.id))) {
+  assert.ok(projectStatus.getActiveProjectStatuses(project.type).includes(project.status), `${project.id} must migrate into its active catalog`)
+}
 assert.match(projectListContainerSource, /useSingleEnumOptions\(\s*statusEnumType,\s*\[\]/)
 for (const retiredStatus of ["status: '规划中'", "status: '筹备中'", "status: '已迁移'"]) {
   assert.doesNotMatch(projectSeedSource, new RegExp(retiredStatus), `project mocks must not keep retired status ${retiredStatus}`)

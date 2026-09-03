@@ -80,7 +80,7 @@ assert.equal(resolveConfiguredProjectStatus({
   submittedStatus: '历史技术状态',
   mode: 'edit',
   originalStatus: '历史技术状态',
-}), '历史技术状态', 'technical edit preserves an unchanged retired status snapshot')
+}), '', 'technical edit rejects an unchanged retired status snapshot')
 assert.equal(typeof buildInitialProjectStatusPatch, 'function', 'source status initialization helper must exist')
 assert.equal(JSON.stringify(buildInitialProjectStatusPatch({
   initialize: true,

@@ -404,7 +404,7 @@ assert.deepEqual(Object.keys(partialized), ['rowsByType'], 'only rowsByType is p
 assert.notEqual(partialized.rowsByType, compatibilityFixture.getState().rowsByType, 'persisted rows are deep-cloned')
 partialized.rowsByType['roadmap-tos'][0].value = 'mutated-copy'
 assert.equal(compatibilityFixture.getRows('roadmap-tos')[0].value, '16.0', 'mutating a persistence snapshot cannot mutate store memory')
-assert.equal(enumStore.useEnumStore.persist.getOptions().version, 3, 'persist middleware exposes version 3 through its runtime options')
+assert.equal(enumStore.useEnumStore.persist.getOptions().version, 4, 'persist middleware exposes the active-status cleanup version through its runtime options')
 const previousWindow = globalThis.window
 const officialPersistStorage = enumStore.useEnumStore.persist.getOptions().storage
 try {

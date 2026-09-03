@@ -24,19 +24,60 @@ export function normalizeLegacyProjectStatus(projectType: string, status: string
   const value = status.trim()
   if (!value) return value
   if (isMachineStatusProjectType(projectType)) {
+    if (ACTIVE_PROJECT_STATUSES.machine.includes(value as typeof ACTIVE_PROJECT_STATUSES.machine[number])) return value
     if (value === '暂停') return '已暂停'
-    if (value === '规划中' || value === '筹备中') return '待立项'
-    return value
+    if (['规划中', '筹备中', '待立议', '待验'].includes(value)) return '待立项'
+    if (value === '进行中') return '在研'
+    if (value === '已上市') return '上市'
+    if (['已完成', '维护', '维护期', '已迁移'].includes(value)) return '转维'
+    return ACTIVE_PROJECT_STATUSES.machine[0]
   }
   if (projectType === '技术项目') {
-    if (value === '在研' || value === '筹备中') return '进行中'
-    if (value === '已迁移' || value === 'EOS') return '已完成'
-    return value
+    if (ACTIVE_PROJECT_STATUSES.technical.includes(value as typeof ACTIVE_PROJECT_STATUSES.technical[number])) return value
+    if (['待立项', '待立议', '规划中', '筹备中', '在研', '待验'].includes(value)) return '进行中'
+    if (['上市', '已上市', '转维', '维护', '维护期', 'EOS', '已迁移'].includes(value)) return '已完成'
+    return ACTIVE_PROJECT_STATUSES.technical[0]
   }
   if (projectType === 'tOS版本项目' || projectType === '能力建设项目') {
+    if (ACTIVE_PROJECT_STATUSES.tos.includes(value as typeof ACTIVE_PROJECT_STATUSES.tos[number])) return value
     return ['已完成', '已迁移', 'EOS'].includes(value) ? '已完成' : '在研'
   }
   return value
+}
+
+type ProjectStatusEnumRow = { id: string; value: string }
+
+export function normalizeProjectStatusEnumRows<T extends ProjectStatusEnumRow>(
+  projectType: string,
+  rows: readonly T[],
+  fallbackRows: readonly T[],
+): T[] {
+  const activeValues = getActiveProjectStatuses(projectType)
+  const candidates = rows.map((row, index) => ({
+    row,
+    index,
+    value: normalizeLegacyProjectStatus(projectType, row.value),
+  }))
+  const claimedIndexes = new Set<number>()
+  const claimedIds = new Set<string>()
+
+  return activeValues.map((value, activeIndex) => {
+    const candidate = candidates.find(item => item.value === value && !claimedIndexes.has(item.index))
+    if (candidate) claimedIndexes.add(candidate.index)
+    const fallback = fallbackRows.find(row => row.value === value)
+    const source = candidate?.row || fallback || ({ id: '', value } as T)
+    let id = String(source.id || '').trim()
+    if (!id || claimedIds.has(id)) {
+      let suffix = activeIndex + 1
+      id = `migrated-project-status-${suffix}`
+      while (claimedIds.has(id)) {
+        suffix += 1
+        id = `migrated-project-status-${suffix}`
+      }
+    }
+    claimedIds.add(id)
+    return { ...source, id, value } as T
+  })
 }
 
 export function getProjectStatusEnumType(category: string): SingleEnumTypeKey {
@@ -95,10 +136,8 @@ export const resolveConfiguredProjectStatus = ({
   const submitted = submittedStatus.trim()
   if (submitted) {
     if (liveValues.includes(submitted)) return submitted
-    if (mode === 'edit' && submitted === originalStatus.trim()) return submitted
     return ''
   }
-  if (mode === 'edit' && originalStatus.trim()) return originalStatus.trim()
   return ''
 }
 

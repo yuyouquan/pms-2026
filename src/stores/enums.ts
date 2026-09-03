@@ -6,6 +6,7 @@ import {
   isEnumTypeKey,
   validateAndNormalizeEnumRow,
 } from '@/lib/enumValues'
+import { normalizeProjectStatusEnumRows } from '@/lib/projectStatus'
 import {
   ENUM_TYPE_KEYS,
   type EnumActionResult,
@@ -36,7 +37,7 @@ export type EnumStore = EnumState & EnumActions
 export type PersistedEnumState = Pick<EnumState, 'rowsByType'>
 
 export const ENUM_STORAGE_KEY = 'pms-enum-values'
-const ENUM_STORE_VERSION = 3
+const ENUM_STORE_VERSION = 4
 
 interface SynchronousStateStorage {
   getItem: (name: string) => string | null
@@ -191,7 +192,30 @@ function sanitizeV2State(persistedState: unknown): PersistedEnumState {
 }
 
 export function migrateEnumState(persistedState: unknown, fromVersion: number): PersistedEnumState {
-  return fromVersion >= 2 ? sanitizeV2State(persistedState) : migrateLegacyState(persistedState)
+  const migrated = fromVersion >= 2 ? sanitizeV2State(persistedState) : migrateLegacyState(persistedState)
+  if (fromVersion >= ENUM_STORE_VERSION) return migrated
+
+  const seeds = createInitialEnumRows()
+  return {
+    rowsByType: {
+      ...migrated.rowsByType,
+      'machine-project-status': normalizeProjectStatusEnumRows(
+        '整机产品项目',
+        migrated.rowsByType['machine-project-status'],
+        seeds['machine-project-status'],
+      ),
+      'technical-project-status': normalizeProjectStatusEnumRows(
+        '技术项目',
+        migrated.rowsByType['technical-project-status'],
+        seeds['technical-project-status'],
+      ),
+      'tos-capability-project-status': normalizeProjectStatusEnumRows(
+        'tOS版本项目',
+        migrated.rowsByType['tos-capability-project-status'],
+        seeds['tos-capability-project-status'],
+      ),
+    },
+  }
 }
 
 export function partializeEnumState(state: Pick<EnumState, 'rowsByType'>): PersistedEnumState {

@@ -354,6 +354,26 @@ assert.match(
 assert.match(modalSource, /!field\.visibleWhen \|\| field\.visibleWhen\(watchedValues\)/, 'group counts and fields include only currently visible conditional fields')
 assert.doesNotMatch(modalSource, /machineCreateFields/, 'machine fields must not bypass the grouped renderer')
 assert.match(modalSource, /getDefaultActiveProjectInfoGroups/, 'fresh create and edit sessions open only the first configured group')
+assert.match(modalSource, /resolveRestoredActiveProjectInfoGroups/, 'legacy draft group state uses an explicit schema-aware upgrade path')
+assert.deepEqual(
+  projectInfoRules.resolveRestoredActiveProjectInfoGroups('技术项目', [], 1, 2),
+  ['basic'],
+  'legacy flat technical drafts open the first new group after upgrade',
+)
+assert.deepEqual(
+  projectInfoRules.resolveRestoredActiveProjectInfoGroups('技术项目', [], 2, 2),
+  [],
+  'current drafts preserve an intentional fully-collapsed state',
+)
+assert.deepEqual(
+  projectInfoRules.getProjectInfoGroupedFields('技术项目').map(field => field.key),
+  technicalCreateKeys.filter(key => !['secondaryCategory', 'projectName'].includes(key)),
+  'technical common source fields stay outside the business groups without duplication',
+)
+assert.match(modalSource, /label="项目分类" name="secondaryCategory"[\s\S]{0,120}<Input disabled/, 'technical project category renders in the common top area')
+assert.match(modalSource, /mode === 'edit' && \(\s*<Form\.Item label="项目名" name="projectName"/, 'technical edit project name renders in the common top area')
+assert.match(modalSource, /fields=\{technicalGroupedFields\}/, 'technical Collapse receives only grouped fields')
+assert.match(modalSource, /invalidTechnicalField[\s\S]{0,260}setActiveGroups/, 'technical semantic validation expands the failing field group')
 assert.match(modalSource, /data-project-create-field=\{field\.key\}/, 'rendered create fields must expose their source key in the live DOM')
 assert.doesNotMatch(
   modalSource,
@@ -373,8 +393,8 @@ assert.match(
 assert.doesNotMatch(modalSource, /groupFields = fields\.filter\([\s\S]{0,180}!field\.readOnly/, 'read-only snapshots stay visible inside their group')
 assert.match(
   modalSource,
-  /fields=\{technicalCreateFields\}/,
-  'the technical form must receive the same ordered create projection',
+  /fields=\{technicalGroupedFields\}/,
+  'the technical form must receive the ordered grouped projection without common top fields',
 )
 assert.match(
   technicalCreateSource,
