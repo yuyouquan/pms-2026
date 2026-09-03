@@ -11,7 +11,56 @@ import type {
   RoadmapValidationErrors,
   TosVersionConfig,
 } from '@/types/roadmap'
+import type { ChipMappingRow } from '@/types/enums'
 import { formatTosSnapshot, normalizeTosSnapshot } from '@/lib/enumConsumers'
+
+const LEGACY_PLATFORM_PREFIX = '历史平台：'
+const LEGACY_PLATFORM_SUFFIX = '（待重选芯片编码）'
+
+export function isUnresolvedLegacyChipCode(value: unknown): boolean {
+  return typeof value === 'string'
+    && value.startsWith(LEGACY_PLATFORM_PREFIX)
+    && value.endsWith(LEGACY_PLATFORM_SUFFIX)
+}
+
+function unwrapLegacyPlatform(value: string): string {
+  return isUnresolvedLegacyChipCode(value)
+    ? value.slice(LEGACY_PLATFORM_PREFIX.length, -LEGACY_PLATFORM_SUFFIX.length).trim()
+    : value.trim()
+}
+
+export function formatUnresolvedLegacyChipCode(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) return ''
+  return `${LEGACY_PLATFORM_PREFIX}${value.trim()}${LEGACY_PLATFORM_SUFFIX}`
+}
+
+export function resolveLegacyRoadmapPlatform(
+  value: unknown,
+  mappings: readonly ChipMappingRow[],
+): string {
+  if (typeof value !== 'string' || !value.trim()) return ''
+  const snapshot = unwrapLegacyPlatform(value)
+  const normalizedSnapshot = snapshot.toLocaleUpperCase('en-US')
+  const matchingCodes = new Set(mappings.flatMap(mapping => {
+    const matches = [mapping.chipCode, mapping.chipModel, mapping.chipPlatform]
+      .some(candidate => candidate.trim().toLocaleUpperCase('en-US') === normalizedSnapshot)
+    const chipCode = mapping.chipCode.trim()
+    return matches && chipCode ? [chipCode] : []
+  }))
+  return matchingCodes.size === 1
+    ? [...matchingCodes][0]
+    : formatUnresolvedLegacyChipCode(snapshot)
+}
+
+export function replayDeferredRoadmapChipCode(
+  value: unknown,
+  mappings: readonly ChipMappingRow[],
+): string {
+  if (typeof value !== 'string') return ''
+  return isUnresolvedLegacyChipCode(value)
+    ? resolveLegacyRoadmapPlatform(value, mappings)
+    : value
+}
 
 export const PRODUCT_LINES_BY_BRAND = {
   TECNO: ['PHANTOM', 'CAMON', 'POVA', 'SPARK', 'POP'],

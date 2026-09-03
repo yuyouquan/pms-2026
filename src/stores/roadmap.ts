@@ -11,7 +11,6 @@ import {
   DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
   DEFAULT_ROADMAP_VISIBLE_COLUMNS,
-  ensureRoadmapLockedColumns,
   getRoadmapQuickFilterValue,
   ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   normalizeRoadmapColumnSettings,
@@ -34,6 +33,8 @@ import {
   normalizeRoadmapTosReference,
   normalizeRoadmapTosValue,
   normalizeTosVersionName,
+  replayDeferredRoadmapChipCode,
+  resolveLegacyRoadmapPlatform,
   validatePlannedProject,
 } from '@/lib/roadmapValidation'
 import {
@@ -56,6 +57,7 @@ import {
   type TosVersionConfig,
 } from '@/types/roadmap'
 import { useEnumStore } from '@/stores/enums'
+import type { ChipMappingRow } from '@/types/enums'
 
 const INITIAL_TIMESTAMP = '2026-01-01T00:00:00.000Z'
 const ROADMAP_STORAGE_KEY = 'pms-project-roadmap'
@@ -220,7 +222,7 @@ export function createInitialPlannedProjects(
     productSeries: 'NOTE 60',
     marketName: 'NOTE 60 Pro',
     productType: '新品',
-    chipCode: 'MT6877',
+    chipCode: 'D8400',
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-10-15',
@@ -259,7 +261,7 @@ export function createInitialRoadmapChangeLogs(
     productSeries: 'CAMON 50',
     marketName: 'NOTE 50',
     productType: '新品',
-    chipCode: 'MT6877',
+    chipCode: 'D8400',
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-05-15',
@@ -406,6 +408,14 @@ function preserveKnownColumnOrder(value: unknown): RoadmapColumnKey[] | undefine
   return order
 }
 
+function preserveRequiredVisibleColumns(
+  columns: readonly RoadmapColumnKey[],
+  required: readonly RoadmapColumnKey[],
+): RoadmapColumnKey[] {
+  const missingRequired = required.filter(key => !columns.includes(key))
+  return [...missingRequired, ...columns]
+}
+
 function migrateTosVersions(value: unknown): TosVersionConfig[] | null {
   if (!Array.isArray(value)) return null
   const versionsByKey = new Map<string, TosVersionConfig>()
@@ -494,7 +504,11 @@ function toProjectFields(input: PlannedRoadmapProjectMutationInput): RoadmapProj
   }
 }
 
-function migratePlannedProjects(value: unknown, versions: readonly TosVersionConfig[]): PlannedRoadmapProject[] | null {
+function migratePlannedProjects(
+  value: unknown,
+  versions: readonly TosVersionConfig[],
+  chipMappings: readonly ChipMappingRow[],
+): PlannedRoadmapProject[] | null {
   if (!Array.isArray(value)) return null
   const projects: PlannedRoadmapProject[] = []
   const usedIds = new Set<string>()
@@ -515,8 +529,8 @@ function migratePlannedProjects(value: unknown, versions: readonly TosVersionCon
       productType,
       firstSaleTosVersionId: tosVersionId,
       chipCode: typeof entry.chipCode === 'string' && entry.chipCode.trim()
-        ? entry.chipCode
-        : entry.platform,
+        ? replayDeferredRoadmapChipCode(entry.chipCode, chipMappings)
+        : resolveLegacyRoadmapPlatform(entry.platform, chipMappings),
       remark: typeof entry.remark === 'string' ? entry.remark : '',
       actor: typeof entry.updatedBy === 'string' ? entry.updatedBy : '系统',
     } as PlannedRoadmapProjectMutationInput
@@ -570,7 +584,7 @@ function isValidChangeLog(value: unknown): value is RoadmapChangeLog {
   return value.snapshot === undefined || hasValidSnapshot
 }
 
-function migrateChangeLogs(value: unknown): RoadmapChangeLog[] | null {
+function migrateChangeLogs(value: unknown, chipMappings: readonly ChipMappingRow[]): RoadmapChangeLog[] | null {
   if (!Array.isArray(value)) return null
   const logs: RoadmapChangeLog[] = []
   const usedIds = new Set<string>()
@@ -586,15 +600,25 @@ function migrateChangeLogs(value: unknown): RoadmapChangeLog[] | null {
           return [{
             ...change,
             field: change.field === 'platform' ? 'chipCode' : change.field,
+            ...(change.field === 'platform' ? {
+              before: resolveLegacyRoadmapPlatform(change.before, chipMappings),
+              after: resolveLegacyRoadmapPlatform(change.after, chipMappings),
+            } : change.field === 'chipCode' ? {
+              before: replayDeferredRoadmapChipCode(change.before, chipMappings),
+              after: replayDeferredRoadmapChipCode(change.after, chipMappings),
+            } : {}),
           }]
         })
       : entry.changes
     const migratedSnapshot = isRecord(entry.snapshot)
       ? {
           ...Object.fromEntries(Object.entries(entry.snapshot).filter(([field]) => field !== 'platform')),
+          ...(Object.prototype.hasOwnProperty.call(entry.snapshot, 'chipCode')
+            ? { chipCode: replayDeferredRoadmapChipCode(entry.snapshot.chipCode, chipMappings) }
+            : {}),
           ...(!Object.prototype.hasOwnProperty.call(entry.snapshot, 'chipCode')
             && Object.prototype.hasOwnProperty.call(entry.snapshot, 'platform')
-            ? { chipCode: entry.snapshot.platform }
+            ? { chipCode: resolveLegacyRoadmapPlatform(entry.snapshot.platform, chipMappings) }
             : {}),
         }
       : entry.snapshot
@@ -628,10 +652,13 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
     ? migrateTosVersions(persistedState.tosVersions)
     : createInitialTosVersions()
   if (!tosVersions) return initial
+  const chipMappings = currentChipMappings()
   const plannedProjects = 'plannedProjects' in persistedState
-    ? migratePlannedProjects(persistedState.plannedProjects, tosVersions)
+    ? migratePlannedProjects(persistedState.plannedProjects, tosVersions, chipMappings)
     : []
-  const changeLogs = 'changeLogs' in persistedState ? migrateChangeLogs(persistedState.changeLogs) : []
+  const changeLogs = 'changeLogs' in persistedState
+    ? migrateChangeLogs(persistedState.changeLogs, chipMappings)
+    : []
   if (!plannedProjects || !changeLogs) return initial
 
   const persistedSelectedTosVersionId = resolveMigratedTosId(
@@ -639,7 +666,7 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
     tosVersions,
   )
   const viewMode = persistedState.viewMode === 'evolution' ? 'evolution' : 'table'
-  let filters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions)
+  let filters = sanitizeRoadmapFilterConditions(persistedState.filters, tosVersions, chipMappings)
   const tosCondition = filters.find(condition => condition.field === 'firstSaleTosVersionId')
   const selectedTosVersionId = tosCondition?.operator === 'equals'
     && typeof tosCondition.value === 'string'
@@ -687,7 +714,7 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
     : JSON.stringify(legacyVisibleColumns) === JSON.stringify(DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS)
       ? [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
       : legacyVisibleColumns
-  let evolutionVisibleColumns = ensureRoadmapLockedColumns(
+  let evolutionVisibleColumns = preserveRequiredVisibleColumns(
     migratedEvolutionVisibleColumns,
     ROADMAP_EVOLUTION_LOCKED_COLUMNS,
   )
@@ -695,19 +722,15 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
     evolutionVisibleColumns = [...DEFAULT_ROADMAP_EVOLUTION_VISIBLE_COLUMNS]
   }
   const visibleColumnsByView = {
-    table: normalizeRoadmapColumnSettings('table', {
-      order: [],
-      visible: tableVisibleColumns,
-    }).visible,
-    evolution: normalizeRoadmapColumnSettings('evolution', {
-      order: [],
-      visible: evolutionVisibleColumns,
-    }).visible,
+    table: preserveRequiredVisibleColumns(tableVisibleColumns, ['firstSaleTosVersionId']),
+    evolution: evolutionVisibleColumns,
   }
   const persistedOrderByView = isRecord(persistedState.columnOrderByView)
     ? persistedState.columnOrderByView
     : null
   const legacyColumnOrder = preserveKnownColumnOrder(persistedState.columnOrder)
+  const persistedTableOrder = preserveKnownColumnOrder(persistedOrderByView?.table)
+  const persistedEvolutionOrder = preserveKnownColumnOrder(persistedOrderByView?.evolution)
   const legacyVisibleColumnOrder = preserveKnownColumnOrder(persistedState.visibleColumns)
   const tableLegacyVisibleOrder = hasPersistedTableColumns
     ? preserveKnownColumnOrder(persistedColumnsByView?.table)
@@ -716,19 +739,18 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
     ? preserveKnownColumnOrder(persistedColumnsByView?.evolution)
     : legacyVisibleColumnOrder
   const tableSettings = normalizeRoadmapColumnSettings('table', {
-    order: Array.isArray(persistedOrderByView?.table)
-      ? persistedOrderByView.table as RoadmapColumnKey[]
+    order: persistedTableOrder
+      ? persistedTableOrder
       : viewMode === 'table' && legacyColumnOrder
         ? legacyColumnOrder
         : tableLegacyVisibleOrder,
     visible: visibleColumnsByView.table,
   })
-  const persistedEvolutionOrder = Array.isArray(persistedOrderByView?.evolution)
-    ? persistedOrderByView.evolution as RoadmapColumnKey[]
-    : viewMode === 'evolution' && legacyColumnOrder
+  const requestedEvolutionOrder = persistedEvolutionOrder
+    ?? (viewMode === 'evolution' && legacyColumnOrder
       ? legacyColumnOrder
-      : evolutionLegacyVisibleOrder
-  const preservedEvolutionOrder = preserveKnownColumnOrder(persistedEvolutionOrder)
+      : evolutionLegacyVisibleOrder)
+  const preservedEvolutionOrder = preserveKnownColumnOrder(requestedEvolutionOrder)
     ?? [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER]
   const completeEvolutionOrder = normalizeRoadmapColumnSettings('evolution', {
     order: preservedEvolutionOrder,
@@ -743,11 +765,7 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
   const evolutionSettings = normalizeRoadmapColumnSettings('evolution', {
     order: fromVersion !== null && fromVersion < 5
       ? upgradedEvolutionOrder
-      : Array.isArray(persistedOrderByView?.evolution)
-      ? persistedOrderByView.evolution as RoadmapColumnKey[]
-      : viewMode === 'evolution' && legacyColumnOrder
-        ? legacyColumnOrder
-        : evolutionLegacyVisibleOrder,
+      : requestedEvolutionOrder,
     visible: visibleColumnsByView.evolution,
   })
   const columnOrderByView = {
@@ -897,9 +915,13 @@ function currentFirstSaleTosEnumValues(): string[] {
 }
 
 function currentChipCodeEnumValues(): string[] {
-  return useEnumStore.getState().rowsByType['chip-mapping']
+  return currentChipMappings()
     .map(row => row.chipCode.trim())
     .filter(Boolean)
+}
+
+function currentChipMappings(): ChipMappingRow[] {
+  return useEnumStore.getState().rowsByType['chip-mapping']
 }
 
 function validateChipCodeSelection(
@@ -907,11 +929,16 @@ function validateChipCodeSelection(
   existingChipCode?: string,
 ): Record<string, string> {
   const activeChipCodes = currentChipCodeEnumValues()
-  if (!activeChipCodes.length) return { chipCode: '请先在配置中心维护芯片编码' }
-  const allowedChipCodes = new Set(activeChipCodes)
+  const normalizedChipCode = typeof chipCode === 'string' ? chipCode.trim() : ''
   const historicalChipCode = existingChipCode?.trim()
+  if (!activeChipCodes.length) {
+    return historicalChipCode && normalizedChipCode === historicalChipCode
+      ? {}
+      : { chipCode: '请先在配置中心维护芯片编码' }
+  }
+  const allowedChipCodes = new Set(activeChipCodes)
   if (historicalChipCode) allowedChipCodes.add(historicalChipCode)
-  return allowedChipCodes.has(chipCode)
+  return allowedChipCodes.has(normalizedChipCode)
     ? {}
     : { chipCode: '请选择配置中心中有效的芯片编码' }
 }

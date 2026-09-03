@@ -1772,7 +1772,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     { id: 'tos-16-3', name: 'tOS 16.3', major: 16, minor: 3, targets: [], createdAt: '', updatedAt: '' },
   ]
   const normal = adapter.adaptNormalProject({
-    id: 'normal-1', name: 'legacy-name', type: '整机-手机', status: '在研',
+    id: 'normal-1', name: 'X6877-D8400_H991', type: '整机-手机', status: '在研',
     androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', currentTosVersionId: 'tos-16-3', tosVersion: 'tOS16.3',
     projectCode: ' X6877 ', model: 'legacy-code', brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 60', marketName: 'SPARK 60',
     productType: '升级', platform: 'explicit-platform', cpu: 'legacy-cpu', startRam: '8GB', memory: '6GB+128GB', versionType: 'Full',
@@ -1786,7 +1786,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     || normal.displayName !== 'X6877(Android 16)'
     || normal.firstSaleTosVersionId !== '16.3'
     || normal.productType !== '老品'
-    || normal.chipCode !== 'explicit-platform'
+    || normal.chipCode !== 'D8400'
     || normal.startRam !== '8GB'
     || normal.developMode !== '外研'
     || normal.remark !== 'explicit remark'
@@ -3909,7 +3909,32 @@ registerAssertion('tOS roadmap normalizes the chip-code domain and migrates lega
   const types = loadTypeScriptModule(path.join(root, 'src/types/roadmap.ts'))
   const audit = loadTypeScriptModule(path.join(root, 'src/lib/roadmapAudit.ts'))
   const adapter = loadTypeScriptModule(path.join(root, 'src/lib/roadmapProjectAdapter.ts'))
-  const storeModule = loadIsolatedRoadmapStore()
+  const roadmapStoreSource = fs.readFileSync(path.join(root, 'src/stores/roadmap.ts'), 'utf8')
+  const roadmapModuleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
+  const loader = createTypeScriptModuleLoader()
+  const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
+  const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
+  const chipMappings = [
+    { id: 'chip-d8400', chipCode: 'D8400', chipModel: 'MT6877', chipPlatform: 'MTK' },
+    { id: 'chip-d8700', chipCode: 'D8700', chipModel: 'MT6888', chipPlatform: 'MTK' },
+  ]
+  const previousWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+  }
+  try {
+    enumModule.useEnumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'chip-mapping': chipMappings },
+    }))
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+
+  if (!roadmapModuleSource.includes('useRoadmapStore.persist.rehydrate()')
+    || !roadmapModuleSource.includes('enumHasHydrated')) {
+    throw new Error('roadmap persistence does not replay migration after chip configuration hydration')
+  }
 
   const chipColumn = types.ROADMAP_COLUMNS.find(column => column.key === 'chipCode')
   if (chipColumn?.label !== '芯片编码' || types.ROADMAP_COLUMNS.some(column => column.key === 'platform')) {
@@ -3926,54 +3951,111 @@ registerAssertion('tOS roadmap normalizes the chip-code domain and migrates lega
     periodStartDate: '', periodEndDate: '', targets: [], createdAt: '', updatedAt: '',
   }]
   const normal = adapter.adaptNormalProject({
-    id: 'normal-chip', name: 'X9000', type: '整机-手机', status: '在研',
-    androidVersion: 'Android 17', firstSaleTosVersionId: '17.2', projectCode: 'X9000',
+    id: 'normal-chip', name: 'X6877-D8400_H991', type: '整机-手机', status: '在研',
+    androidVersion: 'Android 17', firstSaleTosVersionId: '17.2', projectCode: 'X6877',
     brand: 'TECNO', productLine: 'SPARK', productSeries: 'SPARK 90', marketName: 'SPARK 90',
-    productType: '新品', platform: 'D8600', cpu: 'MT6899', chipPlatform: 'MTK', startRam: '8GB',
+    productType: '新品', platform: 'MT6877', cpu: 'MT6877', chipPlatform: 'MTK', startRam: '8GB',
     versionType: 'Full', str5Date: '2027-03-01', launchDate: '2027-04-01', developMode: '自研', remark: '',
   }, versions)
-  if (!normal || normal.chipCode !== 'D8600' || Object.prototype.hasOwnProperty.call(normal, 'platform')) {
-    throw new Error(`normal source compatibility did not normalize platform into chipCode: ${JSON.stringify(normal)}`)
+  if (!normal || normal.chipCode !== 'D8400' || Object.prototype.hasOwnProperty.call(normal, 'platform')) {
+    throw new Error(`normal source compatibility did not derive D8400 from the project identifier: ${JSON.stringify(normal)}`)
+  }
+  const noChipFallback = adapter.adaptNormalProject({
+    ...normal,
+    id: 'normal-no-chip-fallback',
+    source: undefined,
+    readOnly: undefined,
+    type: '整机-手机',
+    name: 'X9000',
+    projectCode: 'X9000',
+    platform: 'D8600',
+    cpu: 'MT6899',
+  }, versions)
+  if (!noChipFallback || noChipFallback.chipCode !== '') {
+    throw new Error(`platform/cpu were still treated as a chip code: ${JSON.stringify(noChipFallback)}`)
   }
 
   const seed = storeModule.createInitialPlannedProjects(versions)[0]
-  const legacyProject = { ...seed, platform: 'LEGACY-D9000' }
+  if (seed?.chipCode !== 'D8400') {
+    throw new Error(`initial planned-project mock is not a real chip code: ${JSON.stringify(seed)}`)
+  }
+  const legacyProject = { ...seed, platform: 'MT6877' }
   delete legacyProject.chipCode
+  const unresolvedLegacyProject = {
+    ...legacyProject,
+    id: 'planned-unresolved-platform',
+    projectCode: 'X9999',
+    displayName: 'X9999',
+    platform: 'LEGACY-D9000',
+  }
   const legacyLog = {
     id: 'legacy-chip-log', projectId: legacyProject.id, projectDisplayName: legacyProject.displayName,
     source: 'planned', action: 'create', actor: '系统', occurredAt: '2026-01-01T00:00:00.000Z',
-    tosVersionName: 'tOS17.2', changes: [], snapshot: { platform: 'LEGACY-D9000' },
+    tosVersionName: 'tOS17.2', changes: [], snapshot: { platform: 'MT6877' },
+  }
+  const unresolvedLegacyLog = {
+    ...legacyLog,
+    id: 'legacy-unresolved-chip-log',
+    projectId: unresolvedLegacyProject.id,
+    projectDisplayName: unresolvedLegacyProject.displayName,
+    snapshot: { platform: 'LEGACY-D9000' },
   }
   const migrated = storeModule.migrateRoadmapState({
     ...storeModule.partializeRoadmapState(storeModule.createInitialRoadmapState()),
     tosVersions: versions,
-    plannedProjects: [legacyProject],
-    changeLogs: [legacyLog],
-    filters: [{ id: 'legacy-platform-filter', field: 'platform', operator: 'contains', value: 'D9000' }],
-    columnOrder: ['firstSaleTosVersionId', 'platform', 'brand'],
+    plannedProjects: [legacyProject, unresolvedLegacyProject],
+    changeLogs: [legacyLog, unresolvedLegacyLog],
+    filters: [
+      { id: 'brand-first', field: 'brand', operator: 'equals', value: 'TECNO' },
+      { id: 'legacy-platform-filter', field: 'platform', operator: 'contains', value: 'MT6877' },
+    ],
+    columnOrder: ['firstSaleTosVersionId', 'brand', 'platform', 'marketName'],
     columnOrderByView: {
-      table: ['firstSaleTosVersionId', 'platform', 'brand'],
-      evolution: ['marketName', 'displayName', 'platform'],
+      table: ['firstSaleTosVersionId', 'brand', 'platform', 'marketName'],
+      evolution: ['marketName', 'platform', 'displayName'],
     },
-    visibleColumns: ['firstSaleTosVersionId', 'platform'],
+    visibleColumns: ['firstSaleTosVersionId', 'brand', 'platform', 'marketName'],
     visibleColumnsByView: {
-      table: ['firstSaleTosVersionId', 'platform'],
-      evolution: ['marketName', 'displayName', 'platform'],
+      table: ['firstSaleTosVersionId', 'brand', 'platform', 'marketName'],
+      evolution: ['marketName', 'platform', 'displayName'],
     },
     sort: { field: 'platform', direction: 'ascend' },
   }, 7)
   const migratedProject = migrated.plannedProjects[0]
-  if (migratedProject?.chipCode !== 'LEGACY-D9000'
+  const unresolvedChipCode = '历史平台：LEGACY-D9000（待重选芯片编码）'
+  if (migratedProject?.chipCode !== 'D8400'
     || Object.prototype.hasOwnProperty.call(migratedProject ?? {}, 'platform')) {
-    throw new Error(`legacy planned platform was not migrated once: ${JSON.stringify(migratedProject)}`)
+    throw new Error(`mapped legacy platform was not resolved through chip configuration: ${JSON.stringify(migratedProject)}`)
   }
-  if (migrated.filters[0]?.field !== 'chipCode'
-    || !migrated.columnOrderByView.table.includes('chipCode')
+  if (migrated.plannedProjects[1]?.chipCode !== unresolvedChipCode) {
+    throw new Error(`unmapped legacy platform masqueraded as a valid chip code: ${JSON.stringify(migrated.plannedProjects[1])}`)
+  }
+  if (migrated.filters[1]?.field !== 'chipCode'
+    || JSON.stringify(migrated.filters[1]?.value) !== JSON.stringify(['D8400'])
+    || migrated.columnOrderByView.table.slice(0, 4).join(',') !== 'firstSaleTosVersionId,brand,chipCode,marketName'
+    || migrated.columnOrderByView.evolution.slice(0, 3).join(',') !== 'marketName,chipCode,displayName'
     || migrated.columnOrderByView.table.includes('platform')
+    || migrated.visibleColumnsByView.table.join(',') !== 'firstSaleTosVersionId,brand,chipCode,marketName'
+    || migrated.visibleColumnsByView.evolution.join(',') !== 'marketName,chipCode,displayName'
     || migrated.sort.field !== 'chipCode'
-    || migrated.changeLogs[0]?.snapshot?.chipCode !== 'LEGACY-D9000'
+    || migrated.changeLogs[0]?.snapshot?.chipCode !== 'D8400'
+    || migrated.changeLogs[1]?.snapshot?.chipCode !== unresolvedChipCode
     || Object.prototype.hasOwnProperty.call(migrated.changeLogs[0]?.snapshot ?? {}, 'platform')) {
     throw new Error(`legacy platform metadata was not normalized: ${JSON.stringify(migrated)}`)
+  }
+
+  const replayableMarker = '历史平台：MT6877（待重选芯片编码）'
+  const replayed = storeModule.migrateRoadmapState({
+    ...storeModule.partializeRoadmapState(storeModule.createInitialRoadmapState()),
+    tosVersions: versions,
+    plannedProjects: [{ ...legacyProject, chipCode: replayableMarker }],
+    changeLogs: [{ ...legacyLog, snapshot: { chipCode: replayableMarker } }],
+    filters: [{ id: 'replayed-chip-filter', field: 'chipCode', operator: 'equals', value: replayableMarker }],
+  }, 8)
+  if (replayed.plannedProjects[0]?.chipCode !== 'D8400'
+    || replayed.changeLogs[0]?.snapshot?.chipCode !== 'D8400'
+    || replayed.filters[0]?.value !== 'D8400') {
+    throw new Error(`deferred chip migration did not replay after configuration hydration: ${JSON.stringify(replayed)}`)
   }
 
   const normalizedSeed = {
@@ -4003,7 +4085,7 @@ registerAssertion('tOS roadmap normalizes the chip-code domain and migrates lega
   const normalizedFilters = filters.sanitizeRoadmapFilterConditions([
     { id: 'legacy-first', field: 'platform', operator: 'equals', value: 'STALE-D7000' },
     { id: 'current-second', field: 'chipCode', operator: 'equals', value: 'CURRENT-D8000' },
-  ], versions)
+  ], versions, chipMappings)
   if (normalizedFilters.length !== 1 || normalizedFilters[0].value !== 'CURRENT-D8000') {
     throw new Error(`current chip-code filter did not win over legacy platform: ${JSON.stringify(normalizedFilters)}`)
   }
@@ -4051,6 +4133,19 @@ registerAssertion('planned tOS roadmap projects require an active configured chi
     }
     const project = store.getState().plannedProjects[0]
     enumStore.setState(state => ({
+      rowsByType: { ...state.rowsByType, 'chip-mapping': [] },
+    }))
+    const noConfigHistorical = store.getState().updatePlannedProject(project.id, { ...input, remark: '只修改备注' })
+    if (!noConfigHistorical.ok) {
+      throw new Error(`unchanged historical chip code was blocked without configuration: ${JSON.stringify(noConfigHistorical)}`)
+    }
+    const noConfigReplacement = store.getState().updatePlannedProject(project.id, { ...input, chipCode: 'D9999' })
+    if (noConfigReplacement.ok
+      || noConfigReplacement.reason !== 'invalid'
+      || noConfigReplacement.errors.chipCode !== '请先在配置中心维护芯片编码') {
+      throw new Error(`chip replacement was not blocked without configuration: ${JSON.stringify(noConfigReplacement)}`)
+    }
+    enumStore.setState(state => ({
       rowsByType: {
         ...state.rowsByType,
         'chip-mapping': [{ id: 'chip-d8700', chipCode: 'D8700', chipModel: 'MT6888', chipPlatform: 'MTK' }],
@@ -4087,6 +4182,9 @@ registerAssertion('tOS roadmap UI uses searchable chip-code selection and chip-c
   }
   if (modal.includes('name="platform"') || modal.includes('label="平台"') || modal.includes('请输入平台')) {
     throw new Error('planned-project modal still exposes free-text platform')
+  }
+  if (moduleSource.includes('project.platform') || moduleSource.includes('project.cpu')) {
+    throw new Error('roadmap chip-code filter history still falls back to platform/cpu')
   }
   if (!details.includes("['芯片编码', row.chipCode]") || details.includes("['芯片平台', row.platform]")) {
     throw new Error('project details do not display chip code exclusively')

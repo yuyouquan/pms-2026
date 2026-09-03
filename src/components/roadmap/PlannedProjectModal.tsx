@@ -128,6 +128,10 @@ export default function PlannedProjectModal({
   const selectedChipOptionId = liveChipRow?.id ?? chipOptions.find(option => option.historical)?.value
   const hasActiveChipCodes = enumReady && rowsByType['chip-mapping'].some(row => Boolean(row.chipCode.trim()))
   const hasInactiveChipCode = Boolean(editingProject?.chipCode && !liveChipRow)
+  const preservesHistoricalChipCode = Boolean(
+    editingProject?.chipCode.trim()
+    && chipCode.trim() === editingProject.chipCode.trim(),
+  )
   const hasInactiveTosVersion = Boolean(tosVersionOptions.find(option => (
     option.value === editingProject?.firstSaleTosVersionId && option.disabled
   )))
@@ -218,7 +222,13 @@ export default function PlannedProjectModal({
         }
         return
       }
-      if (!enumState.rowsByType['chip-mapping'].some(row => Boolean(row.chipCode.trim()))) {
+      const submittedChipCode = String(form.getFieldValue('chipCode') ?? '').trim()
+      const preservesExistingChipCode = Boolean(
+        editingProject?.chipCode.trim()
+        && submittedChipCode === editingProject.chipCode.trim(),
+      )
+      if (!enumState.rowsByType['chip-mapping'].some(row => Boolean(row.chipCode.trim()))
+        && !preservesExistingChipCode) {
         const chipConfigMessage = '请先在配置中心维护芯片编码'
         form.setFields([{ name: 'chipCode', errors: [chipConfigMessage] }])
         message.error(chipConfigMessage)
@@ -343,7 +353,7 @@ export default function PlannedProjectModal({
                 type="primary"
                 onClick={handleSubmit}
                 loading={submitting}
-                disabled={!enumReady || !hasActiveChipCodes || duplicateExists || submitting}
+                disabled={!enumReady || (!hasActiveChipCodes && !preservesHistoricalChipCode) || duplicateExists || submitting}
               >
                 {editingProject ? '保存修改' : '创建项目'}
               </Button>
@@ -378,7 +388,9 @@ export default function PlannedProjectModal({
               type="warning"
               showIcon
               message="暂无可用芯片编码"
-              description="请先在配置中心维护芯片编码后再保存。"
+              description={preservesHistoricalChipCode
+                ? '可保留当前历史芯片编码并修改其他字段；新建或更换芯片编码前需先完善配置。'
+                : '请先在配置中心维护芯片编码后再保存。'}
             />
           ) : null}
           <Card size="small" title="项目分类与识别" style={sectionStyle}>

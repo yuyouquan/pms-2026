@@ -16,6 +16,7 @@ import {
   adaptNormalProject,
   adaptPlannedProject,
   deriveRoadmapPlanningConflicts,
+  resolveNormalProjectChipCode,
 } from '@/lib/roadmapProjectAdapter'
 import ActiveFilterConditions from '@/components/project-list/ActiveFilterConditions'
 import { useHasGlobalPermission } from '@/stores/permission'
@@ -125,12 +126,7 @@ export default function ProjectRoadmapModule({
   const configurableHistory = useMemo(() => ({
     chipCode: [
       ...plannedProjects.map(project => project.chipCode),
-      ...projects.map(project => {
-        const fieldValue = project.fieldValues?.chipCode
-        return typeof fieldValue === 'string'
-          ? fieldValue
-          : project.platform || project.cpu || ''
-      }),
+      ...projects.map(resolveNormalProjectChipCode),
     ].filter(value => Boolean(value.trim())),
     startRam: [...plannedProjects.map(project => project.startRam), ...projects.map(project => project.startRam)]
       .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
@@ -172,6 +168,13 @@ export default function ProjectRoadmapModule({
   const setSort = useRoadmapStore(state => state.setSort)
   const setSelectedConflictKey = useRoadmapStore(state => state.setSelectedConflictKey)
   const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
+  const roadmapHydrationStartedRef = useRef(false)
+
+  useEffect(() => {
+    if (!enumHasHydrated || enumHydrationError || roadmapHydrationStartedRef.current) return
+    roadmapHydrationStartedRef.current = true
+    void useRoadmapStore.persist.rehydrate()
+  }, [enumHasHydrated, enumHydrationError])
 
   const versions = useMemo<TosVersionConfig[]>(() => {
     const currentValues = enumTosOptions.map(option => normalizeRoadmapTosValue(option.value)).filter(Boolean)

@@ -15,7 +15,10 @@ import {
   formatRoadmapTosValue,
   normalizeRoadmapTosReference,
   PRODUCT_LINES_BY_BRAND,
+  replayDeferredRoadmapChipCode,
+  resolveLegacyRoadmapPlatform,
 } from '@/lib/roadmapValidation'
+import type { ChipMappingRow } from '@/types/enums'
 import {
   ROADMAP_COLUMNS,
   type RoadmapBrand,
@@ -268,6 +271,7 @@ function normalizeEnumFilterValue(
 export function sanitizeRoadmapFilterConditions(
   value: unknown,
   versions: readonly TosVersionConfig[],
+  chipMappings: readonly ChipMappingRow[] = [],
 ): RoadmapFilterCondition[] {
   if (!Array.isArray(value)) return []
   const definitions = buildRoadmapFilterFieldDefinitions(versions)
@@ -302,7 +306,10 @@ export function sanitizeRoadmapFilterConditions(
         const rawValues = Array.isArray(candidate.value) ? candidate.value : [candidate.value]
         const enumValues = rawValues.flatMap(rawValue => {
           if (typeof rawValue !== 'string' || !rawValue.trim()) return []
-          const enumValue = normalizeEnumFilterValue(field, rawValue.trim(), definition, versions)
+          const migratedValue = candidate.field === 'platform'
+            ? resolveLegacyRoadmapPlatform(rawValue, chipMappings)
+            : replayDeferredRoadmapChipCode(rawValue.trim(), chipMappings)
+          const enumValue = normalizeEnumFilterValue(field, migratedValue, definition, versions)
           return enumValue ? [enumValue] : []
         })
         const uniqueValues = [...new Set(enumValues)]
@@ -339,11 +346,20 @@ export function sanitizeRoadmapVisibleColumns(
   fallback: readonly RoadmapColumnKey[] = DEFAULT_ROADMAP_TABLE_VISIBLE_COLUMNS,
 ): RoadmapColumnKey[] {
   if (!Array.isArray(value)) return [...fallback]
-  const requested = new Set(value.flatMap(key => {
+  const requested = value.flatMap(key => {
     const normalized = normalizeRoadmapColumnKey(key)
     return normalized ? [normalized] : []
-  }))
-  const approved = ROADMAP_COLUMNS.flatMap(column => requested.has(column.key) ? [column.key] : [])
+  })
+  const requestedSet = new Set(requested)
+  const approved = ROADMAP_COLUMNS.flatMap(column => requestedSet.has(column.key) ? [column.key] : [])
+  if (value.includes('platform') && requestedSet.has('chipCode')) {
+    const legacyPosition = requested.indexOf('chipCode')
+    const currentPosition = approved.indexOf('chipCode')
+    if (currentPosition >= 0 && legacyPosition >= 0) {
+      approved.splice(currentPosition, 1)
+      approved.splice(Math.min(legacyPosition, approved.length), 0, 'chipCode')
+    }
+  }
   return approved.length ? approved : [fallback[0] ?? ROADMAP_COLUMNS[0].key]
 }
 

@@ -38,9 +38,17 @@ function firstNonBlank(...values: unknown[]): string {
   return ''
 }
 
-function getNormalProjectChipCode(project: ProjectItem): string {
-  const directChipCode = (project as ProjectItem & { chipCode?: string }).chipCode
-  return firstNonBlank(project.fieldValues?.chipCode, directChipCode, project.platform, project.cpu)
+function extractNamedChipCode(value: unknown): string {
+  if (typeof value !== 'string') return ''
+  return value.trim().match(/-([^_\s]+)_(?:[^_\s]+)$/)?.[1]?.trim() ?? ''
+}
+
+export function resolveNormalProjectChipCode(project: ProjectItem): string {
+  return firstNonBlank(
+    project.fieldValues?.chipCode,
+    extractNamedChipCode(project.projectCode),
+    extractNamedChipCode(project.name),
+  )
 }
 
 function normalizeNormalProductType(value: unknown): RoadmapProductType | null {
@@ -178,7 +186,7 @@ export function adaptNormalProject(
     productSeries: firstNonBlank(project.productSeries),
     marketName: firstNonBlank(project.marketName),
     productType,
-    chipCode: getNormalProjectChipCode(project),
+    chipCode: resolveNormalProjectChipCode(project),
     startRam,
     versionType,
     str5Date: firstNonBlank(project.str5Date),
