@@ -290,7 +290,7 @@ assert.match(
   'whole-machine plan information must pass every grid field from the selected market row',
 )
 
-assert.match(projectSpace, /afterCore=\{isWholeMachine \? renderWholeMachinePlanInfo\(\) : renderProjectPlanInfo\(\)\}/, 'target project plan information must remain directly below the core card')
+assert.match(projectSpace, /afterCore=\{canDo\('basicInfo:planConfigView'\) \? \(isWholeMachine \? renderWholeMachinePlanInfo\(\) : renderProjectPlanInfo\(\)\) : undefined\}/, 'authorized target project plan information remains directly below the core card; denied users receive no plan/config content')
 assert.match(projectSpace, /const anchorSections = \[[\s\S]*id: 'section-plan', label: '计划信息'/, 'the target project anchor must use the unified plan-information label')
 assert.match(projectSpace, /\{!isTargetProject && renderProjectPlanInfo\(\)\}/, 'only non-target projects may use the lower plan-information section')
 assert.match(projectSpace, /\{!isTargetProject && \(isSoftware \|\| isTech\) && \(/, 'target machine and tOS projects must not render the standalone configuration section')

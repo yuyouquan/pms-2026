@@ -91,14 +91,15 @@ if (
 const migratedPeriods = roadmapStore.migrateRoadmapState({
   ...roadmapStore.createInitialRoadmapState(),
   tosVersions: [
-    { id: 'single-period', name: 'tOS 15.1', periodStartDate: '2026-01-01', periodEndDate: '' },
-    { id: 'invalid-period', name: 'tOS 15.2', periodStartDate: '2026-02-30', periodEndDate: '2026-03-01' },
-    { id: 'valid-period', name: 'tOS 15.3', periodStartDate: '2026-01-01', periodEndDate: '2026-12-31' },
+    { id: '15.1', name: 'tOS 15.1', periodStartDate: '2026-01-01', periodEndDate: '' },
+    { id: '15.2', name: 'tOS 15.2', periodStartDate: '2026-02-30', periodEndDate: '2026-03-01' },
+    { id: '15.3', name: 'tOS 15.3', periodStartDate: '2026-01-01', periodEndDate: '2026-12-31' },
   ],
 }, 1)
 for (const id of ['15.1', '15.2']) {
   const version = migratedPeriods.tosVersions.find(candidate => candidate.id === id)
-  if (version?.periodStartDate || version?.periodEndDate) {
+  if (!version) throw new Error(`migration dropped period fixture ${id}`)
+  if (version.periodStartDate || version.periodEndDate) {
     throw new Error(`migration did not clear invalid period pair ${id}`)
   }
 }

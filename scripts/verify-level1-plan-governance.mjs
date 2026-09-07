@@ -1504,7 +1504,32 @@ assert.match(
   'draft auto-edit effect must rerun when entering the plan module',
 )
 
-assert.equal(plan.PLAN_STORE_VERSION, 13, 'plan persistence retires legacy level-three data and backfills the workbench revision scope after the V9 level-one upgrade')
+assert.ok(Number.isInteger(plan.PLAN_STORE_VERSION) && plan.PLAN_STORE_VERSION >= 14, 'plan persistence includes legacy level-three retirement and the V14 canonical MR scope migration')
+const migrationDraftMarketKey = 'project::1::OP::level1::versions'
+const migrationDraftTosKey = 'project::19::tos-type::Full::level1::versions'
+const migrationUserDraft = { id: 'user-v5', versionNo: 'V5', status: '修订中' }
+const migrationUserSnapshotKey = 'project::1::OP::level1::user-v5'
+const migrationUserSnapshot = [{ id: 'user-task', taskName: '用户修订任务', planEndDate: '2028-08-09', actualEndDate: '2028-08-10' }]
+const migrationUserDraftInput = {
+  marketVersionsByKey: { [migrationDraftMarketKey]: [migrationUserDraft] },
+  tosTypeVersionsByKey: { [migrationDraftTosKey]: [migrationUserDraft] },
+  tosTypeCurrentVersionByKey: { [migrationDraftTosKey]: migrationUserDraft.id },
+  publishedSnapshots: { [migrationUserSnapshotKey]: migrationUserSnapshot },
+}
+const migrationUserDraftBefore = structuredClone(migrationUserDraftInput)
+const migrationWithUserDraft = plan.migratePlanStoreState(migrationUserDraftInput, 13)
+for (const [scope, versions] of [
+  ['machine OP', migrationWithUserDraft.marketVersionsByKey[migrationDraftMarketKey]],
+  ['tOS Full', migrationWithUserDraft.tosTypeVersionsByKey[migrationDraftTosKey]],
+]) {
+  assert.deepEqual(versions.filter(version => version.status === '修订中'), [migrationUserDraft], `${scope} migration preserves the existing user draft without adding a demo draft`)
+  assert.equal(versions.filter(version => version.status === '已发布').length, 3, `${scope} migration still backfills missing published demo history`)
+}
+assert.equal(migrationWithUserDraft.marketCurrentVersionByKey[migrationDraftMarketKey], migrationUserDraft.id, 'a missing market version pointer resolves to the preserved user draft')
+assert.equal(migrationWithUserDraft.tosTypeCurrentVersionByKey[migrationDraftTosKey], migrationUserDraft.id, 'migration preserves the selected tOS user draft')
+assert.deepEqual(migrationWithUserDraft.publishedSnapshots[migrationUserSnapshotKey], migrationUserSnapshot, 'migration preserves user task names and planned and actual dates')
+assert.deepEqual(migrationUserDraftInput, migrationUserDraftBefore, 'draft backfill never mutates its input')
+assert.deepEqual(plan.migratePlanStoreState(migrationWithUserDraft, 13), migrationWithUserDraft, 'draft-safe legacy migration is idempotent')
 const migratedPartialV11 = plan.migratePlanStoreState({
   versions: structuredClone(plan.VERSION_DATA),
   currentVersion: 'v3',
@@ -1927,7 +1952,7 @@ assert.match(configSource, /items=\{isTechnicalTemplate[\s\S]*key: 'level1'[\s\S
 for (const label of ['阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {
   assert.match(projectSpaceSource, new RegExp(label), `project level1 table contains ${label}`)
 }
-for (const label of ['阶段', '里程碑点', '活动名称', '实际开始时间', '实际完成时间']) assert.match(technicalModuleSource, new RegExp(label), `technical flat table contains ${label}`)
+for (const label of ['阶段/节点', '活动名称', '实际开始时间', '实际完成时间']) assert.match(technicalModuleSource, new RegExp(label), `technical plan table contains ${label}`)
 assert.match(projectSpaceSource, /getLevel1StructurePermissions/, 'all governed structure actions use the centralized permission matrix')
 assert.match(projectSpaceSource, /insertLevel1BusinessNode/, 'machine and tOS controlled additions use the validated business-node helper')
 assert.match(projectSpaceSource, /renameLevel1BusinessNode/, 'business-node editing uses the validated immutable rename helper')
@@ -1980,8 +2005,8 @@ assert.match(
 )
 assert.doesNotMatch(projectSpaceSource, /isFlatGovernedLevel1Table|pms-level1-flat-milestone-table/, 'project space no longer has a special flat eight-column branch')
 assert.match(projectSpaceSource, /handleGovernedDragEnd/, 'approved custom launch children have a dedicated safe reorder path')
-assert.match(technicalStoreSource, /publishedVersions\.length <= 1[\s\S]*buildFirstLevel1RevisionTasks[\s\S]*buildNextLevel1RevisionTasks/, 'technical first and later revisions follow different synchronization rules')
-assert.match(technicalStoreSource, /changedActualDatePatches[\s\S]*actualStartDate[\s\S]*actualEndDate[\s\S]*pairedVersionId/, 'technical draft and published actual dates synchronize by stable ID')
+assert.match(technicalStoreSource, /mergeTechnicalPlanRevisionTasks\([\s\S]{0,200}input\.templateTasks,[\s\S]{0,100}previousPublished\?\.tasks/, 'every technical revision merges the latest template with the previous published values')
+assert.match(technicalStoreSource, /currentVersion\.status === '已发布'[\s\S]{0,160}reason: 'historical-published'/, 'published technical snapshots reject writes, including actual dates')
 assert.match(compareModalSource, /fieldMode === 'hierarchical-flat'/, 'version comparison supports flat milestone columns')
 assert.match(compareModalSource, /fieldMode === 'technical-subproject'/, 'version comparison supports technical activity columns')
 assert.match(compareModalSource, /fieldMode\?: 'legacy' \| 'governed' \| 'hierarchical-flat' \| 'technical-subproject'/, 'version comparison retains the governed field mode for ordinary level-one plans')

@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import ts from 'typescript'
+import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
 const root = process.cwd()
 
@@ -88,14 +89,14 @@ const checks = [
     includes: '<Descriptions.Item label="产品系列">',
   },
   {
-    name: 'Project space status is editable with custom enum options',
+    name: 'Project space status is editable with current category enum options',
     file: 'src/containers/ProjectSpaceContainer.tsx',
-    includes: 'PROJECT_SPACE_STATUS_OPTIONS',
+    includes: 'getConfiguredProjectStatusOptions',
   },
   {
-    name: 'Project space status options include EOS',
-    file: 'src/containers/ProjectSpaceContainer.tsx',
-    includes: "{ label: 'EOS', value: 'EOS' }",
+    name: 'Machine status catalog includes EOS',
+    file: 'src/lib/projectStatus.ts',
+    includes: "'EOS'",
   },
   {
     name: 'Project space status uses single-select editing',
@@ -103,9 +104,9 @@ const checks = [
     includes: "setEf('status'",
   },
   {
-    name: 'Add project defaults to pending approval status',
+    name: 'Add project saves the explicitly submitted project status',
     file: 'src/components/workspace/AddProjectModal.tsx',
-    includes: "status: '待立项'",
+    includes: 'status: payload.projectStatus',
   },
   {
     name: 'Summary board component exists',
@@ -163,9 +164,9 @@ const checks = [
     includes: '字段配置',
   },
   {
-    name: 'Summary board reuses roadmap project info columns',
+    name: 'Summary board uses the project-summary field projection',
     file: 'src/components/roadmap/ProjectPlanSummaryBoard.tsx',
-    includes: 'getFixedColumnsForType',
+    includes: 'getProjectSummaryBoardColumns(activeProjectSummaryDefinitions)',
   },
   {
     name: 'Product category only appears in overall view columns',
@@ -293,14 +294,14 @@ const checks = [
     includes: 'parseProjectViewShare',
   },
   {
-    name: 'Project view parent switches to shared roadmap view kind',
+    name: 'Project view parent mounts the rebuilt roadmap',
     file: 'src/components/roadmap/RoadmapView.tsx',
-    includes: 'PROJECT_VIEW_KINDS.roadmapMilestone',
+    contract: source => importsAndMounts(parseTsx(source, 'RoadmapView.tsx'), 'ProjectRoadmapModule', './ProjectRoadmapModule'),
   },
   {
-    name: 'Project view parent reads shared view URLs',
+    name: 'Project view parent does not remount the retired milestone surface',
     file: 'src/components/roadmap/RoadmapView.tsx',
-    includes: 'parseProjectViewShare',
+    contract: source => !mountsComponent(parseTsx(source, 'RoadmapView.tsx'), 'MilestoneView'),
   },
   {
     name: 'Home page opens project view from shared view URLs',
@@ -483,14 +484,14 @@ const checks = [
     includes: 'PROJECT_TYPE_TOS_VERSION',
   },
   {
-    name: 'Project type options include independent software projects',
+    name: 'Project type options reuse the current category registry',
     file: 'src/data/projects.ts',
-    includes: 'PROJECT_TYPE_INDEPENDENT_SOFTWARE',
+    includes: 'PROJECT_TYPES',
   },
   {
-    name: 'Add project modal can infer tOS version project names',
+    name: 'Add project respects the type resolved by the classification form',
     file: 'src/components/workspace/AddProjectModal.tsx',
-    includes: 'inferSoftwareProjectTypeFromName',
+    includes: 'const projectType = payload.projectType',
   },
   {
     name: 'Project list filters use current first-level project categories',
@@ -508,9 +509,9 @@ const checks = [
     includes: 'isSoftwareProjectType',
   },
   {
-    name: 'Plan template project types include split software project categories',
+    name: 'Plan template project types reuse the current category registry',
     file: 'src/stores/plan.ts',
-    includes: 'PROJECT_TYPE_TOS_VERSION',
+    includes: 'PROJECT_TEMPLATE_TYPES',
   },
   {
     name: 'Summary board has tOS version project tab',
@@ -595,9 +596,13 @@ for (const name of ['tOS16.1', 'tOS16.2', 'tOS17.1']) {
     failures.push(`Mock tOS project ${name} should use tOS版本项目 type`)
   }
 }
-if (!/name: '((?!tOS)\w|HiOS|AI|Launcher|Weather)[\s\S]{0,260}type: (?:'独立软件产品项目'|PROJECT_TYPE_INDEPENDENT_SOFTWARE)/.test(projectData)) {
-  failures.push('Mock data should include at least one non-tOS independent software project')
-}
+// July classification supersedes the old independent-software creation category.
+const projectTypesModule = loadTypeScriptModule(root, 'src/constants/projectTypes.ts')
+const currentCategories = ['整机产品项目', 'tOS版本项目', '技术项目', '能力建设项目']
+if (JSON.stringify(projectTypesModule.PROJECT_TYPES) !== JSON.stringify(currentCategories)) failures.push('Project categories must preserve the four approved first-level categories')
+const initialProjects = loadTypeScriptModule(root, 'src/data/projects.ts').initialProjects
+if (initialProjects.some(project => !currentCategories.includes(project.type))) failures.push('Current mock projects must use the approved first-level categories')
+if (projectTypesModule.resolveProjectClassification('独立软件产品项目').projectCategory !== 'tOS版本项目') failures.push('Legacy independent software snapshots must still migrate into the tOS category')
 const statusFilterBlock = summaryBoard.match(/const STATUS_FILTERS[\s\S]*?\n\]/)?.[0] || ''
 const forbiddenStatusFilters = ['筹备中', 'EOL', "key: '维护'", '进行中', '已完成', '已上市', '维护期']
 for (const status of forbiddenStatusFilters) {
@@ -644,7 +649,7 @@ if (summaryProductCategoryColumn.includes('pms-summary-category-dot')) {
 if (!summaryBoard.includes("dataIndex: 'tosVersion'") || summaryBoard.indexOf("dataIndex: 'projectName'") > summaryBoard.indexOf("dataIndex: 'tosVersion'")) {
   failures.push('Summary board should render tOS版本 immediately after project name')
 }
-if (!summaryBoard.includes('filterMilestonesByDateRange') || !summaryBoard.includes('DatePicker.RangePicker')) {
+if (!summaryBoard.includes('applyMilestoneDateRange') || !summaryBoard.includes('DatePicker.RangePicker')) {
   failures.push('Summary board should filter milestone nodes with a date range picker')
 }
 if (!summaryBoard.includes('viewMode') || !summaryBoard.includes("value: 'calendar'")) {
@@ -781,44 +786,28 @@ for (const oldStatus of ['进行中', '已完成', '已上市', '维护期']) {
   }
 }
 
-const projectStatusAssignments = Array.from(projectData.matchAll(/status: '([^']+)'/g)).map(match => match[1])
-for (const oldStatus of ['进行中', '已完成', '已上市', '维护期', '维护']) {
-  if (projectStatusAssignments.includes(oldStatus)) {
-    failures.push(`Mock project data should use new project status enum, found ${oldStatus}`)
-  }
+// September status and governance specifications replace the older global status
+// list and explicit clone menu; retain executable checks for every current category.
+const statusModule = loadTypeScriptModule(root, 'src/lib/projectStatus.ts')
+const expectedStatuses = {
+  '整机产品项目': ['待立项', '在研', '上市', 'EOS', '转维', '已取消', '已暂停'],
+  'tOS版本项目': ['在研', '已完成'],
+  '技术项目': ['进行中', '已完成', '暂停', '已取消'],
+  '能力建设项目': ['在研', '已完成'],
 }
-for (const status of ['待立项', '在研', '上市', '转维', 'EOS', '暂停', '已取消', '已迁移']) {
-  if (!projectData.includes(`status: '${status}'`)) {
-    failures.push(`Mock project data should include ${status} status`)
-  }
+for (const [category, statuses] of Object.entries(expectedStatuses)) {
+  if (JSON.stringify(statusModule.getActiveProjectStatuses(category)) !== JSON.stringify(statuses)) failures.push(`Current status catalog is incorrect for ${category}`)
+  if (statusModule.resolveConfiguredProjectStatus({ projectType: category, configuredValues: statuses, ipmStatus: '进行中' }) !== '') failures.push(`New ${category} must require an explicit status selection`)
 }
-if (!/type: PROJECT_TYPE_TECH,[\s\S]{0,260}status: '已迁移'/.test(projectData)) {
-  failures.push('Mock project data should include a technical project with 已迁移 status')
+for (const project of initialProjects) {
+  if (!expectedStatuses[project.type]?.includes(project.status)) failures.push(`Mock ${project.id} uses invalid ${project.type} status ${project.status}`)
 }
-if (!projectSpaceContainer.includes("const PROJECT_SPACE_STATUS_OPTIONS") || !projectSpaceContainer.includes("{ label: '已迁移', value: '已迁移' }")) {
-  failures.push('Project space should expose 已迁移 in technical-project status options')
+if (!projectSpaceContainer.includes('getProjectStatusEnumType(p.type)') || !projectSpaceContainer.includes('options={getConfiguredProjectStatusOptions(p, enumRowsByType, enumReady)}')) failures.push('Project-space status choices must be resolved from the current category enum')
+for (const retired of ['PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS', 'PROJECT_PLAN_CLONE_MARKET_VERSION_MAP', 'buildPlanCloneMenuItems', 'handleClonePlanSource']) {
+  if (projectSpaceContainer.includes(retired)) failures.push(`Retired level1 clone menu must remain absent: ${retired}`)
 }
-if (!projectSpaceContainer.includes('getProjectStatusOptions') || !projectSpaceContainer.includes("p.type === PROJECT_TYPE_TECH")) {
-  failures.push('Project space status selector should add 已迁移 only for 技术项目')
-}
-
-for (const required of [
-  'PROJECT_PLAN_CLONE_TEMPLATE_VERSIONS',
-  'PROJECT_PLAN_CLONE_MARKET_VERSION_MAP',
-  'buildPlanCloneMenuItems',
-  'handleClonePlanSource',
-  'cloneTasksWithoutActualDates',
-  "title: '确认克隆计划'",
-  "label: '模板'",
-  "label: 'OP'",
-  "label: 'TR'",
-  "actualStartDate: ''",
-  "actualEndDate: ''",
-  '克隆',
-]) {
-  if (!projectSpaceContainer.includes(required)) {
-    failures.push(`Project space revision clone feature missing ${required}`)
-  }
+for (const required of ['mergeLevel1RevisionWithLatestTemplate', 'currentLevel1TemplateResolution']) {
+  if (!projectSpaceContainer.includes(required)) failures.push(`Creating a revision must merge the latest published template: ${required}`)
 }
 for (const required of [
   'PLAN_REVISION_KIND_OPTIONS',
@@ -872,25 +861,17 @@ if (
 ) {
   failures.push('Config plan template should not display or edit 默认路标')
 }
-if (!planStore.includes("responsible: 'SPM'")) {
-  failures.push('Level1 template tasks should store SPM as the default template role')
+const templateTasks = loadTypeScriptModule(root, 'src/stores/plan.ts').LEVEL1_TEMPLATE_TASKS
+if (!templateTasks.some(task => task.role === 'SPM' && task.responsible === 'SPM') || templateTasks.some(task => task.responsible !== (task.role || ''))) {
+  failures.push('Generated level1 template tasks must preserve configured roles, including SPM, without inserting user names')
 }
+if (templateTasks.some(task => task.actualStartDate || task.actualEndDate)) failures.push('Configuration template tasks must not carry execution dates')
 for (const [pageName, pageSource] of [
   ['level1 template page', level1TemplatePage],
   ['level2 template page', level2TemplatePage],
 ]) {
-  for (const required of [
-    'PLAN_TEMPLATE_ROLE_OPTIONS',
-    '>角色</th>',
-    '<option key={role} value={role}>{role}</option>',
-    "responsible: 'SPM'",
-  ]) {
-    if (!pageSource.includes(required)) {
-      failures.push(`${pageName} should support role-based template editing: missing ${required}`)
-    }
-  }
-  if (pageSource.includes('>责任人</th>')) {
-    failures.push(`${pageName} should rename the old responsible column to 角色`)
+  if (!pageSource.includes("export { default } from '@/components/config/LegacyPlanTemplateRoute'")) {
+    failures.push(`${pageName} should delegate role-based template editing to the shared configuration center`)
   }
 }
 for (const required of [

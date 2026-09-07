@@ -3264,7 +3264,7 @@ registerAssertion('roadmap filter conditions use one compact row per condition',
   ]) {
     if (!source.includes(contract)) throw new Error(`roadmap filter drawer is missing compact row contract ${contract}`)
   }
-  if (!styles.includes('grid-template-columns: 138px 68px minmax(130px, 1fr) 28px')) {
+  if (!styles.includes('grid-template-columns: 138px 68px minmax(130px, 1fr) 32px')) {
     throw new Error('roadmap filter condition does not use the approved one-line compact grid')
   }
   if (source.includes('>值</Typography.Text>')) throw new Error('filter value label must not occupy a second row')

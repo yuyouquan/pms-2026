@@ -398,14 +398,14 @@ function projectSpaceMaterialFailures(root) {
 
 const STANDALONE_MATERIAL_EXPECTATIONS = {
   'src/app/config/level1-template/page.tsx': [
-    { label: 'level-one template page shell', pattern: /pms-template-page pms-page-shell/ },
-    { label: 'level-one template topbar', pattern: /<header className="pms-topbar/ },
-    { label: 'level-one solid work area', pattern: /<main className="pms-solid-surface/ },
+    { label: 'level-one delegates to shared application shell', pattern: /export \{ default \} from '@\/components\/config\/LegacyPlanTemplateRoute'/ },
   ],
   'src/app/config/level2-template/page.tsx': [
-    { label: 'level-two template page shell', pattern: /pms-template-page pms-page-shell/ },
-    { label: 'level-two template topbar', pattern: /<header className="pms-topbar/ },
-    { label: 'level-two solid work area', pattern: /<main className="pms-solid-surface/ },
+    { label: 'level-two delegates to shared application shell', pattern: /export \{ default \} from '@\/components\/config\/LegacyPlanTemplateRoute'/ },
+  ],
+  'src/components/config/LegacyPlanTemplateRoute.tsx': [
+    { label: 'legacy templates use canonical page shell and header', pattern: /import Home from '@\/app\/page'/ },
+    { label: 'legacy templates render canonical page shell and header', pattern: /return <Home \/>/ },
   ],
   'src/app/share/plan/page.tsx': [
     { label: 'share page shell', pattern: /pms-share-page pms-page-shell/ },
@@ -573,8 +573,8 @@ const CSS_ROOT_EXPECTATIONS = [
   { label: '--pms-text-secondary token', pattern: /^\s*--pms-text-secondary:\s*#625d70;$/im },
   { label: '--pms-text-tertiary token', pattern: /^\s*--pms-text-tertiary:\s*#817b90;$/im },
   { label: '--pms-border token', pattern: /^\s*--pms-border:\s*#e6e3ef;$/im },
-  { label: '--pms-radius-control token', pattern: /^\s*--pms-radius-control:\s*8px;$/im },
-  { label: '--pms-radius-surface token', pattern: /^\s*--pms-radius-surface:\s*12px;$/im },
+  { label: '--pms-radius-control token', pattern: /^\s*--pms-radius-control:\s*6px;$/im },
+  { label: '--pms-radius-surface token', pattern: /^\s*--pms-radius-surface:\s*16px;$/im },
   { label: '--pms-glass-filter token', pattern: /^\s*--pms-glass-filter:\s*blur\(14px\)\s+saturate\(145%\);$/im },
   { label: '--pms-shadow-glass token', pattern: /^\s*--pms-shadow-glass:\s*0\s+12px\s+32px\s+rgb\(75\s+59\s+148\s*\/\s*8%\);$/im },
   { label: '--pms-shadow-floating token', pattern: /^\s*--pms-shadow-floating:\s*0\s+22px\s+60px\s+rgb\(79\s+62\s+158\s*\/\s*12%\);$/im },
@@ -1290,14 +1290,14 @@ function verifyContract(root) {
     { label: 'colorTextTertiary mapping', pattern: /^\s*colorTextTertiary:\s*PMS_COLORS\.textTertiary,$/m },
     { label: 'colorBorder mapping', pattern: /^\s*colorBorder:\s*PMS_COLORS\.border,$/m },
     { label: "colorBorderSecondary: '#EFEDF4'", pattern: /^\s*colorBorderSecondary:\s*'#EFEDF4',$/m },
-    { label: 'borderRadius: 8', pattern: /^\s*borderRadius:\s*8,$/m },
-    { label: 'borderRadiusLG: 12', pattern: /^\s*borderRadiusLG:\s*12,$/m },
+    { label: 'borderRadius: 6', pattern: /^\s*borderRadius:\s*6,$/m },
+    { label: 'borderRadiusLG: 16', pattern: /^\s*borderRadiusLG:\s*16,$/m },
     { label: 'controlHeight: 32', pattern: /^\s*controlHeight:\s*32,$/m },
     { label: 'approved Chinese font stack', pattern: /^\s*fontFamily:\s*'-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',$/m },
-    { label: 'Button component mapping', pattern: /Button:\s*{\s*borderRadius:\s*8,\s*primaryShadow:\s*'0 5px 14px rgba\(96, 76, 226, \.22\)',\s*}/ },
-    { label: 'Card component mapping', pattern: /Card:\s*{\s*borderRadiusLG:\s*12,\s*}/ },
-    { label: 'Modal component mapping', pattern: /Modal:\s*{\s*borderRadiusLG:\s*16,\s*}/ },
-    { label: 'Table component mapping', pattern: /Table:\s*{\s*headerBg:\s*PMS_COLORS\.brandSurface,\s*headerColor:\s*'#514A70',\s*rowHoverBg:\s*'#FAF9FF',\s*}/ },
+    { label: 'Button component mapping', pattern: /Button:\s*{\s*borderRadius:\s*6,[^}]*primaryShadow:\s*'0 5px 14px rgba\(96, 76, 226, \.22\)',\s*}/ },
+    { label: 'Card component mapping', pattern: /Card:\s*{\s*borderRadiusLG:\s*16,[^}]*bodyPadding:\s*16,[^}]*headerFontSize:\s*16,[^}]*}/ },
+    { label: 'Modal component mapping', pattern: /Modal:\s*{\s*borderRadiusLG:\s*16,[^}]*titleFontSize:\s*16,[^}]*}/ },
+    { label: 'Table component mapping', pattern: /Table:\s*{\s*headerBg:\s*PMS_COLORS\.brandSurface,\s*headerColor:\s*'#514A70',\s*rowHoverBg:\s*'#FAF9FF',[^}]*cellPaddingBlock:\s*8,[^}]*cellPaddingInline:\s*12,[^}]*}/ },
     { label: 'Tabs component mapping', pattern: /Tabs:\s*{\s*inkBarColor:\s*PMS_COLORS\.brandMain,\s*itemSelectedColor:\s*PMS_COLORS\.brandStrong,\s*}/ },
   ])
 
@@ -1305,7 +1305,7 @@ function verifyContract(root) {
     { label: "'use client'", pattern: /^'use client'$/m },
     { label: 'App and ConfigProvider import', pattern: /^import\s*{\s*App\s*,\s*ConfigProvider\s*}\s*from\s*'antd'$/m },
     { label: 'pmsTheme import', pattern: /^import\s*{\s*pmsTheme\s*}\s*from\s*'@\/theme\/pmsTheme'$/m },
-    { label: 'ConfigProvider theme binding', pattern: /<ConfigProvider\s+theme=\{pmsTheme\}\s+button=\{\{\s*autoInsertSpace:\s*false\s*}}/ },
+    { label: 'ConfigProvider theme and Chinese locale binding', pattern: /<ConfigProvider\s+theme=\{pmsTheme\}\s+locale=\{zhCN\}\s+button=\{\{\s*autoInsertSpace:\s*false\s*}}/ },
     { label: 'persistent Ant Design App context', pattern: /<ConfigProvider[\s\S]*<App>\{children\}<\/App>[\s\S]*<\/ConfigProvider>/ },
   ])
 

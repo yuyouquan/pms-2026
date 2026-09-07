@@ -16,6 +16,7 @@ import ConfigContainer from '@/containers/ConfigContainer'
 import JointProjectSpaceContainer from '@/containers/JointProjectSpaceContainer'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import type { ProjectItem } from '@/types/app'
+import ProjectSpaceAccessBoundary from '@/components/permission/ProjectSpaceAccessBoundary'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
 const globalStyles = `
@@ -36,6 +37,7 @@ export default function Home() {
   const {
     projects,
     selectedProject,
+    currentLoginUser,
   } = useProjectStore()
   const activateProject = useActivateProject()
 
@@ -70,7 +72,9 @@ export default function Home() {
       <div className="pms-page-shell">
         {/* Project Space — full-screen layout with its own header */}
         {activeModule === 'projectSpace' && selectedProject ? (
-          <ProjectSpaceContainer />
+          <ProjectSpaceAccessBoundary>
+            <ProjectSpaceContainer key={`${selectedProject.id}::${currentLoginUser}`} />
+          </ProjectSpaceAccessBoundary>
         ) : (
           <>
             {/* Main header (logo + nav + user switcher) */}

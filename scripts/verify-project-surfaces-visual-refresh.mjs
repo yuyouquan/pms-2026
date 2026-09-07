@@ -164,7 +164,8 @@ assert.equal(
 const technicalCreateProjectName = schema.TECHNICAL_PROJECT_CREATE_FIELDS.find(field => field.key === 'projectName')
 assert.equal(technicalCreateProjectName?.label, '子项目名称', 'technical create must retain the source subproject name field')
 assert.equal(technicalCreateProjectName?.readOnly, true, 'technical create must retain the read-only source subproject name')
-assert.match(createSource, /子项目名称/, 'technical create UI must retain the subproject-name surface')
+assert.match(createSource, /const fieldLabel[\s\S]{0,150}: field\.label/, 'technical create fields render their configured schema label')
+assert.match(projectInfoModalSource, /aria-label="IPM项目来源"[\s\S]{0,1000}<Form\.Item label="项目名" name="projectName"><Input disabled/, 'technical source project name remains read-only in the common IPM source area')
 assert.match(technicalInformationSource, /visibleChildren\.map\(child => \(\{[\s\S]*?<span>\{child\.name\}<\/span>/, 'technical project-space tabs must retain subproject names')
 assert.equal(
   technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS.length > 0,

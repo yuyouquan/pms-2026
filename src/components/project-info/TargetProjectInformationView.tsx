@@ -17,6 +17,7 @@ interface TargetProjectInformationViewProps {
   canConfigure: boolean
   onEdit: () => void
   onApplyTransfer?: () => void
+  canApplyTransfer?: boolean
   afterCore?: ReactNode
   visibleGroupKeys?: ProjectInfoGroupKey[]
 }
@@ -41,6 +42,7 @@ export default function TargetProjectInformationView({
   canConfigure,
   onEdit,
   onApplyTransfer,
+  canApplyTransfer = false,
   afterCore,
   visibleGroupKeys,
 }: TargetProjectInformationViewProps) {
@@ -89,7 +91,7 @@ export default function TargetProjectInformationView({
       coreFields={coreFields}
       actions={(
         <div className="pms-project-info-core-actions">
-          {isWholeMachine && onApplyTransfer && <Button type="primary" icon={<SendOutlined />} onClick={onApplyTransfer}>申请转维</Button>}
+          {isWholeMachine && onApplyTransfer && <Tooltip title={canApplyTransfer ? undefined : '无申请转维权限'}><Button type="primary" icon={<SendOutlined />} disabled={!canApplyTransfer} onClick={onApplyTransfer}>申请转维</Button></Tooltip>}
           {canEdit
             ? <Button icon={<EditOutlined />} onClick={onEdit}>编辑</Button>
             : <Tooltip title="无基础信息编辑权限"><Button icon={<EditOutlined />} disabled>编辑</Button></Tooltip>}

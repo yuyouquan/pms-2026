@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { seedTransferMaterials } from '@/lib/transferWorkflow'
 import {
   MOCK_TM_USERS,
   MOCK_TRANSFER_APPLICATIONS,
@@ -164,6 +165,8 @@ const VIEW_TRANSIENT_DEFAULTS = {
   tmSqaAction: 'approve' as const,
 }
 
+const additionalMaterials = MOCK_TRANSFER_APPLICATIONS.filter(app => !MOCK_CHECKLIST_ITEMS.some(item => item.applicationId === app.id)).map(seedTransferMaterials)
+
 export const useTransferStore = create<TransferState & TransferActions>()((set) => ({
   // Current user
   currentUser: MOCK_TM_USERS[0],
@@ -182,8 +185,8 @@ export const useTransferStore = create<TransferState & TransferActions>()((set) 
 
   // Data
   transferApplications: MOCK_TRANSFER_APPLICATIONS,
-  tmChecklistItems: MOCK_CHECKLIST_ITEMS,
-  tmReviewElements: MOCK_REVIEW_ELEMENTS,
+  tmChecklistItems: [...MOCK_CHECKLIST_ITEMS, ...additionalMaterials.flatMap(materials => materials.checklist)],
+  tmReviewElements: [...MOCK_REVIEW_ELEMENTS, ...additionalMaterials.flatMap(materials => materials.reviewElements)],
   tmBlockTasks: MOCK_BLOCK_TASKS,
   tmLegacyTasks: MOCK_LEGACY_TASKS,
 
@@ -232,7 +235,7 @@ export const useTransferStore = create<TransferState & TransferActions>()((set) 
   setCurrentUser: (v) => set({ currentUser: v }),
 
   setTransferView: (v) => set((s) => s.transferView === v ? { transferView: v } : { transferView: v, ...VIEW_TRANSIENT_DEFAULTS }),
-  setSelectedTransferAppId: (v) => set({ selectedTransferAppId: v }),
+  setSelectedTransferAppId: (v) => set(s => s.selectedTransferAppId === v ? { selectedTransferAppId: v } : { selectedTransferAppId: v, ...VIEW_TRANSIENT_DEFAULTS }),
 
   setTransferConfigView: (v) => set({ transferConfigView: v }),
   setTmConfigSearchText: (v) => set({ tmConfigSearchText: v }),

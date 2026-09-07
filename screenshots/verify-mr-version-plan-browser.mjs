@@ -508,6 +508,7 @@ async function clickMrTemplatePublishButton() {
         toolbarText: document.querySelector('.pms-mr-toolbar')?.textContent?.trim() ?? '',
       }
     }
+    button.scrollIntoView({ block: 'center', inline: 'nearest' })
     const rect = button.getBoundingClientRect()
     return {
       box: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 },

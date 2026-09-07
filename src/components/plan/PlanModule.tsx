@@ -167,7 +167,9 @@ function DHTMLXGantt({
     gantt.config.scale_unit = 'month'
     gantt.config.date_scale = '%Y年%m月'
     gantt.config.subscales = [{ unit: 'day', step: 1, date: '%d日' }]
-    gantt.config.row_height = 35
+    const density = getComputedStyle(ganttContainer.current)
+    gantt.config.row_height = Number.parseInt(density.getPropertyValue('--pms-table-row-height'), 10) || 40
+    gantt.config.scale_height = (Number.parseInt(density.getPropertyValue('--pms-table-group-head-height'), 10) || 40) * 2
     gantt.config.bar_height = 20
     gantt.config.fit_tasks = true
     gantt.config.auto_scheduling = true
