@@ -34,7 +34,7 @@ const sharedSource = fs.readFileSync(
   'utf8',
 )
 assert.match(sharedSource, /ariaLabel="字段配置"/)
-assert.match(sharedSource, />字段配置<\/span>/)
+assert.match(sharedSource, />选择要显示的字段<\/span>/)
 assert.match(sharedSource, /aria-label="搜索字段配置"/)
 
 console.log('Field configuration copy verification passed.')

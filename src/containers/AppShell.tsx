@@ -10,7 +10,8 @@ import {
 import { useUiStore, type MainModule } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
-import { usePermissionStore } from '@/stores/permission'
+import { usePermissionStore, resolvePermissionProjectId } from '@/stores/permission'
+import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import { useTransferStore } from '@/stores/transfer'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { useActivateProject } from '@/hooks/useActivateProject'
@@ -20,7 +21,36 @@ import { useRef, useEffect, useMemo } from 'react'
 
 function UserSwitcher() {
   const { projects, currentLoginUser, setCurrentLoginUser, setProjectCardPage, projectMemberMap } = useProjectStore()
-  const { globalRoles } = usePermissionStore()
+  const { globalRoles, rolesByProject } = usePermissionStore()
+
+  const countVisibleProjects = (user: string) => projects.filter(project => canEnterProjectSpace(
+    resolvePermissionProjectId(project.id, typeof project.parentProjectId === 'string' ? project.parentProjectId : undefined),
+    user, rolesByProject, globalRoles.some(role => role.name === '管理组' && role.members.includes(user)),
+  )).length
+
+  const switchUser = (user: string) => {
+    if (user === currentLoginUser) return
+    const ui = useUiStore.getState()
+    const project = useProjectStore.getState()
+    const plan = usePlanStore.getState()
+    const apply = () => {
+      project.setBasicInfoEditMode(false)
+      project.setEditingProjectFields({})
+      ui.setIsEditMode(false)
+      ui.setShowVersionCompare(false)
+      ui.setShowColumnModal(false)
+      ui.setShowCreateLevel2Plan(false)
+      ui.setShowProjectSearch(false)
+      useTransferStore.getState().setTransferView(null)
+      setCurrentLoginUser(user)
+      setProjectCardPage(1)
+    }
+    const autoSavedDraft = plan.versions.find(version => version.id === plan.currentVersion)?.status === '修订中'
+    if (project.basicInfoEditMode || (ui.isEditMode && !autoSavedDraft)) {
+      ui.setPendingNavigation(apply)
+      ui.setShowLeaveConfirm(true)
+    } else apply()
+  }
 
   const isAdminUser = useMemo(() => {
     const adminGroup = globalRoles.find(r => r.name === '管理组')
@@ -37,7 +67,7 @@ function UserSwitcher() {
               {(() => {
                 const adminGroup = globalRoles.find(r => r.name === '管理组')
                 const isAdmin = adminGroup?.members.includes(currentLoginUser)
-                const projectCount = isAdmin ? projects.length : projects.filter(p => (projectMemberMap[p.id] || []).includes(currentLoginUser)).length
+                const projectCount = countVisibleProjects(currentLoginUser)
                 return <>
                   {isAdmin && <Tag color="red" style={{ fontSize: 10, marginLeft: 6 }}>管理组</Tag>}
                   <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 6 }}>可见 {projectCount} 个项目</span>
@@ -51,7 +81,7 @@ function UserSwitcher() {
             const isActive = currentLoginUser === u
             const adminGroup = globalRoles.find(r => r.name === '管理组')
             const isAdmin = adminGroup?.members.includes(u)
-            const projectCount = isAdmin ? projects.length : projects.filter(p => (projectMemberMap[p.id] || []).includes(u)).length
+            const projectCount = countVisibleProjects(u)
             return {
               key: u,
               label: <div className="pms-user-menu__row" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
@@ -61,7 +91,7 @@ function UserSwitcher() {
                 <span className="pms-user-menu__count" style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
                 {isActive && <CheckCircleOutlined style={{ color: 'var(--pms-brand-strong)' }} />}
               </div>,
-              onClick: () => { setCurrentLoginUser(u); setProjectCardPage(1) },
+              onClick: () => switchUser(u),
             }
           }),
         ],
@@ -169,7 +199,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
     currentLoginUser, projectMemberMap,
   } = useProjectStore()
 
-  const { globalRoles } = usePermissionStore()
+  const { globalRoles, rolesByProject } = usePermissionStore()
   const { setTransferView } = useTransferStore()
   const activateProject = useActivateProject()
 
@@ -182,11 +212,11 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
 
   const visibleProjects = useMemo(() => {
     if (isAdminUser) return projects
-    return projects.filter(p => {
-      const members = projectMemberMap[p.id] || []
-      return members.includes(currentLoginUser)
-    })
-  }, [projects, isAdminUser, currentLoginUser, projectMemberMap])
+    return projects.filter(p => canEnterProjectSpace(
+      resolvePermissionProjectId(p.id, typeof p.parentProjectId === 'string' ? p.parentProjectId : undefined),
+      currentLoginUser, rolesByProject, isAdminUser,
+    ))
+  }, [projects, isAdminUser, currentLoginUser, rolesByProject])
 
   const filteredProjects = visibleProjects.filter(p => {
     if (!projectSearchText) return true
@@ -197,7 +227,9 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
 
   const returnLabel = projectSpaceOrigin?.module === 'projectList'
     ? '返回项目列表'
-    : projectSpaceOrigin?.module === 'roadmap'
+    : projectSpaceOrigin?.module === 'jointProjectSpace'
+      ? '返回联合项目空间'
+      : projectSpaceOrigin?.module === 'roadmap'
       ? '返回tOS路标'
       : '返回工作台'
 

@@ -994,7 +994,7 @@ export default function TechnicalPlanModule({
               <Tooltip title="全部收起"><Button icon={<MinusSquareOutlined />} size="small" style={{ borderRadius: 6 }} onClick={collapseAll} aria-label="全部收起" /></Tooltip>
             </>}
             <Tooltip title="版本对比"><Button aria-label="版本对比" icon={<HistoryOutlined />} style={{ borderRadius: 6 }} disabled={visibleVersions.length < 2} onClick={openVersionCompare} /></Tooltip>
-            <Tooltip title={!canViewTechnicalPlan || !canShareTechnicalPlan ? '无计划分享权限' : !publishedVersions.length ? '暂无已发布版本' : '复制分享链接，无需权限即可查看'}>
+            <Tooltip title={!canViewTechnicalPlan || !canShareTechnicalPlan ? '无计划分享权限' : !publishedVersions.length ? '暂无已发布版本' : '复制已发布计划链接；当前为本地演示，其他浏览器不会同步本地修改'}>
               <Button aria-label="分享计划" icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} disabled={!canViewTechnicalPlan || !canShareTechnicalPlan || !publishedVersions.length} onClick={handleShare} />
             </Tooltip>
           </Space>

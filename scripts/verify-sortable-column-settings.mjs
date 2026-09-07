@@ -58,6 +58,9 @@ function loadTypeScriptModule(modulePath, moduleCache = typeScriptModuleCache) {
   }).outputText
   const localRequire = specifier => {
     const dependencyPath = resolveTypeScriptModule(specifier, resolvedPath)
+    // Browser styling is not executable JavaScript. The plan-store dependency
+    // graph now reaches the Gantt stylesheet through its shared plan helpers.
+    if (/\.(?:css|scss|sass|less|svg|png|jpg|jpeg|gif)$/.test(dependencyPath)) return {}
     return /\.(?:ts|tsx|js|jsx)$/.test(dependencyPath)
       ? loadTypeScriptModule(dependencyPath, moduleCache)
       : require(dependencyPath)
@@ -279,6 +282,7 @@ function createRenderAnalysis(sourceFile, componentName) {
     configuredNames,
     orderHelperNames: importedLocalNames(sourceFile, '@/lib/columnSettings', 'orderVisibleDefinitions'),
     normalizeHelperNames: importedLocalNames(sourceFile, '@/lib/columnSettings', 'normalizeColumnSettings'),
+    columnProjectionNames: importedLocalNames(sourceFile, '@/lib/planGanttRules', 'buildVisiblePlanGanttColumns'),
   }
 }
 
@@ -367,6 +371,13 @@ function expressionUsesOrderedResult(expression, analysis, resolving = new Set()
   if (
     ts.isCallExpression(expression)
     && ts.isIdentifier(expression.expression)
+    && analysis.columnProjectionNames.has(expression.expression.text)
+  ) {
+    return Boolean(expression.arguments[0] && expressionUsesOrderedResult(expression.arguments[0], analysis, resolving))
+  }
+  if (
+    ts.isCallExpression(expression)
+    && ts.isIdentifier(expression.expression)
     && analysis.orderHelperNames.has(expression.expression.text)
   ) {
     return Boolean(expression.arguments[1] && hasConfiguredOrder(expression.arguments[1], analysis))
@@ -401,7 +412,12 @@ function expressionUsesOrderedResult(expression, analysis, resolving = new Set()
   if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
     return expressionUsesOrderedResult(expression.expression, analysis, resolving)
   }
-  if (ts.isParenthesizedExpression(expression)) {
+  if (
+    ts.isParenthesizedExpression(expression)
+    || ts.isAsExpression(expression)
+    || ts.isTypeAssertionExpression(expression)
+    || ts.isNonNullExpression(expression)
+  ) {
     return expressionUsesOrderedResult(expression.expression, analysis, resolving)
   }
   if (ts.isConditionalExpression(expression)) {
@@ -957,49 +973,50 @@ registerAssertion('roadmap per-target controls stay inside compact target-card h
   assert.ok(toolbar.includes('onToggleAllTargets'))
 })
 
-registerAssertion('roadmap conflicts use one compact counted toolbar action', () => {
+registerAssertion('roadmap conflict actions open the selected project conflict in both views', () => {
   const alertPath = path.join(root, 'src/components/roadmap/RoadmapConflictAlert.tsx')
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
   const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
+  const table = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapTableView.tsx'), 'utf8')
+  const evolution = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapEvolutionView.tsx'), 'utf8')
+  const card = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
 
   assert.equal(fs.existsSync(alertPath), false, 'full-width roadmap conflict Alert still exists')
   assert.ok(!moduleSource.includes('RoadmapConflictAlert'))
   assert.ok(!moduleSource.includes('个待规划项目已存在对应正常项目'))
   for (const contract of [
-    'countConflictingPlannedProjects',
-    'conflictCount={conflictCount}',
-    'onResolveConflicts={() => openConflictDrawer()}',
+    'deriveRoadmapPlanningConflicts(normalRows, plannedRows)',
+    'onOpenConflict: openConflictDrawer',
+    'conflicts.filter(conflict => conflict.key === selectedConflictKey)',
+    'groups={scopedConflicts}',
   ]) {
     assert.ok(moduleSource.includes(contract), `roadmap module is missing ${contract}`)
   }
-  for (const contract of [
-    'conflictCount > 0',
-    'count={conflictCount}',
-    'onClick={onResolveConflicts}',
-    '解决冲突',
-    'wrap={false}',
-  ]) {
-    assert.ok(toolbar.includes(contract), `roadmap toolbar is missing ${contract}`)
+  for (const [label, source] of [['table', table], ['card', card]]) {
+    assert.ok(source.includes('onOpenConflict(conflictKey)'), `${label} opens its own conflict group`)
+    assert.ok(source.includes('冲突'), `${label} labels its conflict action`)
   }
+  assert.ok(table.includes('conflictKeyByPlannedIdentity'), 'table maps each planned row to its conflict group')
+  assert.ok(evolution.includes('conflictKeyByIdentity.get(`${row.source}:${row.id}`)'), 'evolution passes the project conflict key into its card')
   assert.equal(
     toolbar.match(/onClick=\{onResolveConflicts\}/g)?.length,
-    1,
-    'roadmap toolbar must expose one conflict-resolution entry',
+    undefined,
+    'the retired global conflict action must not duplicate project actions',
   )
 })
 
-registerAssertion('roadmap toolbar is one polished horizontally scrollable control rail', () => {
+registerAssertion('roadmap toolbar groups quick filters and accessible actions in its scroll rail', () => {
   const toolbar = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapToolbar.tsx'), 'utf8')
   for (const contract of [
-    'roadmap-toolbar-scroll-row',
-    'roadmap-toolbar-view-switch',
-    'roadmap-toolbar-filter-group',
-    'roadmap-toolbar-group-divider',
+    'className="roadmap-toolbar-glass pms-toolbar"',
+    'className="pms-roadmap-view-mode-row"',
+    'data-roadmap-quick-filter',
+    'data-roadmap-actions',
     "overflowX: 'auto'",
     'wrap={false}',
-    'height: 32',
-    'minHeight: 44',
-    '.roadmap-toolbar-glass .ant-btn::before',
+    'renderFilters(',
+    'renderColumnSettings(',
+    'aria-label="字段配置"',
   ]) {
     assert.ok(toolbar.includes(contract), `roadmap toolbar polish is missing ${contract}`)
   }

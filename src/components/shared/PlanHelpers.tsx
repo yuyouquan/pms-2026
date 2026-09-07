@@ -122,9 +122,15 @@ export function DHTMLXGantt({
     const scaleConfig = getGanttScaleConfig(scaleMode)
     const ganttConfig = gantt.config as any
     ganttConfig.scales = scaleConfig.scales
-    gantt.config.scale_height = scaleConfig.scaleHeight
+    // Gantt calculates canvas geometry in JS, so mirror the shared CSS scale
+    // here instead of overriding row heights after the chart has measured them.
+    const uiScale = getComputedStyle(ganttContainer.current)
+    const cssPixels = (token: string, fallback: number) => Number.parseFloat(uiScale.getPropertyValue(token)) || fallback
+    gantt.config.scale_height = scaleConfig.scales.length > 1
+      ? scaleConfig.scales.length * cssPixels('--pms-table-group-head-height', 40)
+      : cssPixels('--pms-table-head-height', 48)
     gantt.config.min_column_width = scaleConfig.minColumnWidth
-    gantt.config.row_height = 35
+    gantt.config.row_height = cssPixels('--pms-table-row-height', 40)
     gantt.config.bar_height = 20
     gantt.config.fit_tasks = true
     gantt.config.auto_scheduling = true
@@ -228,7 +234,7 @@ export function DHTMLXGantt({
     queueMicrotask(() => { suppressFeedback.current = false })
   }, [collapsedIds])
 
-  return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
+  return <div className="pms-gantt" ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
 }
 
 // ─── MiniPipeline ───────────────────────────────────────────────────
@@ -252,7 +258,7 @@ export function MiniPipeline({ app }: { app: TransferApplication }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200 }}>
       <Progress percent={pct} size="small" strokeColor={strokeColor} showInfo={false} style={{ flex: 1, margin: 0 }} />
-      <Tag color={tagConfig.color} style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{label}</Tag>
+      <Tag color={tagConfig.color} style={{ margin: 0, fontSize: 12, lineHeight: '18px', padding: '0 6px' }}>{label}</Tag>
     </div>
   )
 }
@@ -263,8 +269,8 @@ export function TeamMemberCard({ member }: { member: TMTeamMember }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 6, border: '1px solid #f3f4f6', background: '#f8fafc' }}>
       <Avatar size={28} style={{ background: ROLE_COLORS[member.role] || '#999', fontSize: 12, flexShrink: 0 }}>{member.name.slice(-1)}</Avatar>
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</div>
-        <div style={{ fontSize: 11, color: '#9ca3af' }}>{member.role} · {member.department}</div>
+        <div style={{ fontSize: 14, fontWeight: 500, color: '#111827', lineHeight: '22px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{member.name}</div>
+        <div style={{ fontSize: 12, color: '#9ca3af', lineHeight: '18px' }}>{member.role} · {member.department}</div>
       </div>
     </div>
   )
@@ -293,7 +299,7 @@ export function renderEntryContent(record: { entryContent?: string; deliverables
     if (lastIdx < content.length) { const t = content.slice(lastIdx).trim(); if (t) segments.push({ type: 'text', text: t }) }
   }
   return (
-    <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', fontSize: 12 }}>
+    <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden', fontSize: 14, lineHeight: '22px' }}>
       {segments.map((seg, i) => {
         if (seg.type === 'feishu') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pms-brand-strong)', display: 'inline-flex', alignItems: 'center', gap: 2 }}><FileTextOutlined style={{ fontSize: 11 }} />飞书文档</a>
         if (seg.type === 'link') return <a key={i} href={seg.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--pms-brand)', display: 'inline-flex', alignItems: 'center', gap: 2 }}><LinkOutlined style={{ fontSize: 11 }} />{seg.text}</a>
@@ -335,7 +341,7 @@ export function ClickToEditDate({ value, onChange, disabledDate, onSaved, align 
     <div
       onClick={() => setEditing(true)}
       style={{
-        fontSize: 12, color: value ? '#4b5563' : '#bfbfbf',
+        fontSize: 14, lineHeight: '22px', color: value ? '#4b5563' : '#bfbfbf',
         cursor: 'pointer', padding: '4px 8px', borderRadius: 4,
         border: '1px dashed transparent', transition: 'all 0.2s',
         minHeight: 28, display: 'flex', alignItems: 'center',

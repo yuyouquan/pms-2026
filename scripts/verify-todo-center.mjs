@@ -180,6 +180,44 @@ assert.equal(transferFixtures[0].generatedAt, '2026-07-28 10:00:00', 'transfer c
 assert.equal(transferFixtures[1].applicationId, 'review', 'transfer routes preserve the real application id rather than the row id')
 assert.equal(transferFixtures[1].id, 'review:review', 'each transfer node keeps a unique workbench row id')
 
+const sameNameProjects = [
+  { id: 'new-project', name: 'X6877(16)' },
+  { id: 'old-project', name: 'X6877(16)' },
+]
+const projectRoutingApplication = {
+  id: 'project-routing', projectId: 'old-project', projectName: 'X6877(16)',
+  status: 'in_progress', applicantId: 'u001', applicant: '张明辉',
+  pipeline: { dataEntry: 'in_progress', maintenanceReview: 'not_started', sqaReview: 'not_started' },
+  team: { maintenance: [], research: [] },
+}
+const buildProjectRoutingTodos = (application, projects = sameNameProjects) => todos.buildTransferTodoCandidates({
+  projects,
+  applications: [application],
+})
+assert.deepEqual(
+  buildProjectRoutingTodos(projectRoutingApplication).map(item => item.projectId),
+  ['old-project'],
+  'transfer todos use the exact project ID even when a same-name project appears first',
+)
+assert.deepEqual(
+  buildProjectRoutingTodos({ ...projectRoutingApplication, projectId: 'removed-project' }),
+  [],
+  'a modern application with a missing project cannot attach to a different same-name project',
+)
+assert.deepEqual(
+  buildProjectRoutingTodos({ ...projectRoutingApplication, projectId: 'proj_001' }, [sameNameProjects[1]]).map(item => item.projectId),
+  ['old-project'],
+  'legacy mock project IDs retain the supported name fallback when no exact ID exists',
+)
+assert.deepEqual(
+  buildProjectRoutingTodos(
+    { ...projectRoutingApplication, projectId: 'proj_001' },
+    [sameNameProjects[0], { id: 'proj_001', name: 'Renamed project' }],
+  ).map(item => [item.projectId, item.projectName]),
+  [['proj_001', 'Renamed project']],
+  'an exact legacy project ID also takes precedence over the historical project name',
+)
+
 const crossDayCandidates = {
   currentUser: '张三',
   planTodos: [

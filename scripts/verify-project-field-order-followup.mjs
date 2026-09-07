@@ -371,7 +371,7 @@ assert.deepEqual(
   'technical common source fields stay outside the business groups without duplication',
 )
 assert.match(modalSource, /label="项目分类" name="secondaryCategory"[\s\S]{0,120}<Input disabled/, 'technical project category renders in the common top area')
-assert.match(modalSource, /mode === 'edit' && \(\s*<Form\.Item label="项目名" name="projectName"/, 'technical edit project name renders in the common top area')
+assert.match(modalSource, /aria-label="IPM项目来源"[\s\S]{0,950}mode === 'create' \?[\s\S]{0,800}: \(\s*<Form\.Item label="项目名" name="projectName"><Input disabled/, 'technical edit project name remains read-only in the common IPM source area')
 assert.match(modalSource, /fields=\{technicalGroupedFields\}/, 'technical Collapse receives only grouped fields')
 assert.match(modalSource, /invalidTechnicalField[\s\S]{0,260}setActiveGroups/, 'technical semantic validation expands the failing field group')
 assert.match(modalSource, /data-project-create-field=\{field\.key\}/, 'rendered create fields must expose their source key in the live DOM')

@@ -8,8 +8,8 @@ const read = file => readFileSync(file, 'utf8')
 const required = [
   ['src/app/page.tsx', 'useActivateProject'],
   ['src/hooks/useActivateProject.ts', 'project.markets'],
-  ['src/app/config/level1-template/page.tsx', 'PROJECT_TEMPLATE_TYPES'],
-  ['src/app/config/level2-template/page.tsx', 'PROJECT_TEMPLATE_TYPES'],
+  ['src/app/config/level1-template/page.tsx', 'LegacyPlanTemplateRoute'],
+  ['src/app/config/level2-template/page.tsx', 'LegacyPlanTemplateRoute'],
   ['src/components/project-info/TargetProjectInformationView.tsx', 'isMachineProjectType'],
   ['src/components/project-info/ProjectInfoModal.tsx', 'isMachineProjectType(item.type)'],
   ['src/lib/projectInfoRules.ts', 'isMachineProjectType(project.type)'],
@@ -28,12 +28,14 @@ const required = [
   ['src/stores/plan.ts', 'PROJECT_TEMPLATE_TYPES'],
   ['src/stores/plan.ts', 'projectTemplateCompatibility'],
   ['src/containers/ConfigContainer.tsx', 'PROJECT_TEMPLATE_TYPES'],
-  ['src/containers/ProjectSpaceContainer.tsx', 'getProjectTypeFamilyKey(selectedProject?.type || selectedPlanType)'],
+  ['src/containers/ProjectSpaceContainer.tsx', 'getProjectTypeFamilyKey(projectType)'],
 ]
 
 for (const [file, token] of required) {
   assert.equal(read(file).includes(token), true, `${file} must use ${token}`)
 }
+
+assert.match(read('src/containers/ProjectSpaceContainer.tsx'), /currentLevel1TemplateResolution\s*=\s*useMemo\(\(\)\s*=>\s*resolvePublishedLevel1Template\(\{\s*projectType:\s*selectedProject\?\.type\s*\|\|\s*selectedPlanType,/, 'the current project type reaches the shared canonical published-template resolver')
 
 const projectTypesFilename = 'src/constants/projectTypes.ts'
 const projectTypesOutput = ts.transpileModule(read(projectTypesFilename), {

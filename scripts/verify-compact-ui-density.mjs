@@ -38,18 +38,20 @@ assert.doesNotMatch(columnSettingsSource, />取消<\/Button>/, 'field configurat
 assert.doesNotMatch(columnSettingsSource, />确定<\/Button>/, 'field configuration has no confirm button')
 
 for (const token of [
-  '--pms-font-size-compact: 12px',
-  '--pms-control-height: 28px',
-  '--pms-table-head-height: 32px',
-  '--pms-table-row-height: 34px',
+  '--pms-font-size-body: 14px',
+  '--pms-control-height: 32px',
+  '--pms-table-head-height: 48px',
+  '--pms-table-row-height: 40px',
+  '--pms-table-group-head-height: 40px',
+  '--pms-font-size-header: 16px',
 ]) assert.match(globalStyles, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `missing density token ${token}`)
 
 assert.match(globalStyles, /grid-template-rows:\s*repeat\(6, minmax\(0, 1fr\)\)/, 'calendar divides the viewport into six weeks')
 assert.match(globalStyles, /\.pms-project-list-card-column/, 'card columns expose a stable five-column hook')
 assert.match(globalStyles, /\.pms-active-filter-conditions\s*\{[^}]*display:\s*flex/s, 'active filters use a compact shared condition rail')
-assert.match(globalStyles, /\.pms-active-filter-chip\s*\{[^}]*height:\s*24px/s, 'active filter chips keep the compact control height')
-assert.match(globalStyles, /\.pms-workbench-header h1\s*\{[^}]*font-size:\s*16px/s, 'workspace titles stay compact while remaining larger than navigation text')
-assert.match(globalStyles, /\.pms-workbench-switch\.ant-segmented\s*\{[^}]*height:\s*28px/s, 'workbench and config capsules match the project-list switch height')
+assert.match(globalStyles, /\.pms-active-filter-chip\s*\{[^}]*height:\s*var\(--pms-control-height\)/s, 'interactive filter chips use the shared control height')
+assert.match(globalStyles, /\.pms-workbench-header h1\s*\{[^}]*font-size:\s*var\(--pms-font-size-title\)/s, 'workspace titles follow the shared 20px scale')
+assert.match(globalStyles, /\.pms-workbench-switch\.ant-segmented\s*\{[^}]*height:\s*var\(--pms-control-height\)/s, 'workbench and config capsules match the project-list switch height')
 assert.match(globalStyles, /\.pms-workbench-switch \.ant-segmented-group,[\s\S]{0,120}display:\s*flex/s, 'shared capsule items remain on one line')
 
-console.log('compact ui density contract passed')
+console.log('shared ui density contract passed')

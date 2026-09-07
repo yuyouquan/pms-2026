@@ -290,7 +290,7 @@ export default function ConfigContainer() {
   const isCurrentDraft = currentVersionData?.status === '修订中'
   const navigateWithEditGuard = (action: () => void) => {
     if (isEditMode && !isCurrentDraft) {
-      setPendingNavigation(() => action)
+      setPendingNavigation(action)
       setShowLeaveConfirm(true)
     } else {
       action()

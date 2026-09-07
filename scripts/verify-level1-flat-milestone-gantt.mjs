@@ -1637,20 +1637,26 @@ assert.equal(publishedActualStore.setCurrentVersion(publishedActualScope, latest
 const publishedActualWrite = latestPublished.tasks.map(task => task.stableId === targetStableId
   ? { ...task, taskName: '不可覆盖的发布名称', planEndDate: '2026-09-01', actualStartDate: '2026-08-02', actualEndDate: '2026-08-09', actualDays: 999 }
   : task)
-assert.equal(publishedActualStore.updateCurrentTasks(publishedActualScope, publishedActualWrite, 2).ok, true, 'latest published version accepts actual-date-only updates')
-const afterPublishedActualWrite = publishedActualStore.getState().plansByKey['published-actual:tdt']
-const afterPublishedTarget = afterPublishedActualWrite.versions.find(version => version.id === latestPublished.id).tasks.find(task => task.stableId === targetStableId)
-const afterDraftTarget = afterPublishedActualWrite.versions.find(version => version.status === '修订中').tasks.find(task => task.stableId === targetStableId)
-const afterDraftCustom = afterPublishedActualWrite.versions.find(version => version.status === '修订中').tasks.find(task => task.stableId === 'custom-draft')
-assert.deepEqual([afterPublishedTarget.taskName, afterPublishedTarget.planEndDate, afterPublishedTarget.actualStartDate, afterPublishedTarget.actualEndDate, afterPublishedTarget.actualDays], [latestPublished.tasks.find(task => task.stableId === targetStableId).taskName, latestPublished.tasks.find(task => task.stableId === targetStableId).planEndDate, '2026-08-02', '2026-08-09', 7], 'published writes preserve plan fields and recompute actual duration')
-assert.deepEqual([afterDraftTarget.taskName, afterDraftTarget.planEndDate, afterDraftTarget.actualStartDate, afterDraftTarget.actualEndDate, afterDraftTarget.actualDays], ['草稿保留名称', '2026-10-01', '2026-08-02', '2026-08-09', 7], 'published writes merge actual fields by stable ID into the paired draft without replacing draft plan fields')
-assert.equal(afterDraftCustom?.taskName, '草稿自定义节点', 'published writes retain paired-draft custom tasks')
+const beforePublishedActualWrite = publishedActualStore.getState().plansByKey['published-actual:tdt']
+assert.deepEqual(publishedActualStore.updateCurrentTasks(publishedActualScope, publishedActualWrite, 2), { ok: false, reason: 'historical-published' }, 'latest published technical version rejects planned and actual date updates')
+assert.deepEqual(publishedActualStore.getState().plansByKey['published-actual:tdt'], beforePublishedActualWrite, 'rejected published writes preserve both release and paired draft')
+assert.equal(publishedActualStore.setCurrentVersion(publishedActualScope, pairedDraft.id), true, 'actual-date editing requires the paired draft')
+const draftActualWrite = ganttRules.applyPlanTaskDatePatch(divergentDraft, {
+  taskId: divergentDraft.find(task => task.stableId === targetStableId).id,
+  patch: { actualStartDate: '2026-08-02', actualEndDate: '2026-08-09' },
+})
+assert.equal(publishedActualStore.updateCurrentTasks(publishedActualScope, draftActualWrite, 2).ok, true, 'technical draft accepts actual-date updates')
+const afterDraftActualWrite = publishedActualStore.getState().plansByKey['published-actual:tdt']
+assert.deepEqual(afterDraftActualWrite.versions.find(version => version.id === latestPublished.id), latestPublished, 'draft actual-date updates never change the published snapshot')
+const afterDraftTarget = afterDraftActualWrite.versions.find(version => version.status === '修订中').tasks.find(task => task.stableId === targetStableId)
+assert.deepEqual([afterDraftTarget.taskName, afterDraftTarget.planEndDate, afterDraftTarget.actualStartDate, afterDraftTarget.actualEndDate, afterDraftTarget.actualDays], ['草稿保留名称', '2026-10-01', '2026-08-02', '2026-08-09', 7], 'draft actual-date editing preserves plan fields and recomputes actual duration')
+assert.equal(afterDraftActualWrite.versions.find(version => version.status === '修订中').tasks.find(task => task.stableId === 'custom-draft')?.taskName, '草稿自定义节点', 'actual-date editing retains custom draft tasks')
 assert.equal(publishedActualStore.publishRevision(publishedActualScope, '2026-02-01T00:00:00Z').ok, true, 'published-actual fixture publishes V2')
-const historicalVersionId = afterPublishedActualWrite.versions.find(version => version.id === latestPublished.id).id
+const historicalVersionId = latestPublished.id
 assert.equal(publishedActualStore.setCurrentVersion(publishedActualScope, historicalVersionId), true, 'published-actual fixture selects historical V1')
 assert.deepEqual(publishedActualStore.updateCurrentTasks(publishedActualScope, publishedActualWrite, 2), { ok: false, reason: 'historical-published' }, 'historical published versions are immutable')
 
-for (const label of ['阶段', '里程碑点', '活动名称', '添加转测版本', '实际开始时间', '实际完成时间']) {
+for (const label of ['阶段/节点', '活动名称', '添加转测版本', '实际开始时间', '实际完成时间']) {
   assert.match(technicalModuleSource, new RegExp(label), `technical plan contains ${label}`)
 }
 assert.match(technicalModuleSource, /transferConfirmation && \(/, 'technical transfer confirmation is controlled by component state')
@@ -1665,8 +1671,8 @@ assert.match(technicalWorkspaceSource, /TECHNICAL_TDT_EXPORT_COLUMNS/, 'technica
 assert.match(technicalWorkspaceSource, /TECHNICAL_SUBPROJECT_EXPORT_COLUMNS/, 'technical workspace exposes subproject export columns')
 
 const technicalStoreSource = read('src/stores/technicalPlan.ts')
-assert.match(technicalStoreSource, /actualStartDate/, 'technical store safely supports published actual-start updates')
-assert.match(technicalStoreSource, /actualDays/, 'technical store synchronizes actual duration when actual dates change')
+assert.match(technicalStoreSource, /currentVersion\.status === '已发布'[\s\S]{0,160}reason: 'historical-published'/, 'technical store keeps published actual values immutable')
+assert.match(technicalModuleSource, /const canEditActualDates = canMaintain\b/, 'technical actual-date editors are limited to a maintainable draft')
 
 const versionCompareSource = read('src/lib/versionCompare.ts')
 const compareModalSource = read('src/components/plans/PlanVersionCompareModal.tsx')

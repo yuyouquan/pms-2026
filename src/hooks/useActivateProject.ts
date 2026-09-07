@@ -24,6 +24,8 @@ export function useActivateProject() {
 
   return useCallback((project: ActivatableProject, options: ActivateProjectOptions = {}) => {
     setTransferView(null)
+    useProjectStore.getState().setBasicInfoEditMode(false)
+    useProjectStore.getState().setEditingProjectFields({})
     setSelectedProject(project)
 
     const projectMarkets: readonly string[] = project.markets || []

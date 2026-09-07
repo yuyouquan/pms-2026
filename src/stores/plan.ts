@@ -18,6 +18,7 @@ import type {
   TosTypeVersionsState,
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
+import { comparePlanVersions } from '@/lib/planVersioning'
 import { buildLevel1TasksForProjectType } from '@/lib/level1PlanRules'
 import { pickScopedPlanPersistence } from '@/lib/projectSpaceLevel1Rules'
 import { getTemplateSnapshotKey, isRetiredLevel3SnapshotKey } from '@/lib/projectTemplateCompatibility'
@@ -730,21 +731,30 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     Object.entries(workbenchAcceptanceSeed.marketVersionsByKey).forEach(([key, seededVersions]) => {
       const storedVersions = Array.isArray(marketVersionsByKey[key]) ? marketVersionsByKey[key] : []
       const storedIds = new Set(storedVersions.map((version: any) => version.id))
+      const hasStoredDraft = storedVersions.some((version: any) => version.status === '修订中')
       marketVersionsByKey[key] = [
         ...storedVersions,
-        ...seededVersions.filter(version => !storedIds.has(version.id)).map(version => ({ ...version })),
+        ...seededVersions.filter(version => !storedIds.has(version.id)
+          && !(hasStoredDraft && version.status === '修订中')).map(version => ({ ...version })),
       ]
     })
     Object.entries(workbenchAcceptanceSeed.tosTypeVersionsByKey).forEach(([key, seededVersions]) => {
       const storedVersions = Array.isArray(tosTypeVersionsByKey[key]) ? tosTypeVersionsByKey[key] : []
       const storedIds = new Set(storedVersions.map((version: any) => version.id))
+      const hasStoredDraft = storedVersions.some((version: any) => version.status === '修订中')
       tosTypeVersionsByKey[key] = [
         ...storedVersions,
-        ...seededVersions.filter(version => !storedIds.has(version.id)).map(version => ({ ...version })),
+        ...seededVersions.filter(version => !storedIds.has(version.id)
+          && !(hasStoredDraft && version.status === '修订中')).map(version => ({ ...version })),
       ]
     })
     const demoRevisionKey = getMarketPlanVersionKey('1', 'OP')
-    if (!marketCurrentVersionByKey[demoRevisionKey]) marketCurrentVersionByKey[demoRevisionKey] = 'v4'
+    if (!marketCurrentVersionByKey[demoRevisionKey]) {
+      const versions = marketVersionsByKey[demoRevisionKey]
+      marketCurrentVersionByKey[demoRevisionKey] = versions.find((version: any) => version.status === '修订中')?.id
+        || [...versions].sort((a, b) => comparePlanVersions(b, a))[0]?.id
+        || ''
+    }
   }
   return {
     ...migrated,

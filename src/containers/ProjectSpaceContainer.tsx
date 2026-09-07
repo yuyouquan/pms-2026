@@ -153,11 +153,12 @@ import { useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { usePlanStore, LEVEL2_PLAN_TYPES, FIXED_LEVEL2_PLANS, VERSION_DATA, LEVEL1_TASKS, LEVEL1_TEMPLATE_TASKS, INITIAL_LEVEL2_PLAN_TASKS, ALL_COLUMNS, TABLE_COLUMNS, GANTT_COLUMNS, getColumnsForView, getTemplateSnapshotKey } from '@/stores/plan'
 import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '@/data/projectListPlanMocks'
 import { useTransferStore } from '@/stores/transfer'
+import { matchesTransferProject } from '@/lib/transferWorkflow'
 import { selectTechnicalProjectStage, useTechnicalPlanStore } from '@/stores/technicalPlan'
 import { resolvePermissionProjectId, usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
-import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview } from '@/components/transfer/TransferModule'
+import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview, TransferWorkbench } from '@/components/transfer/TransferModule'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans/VersionTrainPlan'
 import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
@@ -2052,7 +2053,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const currentProjectTransferApps = useMemo(() =>
-    transfer.transferApplications.filter(a => a.projectName === selectedProject?.name),
+    transfer.transferApplications.filter(a => matchesTransferProject(a, selectedProject)),
     [transfer.transferApplications, selectedProject]
   )
 
@@ -2107,8 +2108,12 @@ export default function ProjectSpaceContainer() {
   }
 
   const navigateWithEditGuard = (action: () => void) => {
-    if (isEditMode && !isCurrentDraft) {
-      setPendingNavigation(() => action)
+    if (basicInfoEditMode || (isEditMode && !isCurrentDraft)) {
+      setPendingNavigation(() => {
+        setBasicInfoEditMode(false)
+        setEditingProjectFields({})
+        action()
+      })
       setShowLeaveConfirmFn(true)
     } else {
       action()
@@ -2937,7 +2942,7 @@ export default function ProjectSpaceContainer() {
 
   // Basic info
   const startBasicInfoEdit = () => {
-    if (!selectedProject) return; const p = selectedProject
+    if (!selectedProject || !canEditBasicInfo) return; const p = selectedProject
     setBasicInfoJiraErrors([])
     const currentJiraProjects = Array.isArray((p as any).jiraProjects) ? (p as any).jiraProjects.map((row: JiraProjectConfig) => ({ ...row })) : []
     setEditingProjectFields({
@@ -2986,6 +2991,7 @@ export default function ProjectSpaceContainer() {
     setBasicInfoEditMode(true)
   }
   const saveBasicInfoEdit = () => {
+    if (!canEditBasicInfo) return
     const enumState = useEnumStore.getState()
     if (!enumState.hasHydrated || enumState.hydrationError) {
       message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
@@ -3144,6 +3150,7 @@ export default function ProjectSpaceContainer() {
 
   // Export functions
   const handleExportVerticalPlan = (scope: 'current' | 'all') => {
+    if (!canExportTechnicalPlan) return
     const isGovernedLevel1Export = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
     const exportCols: ExportColumn[] = isGovernedLevel1Export
@@ -3167,6 +3174,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
+    if (!canExportTechnicalPlan) return
     const displayVersions = selectLevel1HorizontalVersions(level1SurfaceVersions, {
       surface: 'project-plan',
       includeDraft: level1SurfaceCanMaintain,
@@ -3225,6 +3233,8 @@ export default function ProjectSpaceContainer() {
   }), [currentLoginUser])
   const transferProps = {
     selectedProject, currentUser: transferCurrentUser,
+    canApplyTransfer: canDo('basicInfo:applyTransfer'),
+    canViewTransfer: canDo('basicInfo:transferView'),
     transferView: transfer.transferView, setTransferView: transfer.setTransferView,
     transferConfigView: transfer.transferConfigView, setTransferConfigView: transfer.setTransferConfigView,
     tmConfigSearchText: transfer.tmConfigSearchText, setTmConfigSearchText: transfer.setTmConfigSearchText,
@@ -4528,6 +4538,7 @@ export default function ProjectSpaceContainer() {
   )
 
   const renderProjectBasicInfo = () => {
+    if (!canViewBasicInfo) return <Empty description="无基础信息查看权限" />
     const p = selectedProject
     if (!p) return null
     const isWholeMachine = isMachineProjectType(p.type)
@@ -4722,7 +4733,7 @@ export default function ProjectSpaceContainer() {
       { id: 'section-header', label: isTargetProject ? '项目名称' : '项目概览', icon: <ProjectOutlined /> },
       { id: 'section-plan', label: '计划信息', icon: <CalendarOutlined /> },
       { id: 'section-basic', label: isTargetProject ? '项目信息' : '基本信息', icon: <SettingOutlined /> },
-      ...(isWholeMachine && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
+      ...(isWholeMachine && canDo('basicInfo:transferView') && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
       ...(!isTargetProject && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
     ]
     const scrollToSection = (id: string) => {
@@ -4765,7 +4776,8 @@ export default function ProjectSpaceContainer() {
             canConfigure={canViewBasicInfo}
             onEdit={() => setShowProjectInfoEditor(true)}
             onApplyTransfer={isWholeMachine ? () => transfer.setTransferView('apply') : undefined}
-            afterCore={isWholeMachine ? renderWholeMachinePlanInfo() : renderProjectPlanInfo()}
+            canApplyTransfer={canDo('basicInfo:applyTransfer')}
+            afterCore={canDo('basicInfo:planConfigView') ? (isWholeMachine ? renderWholeMachinePlanInfo() : renderProjectPlanInfo()) : undefined}
             visibleGroupKeys={isTosVersionProject ? ['team'] : undefined}
           />
         ) : (
@@ -4915,7 +4927,7 @@ export default function ProjectSpaceContainer() {
           </>
         )}
         {/* Transfer info */}
-        {isWholeMachine && currentProjectTransferApps.length > 0 && (
+        {isWholeMachine && canDo('basicInfo:transferView') && currentProjectTransferApps.length > 0 && (
           <Card
             id="section-transfer"
             style={{ marginBottom: 20, borderRadius: 8 }}
@@ -4935,36 +4947,7 @@ export default function ProjectSpaceContainer() {
             )}
           >
             {!transferInfoCollapsed && <div id="section-transfer-content">
-              <Table dataSource={currentProjectTransferApps} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }}
-              rowClassName={(r: any) => r.status === 'cancelled' ? 'tm-row-cancelled' : ''}
-              columns={[
-                { title: '项目名称', dataIndex: 'projectName', width: 200, render: (_: unknown, r: TransferApplication) => (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || 'var(--pms-brand-strong)'} 0%, var(--pms-brand) 100%)`, fontSize: 12, flexShrink: 0 }}>{r.applicant.slice(-1)}</Avatar>
-                    <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div><div style={{ fontSize: 11, color: '#9ca3af' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div></div>
-                  </div>
-                ) },
-                { title: '流水线进度', width: 180, render: (_: unknown, r: TransferApplication) => <MiniPipeline app={r} /> },
-                { title: '计划评审日期', dataIndex: 'plannedReviewDate', width: 110 },
-                { title: '角色进度', width: 180, render: (_: unknown, r: TransferApplication) => (
-                  <Space size={4} wrap>
-                    {r.pipeline.roleProgress.map(rp => {
-                      const color = rp.entryStatus === 'completed' && rp.reviewStatus === 'completed' ? 'success' : rp.reviewStatus === 'rejected' ? 'error' : rp.entryStatus === 'in_progress' || rp.reviewStatus === 'in_progress' ? 'processing' : 'default'
-                      return <Tag key={rp.role} color={color} style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{rp.role}</Tag>
-                    })}
-                  </Space>
-                ) },
-                { title: '操作', width: 220, render: (_: unknown, r: TransferApplication) => (
-                  <Space size={4}>
-                    <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: '#666' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('detail') }}>详情</Button>
-                    {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('entry') }}>录入</Button>}
-                    {r.status === 'in_progress' && r.pipeline.maintenanceReview === 'in_progress' && <Button size="small" type="text" icon={<AuditOutlined />} style={{ color: '#52c41a' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('review') }}>评审</Button>}
-                    {r.status === 'in_progress' && r.pipeline.sqaReview === 'in_progress' && <Button size="small" type="text" icon={<SafetyOutlined />} style={{ color: '#faad14' }} onClick={() => { transfer.setSelectedTransferAppId(r.id); transfer.setTransferView('sqa-review') }}>SQA审核</Button>}
-                    {r.status === 'in_progress' && <Button size="small" type="text" danger icon={<CloseCircleOutlined />} onClick={() => { transfer.setTmCloseAppId(r.id); transfer.setTmCloseReason(''); transfer.setTmCloseModalVisible(true) }}>关闭</Button>}
-                  </Space>
-                ) },
-              ]}
-              />
+              <TransferWorkbench {...transferProps} embedded />
             </div>}
           </Card>
         )}
@@ -5090,6 +5073,9 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ renderProjectPlan ═══════
   const renderProjectPlan = () => {
+    if (!(projectPlanLevel === 'level2' ? canViewLevel2Plan : canViewLevel1Plan)) {
+      return <Empty description="无当前计划查看权限" />
+    }
     const showMarketControls = isMachineProjectType(selectedProject?.type) && projectPlanLevel === 'level1'
     const showTosTypeTabs = selectedProject?.type === PROJECT_TYPE_TOS_VERSION
       && projectPlanLevel === 'level1'
@@ -5491,7 +5477,7 @@ export default function ProjectSpaceContainer() {
                   ) : null}
                   {projectPlanViewMode !== 'gantt' && (
                     <Dropdown trigger={['click']} menu={{ items: [{ key: 'current', label: '导出当前视图' }, { key: 'all', label: '导出全部' }], onClick: ({ key }) => { if (projectPlanViewMode === 'horizontal') handleExportHorizontalPlan(key as 'current' | 'all'); else handleExportVerticalPlan(key as 'current' | 'all') } }}>
-                      <Tooltip title="导出为 Excel"><Button aria-label="导出计划" icon={<DownloadOutlined />} style={{ borderRadius: 6 }} /></Tooltip>
+                      <Tooltip title={canExportTechnicalPlan ? '导出为 Excel' : '无计划导出权限'}><Button disabled={!canExportTechnicalPlan} aria-label="导出计划" icon={<DownloadOutlined />} style={{ borderRadius: 6 }} /></Tooltip>
                     </Dropdown>
                   )}
                   {projectPlanLevel !== 'level1' && projectPlanViewMode !== 'horizontal' && (
@@ -5527,10 +5513,11 @@ export default function ProjectSpaceContainer() {
                     <Button icon={<HistoryOutlined />} style={{ borderRadius: 6 }} onClick={() => setShowVersionCompare(true)} aria-label="版本对比" />
                   </Tooltip>
                   {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
-                    <Tooltip title="复制分享链接，无需权限即可查看">
-                      <Button icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} onClick={() => {
+                    <Tooltip title="复制已发布计划链接；当前为本地演示，其他浏览器不会同步本地修改">
+                      <Button disabled={!canShareTechnicalPlan} icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} onClick={() => {
+                        if (!canShareTechnicalPlan) return
                         const url = `${window.location.origin}/share/plan?projectId=${selectedProject?.id}&level=level1`
-                        navigator.clipboard.writeText(url).then(() => { message.success('分享链接已复制到剪贴板') })
+                        navigator.clipboard.writeText(url).then(() => { message.success('分享链接已复制到剪贴板') }).catch(() => { message.error('复制失败，请检查浏览器剪贴板权限后重试') })
                       }} aria-label="分享计划" />
                     </Tooltip>
                   )}
@@ -5551,17 +5538,17 @@ export default function ProjectSpaceContainer() {
 
   // ═══════ Sidebar menu items ═══════
   const menuItems = [
-    { key: 'basic', icon: <SettingOutlined />, label: '基础信息' },
+    { key: 'basic', icon: <SettingOutlined />, label: '基础信息', disabled: !canViewBasicInfo },
     { key: 'overview', icon: <FileTextOutlined />, label: '概况' },
     { key: 'requirements', icon: <FileTextOutlined />, label: '需求' },
-    { key: 'plan', icon: <CalendarOutlined />, label: '计划' },
+    { key: 'plan', icon: <CalendarOutlined />, label: '计划', disabled: !canViewLevel1Plan && !canViewLevel2Plan },
     { key: 'resources', icon: <TeamOutlined />, label: '资源' },
     { key: 'tasks', icon: <CheckSquareOutlined />, label: '任务' },
     { key: 'risks', icon: <WarningOutlined />, label: '风险' },
     { key: 'bugs', icon: <BugOutlined />, label: '缺陷' },
     { key: 'team', icon: <TeamOutlined />, label: '团队' },
     { key: 'docs', icon: <FolderOutlined />, label: '项目文档' },
-    { key: 'permission', icon: <SafetyCertificateOutlined />, label: '权限配置' },
+    { key: 'permission', icon: <SafetyCertificateOutlined />, label: '权限配置', disabled: !canManageRoles },
   ]
 
   const handleComparePlanVersions = () => {
@@ -5676,7 +5663,7 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'review' && <TransferReview {...transferProps} />}
           {transfer.transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
           {transfer.transferView === null && projectSpaceModule === 'basic' && (
-            isTechnicalProject && selectedProject
+            !canViewBasicInfo ? <Empty description="无基础信息查看权限" /> : isTechnicalProject && selectedProject
               ? <TechnicalProjectInformationView
                   project={selectedProject}
                   stage={technicalStage}
@@ -5713,9 +5700,9 @@ export default function ProjectSpaceContainer() {
               <Empty description={<span style={{ color: '#9ca3af' }}>需求模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
             </Card>
           )}
-          {transfer.transferView === null && projectSpaceModule === 'permission' && (
+          {transfer.transferView === null && projectSpaceModule === 'permission' && (canManageRoles ? (
             <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} projectType={selectedProject?.type} onRoleMembersChange={handleProjectRoleMembersChange} syncTosTeamPermissionMembers={handleProjectRoleMembersChange} canManageRoles={canManageRoles} />
-          )}
+          ) : <Empty description="无项目权限配置权限" />)}
           {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
               <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
@@ -5748,7 +5735,7 @@ export default function ProjectSpaceContainer() {
       {/* Version compare modal */}
       <PlanVersionCompareModal
         fieldMode={usesGovernedProjectLevel1History ? 'governed' : 'legacy'}
-        open={showVersionCompare}
+        open={showVersionCompare && canViewCurrentPlan}
         rows={compareResult}
         versions={usesGovernedProjectLevel1History ? level1SurfaceVersions : versions}
         baseVersionId={compareVersionA}

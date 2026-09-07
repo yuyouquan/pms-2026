@@ -1,3 +1,4 @@
+import { ALL_USERS } from '@/constants/permissions'
 import {
   getMarketCurrentVersion,
   getMarketPlanVersionKey,
@@ -249,14 +250,18 @@ export function buildTransferTodoCandidates({
 }): TransferTodoCandidate[] {
   return applications.flatMap(application => {
     if (application.status === 'cancelled') return []
-    const project = projects.find(candidate => candidate.id === application.projectId || candidate.name === application.projectName)
+    const project = projects.find(candidate => candidate.id === application.projectId)
+      ?? (/^proj_\d+$/.test(application.projectId)
+        ? projects.find(candidate => candidate.name === application.projectName)
+        : undefined)
     if (!project) return []
     const nodes = [
       {
         key: 'entry',
         state: application.pipeline.dataEntry,
         label: '转维资料录入',
-        owner: { id: application.applicantId, name: application.applicant },
+        owner: application.team.research.find(member => member.role === 'SPM')
+          ?? { id: application.applicantId, name: application.applicant },
       },
       {
         key: 'review',
@@ -370,6 +375,8 @@ export function mapTransferOwnerToPmsUser(
   transferExternalUserName: string | undefined,
 ): string | undefined {
   if (!transferExternalUserId || !transferExternalUserName) return undefined
+  // Applications created inside PMS carry this exact local-directory identity pair.
+  if (transferExternalUserId === `login-${transferExternalUserName}` && ALL_USERS.includes(transferExternalUserName)) return transferExternalUserName
   const identity = TRANSFER_TO_PMS_USER_MAP[transferExternalUserId]
   return identity?.transferUserName === transferExternalUserName
     ? identity.pmsUserName

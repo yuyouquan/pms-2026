@@ -20,8 +20,9 @@ export function getActiveProjectStatuses(projectType: string): readonly string[]
   return ACTIVE_PROJECT_STATUSES.tos
 }
 
-export function normalizeLegacyProjectStatus(projectType: string, status: string): string {
-  const value = status.trim()
+export function normalizeLegacyProjectStatus(projectType: string, status: unknown): string {
+  // Persisted legacy records can predate the status field or contain null.
+  const value = typeof status === 'string' ? status.trim() : ''
   if (!value) return value
   if (isMachineStatusProjectType(projectType)) {
     if (ACTIVE_PROJECT_STATUSES.machine.includes(value as typeof ACTIVE_PROJECT_STATUSES.machine[number])) return value

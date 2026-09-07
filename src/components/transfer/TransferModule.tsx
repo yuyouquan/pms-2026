@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment } from 'react'
+import { Fragment, useEffect } from 'react'
 import {
   Card,
   Table,
@@ -72,9 +72,8 @@ import {
   type PipelineState,
   type PipelineNodeStatus,
   type TMTeamMember,
-  type EntryStatus,
-  type ReviewStatus,
 } from '@/mock/transfer-maintenance'
+import { matchesTransferProject, canEnterTransferItem, canReviewTransferItem, canSqaReviewTransfer, createTransferMaterials, getMissingTransferTeamRoles, syncTransferPipeline } from '@/lib/transferWorkflow'
 import { ConfigWorkspaceShell } from '@/components/shared/CollapsibleWorkspace'
 
 const { Option } = Select
@@ -222,6 +221,8 @@ export interface TransferModuleProps {
   // Project context
   selectedProject: { id: string; name: string; [key: string]: any } | null
   currentUser: { id: string; name: string; [key: string]: any }
+  canApplyTransfer?: boolean
+  canViewTransfer?: boolean
 
   // Transfer view navigation
   transferView: null | 'apply' | 'detail' | 'entry' | 'review' | 'sqa-review'
@@ -319,6 +320,21 @@ export interface TransferModuleProps {
   setProjectSpaceModule: (v: string) => void
 }
 
+// A user/project switch invalidates any confirmation opened under the old identity.
+function useTransferDialogScope(props: TransferModuleProps) {
+  useEffect(() => {
+    props.setTmEntryModalOpen(false)
+    props.setTmEntryModalRecord(null)
+    props.setTmEntryContent('')
+    props.setTmReviewModalOpen(false)
+    props.setTmReviewRecord(null)
+    props.setTmReviewComment('')
+    props.setTmSqaModalOpen(false)
+    props.setTmSqaComment('')
+    props.setTmCloseModalVisible(false)
+  }, [props.currentUser.id, props.currentUser.name, props.selectedProject?.id, props.selectedTransferAppId, props.canViewTransfer, props.canApplyTransfer])
+}
+
 // ========== TransferConfig ==========
 export function TransferConfig(props: TransferModuleProps) {
   const configSidebarCollapsed = props.configSidebarCollapsed ?? false
@@ -414,19 +430,63 @@ export function TransferConfig(props: TransferModuleProps) {
 }
 
 // ========== TransferWorkbench ==========
-export function TransferWorkbench(props: TransferModuleProps) {
-  const apps = props.transferApplications.filter(a => a.projectName === props.selectedProject?.name)
+export function TransferWorkbench(props: TransferModuleProps & { embedded?: boolean }) {
+  useTransferDialogScope(props)
+  if (!props.canViewTransfer) return <Empty description="暂无转维信息查看权限" />
+  const apps = props.transferApplications.filter(a => matchesTransferProject(a, props.selectedProject))
   const stats = [
     { label: '总计', value: apps.length, color: 'var(--pms-brand-strong)' },
     { label: '进行中', value: apps.filter(a => a.status === 'in_progress').length, color: 'var(--pms-brand)' },
     { label: '已完成', value: apps.filter(a => a.status === 'completed').length, color: '#52c41a' },
     { label: '已关闭', value: apps.filter(a => a.status === 'cancelled').length, color: '#e5e7eb' },
   ]
+  const tableContent = (<>
+      <Table dataSource={apps} rowKey="id" size="small" pagination={false} scroll={props.embedded ? { x: 900 } : undefined} rowClassName={(r) => r.status === 'cancelled' ? 'tm-row-cancelled' : ''}
+          columns={[
+            { title: '项目名称', dataIndex: 'projectName', width: props.embedded ? 200 : 240, render: (_: unknown, r: TransferApplication) => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || 'var(--pms-brand-strong)'} 0%, var(--pms-brand) 100%)`, fontSize: 12 }}>{r.applicant.slice(-1)}</Avatar>
+                <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div><div style={{ fontSize: 11, color: '#9ca3af' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div></div>
+              </div>
+            )},
+            { title: '流水线进度', width: props.embedded ? 180 : 200, render: (_: unknown, r: TransferApplication) => <MiniPipeline app={r} /> },
+            { title: props.embedded ? '计划评审日期' : '计划评审', dataIndex: 'plannedReviewDate', width: 110 },
+            ...(!props.embedded ? [{ title: '备注', dataIndex: 'remark', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' }] : []),
+            { title: '角色进度', width: props.embedded ? 180 : 200, render: (_: unknown, r: TransferApplication) => (
+              <Space size={4} wrap>{r.pipeline.roleProgress.map(rp => {
+                const color = rp.entryStatus === 'completed' && rp.reviewStatus === 'completed' ? 'success' : rp.reviewStatus === 'rejected' ? 'error' : rp.entryStatus === 'in_progress' || rp.reviewStatus === 'in_progress' ? 'processing' : 'default'
+                return <Tag key={rp.role} color={color} style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{rp.role}</Tag>
+              })}</Space>
+            )},
+            { title: '操作', width: props.embedded ? 220 : 260, fixed: props.embedded ? undefined : 'right' as const, render: (_: unknown, r: TransferApplication) => (
+              <Space size={4}>
+                <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: '#666' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('detail'); }}>详情</Button>
+                {[...props.tmChecklistItems, ...props.tmReviewElements].some(item => canEnterTransferItem(r, item, props.currentUser, props.selectedProject)) && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('entry'); }}>录入</Button>}
+                {[...props.tmChecklistItems, ...props.tmReviewElements].some(item => canReviewTransferItem(r, item, props.currentUser, props.selectedProject)) && <Button size="small" type="text" icon={<AuditOutlined />} style={{ color: '#52c41a' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('review'); }}>评审</Button>}
+                {canSqaReviewTransfer(r, props.currentUser, props.selectedProject) && <Button size="small" type="text" icon={<SafetyOutlined />} style={{ color: '#faad14' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('sqa-review'); }}>SQA审核</Button>}
+                {props.canApplyTransfer && r.status === 'in_progress' && <Button size="small" type="text" danger icon={<CloseCircleOutlined />} onClick={() => { props.setTmCloseAppId(r.id); props.setTmCloseReason(''); props.setTmCloseModalVisible(true); }}>关闭</Button>}
+              </Space>
+            )},
+          ]}
+        />
+      {/* 关闭Modal */}
+      <Modal title="关闭转维流水线" open={props.tmCloseModalVisible} onCancel={() => props.setTmCloseModalVisible(false)} onOk={() => {
+        const target = apps.find(app => app.id === props.tmCloseAppId)
+        if (!props.canApplyTransfer || !target || target.status !== 'in_progress') { message.warning('当前无权关闭该转维申请'); return }
+        if (!props.tmCloseReason.trim()) { message.warning('请输入关闭原因'); return; }
+        props.setTransferApplications(prev => prev.map(a => a.id === props.tmCloseAppId ? { ...a, status: 'cancelled' as const, cancelReason: props.tmCloseReason } : a));
+        props.setTmCloseModalVisible(false); message.success('已关闭');
+      }}>
+        <div style={{ marginBottom: 12, fontSize: 13, color: '#9ca3af' }}>关闭后该转维申请将不可恢复，请确认。</div>
+        <TextArea rows={3} placeholder="请输入关闭原因..." value={props.tmCloseReason} onChange={e => props.setTmCloseReason(e.target.value)} />
+      </Modal>
+  </>)
+  if (props.embedded) return tableContent
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
       <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ fontSize: 18, fontWeight: 600 }}>转维管理</span>
-        <Button type="primary" icon={<PlusOutlined />} style={{ background: 'var(--pms-brand-strong)' }} onClick={() => props.setTransferView('apply')}>申请转维</Button>
+        <Button type="primary" icon={<PlusOutlined />} style={{ background: 'var(--pms-brand-strong)' }} disabled={!props.canApplyTransfer} onClick={() => { if (props.canApplyTransfer) props.setTransferView('apply') }}>申请转维</Button>
       </div>
       <Row gutter={16} style={{ marginBottom: 20 }}>
         {stats.map(s => (
@@ -438,50 +498,15 @@ export function TransferWorkbench(props: TransferModuleProps) {
         ))}
       </Row>
       <Card style={{ borderRadius: 8 }}>
-        <Table dataSource={apps} rowKey="id" size="small" pagination={false} rowClassName={(r) => r.status === 'cancelled' ? 'tm-row-cancelled' : ''}
-          columns={[
-            { title: '项目名称', dataIndex: 'projectName', width: 240, render: (_: unknown, r: TransferApplication) => (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <Avatar size={32} style={{ background: `linear-gradient(135deg, ${ROLE_COLORS[r.team.research[0]?.role] || 'var(--pms-brand-strong)'} 0%, var(--pms-brand) 100%)`, fontSize: 12 }}>{r.applicant.slice(-1)}</Avatar>
-                <div><div style={{ fontSize: 13, fontWeight: 500 }}>{r.projectName}</div><div style={{ fontSize: 11, color: '#9ca3af' }}>{r.applicant} · {r.createdAt.slice(0, 10)}</div></div>
-              </div>
-            )},
-            { title: '流水线进度', width: 200, render: (_: unknown, r: TransferApplication) => <MiniPipeline app={r} /> },
-            { title: '计划评审', dataIndex: 'plannedReviewDate', width: 110 },
-            { title: '备注', dataIndex: 'remark', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' },
-            { title: '角色进度', width: 200, render: (_: unknown, r: TransferApplication) => (
-              <Space size={4} wrap>{r.pipeline.roleProgress.map(rp => {
-                const color = rp.entryStatus === 'completed' && rp.reviewStatus === 'completed' ? 'success' : rp.reviewStatus === 'rejected' ? 'error' : rp.entryStatus === 'in_progress' || rp.reviewStatus === 'in_progress' ? 'processing' : 'default'
-                return <Tag key={rp.role} color={color} style={{ margin: 0, fontSize: 11, lineHeight: '18px', padding: '0 6px' }}>{rp.role}</Tag>
-              })}</Space>
-            )},
-            { title: '操作', width: 260, fixed: 'right' as const, render: (_: unknown, r: TransferApplication) => (
-              <Space size={4}>
-                <Button size="small" type="text" icon={<FileTextOutlined />} style={{ color: '#666' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('detail'); }}>详情</Button>
-                {r.status === 'in_progress' && r.pipeline.dataEntry !== 'success' && <Button size="small" type="text" icon={<EditOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('entry'); }}>录入</Button>}
-                {r.status === 'in_progress' && r.pipeline.maintenanceReview === 'in_progress' && <Button size="small" type="text" icon={<AuditOutlined />} style={{ color: '#52c41a' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('review'); }}>评审</Button>}
-                {r.status === 'in_progress' && r.pipeline.sqaReview === 'in_progress' && <Button size="small" type="text" icon={<SafetyOutlined />} style={{ color: '#faad14' }} onClick={() => { props.setSelectedTransferAppId(r.id); props.setTransferView('sqa-review'); }}>SQA审核</Button>}
-                {r.status === 'in_progress' && <Button size="small" type="text" danger icon={<CloseCircleOutlined />} onClick={() => { props.setTmCloseAppId(r.id); props.setTmCloseReason(''); props.setTmCloseModalVisible(true); }}>关闭</Button>}
-              </Space>
-            )},
-          ]}
-        />
+        {tableContent}
       </Card>
-      {/* 关闭Modal */}
-      <Modal title="关闭转维流水线" open={props.tmCloseModalVisible} onCancel={() => props.setTmCloseModalVisible(false)} onOk={() => {
-        if (!props.tmCloseReason.trim()) { message.warning('请输入关闭原因'); return; }
-        props.setTransferApplications(prev => prev.map(a => a.id === props.tmCloseAppId ? { ...a, status: 'cancelled' as const, cancelReason: props.tmCloseReason } : a));
-        props.setTmCloseModalVisible(false); message.success('已关闭');
-      }}>
-        <div style={{ marginBottom: 12, fontSize: 13, color: '#9ca3af' }}>关闭后该转维申请将不可恢复，请确认。</div>
-        <TextArea rows={3} placeholder="请输入关闭原因..." value={props.tmCloseReason} onChange={e => props.setTmCloseReason(e.target.value)} />
-      </Modal>
     </div>
   )
 }
 
 // ========== TransferApply ==========
 export function TransferApply(props: TransferModuleProps) {
+  useTransferDialogScope(props)
   const roleOrder: string[] = ['SPM', 'TPM', 'SQA', '底软', '系统', '影像']
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -559,7 +584,10 @@ export function TransferApply(props: TransferModuleProps) {
         <div style={{ marginTop: 24, textAlign: 'right' }}>
           <Space>
             <Button onClick={() => props.setTransferView(null)}>取消</Button>
-            <Button type="primary" style={{ background: 'var(--pms-brand-strong)' }} onClick={() => {
+            <Button type="primary" disabled={!props.canApplyTransfer || !props.selectedProject} style={{ background: 'var(--pms-brand-strong)' }} onClick={() => {
+              if (!props.canApplyTransfer || !props.selectedProject) { message.warning('暂无申请转维权限'); return }
+              const missingRoles = getMissingTransferTeamRoles(props.tmApplyTeam)
+              if (missingRoles.length) { message.warning(`请配置团队成员：${missingRoles.join('、')}`); return }
               if (!props.tmApplyDate) { message.warning('请选择计划评审日期'); return; }
               const newApp: TransferApplication = {
                 id: `app-new-${Date.now()}`,
@@ -584,6 +612,9 @@ export function TransferApply(props: TransferModuleProps) {
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
               }
+              const materials = createTransferMaterials(newApp)
+              props.setTmChecklistItems(prev => [...prev, ...materials.checklist])
+              props.setTmReviewElements(prev => [...prev, ...materials.reviewElements])
               props.setTransferApplications(prev => [newApp, ...prev])
               props.setTmApplyDate(''); props.setTmApplyRemark(''); props.setTmApplyTeam({ research: [], maintenance: [] })
               props.setTransferView(null); props.setProjectSpaceModule('basic')
@@ -598,8 +629,9 @@ export function TransferApply(props: TransferModuleProps) {
 
 // ========== TransferDetail ==========
 export function TransferDetail(props: TransferModuleProps) {
-  const app = props.transferApplications.find(a => a.id === props.selectedTransferAppId)
-  if (!app) return <Empty description="未找到该转维申请" />
+  useTransferDialogScope(props)
+  const app = props.transferApplications.find(a => a.id === props.selectedTransferAppId && matchesTransferProject(a, props.selectedProject))
+  if (!props.canViewTransfer || !app) return <Empty description="未找到申请或暂无查看权限" />
   const appChecklist = props.tmChecklistItems.filter(c => c.applicationId === app.id)
   const appReviewEls = props.tmReviewElements.filter(r => r.applicationId === app.id)
   const appBlockTasks = props.tmBlockTasks.filter(b => b.applicationId === app.id)
@@ -808,8 +840,9 @@ export function TransferDetail(props: TransferModuleProps) {
 
 // ========== TransferEntry ==========
 export function TransferEntry(props: TransferModuleProps) {
-  const app = props.transferApplications.find(a => a.id === props.selectedTransferAppId)
-  if (!app) return <Empty description="未找到申请" />
+  useTransferDialogScope(props)
+  const app = props.transferApplications.find(a => a.id === props.selectedTransferAppId && matchesTransferProject(a, props.selectedProject))
+  if (!props.canViewTransfer || !app) return <Empty description="未找到申请或暂无查看权限" />
 
   const appChecklist = props.tmChecklistItems.filter(c => c.applicationId === app.id)
   const appReviewEls = props.tmReviewElements.filter(r => r.applicationId === app.id)
@@ -818,21 +851,40 @@ export function TransferEntry(props: TransferModuleProps) {
   const filteredRE = props.tmEntryActiveRole === 'all' ? appReviewEls : appReviewEls.filter(r => r.responsibleRole === props.tmEntryActiveRole)
 
   const openEntry = (record: any, tab: 'checklist' | 'review') => {
-    props.setTmEntryModalRecord({ ...record, _tab: tab })
+    if (!canEnterTransferItem(app, record, props.currentUser, props.selectedProject)) return
+    props.setTmEntryModalRecord({ ...record, _tab: tab, _actorId: props.currentUser.id })
     props.setTmEntryContent(record.entryContent || '')
     props.setTmEntryModalOpen(true)
   }
 
   const saveEntry = (mode: 'draft' | 'confirm') => {
-    if (!props.tmEntryModalRecord) return
-    const status: EntryStatus = mode === 'draft' ? 'draft' : 'entered'
-    if (props.tmEntryModalRecord._tab === 'checklist') {
-      props.setTmChecklistItems(prev => prev.map(c => c.id === props.tmEntryModalRecord.id ? { ...c, entryContent: props.tmEntryContent, entryStatus: status, aiCheckStatus: mode === 'confirm' ? 'passed' as const : 'not_started' as const } : c))
-    } else {
-      props.setTmReviewElements(prev => prev.map(r => r.id === props.tmEntryModalRecord.id ? { ...r, entryContent: props.tmEntryContent, entryStatus: status, aiCheckStatus: mode === 'confirm' ? 'passed' as const : 'not_started' as const } : r))
+    const modalRecord = props.tmEntryModalRecord
+    if (!modalRecord) return
+    const source = modalRecord._tab === 'checklist' ? props.tmChecklistItems : props.tmReviewElements
+    const record = source.find(item => item.id === modalRecord.id && item.applicationId === app.id)
+    if (!props.canViewTransfer || !record || modalRecord._actorId !== props.currentUser.id || !canEnterTransferItem(app, record, props.currentUser, props.selectedProject)) {
+      message.warning('当前无权录入该资料'); return
     }
+    if (mode === 'confirm' && !props.tmEntryContent.trim() && !record.deliverables.length) { message.warning('请填写录入内容'); return }
+    const update = <T extends CheckListItem | ReviewElement>(item: T): T => item.id === record.id && item.applicationId === app.id ? {
+      ...item, entryContent: props.tmEntryContent, entryStatus: mode === 'draft' ? 'draft' : 'entered',
+      aiCheckStatus: mode === 'confirm' ? 'passed' : 'not_started', aiCheckResult: undefined,
+      reviewStatus: 'not_reviewed', reviewComment: undefined,
+    } : item
+    const checklist = modalRecord._tab === 'checklist' ? props.tmChecklistItems.map(update) : props.tmChecklistItems
+    const reviewElements = modalRecord._tab === 'review' ? props.tmReviewElements.map(update) : props.tmReviewElements
+    props.setTmChecklistItems(checklist)
+    props.setTmReviewElements(reviewElements)
+    props.setTransferApplications(prev => prev.map(item => item.id === app.id ? syncTransferPipeline(item, checklist, reviewElements) : item))
     props.setTmEntryModalOpen(false)
     message.success(mode === 'draft' ? '已暂存' : '已确认并提交AI检查')
+    if (mode === 'confirm') {
+      const remaining = [...checklist, ...reviewElements].filter(item => item.applicationId === app.id && (item.entryStatus !== 'entered' || item.aiCheckStatus !== 'passed' || item.reviewStatus === 'rejected') && canEnterTransferItem(app, item, props.currentUser, props.selectedProject))
+      if (remaining.length) {
+        props.setTmEntryActiveRole(remaining[0].responsibleRole)
+        props.setTmEntryTab('checkItem' in remaining[0] ? 'checklist' : 'review')
+      } else props.setTransferView('detail')
+    }
   }
 
   const clColumns: any[] = [
@@ -844,7 +896,7 @@ export function TransferEntry(props: TransferModuleProps) {
     { title: '录入状态', dataIndex: 'entryStatus', width: 90, render: (v: string) => <Tag color={ENTRY_STATUS_CONFIG[v]?.color}>{ENTRY_STATUS_CONFIG[v]?.label}</Tag> },
     { title: 'AI检查', dataIndex: 'aiCheckStatus', width: 90, render: (v: string) => <Tag color={AI_CHECK_STATUS_CONFIG[v]?.color}>{AI_CHECK_STATUS_CONFIG[v]?.label}</Tag> },
     { title: '内容', dataIndex: 'entryContent', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' },
-    { title: '操作', width: 100, render: (_: unknown, r: any) => <Button size="small" type="link" onClick={() => openEntry(r, 'checklist')}>录入</Button> },
+    { title: '操作', width: 100, render: (_: unknown, r: any) => canEnterTransferItem(app, r, props.currentUser, props.selectedProject) ? <Button size="small" type="link" onClick={() => openEntry(r, 'checklist')}>录入</Button> : '-' },
   ]
   const reColumns: any[] = [
     { title: '序号', dataIndex: 'seq', width: 60 },
@@ -855,7 +907,7 @@ export function TransferEntry(props: TransferModuleProps) {
     { title: '录入状态', dataIndex: 'entryStatus', width: 90, render: (v: string) => <Tag color={ENTRY_STATUS_CONFIG[v]?.color}>{ENTRY_STATUS_CONFIG[v]?.label}</Tag> },
     { title: 'AI检查', dataIndex: 'aiCheckStatus', width: 90, render: (v: string) => <Tag color={AI_CHECK_STATUS_CONFIG[v]?.color}>{AI_CHECK_STATUS_CONFIG[v]?.label}</Tag> },
     { title: '内容', dataIndex: 'entryContent', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' },
-    { title: '操作', width: 100, render: (_: unknown, r: any) => <Button size="small" type="link" onClick={() => openEntry(r, 'review')}>录入</Button> },
+    { title: '操作', width: 100, render: (_: unknown, r: any) => canEnterTransferItem(app, r, props.currentUser, props.selectedProject) ? <Button size="small" type="link" onClick={() => openEntry(r, 'review')}>录入</Button> : '-' },
   ]
 
   return (
@@ -900,8 +952,9 @@ export function TransferEntry(props: TransferModuleProps) {
 
 // ========== TransferReview ==========
 export function TransferReview(props: TransferModuleProps) {
-  const app = props.transferApplications.find(a => a.id === props.selectedTransferAppId)
-  if (!app) return <Empty description="未找到申请" />
+  useTransferDialogScope(props)
+  const app = props.transferApplications.find(a => a.id === props.selectedTransferAppId && matchesTransferProject(a, props.selectedProject))
+  if (!props.canViewTransfer || !app) return <Empty description="未找到申请或暂无查看权限" />
 
   const appChecklist = props.tmChecklistItems.filter(c => c.applicationId === app.id)
   const appReviewEls = props.tmReviewElements.filter(r => r.applicationId === app.id)
@@ -910,17 +963,28 @@ export function TransferReview(props: TransferModuleProps) {
   const filteredRE = props.tmReviewActiveRole === 'all' ? appReviewEls : appReviewEls.filter(r => r.responsibleRole === props.tmReviewActiveRole)
 
   const openReview = (record: any, action: 'pass' | 'reject', tab: 'checklist' | 'review') => {
-    props.setTmReviewRecord({ ...record, _tab: tab }); props.setTmReviewAction(action); props.setTmReviewComment(''); props.setTmReviewModalOpen(true)
+    if (!canReviewTransferItem(app, record, props.currentUser, props.selectedProject)) return
+    props.setTmReviewRecord({ ...record, _tab: tab, _actorId: props.currentUser.id }); props.setTmReviewAction(action); props.setTmReviewComment(''); props.setTmReviewModalOpen(true)
   }
 
   const submitReview = () => {
-    if (!props.tmReviewRecord) return
-    const status: ReviewStatus = props.tmReviewAction === 'pass' ? 'passed' : 'rejected'
-    if (props.tmReviewRecord._tab === 'checklist') {
-      props.setTmChecklistItems(prev => prev.map(c => c.id === props.tmReviewRecord.id ? { ...c, reviewStatus: status, reviewComment: props.tmReviewAction === 'reject' ? props.tmReviewComment : undefined } : c))
-    } else {
-      props.setTmReviewElements(prev => prev.map(r => r.id === props.tmReviewRecord.id ? { ...r, reviewStatus: status, reviewComment: props.tmReviewAction === 'reject' ? props.tmReviewComment : undefined } : r))
+    const modalRecord = props.tmReviewRecord
+    if (!modalRecord) return
+    const source = modalRecord._tab === 'checklist' ? props.tmChecklistItems : props.tmReviewElements
+    const record = source.find(item => item.id === modalRecord.id && item.applicationId === app.id)
+    if (!props.canViewTransfer || !record || modalRecord._actorId !== props.currentUser.id || !canReviewTransferItem(app, record, props.currentUser, props.selectedProject)) {
+      message.warning('当前无权审核该资料'); return
     }
+    if (props.tmReviewAction === 'reject' && !props.tmReviewComment.trim()) { message.warning('请填写拒绝原因'); return }
+    const update = <T extends CheckListItem | ReviewElement>(item: T): T => item.id === record.id && item.applicationId === app.id ? {
+      ...item, reviewStatus: props.tmReviewAction === 'pass' ? 'passed' : 'rejected',
+      reviewComment: props.tmReviewAction === 'reject' ? props.tmReviewComment : undefined,
+    } : item
+    const checklist = modalRecord._tab === 'checklist' ? props.tmChecklistItems.map(update) : props.tmChecklistItems
+    const reviewElements = modalRecord._tab === 'review' ? props.tmReviewElements.map(update) : props.tmReviewElements
+    props.setTmChecklistItems(checklist)
+    props.setTmReviewElements(reviewElements)
+    props.setTransferApplications(prev => prev.map(item => item.id === app.id ? syncTransferPipeline(item, checklist, reviewElements) : item))
     props.setTmReviewModalOpen(false)
     message.success(props.tmReviewAction === 'pass' ? '已通过' : '已拒绝')
   }
@@ -941,7 +1005,7 @@ export function TransferReview(props: TransferModuleProps) {
       { title: '内容', dataIndex: 'entryContent', width: 160, ellipsis: true, render: (v: string) => v ? <Tooltip title={v}><span>{v}</span></Tooltip> : '-' },
       { title: 'AI检查', dataIndex: 'aiCheckStatus', width: 80, render: (v: string) => <Tag color={AI_CHECK_STATUS_CONFIG[v]?.color}>{AI_CHECK_STATUS_CONFIG[v]?.label}</Tag> },
       { title: '审核状态', dataIndex: 'reviewStatus', width: 90, render: (v: string) => <Tag color={REVIEW_STATUS_CONFIG[v]?.color}>{REVIEW_STATUS_CONFIG[v]?.label}</Tag> },
-      { title: '操作', width: 140, render: (_: unknown, r: any) => r.entryStatus === 'entered' && r.aiCheckStatus === 'passed' && r.reviewStatus !== 'passed' ? (
+      { title: '操作', width: 140, render: (_: unknown, r: any) => canReviewTransferItem(app, r, props.currentUser, props.selectedProject) ? (
         <Space size={4}>
           <Button size="small" type="link" style={{ color: '#52c41a' }} onClick={() => openReview(r, 'pass', tab)}>通过</Button>
           <Button size="small" type="link" danger onClick={() => openReview(r, 'reject', tab)}>拒绝</Button>
@@ -981,8 +1045,9 @@ export function TransferReview(props: TransferModuleProps) {
 
 // ========== TransferSqaReview ==========
 export function TransferSqaReview(props: TransferModuleProps) {
-  const app = props.transferApplications.find(a => a.id === props.selectedTransferAppId)
-  if (!app) return <Empty description="未找到申请" />
+  useTransferDialogScope(props)
+  const app = props.transferApplications.find(a => a.id === props.selectedTransferAppId && matchesTransferProject(a, props.selectedProject))
+  if (!props.canViewTransfer || !app) return <Empty description="未找到申请或暂无查看权限" />
   const sqaComment = props.tmSqaComment
   const setSqaComment = props.setTmSqaComment
   const sqaModalOpen = props.tmSqaModalOpen
@@ -1074,7 +1139,7 @@ export function TransferSqaReview(props: TransferModuleProps) {
       )}
 
       {/* SQA审核操作 */}
-      <Card style={{ borderRadius: 10 }} title="SQA审核决定" size="small">
+      {canSqaReviewTransfer(app, props.currentUser, props.selectedProject) && <Card style={{ borderRadius: 10 }} title="SQA审核决定" size="small">
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 500, marginBottom: 8 }}>SQA意见</div>
           <TextArea rows={3} placeholder="请输入SQA审核意见..." value={sqaComment} onChange={e => setSqaComment(e.target.value)} />
@@ -1083,10 +1148,24 @@ export function TransferSqaReview(props: TransferModuleProps) {
           <Button type="primary" style={{ background: '#52c41a', borderColor: '#52c41a' }} onClick={() => { setSqaAction('approve'); setSqaModalOpen(true); }}>审核通过</Button>
           <Button danger onClick={() => { if (!sqaComment.trim()) { message.warning('拒绝时请填写SQA意见'); return; } setSqaAction('reject'); setSqaModalOpen(true); }}>审核拒绝</Button>
         </Space>
-      </Card>
+      </Card>}
 
       <Modal title={sqaAction === 'approve' ? 'SQA审核通过确认' : 'SQA审核拒绝确认'} open={sqaModalOpen} onCancel={() => setSqaModalOpen(false)}
         onOk={() => {
+          if (!props.canViewTransfer || !canSqaReviewTransfer(app, props.currentUser, props.selectedProject)) { message.warning('当前无权进行SQA审核'); return }
+          if (sqaAction === 'reject' && !sqaComment.trim()) { message.warning('拒绝时请填写SQA意见'); return }
+          if (sqaAction === 'reject') {
+            props.setTmChecklistItems(prev => prev.map(item => item.applicationId === app.id ? { ...item, reviewStatus: 'not_reviewed', reviewComment: undefined } : item))
+            props.setTmReviewElements(prev => prev.map(item => item.applicationId === app.id ? { ...item, reviewStatus: 'not_reviewed', reviewComment: undefined } : item))
+          }
+          props.setTransferApplications(prev => prev.map(item => item.id === app.id ? {
+            ...item, updatedAt: new Date().toISOString(), pipeline: {
+              ...item.pipeline, maintenanceReview: sqaAction === 'approve' ? 'success' : 'in_progress',
+              sqaReview: sqaAction === 'approve' ? 'success' : 'not_started',
+              infoChange: sqaAction === 'approve' ? 'in_progress' : 'not_started',
+              roleProgress: sqaAction === 'approve' ? item.pipeline.roleProgress : item.pipeline.roleProgress.map(role => ({ ...role, reviewStatus: 'in_progress' })),
+            },
+          } : item))
           message.success(sqaAction === 'approve' ? 'SQA审核已通过，流水线进入信息变更阶段' : 'SQA审核已拒绝，流水线回退至维护审核')
           setSqaModalOpen(false); props.setTransferView(null)
         }}

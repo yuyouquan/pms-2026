@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs'
 import path from 'node:path'
+import assert from 'node:assert/strict'
 
 const root = process.cwd()
 const summaryPath = path.join(root, 'src/components/roadmap/ProjectPlanSummaryBoard.tsx')
@@ -12,10 +13,12 @@ const failures = []
 const machineMilestones = "['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'MR1', 'MR2', 'MR3', 'MR4', 'MR5']"
 const tosMilestones = "['概念启动', 'STR1', 'STR2', 'STR3', 'STR4', 'STR4A', 'STR5', 'tOS16.1.101', 'tOS16.1.102', 'tOS16.1.103', 'tOS16.1.104']"
 
-for (const [label, source] of [
-  ['Project plan summary board', summarySource],
-  ['Roadmap milestone view', roadmapSource],
-]) {
+assert.match(summarySource, /getLatestPublishedTemplateTasks\([\s\S]{0,350}namespacedOnly: true/, 'summary board reads the published template for the selected project type')
+assert.match(summarySource, /getTemplateTaskFieldDefinitions\(projectType, publishedTemplateTasks\)/, 'summary milestone columns derive from the published template')
+for (const scope of ['machine', 'tosVersion']) {
+  assert.ok(summarySource.includes(`buildProjectSummaryRow(project, definitionSets.${scope})`), `${scope} summary dates are projected by the shared plan adapter`)
+}
+for (const [label, source] of [['Roadmap milestone view', roadmapSource]]) {
   for (const required of [
     machineMilestones,
     tosMilestones,
