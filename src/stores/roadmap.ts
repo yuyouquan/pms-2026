@@ -1,3 +1,4 @@
+import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import {
@@ -64,7 +65,7 @@ const ROADMAP_STORAGE_KEY = 'pms-project-roadmap'
 export const ROADMAP_STORE_VERSION = 8
 
 const KNOWN_COLUMN_KEYS = new Set<RoadmapColumnKey>(ROADMAP_COLUMNS.map(column => column.key))
-const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
+const ROADMAP_BRANDS = new Set<RoadmapBrand>(['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌'])
 const ROADMAP_PRODUCT_TYPES = new Set<RoadmapProductType>(['新品', '老品'])
 const ROADMAP_AUDIT_FIELD_SET = new Set<string>(ROADMAP_AUDIT_FIELDS)
 
@@ -210,19 +211,19 @@ export function createInitialPlannedProjects(
     ?? tosVersions[0]
   if (!firstSaleVersion) return []
   return [{
-    id: 'planned-mock-x6877-android16-new',
+    id: 'planned-mock-demo017-android16-new',
     status: '待规划',
     machineProjectType: '整机-手机',
-    projectCode: 'X6877',
-    displayName: 'X6877',
+    projectCode: 'DEMO017',
+    displayName: 'DEMO017',
     androidVersion: 'Android 16',
     firstSaleTosVersionId: firstSaleVersion.id,
-    brand: 'Infinix',
-    productLine: 'NOTE',
-    productSeries: 'NOTE 60',
-    marketName: 'NOTE 60 Pro',
+    brand: '示例品牌B',
+    productLine: '示例系列A',
+    productSeries: '示例系列A 60',
+    marketName: '示例系列A 60 Pro',
     productType: '新品',
-    chipCode: 'D8400',
+    chipCode: 'DEMOCHIP001',
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-10-15',
@@ -232,9 +233,9 @@ export function createInitialPlannedProjects(
     developMode: 'ODC',
     remark: '待规划样例：用于确认与已存在普通项目的重复冲突处理。',
     createdAt: '2026-07-21T02:15:00.000Z',
-    createdBy: '李四',
+    createdBy: '演示用户02',
     updatedAt: '2026-07-22T09:30:00.000Z',
-    updatedBy: '张三',
+    updatedBy: '演示用户01',
   }]
 }
 
@@ -242,7 +243,7 @@ export function createInitialRoadmapChangeLogs(
   tosVersions: readonly TosVersionConfig[] = createInitialTosVersions(),
   plannedProjects: readonly PlannedRoadmapProject[] = createInitialPlannedProjects(tosVersions),
 ): RoadmapChangeLog[] {
-  const planned = plannedProjects.find(project => project.id === 'planned-mock-x6877-android16-new')
+  const planned = plannedProjects.find(project => project.id === 'planned-mock-demo017-android16-new')
   if (!planned) return []
   const plannedTosVersionName = tosVersions.find(version => version.id === planned.firstSaleTosVersionId)?.name
     ?? planned.firstSaleTosVersionId
@@ -252,16 +253,16 @@ export function createInitialRoadmapChangeLogs(
 
   const normalBefore: RoadmapProjectFields = {
     machineProjectType: '整机-手机',
-    projectCode: 'X6877',
-    displayName: buildRoadmapDisplayName('X6877', 'Android 16', '新品'),
+    projectCode: 'DEMO017',
+    displayName: buildRoadmapDisplayName('DEMO017', 'Android 16', '新品'),
     androidVersion: 'Android 16',
     firstSaleTosVersionId: normalBeforeVersion.id,
-    brand: 'TECNO',
-    productLine: 'NOTE',
-    productSeries: 'CAMON 50',
-    marketName: 'NOTE 50',
+    brand: '示例品牌A',
+    productLine: '示例系列A',
+    productSeries: '示例系列D 50',
+    marketName: '示例系列A 50',
     productType: '新品',
-    chipCode: 'D8400',
+    chipCode: 'DEMOCHIP001',
     startRam: '8GB',
     versionType: 'Full',
     str5Date: '2026-05-15',
@@ -274,7 +275,7 @@ export function createInitialRoadmapChangeLogs(
   const normalAfter: RoadmapProjectFields = {
     ...normalBefore,
     firstSaleTosVersionId: normalAfterVersion.id,
-    marketName: 'NOTE 50 Pro',
+    marketName: '示例系列A 50 Pro',
     remark: '重点验证 tOS 16.3 全量版本交付。',
   }
   const plannedBefore: RoadmapProjectFields = {
@@ -282,51 +283,51 @@ export function createInitialRoadmapChangeLogs(
     brand: '待定',
     productLine: '待定',
     productSeries: '待定',
-    marketName: 'X6877',
+    marketName: 'DEMO017',
   }
 
   return [
     {
-      id: 'roadmap-log-mock-planned-update-x6877',
+      id: 'roadmap-log-mock-planned-update-demo017',
       projectId: planned.id,
       projectDisplayName: buildRoadmapDisplayName(planned.projectCode, planned.androidVersion, planned.productType),
       source: 'planned',
       action: 'update',
-      actor: '张三',
+      actor: '演示用户01',
       occurredAt: '2026-07-22T09:30:00.000Z',
       tosVersionName: plannedTosVersionName,
       changes: diffRoadmapProjectFields(plannedBefore, planned, tosVersions),
     },
     {
-      id: 'roadmap-log-mock-normal-update-x6877',
+      id: 'roadmap-log-mock-normal-update-demo017',
       projectId: '1',
       projectDisplayName: buildRoadmapDisplayName(normalAfter.projectCode, normalAfter.androidVersion, normalAfter.productType),
       source: 'normal',
       action: 'update',
-      actor: '张三',
+      actor: '演示用户01',
       occurredAt: '2026-07-22T08:45:00.000Z',
       tosVersionName: normalAfterVersion.name,
       changes: diffRoadmapProjectFields(normalBefore, normalAfter, tosVersions),
     },
     {
-      id: 'roadmap-log-mock-planned-create-x6877',
+      id: 'roadmap-log-mock-planned-create-demo017',
       projectId: planned.id,
       projectDisplayName: buildRoadmapDisplayName(planned.projectCode, planned.androidVersion, planned.productType),
       source: 'planned',
       action: 'create',
-      actor: '李四',
+      actor: '演示用户02',
       occurredAt: '2026-07-21T02:15:00.000Z',
       tosVersionName: plannedTosVersionName,
       changes: [],
       snapshot: createRoadmapAuditSnapshot(plannedBefore, tosVersions),
     },
     {
-      id: 'roadmap-log-mock-normal-create-x6877',
+      id: 'roadmap-log-mock-normal-create-demo017',
       projectId: '1',
       projectDisplayName: buildRoadmapDisplayName(normalBefore.projectCode, normalBefore.androidVersion, normalBefore.productType),
       source: 'normal',
       action: 'create',
-      actor: '李四',
+      actor: '演示用户02',
       occurredAt: '2026-07-20T06:20:00.000Z',
       tosVersionName: normalBeforeVersion.name,
       changes: [],
@@ -870,7 +871,7 @@ const safeRoadmapStorage: StateStorage = {
   getItem(name) {
     if (typeof window === 'undefined') return null
     try {
-      const stored = window.localStorage.getItem(name)
+      const stored = getPmsLocalStorage().getItem(name)
       if (stored !== null) JSON.parse(stored)
       roadmapStorageReadFailed = false
       return stored
@@ -883,7 +884,7 @@ const safeRoadmapStorage: StateStorage = {
   setItem(name, value) {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.setItem(name, value)
+      getPmsLocalStorage().setItem(name, value)
     } catch (error) {
       console.error(`Failed to persist ${ROADMAP_STORAGE_KEY}.`, error)
     }
@@ -891,7 +892,7 @@ const safeRoadmapStorage: StateStorage = {
   removeItem(name) {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.removeItem(name)
+      getPmsLocalStorage().removeItem(name)
     } catch (error) {
       console.error(`Failed to remove ${ROADMAP_STORAGE_KEY}.`, error)
     }

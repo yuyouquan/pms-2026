@@ -687,7 +687,7 @@ try {
 
   await clickVisibleText(page, 'button', '返回工作台')
   await waitForVisibleText(page, '新增项目', 'button')
-  await clickProject(page, 'X6877-D8400_H991')
+  await clickProject(page, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
   await assertVisibleText(page, '计划信息', '#section-plan')
   await assertNoVisibleText(page, '计划信息与配置信息', '#section-plan')
   await assertNoVisibleText(page, '配置信息', '#section-plan')

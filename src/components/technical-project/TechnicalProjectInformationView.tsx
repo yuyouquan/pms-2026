@@ -1,5 +1,7 @@
 'use client'
 
+import { pmsSessionStorage } from '@/lib/mockDatasetStorage'
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Avatar, Button, Space, Tabs, Tag, Tooltip, Typography } from 'antd'
 import {
@@ -110,8 +112,8 @@ export default function TechnicalProjectInformationView({
   }, [project.id, tdtKey])
 
   useEffect(() => {
-    const targetChildId = window.sessionStorage.getItem('pms:technical-project-list-target-child') || ''
-    if (targetChildId) window.sessionStorage.removeItem('pms:technical-project-list-target-child')
+    const targetChildId = pmsSessionStorage.getItem('pms:technical-project-list-target-child') || ''
+    if (targetChildId) pmsSessionStorage.removeItem('pms:technical-project-list-target-child')
     const target = allChildren.find(child => child.id === targetChildId && child.active)
     if (!target) return
     setActiveKey(getTechnicalPlanKey({ kind: 'subproject', parentProjectId: project.id, subprojectId: target.id }))

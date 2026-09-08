@@ -25,7 +25,7 @@ assert.match(projectListSource, /total=\{cardRows\.length\}/, 'card view always 
 assert.match(projectSummarySource, /tablePageSize\?: number/, 'summary table exposes an opt-in page size')
 assert.match(projectSummarySource, /showTotal:\s*total => `共 \$\{total\} 个项目`/, 'list pagination reports the filtered total')
 assert.match(projectDataSource, /ADDITIONAL_MACHINE_PROJECTS/, 'mock data includes a dedicated pagination fixture set')
-assert.match(projectDataSource, /SPARK 40[\s\S]*HOT 60[\s\S]*NOTE 60/, 'mock projects cover multiple product series across pages')
+assert.match(projectDataSource, /示例系列B 40[\s\S]*示例系列C 60[\s\S]*示例系列A 60/, 'mock projects cover multiple product series across pages')
 
 assert.match(configSource, /<h1>配置中心<\/h1>/, 'config center exposes the same left-aligned title structure as workbench')
 assert.match(configSource, /className="pms-workbench-switch pms-config-center-switch"/, 'config modules use the shared capsule switch')

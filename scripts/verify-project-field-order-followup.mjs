@@ -286,7 +286,7 @@ const newMachineSubmit = projectInfoRules.getProjectInfoModalSubmitValues('整�
   developmentMode: '自研',
   productType: '新品',
   projectModel: 'Spark40',
-  mainboardName: 'SPARK40_MB',
+  mainboardName: '示例系列B40_MB',
   androidVersion: 'Android 16',
   productionForbiddenDate: '2026-12-01',
   baselineName: 'Spark40-baseline',
@@ -298,7 +298,7 @@ assert.equal(newMachineSubmit.isTwoStage, undefined, 'hidden conditional fields 
 for (const [key, value] of [
   ['productType', '新品'],
   ['projectModel', 'Spark40'],
-  ['mainboardName', 'SPARK40_MB'],
+  ['mainboardName', '示例系列B40_MB'],
   ['androidVersion', 'Android 16'],
   ['productionForbiddenDate', '2026-12-01'],
   ['baselineName', 'Spark40-baseline'],
@@ -616,12 +616,12 @@ assert.deepEqual(machineCreatePayload.machineQualityRepresentative, ['质量甲'
 assert.deepEqual(machineCreatePayload.machineOther, ['协同乙'])
 
 const technicalCreatePayload = technicalProjectRules.normalizeTechnicalProjectValues({
-  technicalLead: '张三',
-  technicalProjectManager: '李白',
+  technicalLead: '演示用户01',
+  technicalProjectManager: '演示用户07',
   technicalOther: '协同丙',
 })
-assert.equal(technicalCreatePayload.technicalLead, '张三')
-assert.equal(technicalCreatePayload.technicalProjectManager, '李白')
+assert.equal(technicalCreatePayload.technicalLead, '演示用户01')
+assert.equal(technicalCreatePayload.technicalProjectManager, '演示用户07')
 assert.equal(technicalCreatePayload.technicalOther, '协同丙', 'the new technical role must survive create/edit payload normalization')
 
 assert.equal(

@@ -142,7 +142,7 @@ function SharePlanContent() {
           </Space>
         </div>
         <div style={{ marginTop: 8, fontSize: 12, lineHeight: '18px', color: 'var(--pms-text-secondary)' }}>
-          查看最新已发布版本。当前为本地演示，分享页读取本浏览器已保存的计划；其他浏览器不会同步本地修改。
+          查看最新已发布版本。当前为虚构数据的本地演示，分享页读取本浏览器已保存的计划；其他浏览器不会同步本地修改。
         </div>
       </Card>
 

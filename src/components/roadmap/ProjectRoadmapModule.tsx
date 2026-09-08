@@ -443,7 +443,7 @@ export default function ProjectRoadmapModule({
   }
   const updateQuickFilter = (
     field: 'brand' | 'productType',
-    value: 'all' | 'TECNO' | 'Infinix' | 'itel' | '待定' | '其他品牌' | '新品' | '老品',
+    value: 'all' | '示例品牌A' | '示例品牌B' | '示例品牌C' | '待定' | '其他品牌' | '新品' | '老品',
   ) => {
     setFilters(setRoadmapQuickFilter(normalizedFilters, field, value))
   }

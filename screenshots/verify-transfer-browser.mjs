@@ -75,12 +75,12 @@ try {
   await page.waitForSelector('input[type="date"]')
   await page.$eval('input[type="date"]', input => { const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; setter.call(input,'2026-09-09'); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})) })
   for (const [side,role,name] of [
-    ['在研团队','SPM','张明辉'],['在研团队','TPM','赵丽华'],['在研团队','SQA','陈晓峰'],['在研团队','底软','刘志远'],['在研团队','系统','吴晨阳'],
-    ['维护团队','SPM','李思源'],['维护团队','TPM','孙伟强'],['维护团队','底软','杨海涛'],['维护团队','系统','郑雨晴'],
+    ['在研团队','SPM','演示用户01'],['在研团队','TPM','演示用户04'],['在研团队','SQA','演示用户07'],['在研团队','底软','演示用户08'],['在研团队','系统','演示外协03'],
+    ['维护团队','SPM','演示用户02'],['维护团队','TPM','演示用户05'],['维护团队','底软','演示外协01'],['维护团队','系统','演示外协04'],
   ]) await chooseTeamMember(side,role,name)
   const chosenTeams = await page.$$eval('.ant-card',cards=>cards.filter(card=>['在研团队','维护团队'].some(side=>card.textContent.trim().startsWith(side))).map(card=>card.innerText))
   observations.push({chosenTeams})
-  assert.ok(chosenTeams[1].includes('李思源') && chosenTeams[1].includes('孙伟强'),'maintenance team selections persisted in correct side')
+  assert.ok(chosenTeams[1].includes('演示用户02') && chosenTeams[1].includes('演示用户05'),'maintenance team selections persisted in correct side')
   console.log('Team assignment ready')
   await clickText('提交申请')
   await page.waitForSelector('#section-transfer tr[data-row-key^="app-new-"]')
@@ -93,8 +93,8 @@ try {
   const reviewCount=await page.$$eval(`tr[data-row-key^="re_${id}_"]`,rows=>rows.length)
   assert.ok(checklistCount>0 && reviewCount>0,'new application has both sets of material rows')
   const firstRow=await page.$eval(`tr[data-row-key^="cl_${id}_"]`,row=>row.textContent)
-  assert.ok(firstRow.includes('张明辉') && firstRow.includes('未录入'), 'new material shows its assigned entry owner and empty state')
-  assert.ok((await page.$eval('body',body=>body.innerText)).includes('转维负责人\n李思源'), 'detail project summary shows selected maintenance SPM')
+  assert.ok(firstRow.includes('演示用户01') && firstRow.includes('未录入'), 'new material shows its assigned entry owner and empty state')
+  assert.ok((await page.$eval('body',body=>body.innerText)).includes('转维负责人\n演示用户02'), 'detail project summary shows selected maintenance SPM')
   observations.push({checklistCount,reviewCount,firstRow})
   await page.$eval('#section-checklist',element=>element.scrollIntoView({block:'start'}))
   await screenshot('02-new-application-materials')

@@ -1,3 +1,4 @@
+import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import type {
   ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
@@ -46,7 +47,7 @@ export class LocalStorageProjectFieldPreferenceRepository implements ProjectFiel
   get(scope: ProjectFieldPreferenceScope) {
     if (typeof window === 'undefined') return null
     try {
-      const raw = window.localStorage.getItem(buildStorageKey(scope))
+      const raw = getPmsLocalStorage().getItem(buildStorageKey(scope))
       if (!raw) return null
       const parsed = JSON.parse(raw) as ProjectFieldVisibilityPreference
       if (!Array.isArray(parsed.visibleFieldKeys)) return null
@@ -66,7 +67,7 @@ export class LocalStorageProjectFieldPreferenceRepository implements ProjectFiel
 
   save(preference: ProjectFieldVisibilityPreference) {
     if (typeof window === 'undefined') return
-    window.localStorage.setItem(buildStorageKey(preference), JSON.stringify(preference))
+    getPmsLocalStorage().setItem(buildStorageKey(preference), JSON.stringify(preference))
   }
 }
 

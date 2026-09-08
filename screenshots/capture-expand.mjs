@@ -45,7 +45,7 @@ async function capture() {
     const cards = Array.from(document.querySelectorAll('.ant-card'))
     for (const c of cards) {
       const text = c.textContent || ''
-      // A project card typically contains a project code like X6877 or iOS
+      // A project card typically contains a project code like DEMO017 or iOS
       if (text.match(/X\d{4}|iOS\d+/)) {
         const clickable = c.querySelector('button, [role="button"], .ant-card-body')
         if (clickable) { (clickable).click(); return text.slice(0, 30) }

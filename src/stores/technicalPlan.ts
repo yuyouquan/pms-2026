@@ -1,3 +1,4 @@
+import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
@@ -106,7 +107,7 @@ const SUBPROJECT_PLAN_SCOPES = [
   ['9', 'IPM-AI-001'], ['9', 'IPM-AI-002'],
   ['20', 'IPM-BASE-001'], ['20', 'IPM-BASE-002'],
   ['21', 'IPM-IMAGE-001'], ['21', 'IPM-IMAGE-002'],
-  ['mock-tech-aios-v3', 'IPM-AIOS-001'], ['mock-tech-perf-power', 'IPM-POWER-001'],
+  ['mock-tech-aios-v3', 'IPM-示例智能技术-001'], ['mock-tech-perf-power', 'IPM-POWER-001'],
   ['mock-tech-system-experience', 'IPM-UX-001'], ['mock-tech-6g-prestudy', 'IPM-6G-001'],
 ] as const
 
@@ -440,7 +441,7 @@ export const useTechnicalPlanStore = create<TechnicalPlanState & TechnicalPlanAc
   {
     name: 'pms-technical-plans',
     version: TECHNICAL_PLAN_STORE_VERSION,
-    storage: createJSONStorage(() => localStorage),
+    storage: createJSONStorage(() => pmsLocalStorage),
     migrate: migrateTechnicalPlanState,
     merge: (persisted, current) => ({ ...current, ...migrateTechnicalPlanState(persisted, TECHNICAL_PLAN_STORE_VERSION) }),
     partialize: state => ({ plansByKey: state.plansByKey }),

@@ -15,11 +15,11 @@ async function capture() {
   await page.goto(BASE, { waitUntil: 'networkidle2' })
   await wait(800)
 
-  // Step 2: Click project card X6877 to enter project space
+  // Step 2: Click project card DEMO017 to enter project space
   const cards = await page.$$('.ant-card')
   for (const card of cards) {
     const t = await page.evaluate(el => el.textContent, card)
-    if (t && t.includes('NOTE 50 Pro')) { await card.click(); break }
+    if (t && t.includes('示例系列A 50 Pro')) { await card.click(); break }
   }
   await wait(1500)
 

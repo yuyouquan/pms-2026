@@ -25,7 +25,7 @@ vm.runInThisContext(`(function(require,module,exports){${output}\n})`)(requireMo
 const components = module.exports
 const allNodes = element => !element || typeof element !== 'object' ? [] : [element, ...[element.props?.children, element.props?.footer].flat(Infinity).flatMap(allNodes)]
 const button = (tree, label) => allNodes(tree).find(node => node.type === 'Button' && node.props.children === label)
-const propsFor = (app, user = '张三') => {
+const propsFor = (app, user = '演示用户01') => {
   const props = { ...useTransferStore.getState(), selectedProject: { id: app.projectId, name: app.projectName }, currentUser: { id: `login-${user}`, name: user }, canApplyTransfer: true, canViewTransfer: true, setProjectSpaceModule() {} }
   for (const key of Object.keys(useTransferStore.getState()).filter(key => key !== 'currentUser')) Object.defineProperty(props, key, { get: () => useTransferStore.getState()[key], configurable: true })
   useTransferStore.getState().setSelectedTransferAppId(app.id)
@@ -39,10 +39,10 @@ check('unauthorized actor cannot save a stale entry dialog', () => {
   const app = mock.MOCK_TRANSFER_APPLICATIONS[0]
   const props = propsFor(app)
   const item = props.tmChecklistItems.find(item => item.responsibleRole === 'SPM')
-  props.setTmEntryModalRecord({ ...item, _tab: 'checklist', _actorId: 'login-张三' })
+  props.setTmEntryModalRecord({ ...item, _tab: 'checklist', _actorId: 'login-演示用户01' })
   props.setTmEntryContent('unauthorized overwrite')
   props.setTmEntryModalOpen(true)
-  props.currentUser = { id: 'login-王五', name: '王五' }
+  props.currentUser = { id: 'login-演示用户03', name: '演示用户03' }
   button(components.TransferEntry(props), '确认提交')?.props.onClick()
   assert.notEqual(props.tmChecklistItems.find(row => row.id === item.id).entryContent, 'unauthorized overwrite')
 })
@@ -71,7 +71,7 @@ check('new application contains its own template rows with team assignment', () 
 })
 check('SQA confirmation updates the application pipeline', () => {
   const app = { ...mock.MOCK_TRANSFER_APPLICATIONS[0], pipeline: { ...mock.MOCK_TRANSFER_APPLICATIONS[0].pipeline, dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' } }
-  const props = propsFor(app, '李白'); props.setTransferApplications([app]); props.setTmSqaModalOpen(true)
+  const props = propsFor(app, '演示用户07'); props.setTransferApplications([app]); props.setTmSqaModalOpen(true)
   const modal = allNodes(components.TransferSqaReview(props)).find(node => node.type === 'Modal')
   modal?.props.onOk()
   assert.equal(props.transferApplications[0].pipeline.sqaReview, 'success')
@@ -101,7 +101,7 @@ check('the last entry and review advance only their application and reset old re
   assert.equal(props.tmChecklistItems[0].reviewComment, undefined)
   assert.equal(props.tmChecklistItems[1], unrelated)
   assert.equal(props.transferApplications.find(row => row.id === app.id).pipeline.maintenanceReview, 'in_progress')
-  props.currentUser = { id: 'login-李四', name: '李四' }
+  props.currentUser = { id: 'login-演示用户02', name: '演示用户02' }
   props.setTmReviewRecord({ ...props.tmChecklistItems[0], _tab: 'checklist', _actorId: props.currentUser.id })
   props.setTmReviewAction('pass')
   allNodes(components.TransferReview(props)).find(node => node.type === 'Modal').props.onOk()
@@ -114,16 +114,16 @@ check('team assignment and item readiness protect maintenance review', () => {
   const app = mock.MOCK_TRANSFER_APPLICATIONS[1]
   const props = propsFor(app)
   const item = props.tmChecklistItems.find(row => row.applicationId === app.id && row.responsibleRole === 'SPM')
-  assert.equal(canReviewTransferItem(app, item, { id: 'login-张三', name: '张三' }, props.selectedProject), true)
-  assert.equal(canReviewTransferItem(app, item, { id: 'login-李四', name: '李四' }, props.selectedProject), false)
-  assert.equal(canReviewTransferItem(app, { ...item, entryStatus: 'draft' }, { id: 'login-张三', name: '张三' }, props.selectedProject), false)
-  assert.equal(canSqaReviewTransfer(app, { id: 'login-李白', name: '李白' }, props.selectedProject), false)
+  assert.equal(canReviewTransferItem(app, item, { id: 'login-演示用户01', name: '演示用户01' }, props.selectedProject), true)
+  assert.equal(canReviewTransferItem(app, item, { id: 'login-演示用户02', name: '演示用户02' }, props.selectedProject), false)
+  assert.equal(canReviewTransferItem(app, { ...item, entryStatus: 'draft' }, { id: 'login-演示用户01', name: '演示用户01' }, props.selectedProject), false)
+  assert.equal(canSqaReviewTransfer(app, { id: 'login-演示用户07', name: '演示用户07' }, props.selectedProject), false)
   assert.equal(matchesTransferProject({ ...app, projectId: 'real-project-id' }, { id: 'other-id', name: app.projectName }), false)
-  assert.equal(canEnterTransferItem({ ...app, status: 'completed' }, item, { id: 'login-张三', name: '张三' }, props.selectedProject), false)
+  assert.equal(canEnterTransferItem({ ...app, status: 'completed' }, item, { id: 'login-演示用户01', name: '演示用户01' }, props.selectedProject), false)
 })
 check('SQA rejection persists the rollback and allows re-review', () => {
   const app = { ...mock.MOCK_TRANSFER_APPLICATIONS[0], pipeline: { ...mock.MOCK_TRANSFER_APPLICATIONS[0].pipeline, dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' } }
-  const props = propsFor(app, '李白'); props.setTransferApplications([app])
+  const props = propsFor(app, '演示用户07'); props.setTransferApplications([app])
   props.setTmSqaAction('reject'); props.setTmSqaComment('补充审核')
   allNodes(components.TransferSqaReview(props)).find(node => node.type === 'Modal').props.onOk()
   assert.equal(props.transferApplications[0].pipeline.maintenanceReview, 'in_progress')
@@ -137,19 +137,19 @@ check('newly submitted application produces the assigned current user entry todo
   button(components.TransferApply(props), '提交申请').props.onClick()
   const app = props.transferApplications[0]
   const todos = buildTransferTodoCandidates({ applications: [app], projects: [props.selectedProject] })
-  assert.equal(todos.find(todo => todo.view === 'entry')?.activeOwner, '张三')
+  assert.equal(todos.find(todo => todo.view === 'entry')?.activeOwner, '演示用户01')
   const assignedElsewhere = { ...app, team: mock.MOCK_TM_TEAMS.TEAM_2 }
   const otherTodos = buildTransferTodoCandidates({ applications: [assignedElsewhere], projects: [props.selectedProject] })
-  assert.equal(otherTodos.find(todo => todo.view === 'entry')?.activeOwner, '王五')
+  assert.equal(otherTodos.find(todo => todo.view === 'entry')?.activeOwner, '演示用户03')
 })
 check('PMS login identities require a directory user and exact matching ID/name pair', () => {
   const { mapTransferOwnerToPmsUser } = loadTypeScriptModule(root, 'src/lib/todoAggregation.ts')
-  assert.equal(mapTransferOwnerToPmsUser('login-张三', '张三'), '张三')
-  assert.equal(mapTransferOwnerToPmsUser('login-钱九', '钱九'), '钱九')
-  assert.equal(mapTransferOwnerToPmsUser('login-张三', '王五'), undefined)
+  assert.equal(mapTransferOwnerToPmsUser('login-演示用户01', '演示用户01'), '演示用户01')
+  assert.equal(mapTransferOwnerToPmsUser('login-演示用户09', '演示用户09'), '演示用户09')
+  assert.equal(mapTransferOwnerToPmsUser('login-演示用户01', '演示用户03'), undefined)
   assert.equal(mapTransferOwnerToPmsUser('login-不存在', '不存在'), undefined)
-  assert.equal(mapTransferOwnerToPmsUser('arbitrary-id', '张三'), undefined)
-  assert.equal(mapTransferOwnerToPmsUser('u001', '王五'), undefined)
+  assert.equal(mapTransferOwnerToPmsUser('arbitrary-id', '演示用户01'), undefined)
+  assert.equal(mapTransferOwnerToPmsUser('u001', '演示用户03'), undefined)
 })
 check('embedded project transfer table hosts the close confirmation and rechecks permission', () => {
   const props = propsFor(mock.MOCK_TRANSFER_APPLICATIONS[0]); props.embedded = true

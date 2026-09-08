@@ -43,7 +43,7 @@ function createLegacyDualCacheFixtures() {
   const userSnapshot = structuredClone(planSeed.publishedSnapshots[snapshotKey])
   const editedBusinessNode = userSnapshot.find(task => task.taskName === '17.1.0.120')
   assert.ok(editedBusinessNode, 'legacy Plan fixture requires the tOS17.1 business node')
-  editedBusinessNode.responsible = '李白'
+  editedBusinessNode.responsible = '演示用户07'
   const userVersion = {
     ...planSeed.tosTypeVersionsByKey[versionsKey][0],
     publishedAt: '2026-01-01T00:00:00.000Z',
@@ -146,7 +146,7 @@ function installDeterministicBrowserEnvironment(fixedNow) {
     }
     window.localStorage.setItem('pms-enum-values', JSON.stringify({
       state: { rowsByType: { 'package-mode-mapping': [
-        { id: 'mr-browser-package', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: '整包' },
+        { id: 'mr-browser-package', androidVersion: 'Android 16', chipModel: 'DEMOSOC003', packageMode: '整包' },
       ] } },
       version: 3,
     }))
@@ -770,7 +770,7 @@ try {
   assert.ok(jointRows[0].text.includes('16.3.0.135') && jointRows[0].text.includes('tOS16.3'))
   assert.equal(jointRows[0].pickerCount, 0)
   assert.equal(jointRows[0].selectCount, 0)
-  assert.ok(jointRows.findIndex(row => row.text.includes('X6855_H8917')) > 0)
+  assert.ok(jointRows.findIndex(row => row.text.includes('DEMO013_DEMOBOARD010')) > 0)
   assert.match(await page.$eval('.pms-joint-mr-table thead', node => node.innerText), /芯片编码/)
   assert.equal(await page.evaluate(machineRow => [...document.querySelectorAll('tr[data-mr-row-kind="machine"]')]
     .find(row => row.dataset.mrProjectId === machineRow)?.innerText.includes('整包') ?? false, '1'), true)
@@ -817,11 +817,11 @@ try {
   await screenshot('joint-invalid.png')
   initialScenarioMatrixVerified = true
 
-  await fillInput('input[aria-label="项目名称"]', 'X6877-D8400_H991')
+  await fillInput('input[aria-label="项目名称"]', 'DEMO017-DEMOCHIP001_DEMOBOARD016')
   await chooseSelect('tOS版本号', '16.3.0.145')
   const filteredTexts = await page.$$eval('.pms-joint-mr-table tbody tr.ant-table-row', rows => rows.map(row => row.innerText))
-  assert.ok(filteredTexts.some(text => text.includes('X6877-D8400_H991')))
-  assert.ok(filteredTexts.every(text => text.includes('X6877-D8400_H991')))
+  assert.ok(filteredTexts.some(text => text.includes('DEMO017-DEMOCHIP001_DEMOBOARD016')))
+  assert.ok(filteredTexts.every(text => text.includes('DEMO017-DEMOCHIP001_DEMOBOARD016')))
   assert.equal(await page.$('.pms-joint-mr-table .pms-mr-cell-error-icon'), null)
   await screenshot('joint-valid.png')
   await clearSelect('tOS版本号')
@@ -830,15 +830,15 @@ try {
 
   assert.equal(await page.$('.pms-joint-mr-batch-actions'), null, '零勾选时不显示批量操作区')
   assert.equal(await page.$eval(`${tosRow('16.3.0.140')} input[type="checkbox"]`, input => input.disabled), true, 'tOS 基准行不可勾选')
-  await page.click('input[aria-label="选择-16.3.0.140-X6877-D8400_H991"]')
-  await page.click('input[aria-label="选择-16.3.0.140-X6855_H8917"]')
+  await page.click('input[aria-label="选择-16.3.0.140-DEMO017-DEMOCHIP001_DEMOBOARD016"]')
+  await page.click('input[aria-label="选择-16.3.0.140-DEMO013_DEMOBOARD010"]')
   await page.waitForSelector('.pms-joint-mr-batch-actions', { visible: true })
   assert.match(await page.$eval('.pms-joint-mr-batch-actions', node => node.innerText), /^已勾选 2 个项目\s*锁定\s*解锁$/)
   await clickVisibleText('锁定', '.pms-joint-mr-batch-actions button')
   await page.waitForSelector('.ant-modal-wrap', { visible: true })
   const lockConfirmationText = await page.$eval('.ant-modal-wrap', node => node.innerText)
-  assert.match(lockConfirmationText, /锁定所选项目[\s\S]*16\.3\.0\.140 \+ X6877-D8400_H991/)
-  assert.match(lockConfirmationText, /16\.3\.0\.140 \+ X6855_H8917/)
+  assert.match(lockConfirmationText, /锁定所选项目[\s\S]*16\.3\.0\.140 \+ DEMO017-DEMOCHIP001_DEMOBOARD016/)
+  assert.match(lockConfirmationText, /16\.3\.0\.140 \+ DEMO013_DEMOBOARD010/)
   await clickTopVisibleModalButton('取消')
   assert.notEqual(await page.$('.pms-joint-mr-batch-actions'), null, '取消保留选择')
   await clickVisibleText('锁定', '.pms-joint-mr-batch-actions button')
@@ -858,7 +858,7 @@ try {
   await page.waitForSelector('.pms-joint-mr-table', { visible: true })
   assert.notEqual(await page.$(`${machineRow('1', '16.3.0.140')} [aria-label="已锁定"]`), null, '刷新后锁定持久保留')
 
-  await switchUser('王五')
+  await switchUser('演示用户03')
   assert.equal(await page.$eval('[aria-label="1-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), true, '锁定后整机 SPM 不可编辑')
   assert.equal(await page.$eval('[aria-label="1-16.3.0.145-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), false)
   assert.equal(await page.$eval('[aria-label="3-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), true)
@@ -866,12 +866,12 @@ try {
   await chooseSelect('1-16.3.0.145-1+N版本类型', '4', '1')
   assert.equal((await readMrState()).machinePlansByKey['1::16.3.0.145'].transferType, '4')
   await chooseSelect('1-16.3.0.145-1+N版本类型', '1', '4')
-  await switchUser('李白')
+  await switchUser('演示用户07')
   assert.equal(await page.$eval('[aria-label="1-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), false, '对应 tOS 版本项目经理可编辑锁定行')
   assert.notEqual(await page.$('.pms-joint-mr-table .ant-table-selection-column'), null, '版本项目经理显示选择列')
   pass(5, 'locked rows tighten SPM access while the matching manager remains editable')
 
-  await switchUser('张三')
+  await switchUser('演示用户01')
   assert.equal(await page.$eval('[aria-label="3-16.3.0.140-1+N版本类型"]', node => node.closest('.ant-select')?.classList.contains('ant-select-disabled')), false)
   await chooseSelect('3-16.3.0.140-1+N版本类型', '3', '2')
   assert.equal((await readMrState()).machinePlansByKey['3::16.3.0.140'].transferType, '3')
@@ -913,7 +913,7 @@ try {
   await screenshot('eos-hidden.png')
   pass(9, 'EOS transition time replaces manual stop-release controls')
 
-  await page.click('button[aria-label="打开项目-X6877-D8400_H991"]')
+  await page.click('button[aria-label="打开项目-DEMO017-DEMOCHIP001_DEMOBOARD016"]')
   await page.waitForSelector('.pms-machine-mr-table [data-mr-tos-version="16.3.0.140"]', { visible: true })
   assert.match(await bodyText(), /三级计划-MR版本计划/)
   await page.waitForFunction(() => document.activeElement?.getAttribute('data-mr-tos-version') === '16.3.0.140')
@@ -1034,12 +1034,12 @@ try {
   assert.equal(
     migratedPlanState.publishedSnapshots[tos17V1SnapshotKey]
       .find(task => task.taskName === '17.1.0.120').responsible,
-    '李白',
+    '演示用户07',
     'Plan V13 cache migration preserves a valid user-edited published snapshot',
   )
   assert.ok(migratedPlanState.publishedSnapshots[tos17V3SnapshotKey])
   await clickButtonStarting('返回')
-  await openProjectFromList('tOS版本项目', 'tOS16.3', '张三,李白')
+  await openProjectFromList('tOS版本项目', 'tOS16.3', '演示用户01,演示用户07')
   await clickVisibleText('计划')
   await clickVisibleText('三级计划-MR版本计划', '[role="tab"],button,span')
   await page.waitForSelector('.pms-mr-project-card', { visible: true })

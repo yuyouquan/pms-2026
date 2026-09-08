@@ -25,22 +25,22 @@ const {
 } = loadedModule.exports
 
 assert.deepEqual(
-  getProjectResponsiblePersons({ leader: '王五', responsiblePersons: ['李四', '赵六'] }),
-  ['李四', '赵六'],
+  getProjectResponsiblePersons({ leader: '演示用户03', responsiblePersons: ['演示用户02', '演示用户04'] }),
+  ['演示用户02', '演示用户04'],
   'project-owned responsible persons should be authoritative',
 )
 assert.deepEqual(
-  getProjectResponsiblePersons({ leader: '王五' }),
-  ['王五'],
+  getProjectResponsiblePersons({ leader: '演示用户03' }),
+  ['演示用户03'],
   'legacy seed projects should initialize responsibility from leader',
 )
 assert.equal(
-  haveProjectResponsiblePersonsChanged(['李四', '赵六'], ['李四', '赵六']),
+  haveProjectResponsiblePersonsChanged(['演示用户02', '演示用户04'], ['演示用户02', '演示用户04']),
   false,
   'saving unrelated fields must not be treated as a responsibility change',
 )
 assert.equal(
-  haveProjectResponsiblePersonsChanged(['李四', '赵六'], ['赵六', '李四']),
+  haveProjectResponsiblePersonsChanged(['演示用户02', '演示用户04'], ['演示用户04', '演示用户02']),
   true,
   'responsibility order is meaningful because the first person is the project leader',
 )

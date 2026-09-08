@@ -1317,12 +1317,12 @@ for (const focusedCase of ['machine-surface', 'machine-summary', 'machine-follow
 assert.equal(task7BrowserRouting.shouldRunTask7FocusedBrowserCase('machine-summary', 'tos-surface'), false, 'an exact focused route never selects an unrelated case')
 assert.match(
   browserSource,
-  /await switchUser\(page, '李四'\)[\s\S]{0,500}view-only user cannot add MR from a business stage/,
-  'machine permission acceptance must use a real non-SPM member instead of the seeded project SPM 王五',
+  /await switchUser\(page, '演示用户02'\)[\s\S]{0,500}view-only user cannot add MR from a business stage/,
+  'machine permission acceptance must use a real non-SPM member instead of the seeded project SPM 演示用户03',
 )
 assert.match(
   browserSource,
-  /machine permission selected vertical[\s\S]{0,300}await ensureDraft\(page\)[\s\S]{0,300}await switchUser\(page, '李四'\)/,
+  /machine permission selected vertical[\s\S]{0,300}await ensureDraft\(page\)[\s\S]{0,300}await switchUser\(page, '演示用户02'\)/,
   'machine permission acceptance must create its own editable revision instead of weakening the published-only MR seed',
 )
 assert.match(
@@ -1509,7 +1509,7 @@ const capabilityFocusToken = projectSpaceFocusToken.createLevel1FocusScopeToken(
   projectId: 'capability-project',
   scopeKind: 'ordinary',
   versionId: 'v4',
-  currentUser: '张三',
+  currentUser: '演示用户01',
   editMode: true,
   planLevel: 'level1',
 })
@@ -1517,15 +1517,15 @@ const independentSoftwareFocusToken = projectSpaceFocusToken.createLevel1FocusSc
   projectId: 'independent-software-project',
   scopeKind: 'ordinary',
   versionId: 'v4',
-  currentUser: '张三',
+  currentUser: '演示用户01',
   editMode: true,
   planLevel: 'level1',
 })
 assert.deepEqual(capabilityFocusToken, {
-  projectId: 'capability-project', scopeKind: 'ordinary', scopeValue: 'default', versionId: 'v4', currentUser: '张三', editMode: true, planLevel: 'level1',
+  projectId: 'capability-project', scopeKind: 'ordinary', scopeValue: 'default', versionId: 'v4', currentUser: '演示用户01', editMode: true, planLevel: 'level1',
 }, 'a capability-building ordinary L1 plan creates a default-scope focus token')
 assert.deepEqual(independentSoftwareFocusToken, {
-  projectId: 'independent-software-project', scopeKind: 'ordinary', scopeValue: 'default', versionId: 'v4', currentUser: '张三', editMode: true, planLevel: 'level1',
+  projectId: 'independent-software-project', scopeKind: 'ordinary', scopeValue: 'default', versionId: 'v4', currentUser: '演示用户01', editMode: true, planLevel: 'level1',
 }, 'an independent-software ordinary L1 plan creates the same default-scope token shape')
 let currentFocusToken = capabilityFocusToken
 let focusAttempts = 0
@@ -1565,7 +1565,7 @@ runNextFocusCallback()
 assert.equal(focusAttempts, 1, 'switching an ordinary L1 version cancels the stale focus attempt')
 assert.equal(scheduledFocusCallbacks.size, 0, 'a stale ordinary version token stops without another retry')
 focusController.start(currentFocusToken, 3)
-focusController.start({ ...currentFocusToken, currentUser: '李四' }, 3)
+focusController.start({ ...currentFocusToken, currentUser: '演示用户02' }, 3)
 assert.equal(cancelledFocusHandles.length, 1, 'a new ordinary focus round cancels the previous pending timer')
 focusController.stop()
 assert.equal(scheduledFocusCallbacks.size, 0, 'unmount/scope cleanup cancels a pending retry timer')
@@ -1585,7 +1585,7 @@ const flatHierarchy = [
 ]
 assert.deepEqual(projectSpaceLevel1Rules.selectFlatGanttHierarchy(flatHierarchy, [flatFilterRows[1]]).map(task => task.stableId), ['stage-2', 'plan-str'], 'flat Gantt filtering keeps matched milestones and their stages in original hierarchy order')
 assert.deepEqual(projectSpaceLevel1Rules.selectFlatGanttHierarchy(flatHierarchy, []).map(task => task.id), [], 'flat Gantt filtering returns no hierarchy for no rows')
-const openingScope = { projectId: 'machine', scopeKind: 'market', scopeValue: 'OP', versionId: 'v4', currentUser: '张三' }
+const openingScope = { projectId: 'machine', scopeKind: 'market', scopeValue: 'OP', versionId: 'v4', currentUser: '演示用户01' }
 assert.equal(projectSpaceLevel1Rules.canConfirmMachineMrInsertion({ openingScope, currentScope: openingScope, isMachineProject: true, isCurrentDraft: true, isEditMode: true, canMaintain: true, followedReadOnly: false }), true, 'fresh machine draft scope can insert MR')
 assert.equal(projectSpaceLevel1Rules.canConfirmMachineMrInsertion({ openingScope, currentScope: { ...openingScope, scopeValue: 'TR' }, isMachineProject: true, isCurrentDraft: true, isEditMode: true, canMaintain: true, followedReadOnly: false }), false, 'a changed MR scope is rejected before writing')
 assert.equal(projectSpaceLevel1Rules.canConfirmMachineMrInsertion({ openingScope, currentScope: openingScope, isMachineProject: true, isCurrentDraft: false, isEditMode: true, canMaintain: true, followedReadOnly: false }), false, 'a no-longer-draft MR scope is rejected before writing')

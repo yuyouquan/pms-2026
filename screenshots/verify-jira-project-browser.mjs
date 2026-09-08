@@ -94,7 +94,7 @@ try {
   await deadline('reset browser state', async () => {
     await page.evaluate(() => { localStorage.clear(); sessionStorage.clear() })
     await page.reload({ waitUntil: 'networkidle0', timeout: TIMEOUT })
-    await page.waitForFunction(() => document.querySelector('[aria-label="切换当前用户"]')?.getAttribute('data-current-user') === '张三')
+    await page.waitForFunction(() => document.querySelector('[aria-label="切换当前用户"]')?.getAttribute('data-current-user') === '演示用户01')
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
     applicationErrors.length = 0
   })
@@ -104,17 +104,17 @@ try {
     await page.waitForSelector('[aria-label="项目列表视图"]', { visible: true })
   })
 
-  await deadline('open X6877 project space', async () => {
+  await deadline('open DEMO017 project space', async () => {
     await clickAria(page, '卡片视图')
     await page.waitForSelector('.pms-project-card-title', { visible: true })
     const opened = await page.evaluate(() => {
-      const title = Array.from(document.querySelectorAll('.pms-project-card-title')).find(element => element.getBoundingClientRect().height > 0 && element.textContent?.trim() === 'X6877-D8400_H991')
+      const title = Array.from(document.querySelectorAll('.pms-project-card-title')).find(element => element.getBoundingClientRect().height > 0 && element.textContent?.trim() === 'DEMO017-DEMOCHIP001_DEMOBOARD016')
       const card = title?.closest('.pms-project-card[role="button"]')
       if (!(card instanceof HTMLElement)) return false
       card.click()
       return true
     })
-    assert.equal(opened, true, 'X6877 project card missing')
+    assert.equal(opened, true, 'DEMO017 project card missing')
     await page.waitForSelector('.pms-project-info-core-actions', { visible: true })
   })
 
@@ -128,11 +128,11 @@ try {
   await deadline('verify shared off clears and disables Affect', async () => {
     await page.waitForFunction(editorSelector => Array.from(document.querySelectorAll(`${editorSelector} [data-jira-row]`)).some(candidate => (
       candidate.querySelector('[data-jira-field="shared"] button')?.getAttribute('aria-checked') === 'true'
-      && candidate.querySelector('[data-jira-field="affectProjects"]')?.textContent?.trim() === 'KN4'
+      && candidate.querySelector('[data-jira-field="affectProjects"]')?.textContent?.trim() === 'DEMO006'
     )), {}, EDITOR)
     const rowIndex = await page.$$eval(`${EDITOR} [data-jira-row]`, candidates => candidates.findIndex(candidate => (
       candidate.querySelector('[data-jira-field="shared"] button')?.getAttribute('aria-checked') === 'true'
-      && candidate.querySelector('[data-jira-field="affectProjects"]')?.textContent?.trim() === 'KN4'
+      && candidate.querySelector('[data-jira-field="affectProjects"]')?.textContent?.trim() === 'DEMO006'
     )))
     assert.notEqual(rowIndex, -1, 'a shared mock row with an existing Affect Projects value is required')
     const row = `${EDITOR} [data-jira-row="${rowIndex}"]`
@@ -141,7 +141,7 @@ try {
     assert.equal(await page.$eval(shared, element => element.getAttribute('aria-checked')), 'true')
     assert.equal(
       await page.$eval(affect, element => element.textContent?.trim()),
-      'KN4',
+      'DEMO006',
       'the row must begin with an existing Affect Projects value so clearing cannot pass falsely',
     )
     await page.$eval(shared, element => element.click())
@@ -150,7 +150,7 @@ try {
       const input = field?.querySelector('input')
       return field?.querySelector('.ant-select')?.classList.contains('ant-select-disabled')
         && input instanceof HTMLInputElement && input.disabled
-        && field.textContent?.trim() !== 'KN4'
+        && field.textContent?.trim() !== 'DEMO006'
     }, {}, affect)
     await page.$eval(shared, element => element.click())
     await page.waitForFunction(selector => {
@@ -158,7 +158,7 @@ try {
       const input = field?.querySelector('input')
       return !field?.querySelector('.ant-select')?.classList.contains('ant-select-disabled')
         && input instanceof HTMLInputElement && !input.disabled
-        && field.textContent?.trim() !== 'KN4'
+        && field.textContent?.trim() !== 'DEMO006'
     }, {}, affect)
     await page.$eval(shared, element => element.click())
     await page.waitForFunction(selector => {

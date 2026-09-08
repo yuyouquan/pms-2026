@@ -63,9 +63,9 @@ export function replayDeferredRoadmapChipCode(
 }
 
 export const PRODUCT_LINES_BY_BRAND = {
-  TECNO: ['PHANTOM', 'CAMON', 'POVA', 'SPARK', 'POP'],
-  Infinix: ['ZERO', 'NOTE', 'GT', 'HOT', 'SMART'],
-  itel: ['SUPER', 'POWER', 'CITY', 'A'],
+  示例品牌A: ['示例系列F', '示例系列D', '示例系列E', '示例系列B', '示例系列G'],
+  示例品牌B: ['示例系列H', '示例系列A', '示例系列I', '示例系列C', '示例系列J'],
+  示例品牌C: ['示例系列K', '示例系列L', '示例系列M', '示例系列N'],
   待定: ['待定'],
   其他品牌: ['其他系列'],
 } as const satisfies Record<RoadmapBrand, readonly string[]>

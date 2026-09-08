@@ -247,7 +247,7 @@ function roadmapControlScannerSelfTestFailures() {
     '.pms-summary-status-pill:hover { background: #eaf0ff; }',
     '.pms-summary-status-dot { background: #2563eb; }',
     '.pms-summary-series-hidden { color: #2563eb; }',
-    "const CATEGORY_THEME = { CAMON: { color: '#2563eb' } }",
+    "const CATEGORY_THEME = { 示例系列D: { color: '#2563eb' } }",
     '.pms-summary-status-pill-active { background: var(--pms-brand); }',
   ]
 

@@ -17,11 +17,11 @@ for (const exportName of [
 
 const validRow = {
   id: 'jira-1',
-  server: 'jira.transsion.com',
-  projectKey: 'KN4-tOS16',
+  server: 'jira.example.com',
+  projectKey: 'DEMO006-tOS16',
   type: 'sw',
   shared: true,
-  affectProjects: 'KN4',
+  affectProjects: 'DEMO006',
 }
 
 assert.deepEqual(rules.validateJiraProjectRows([]), [], 'an empty JIRA configuration is valid')
@@ -78,9 +78,9 @@ assert.deepEqual(
   'a second copy preserves all five business fields',
 )
 
-const legacy = { id: 'legacy', server: ' jira.transsion.com ', projectKey: ' KN4-tOS16 ', type: ' sw ' }
+const legacy = { id: 'legacy', server: ' jira.example.com ', projectKey: ' DEMO006-tOS16 ', type: ' sw ' }
 assert.deepEqual(rules.normalizeJiraProjectConfig(legacy), {
-  id: 'legacy', server: 'jira.transsion.com', projectKey: 'KN4-tOS16', type: 'sw', shared: false, affectProjects: '',
+  id: 'legacy', server: 'jira.example.com', projectKey: 'DEMO006-tOS16', type: 'sw', shared: false, affectProjects: '',
 }, 'legacy rows migrate missing shared and Affect Projects safely')
 
 const rawIncomplete = { id: 'incomplete', server: '  ', projectKey: ' ', type: ' sw ' }
@@ -90,7 +90,7 @@ assert.deepEqual(normalizedIncompleteRows[0], {
   id: 'incomplete', server: '', projectKey: '', type: 'sw', shared: false, affectProjects: '',
 }, 'batch normalization trims raw incomplete rows and applies legacy defaults')
 
-const omittedType = rules.normalizeJiraProjectConfig({ id: 'missing-type', server: 'jira.transsion.com', projectKey: 'KN4-tOS16' })
+const omittedType = rules.normalizeJiraProjectConfig({ id: 'missing-type', server: 'jira.example.com', projectKey: 'DEMO006-tOS16' })
 assert.equal(omittedType.type, '', 'an omitted JIRA type remains incomplete instead of defaulting to sw')
 assert.ok(
   rules.validateJiraProjectRows([omittedType]).some(error => error.fieldKey === 'type'),

@@ -50,13 +50,13 @@ if (selects2[1]) {
   await sleep(400)
 }
 
-// Pick 项目责任人 (since auto-fill was removed, user must select; pick 李四 + 张三)
-console.log('Pick 项目责任人 = 李四 + 张三')
+// Pick 项目责任人 (since auto-fill was removed, user must select; pick 演示用户02 + 演示用户01)
+console.log('Pick 项目责任人 = 演示用户02 + 演示用户01')
 const selects3 = await page.$$('.ant-modal .ant-select')
 if (selects3[2]) {
   await selects3[2].click()
   await sleep(400)
-  for (const name of ['李四', '张三']) {
+  for (const name of ['演示用户02', '演示用户01']) {
     await page.evaluate((n) => {
       const items = Array.from(document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option'))
       const t = items.find(el => (el.textContent || '').trim() === n)

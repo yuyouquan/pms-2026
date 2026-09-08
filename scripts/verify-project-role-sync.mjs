@@ -20,8 +20,8 @@ const tosMap = {
   版本项目经理: 'tosVersionProjectManager', 规划代表: 'tosPlanningRepresentative', SE: 'tosSe',
   测试代表: 'tosTestRepresentative', SQA: 'tosSqa', CMO: 'tosCmo', UX: 'tosUx',
   稳定性代表: 'tosStabilityRepresentative', 性能代表: 'tosPerformanceRepresentative', 功耗代表: 'tosPowerRepresentative',
-  系统应用开发代表: 'tosSystemAppDevRepresentative', 底软通信开发代表: 'tosBasebandDevRepresentative',
-  集成维护开发代表: 'tosIntegrationDevRepresentative', 软件架设与技术规划部开发代表: 'tosArchitectureDevRepresentative',
+  示例应用领域开发代表: 'tosSystemAppDevRepresentative', 示例通信领域开发代表: 'tosBasebandDevRepresentative',
+  示例集成领域开发代表: 'tosIntegrationDevRepresentative', 软件架设与技术规划部开发代表: 'tosArchitectureDevRepresentative',
   创新产品开发代表: 'tosInnovationDevRepresentative', 'TEX AI开发代表': 'tosTexAiDevRepresentative',
   影像开发代表: 'tosImagingDevRepresentative', 预装管理开发代表: 'tosPreinstallRepresentative',
   研发战略生态合作部代表: 'tosEcosystemRepresentative',
@@ -48,48 +48,48 @@ assert.deepEqual(fixture, { teamMembers: ['A'], permissionMembers: ['A'], respon
 const projectStore = projectModule.useProjectStore
 const permissionStore = permissionModule.usePermissionStore
 const seededProjectRoles = permissionStore.getState().rolesByProject
-assert.equal(permissionConstants.ALL_USERS.includes('钱九'), true, '钱九 is available in the shared user selector')
-assert.equal(projectModule.INITIAL_PROJECT_MEMBER_MAP['1'].includes('钱九'), true, '钱九 can see the target project')
+assert.equal(permissionConstants.ALL_USERS.includes('演示用户09'), true, '演示用户09 is available in the shared user selector')
+assert.equal(projectModule.INITIAL_PROJECT_MEMBER_MAP['1'].includes('演示用户09'), true, '演示用户09 can see the target project')
 assert.equal(
   Object.entries(projectModule.INITIAL_PROJECT_MEMBER_MAP)
     .filter(([projectId]) => projectId !== '1')
-    .some(([, members]) => members.includes('钱九')),
+    .some(([, members]) => members.includes('演示用户09')),
   false,
-  '钱九 is not a member of any non-target project',
+  '演示用户09 is not a member of any non-target project',
 )
-assert.equal(seededProjectRoles['1'].find(role => role.name === '项目经理')?.members.includes('钱九'), true, '钱九 is a target-project manager')
+assert.equal(seededProjectRoles['1'].find(role => role.name === '项目经理')?.members.includes('演示用户09'), true, '演示用户09 is a target-project manager')
 assert.equal(
   Object.entries(seededProjectRoles)
     .filter(([projectId]) => projectId !== '1')
-    .some(([, roles]) => roles.some(role => role.members.includes('钱九'))),
+    .some(([, roles]) => roles.some(role => role.members.includes('演示用户09'))),
   false,
-  '钱九 is absent from every non-target project role',
+  '演示用户09 is absent from every non-target project role',
 )
-assert.deepEqual(seededProjectRoles['3'].find(role => role.name === '项目经理')?.members, ['张三', '赵六'], 'the shared project-manager defaults are unchanged')
-assert.equal(permissionStore.getState().globalRoles.some(role => role.members.includes('钱九')), false, '钱九 has no global role')
+assert.deepEqual(seededProjectRoles['3'].find(role => role.name === '项目经理')?.members, ['演示用户01', '演示用户04'], 'the shared project-manager defaults are unchanged')
+assert.equal(permissionStore.getState().globalRoles.some(role => role.members.includes('演示用户09')), false, '演示用户09 has no global role')
 assert.equal(typeof permissionStore.getState().setRolesForProjectGuarded, 'function', 'role mutations expose a guarded store action')
 assert.equal(typeof permissionStore.getState().setRolePermissionsForProjectGuarded, 'function', 'permission mutations expose a guarded store action')
 assert.equal(typeof permissionStore.getState().ensureProjectPermissions, 'function', 'project hydration can backfill missing permission slots')
 const technicalProject = {
   id: 'role-tech', name: '角色技术项目', type: '技术项目', secondaryCategory: '技术项目', status: '在研', progress: 0,
-  leader: '李四', responsiblePersons: ['李四'], markets: [], androidVersion: '', chipPlatform: '', spm: '', updatedAt: '', productLine: '', tosVersion: '', planStartDate: '', planEndDate: '', developCycle: 0, healthStatus: 'normal',
-  technicalLead: '李四', technicalProjectManager: '王五', testRepresentative: '赵六', qualityRepresentative: '', productRepresentative: '孙七', standardizationRepresentative: '', technicalOther: '杜甫',
+  leader: '演示用户02', responsiblePersons: ['演示用户02'], markets: [], androidVersion: '', chipPlatform: '', spm: '', updatedAt: '', productLine: '', tosVersion: '', planStartDate: '', planEndDate: '', developCycle: 0, healthStatus: 'normal',
+  technicalLead: '演示用户02', technicalProjectManager: '演示用户03', testRepresentative: '演示用户04', qualityRepresentative: '', productRepresentative: '演示用户05', standardizationRepresentative: '', technicalOther: '演示用户08',
 }
-permissionStore.setState({ rolesByProject: { 'role-tech': [...permissionModule.getFixedProjectRoles(technicalProject), { name: '架构顾问', members: ['张三'], isFixed: false }] } })
+permissionStore.setState({ rolesByProject: { 'role-tech': [...permissionModule.getFixedProjectRoles(technicalProject), { name: '架构顾问', members: ['演示用户01'], isFixed: false }] } })
 projectStore.setState({ projects: [technicalProject], selectedProject: technicalProject })
 assert.equal(projectStore.getState().syncTechnicalTeamPermissionMembers('role-tech'), true)
 const syncedTechnical = permissionStore.getState().rolesByProject['role-tech']
 assert.deepEqual(syncedTechnical.slice(0, 7).map(role => [role.name, role.members]), [
-  ['技术项目负责人', ['李四']], ['技术项目经理', ['王五']], ['测试代表', ['赵六']], ['质量代表', []], ['产品代表', ['孙七']], ['标准化代表', []],
-  ['其他', ['杜甫']],
+  ['技术项目负责人', ['演示用户02']], ['技术项目经理', ['演示用户03']], ['测试代表', ['演示用户04']], ['质量代表', []], ['产品代表', ['演示用户05']], ['标准化代表', []],
+  ['其他', ['演示用户08']],
 ])
-assert.deepEqual(syncedTechnical.at(-1), { name: '架构顾问', members: ['张三'], isFixed: false }, 'custom technical roles remain assignable')
+assert.deepEqual(syncedTechnical.at(-1), { name: '架构顾问', members: ['演示用户01'], isFixed: false }, 'custom technical roles remain assignable')
 
 permissionStore.setState(state => ({
   globalRoles: state.globalRoles,
   rolesByProject: {
     ...state.rolesByProject,
-    guard: [{ name: '查看者', members: ['孙七'], isFixed: false }],
+    guard: [{ name: '查看者', members: ['演示用户05'], isFixed: false }],
   },
   rolePermissionsByProject: {
     ...state.rolePermissionsByProject,
@@ -97,29 +97,29 @@ permissionStore.setState(state => ({
   },
 }))
 const guardBefore = structuredClone(permissionStore.getState().rolesByProject.guard)
-assert.equal(permissionStore.getState().setRolesForProjectGuarded('guard', '孙七', [{ name: '越权', members: ['孙七'], isFixed: false }]), false, 'unauthorized role mutation is rejected in the store')
+assert.equal(permissionStore.getState().setRolesForProjectGuarded('guard', '演示用户05', [{ name: '越权', members: ['演示用户05'], isFixed: false }]), false, 'unauthorized role mutation is rejected in the store')
 assert.deepEqual(permissionStore.getState().rolesByProject.guard, guardBefore, 'unauthorized role mutation emits no state change')
-assert.equal(permissionStore.getState().setRolePermissionsForProjectGuarded('guard', '孙七', { 查看者: { 'projectPermission:manageRoles': true } }), false, 'unauthorized permission mutation is rejected in the store')
-assert.equal(permissionStore.getState().setRolesForProjectGuarded('guard', '张三', [{ name: '管理员新角色', members: ['李四'], isFixed: false }]), true, 'global administrator bypass still authorizes role mutation')
-assert.deepEqual(permissionStore.getState().rolesByProject.guard, [{ name: '管理员新角色', members: ['李四'], isFixed: false }])
+assert.equal(permissionStore.getState().setRolePermissionsForProjectGuarded('guard', '演示用户05', { 查看者: { 'projectPermission:manageRoles': true } }), false, 'unauthorized permission mutation is rejected in the store')
+assert.equal(permissionStore.getState().setRolesForProjectGuarded('guard', '演示用户01', [{ name: '管理员新角色', members: ['演示用户02'], isFixed: false }]), true, 'global administrator bypass still authorizes role mutation')
+assert.deepEqual(permissionStore.getState().rolesByProject.guard, [{ name: '管理员新角色', members: ['演示用户02'], isFixed: false }])
 const permissionRoundTrip = permissionModule.migratePermissionState(
   permissionModule.partializePermissionState(permissionStore.getState()),
   permissionModule.PERMISSION_STORAGE_VERSION,
 )
-assert.deepEqual(permissionRoundTrip.rolesByProject.guard, [{ name: '管理员新角色', members: ['李四'], isFixed: false }], 'persist roundtrip retains custom roles and members')
+assert.deepEqual(permissionRoundTrip.rolesByProject.guard, [{ name: '管理员新角色', members: ['演示用户02'], isFixed: false }], 'persist roundtrip retains custom roles and members')
 
 const persisted = permissionModule.migratePermissionState({
-  rolesByProject: { persisted: [{ name: ' 自定义角色 ', members: [' 张三 ', '张三'], isFixed: false }] },
+  rolesByProject: { persisted: [{ name: ' 自定义角色 ', members: [' 演示用户01 ', '演示用户01'], isFixed: false }] },
   rolePermissionsByProject: { persisted: { 自定义角色: { 'basicInfo:查看': true, bad: 'yes' } } },
 }, 1)
-assert.deepEqual(persisted.rolesByProject.persisted, [{ name: '自定义角色', members: ['张三'], isFixed: false }], 'persist migration keeps and sanitizes custom roles and members')
+assert.deepEqual(persisted.rolesByProject.persisted, [{ name: '自定义角色', members: ['演示用户01'], isFixed: false }], 'persist migration keeps and sanitizes custom roles and members')
 assert.deepEqual(persisted.rolePermissionsByProject.persisted, { 自定义角色: { 'basicInfo:查看': true } }, 'persist migration keeps boolean role permissions')
 
 const legacyProjectOne = {
   rolesByProject: {
     '1': [
-      { name: '项目经理', members: ['张三', '赵六'], isFixed: true },
-      { name: '自定义项目角色', members: ['李四'], isFixed: false },
+      { name: '项目经理', members: ['演示用户01', '演示用户04'], isFixed: true },
+      { name: '自定义项目角色', members: ['演示用户02'], isFixed: false },
     ],
   },
   rolePermissionsByProject: {
@@ -132,12 +132,12 @@ const legacyProjectOne = {
 const migratedProjectOne = permissionModule.migratePermissionState(legacyProjectOne, 1)
 assert.deepEqual(
   migratedProjectOne.rolesByProject['1'].find(role => role.name === '项目经理')?.members,
-  ['张三', '赵六', '钱九'],
-  'the one-time legacy permission migration backfills 钱九 into project 1 manager members',
+  ['演示用户01', '演示用户04', '演示用户09'],
+  'the one-time legacy permission migration backfills 演示用户09 into project 1 manager members',
 )
 assert.deepEqual(
   migratedProjectOne.rolesByProject['1'].find(role => role.name === '自定义项目角色'),
-  { name: '自定义项目角色', members: ['李四'], isFixed: false },
+  { name: '自定义项目角色', members: ['演示用户02'], isFixed: false },
   'the one-time legacy permission migration preserves custom roles',
 )
 assert.deepEqual(
@@ -148,7 +148,7 @@ assert.deepEqual(
 const currentProjectOne = permissionModule.migratePermissionState(legacyProjectOne, permissionModule.PERMISSION_STORAGE_VERSION)
 assert.deepEqual(
   currentProjectOne.rolesByProject['1'].find(role => role.name === '项目经理')?.members,
-  ['张三', '赵六'],
+  ['演示用户01', '演示用户04'],
   'current-version hydration does not repeatedly re-add a deliberately removed mock manager',
 )
 permissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
@@ -167,9 +167,9 @@ const tosProject = {
 projectStore.setState({ projects: [tosProject], selectedProject: tosProject })
 assert.equal(projectStore.getState().syncTosTeamPermissionMembers('role-tos'), true)
 assert.deepEqual(permissionStore.getState().rolesByProject['role-tos'].map(role => role.name), Object.keys(tosMap), 'tOS permission page exposes exactly 19 fixed roles')
-assert.equal(projectStore.getState().syncTosTeamPermissionMembersGuarded('role-tos', '孙七', '版本项目经理', ['越权']), false, 'permission-side tOS team mutation is store-guarded')
+assert.equal(projectStore.getState().syncTosTeamPermissionMembersGuarded('role-tos', '演示用户05', '版本项目经理', ['越权']), false, 'permission-side tOS team mutation is store-guarded')
 assert.deepEqual(projectStore.getState().projects[0].responsiblePersons, ['A'], 'rejected tOS mutation leaves the project unchanged')
-assert.equal(projectStore.getState().syncTosTeamPermissionMembersGuarded('role-tos', '张三', '版本项目经理', ['管理员']), true, 'global administrator can synchronize tOS members')
+assert.equal(projectStore.getState().syncTosTeamPermissionMembersGuarded('role-tos', '演示用户01', '版本项目经理', ['管理员']), true, 'global administrator can synchronize tOS members')
 assert.equal(projectStore.getState().syncTosTeamPermissionMembers('role-tos', '版本项目经理', [' B ', 'B']), true)
 const afterPermissionSave = projectStore.getState().projects[0]
 assert.deepEqual(afterPermissionSave.fieldValues.tosVersionProjectManager, ['B'], 'permission save writes the team field')

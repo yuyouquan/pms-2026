@@ -18,7 +18,7 @@ console.log('   saved screenshots/prd-todo-center.png')
 console.log('B. Plan view with validation')
 await page.evaluate(() => {
   const cards = Array.from(document.querySelectorAll('[class*="ant-card"]'))
-  cards.find(c => c.textContent && c.textContent.includes('X6877-D8400_H991'))?.click()
+  cards.find(c => c.textContent && c.textContent.includes('DEMO017-DEMOCHIP001_DEMOBOARD016'))?.click()
 })
 await sleep(800)
 await page.evaluate(() => {
@@ -81,17 +81,17 @@ if (startCell) {
 
 // ============== C. Switch to a non-responsible user to show locked draft ==============
 console.log('C. Non-permission + non-responsible state (read-only)')
-// Switch user via UserSwitcher dropdown to 杜甫 (not responsible for X6877 V4 tasks)
+// Switch user via UserSwitcher dropdown to 演示用户08 (not responsible for DEMO017 V4 tasks)
 await page.evaluate(() => {
   const avatar = Array.from(document.querySelectorAll('[class*="ant-avatar"]'))
-    .find(a => a.parentElement?.textContent?.includes('张三') || a.parentElement?.textContent?.includes('管理组'))
+    .find(a => a.parentElement?.textContent?.includes('演示用户01') || a.parentElement?.textContent?.includes('管理组'))
   if (avatar) avatar.parentElement?.click()
 })
 await sleep(500)
 // Try direct click on UserSwitcher avatar area
 await page.evaluate(() => {
   const switchers = Array.from(document.querySelectorAll('div'))
-    .filter(d => d.textContent && /管理组|张三/.test(d.textContent) && d.querySelector('.ant-avatar'))
+    .filter(d => d.textContent && /管理组|演示用户01/.test(d.textContent) && d.querySelector('.ant-avatar'))
   if (switchers.length) {
     const last = switchers[switchers.length - 1]
     last.click()
@@ -100,14 +100,14 @@ await page.evaluate(() => {
 await sleep(800)
 await page.screenshot({ path: '/tmp/dropdown-state.png', fullPage: false })
 
-// Click 杜甫 in dropdown
+// Click 演示用户08 in dropdown
 const duFuClicked = await page.evaluate(() => {
   const items = Array.from(document.querySelectorAll('.ant-dropdown-menu-item, [role="menuitem"]'))
-  const duFu = items.find(i => i.textContent && i.textContent.includes('杜甫'))
+  const duFu = items.find(i => i.textContent && i.textContent.includes('演示用户08'))
   if (duFu) { duFu.click(); return true }
   return false
 })
-console.log('   clicked 杜甫?', duFuClicked)
+console.log('   clicked 演示用户08?', duFuClicked)
 await sleep(1500)
 await page.screenshot({ path: 'screenshots/prd-readonly-user.png', fullPage: false })
 console.log('   saved screenshots/prd-readonly-user.png')

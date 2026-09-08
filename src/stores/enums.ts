@@ -1,3 +1,4 @@
+import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
@@ -49,15 +50,15 @@ interface SynchronousStateStorage {
 const enumStateStorage: SynchronousStateStorage = {
   getItem(name) {
     if (typeof window === 'undefined') throw new Error('localStorage unavailable')
-    return window.localStorage.getItem(name)
+    return getPmsLocalStorage().getItem(name)
   },
   setItem(name, value) {
     if (typeof window === 'undefined') throw new Error('localStorage unavailable')
-    window.localStorage.setItem(name, value)
+    getPmsLocalStorage().setItem(name, value)
   },
   removeItem(name) {
     if (typeof window === 'undefined') throw new Error('localStorage unavailable')
-    window.localStorage.removeItem(name)
+    getPmsLocalStorage().removeItem(name)
   },
 }
 

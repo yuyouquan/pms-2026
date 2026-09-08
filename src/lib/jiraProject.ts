@@ -82,8 +82,8 @@ export const validateJiraProjectRows = (rows: unknown): JiraProjectValidationErr
 }
 
 export const JIRA_SERVER_OPTIONS = [
-  { label: 'jira.transsion.com', value: 'jira.transsion.com' },
-  { label: 'jira-ex.transsion.com:6001', value: 'jira-ex.transsion.com:6001' },
+  { label: 'jira.example.com', value: 'jira.example.com' },
+  { label: 'jira-overseas.example.com', value: 'jira-overseas.example.com' },
 ]
 
 export const JIRA_PROJECT_TYPE_OPTIONS: { label: string; value: JiraProjectType }[] = [
@@ -92,36 +92,36 @@ export const JIRA_PROJECT_TYPE_OPTIONS: { label: string; value: JiraProjectType 
 ]
 
 export const JIRA_PROJECT_NAME_OPTIONS = [
-  'KN3-tOS15',
-  'KN3-tOS15-Aee',
-  'KN3-tOS15-HW',
-  'KN4-tOS16',
-  'KN4-tOS16-Aee',
-  'KN4-tOS16.2-Aee',
-  'KN4n-tOS16-Aee',
-  'KN5-tOS16',
+  'DEMO005-tOS15',
+  'DEMO005-tOS15-Aee',
+  'DEMO005-tOS15-HW',
+  'DEMO006-tOS16',
+  'DEMO006-tOS16-Aee',
+  'DEMO006-tOS16.2-Aee',
+  'DEMO007-tOS16-Aee',
+  'DEMO008-tOS16',
 ]
 
-export const JIRA_AFFECT_PROJECT_OPTIONS = ['KN4', 'KN5', 'X6877', 'X6855', 'X6890'].map(value => ({
+export const JIRA_AFFECT_PROJECT_OPTIONS = ['DEMO006', 'DEMO008', 'DEMO017', 'DEMO013', 'DEMO020'].map(value => ({
   label: value,
   value,
 }))
 
 export const SPUG_BUILD_OPTION_OPTIONS = [
-  'lj8',
-  'lj7',
-  'co7_h8110',
-  'cl9',
-  'cl8',
-  'co7',
-  'x6886',
-  'x6885',
-  'x6871_h962',
-  'x6853_h895',
-  'x6850b',
-  'x6850',
-  'x6850b_h895',
-  'x6850_h895',
+  'demo_build_08',
+  'demo_build_09',
+  'demo_build_10',
+  'demo_build_11',
+  'demo_build_12',
+  'demo_build_13',
+  'demo_build_14',
+  'demo019',
+  'demo_build_15',
+  'demo_build_16',
+  'demo_build_19',
+  'demo_build_20',
+  'demo_build_17',
+  'demo_build_18',
 ].map(value => ({
   label: value,
   value,
@@ -149,7 +149,7 @@ export const SPUG_BUILD_MARKET_OPTIONS = [
 }))
 
 export const getJiraRegionLabel = (server: string) =>
-  server.includes('jira-ex.transsion.com') ? '海外' : '国内'
+  server.includes('jira-overseas.example.com') ? '海外' : '国内'
 
 export const getJiraTypeLabel = (type: string) => {
   if (type === 'sw') return '软件库'

@@ -32,7 +32,7 @@ export interface SpugMarketBuildValidationResult {
   unsupportedIssues: SpugMarketBuildSelectionIssue[]
 }
 
-export const MOCK_SPUG_BUILD_OPTIONS = ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b']
+export const MOCK_SPUG_BUILD_OPTIONS = ['demo_build_01', 'demo_build_02', 'demo_build_03', 'demo_build_04', 'demo_build_05', 'demo_build_06', 'demo_build_07']
 
 export const MOCK_SPUG_BUILD_MARKETS = ['op', 'tr']
 

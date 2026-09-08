@@ -35,10 +35,10 @@ assert.equal(workspace.normalizePlanViewMode('gantt', true), 'gantt', 'gantt vie
 
 const tasks = [
   { id: '2', order: 2, taskName: '开发阶段', status: '未开始', progress: 0 },
-  { id: '2.2', parentId: '2', order: 2, taskName: 'PDCP', responsible: '李四', status: '未开始', progress: 0 },
+  { id: '2.2', parentId: '2', order: 2, taskName: 'PDCP', responsible: '演示用户02', status: '未开始', progress: 0 },
   { id: '1', order: 1, taskName: '概念阶段', status: '未开始', progress: 0 },
-  { id: '1.2', parentId: '1', order: 2, taskName: 'CDCP', responsible: '李四', status: '未开始', progress: 0 },
-  { id: '1.1', parentId: '1', order: 1, taskName: 'STR1', responsible: '张三', status: '未开始', progress: 0 },
+  { id: '1.2', parentId: '1', order: 2, taskName: 'CDCP', responsible: '演示用户02', status: '未开始', progress: 0 },
+  { id: '1.1', parentId: '1', order: 1, taskName: 'STR1', responsible: '演示用户01', status: '未开始', progress: 0 },
 ]
 
 assert.deepEqual(
@@ -47,7 +47,7 @@ assert.deepEqual(
   'collapsed phases hide all descendants while preserving source row order',
 )
 assert.deepEqual(
-  workspace.applyPlanWorkspaceFilters(tasks, [{ id: 'filter-1', field: 'responsible', operator: 'contains', value: '李' }]).map(task => task.id),
+  workspace.applyPlanWorkspaceFilters(tasks, [{ id: 'filter-1', field: 'responsible', operator: 'contains', value: '用户02' }]).map(task => task.id),
   ['2.2', '1.2'],
   'shared plan filtering keeps existing all-active-conditions semantics',
 )

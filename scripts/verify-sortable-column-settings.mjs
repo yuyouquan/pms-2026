@@ -5,6 +5,7 @@ import path from 'node:path'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 import ts from 'typescript'
+import { createCurrentDatasetStorage } from './lib/mock-dataset-storage.mjs'
 
 const root = process.cwd()
 const require = createRequire(import.meta.url)
@@ -836,11 +837,7 @@ registerAssertion('roadmap hydration migrates partial visibility maps per view',
   const hydrateEnvelope = envelope => {
     const previousWindow = globalThis.window
     globalThis.window = {
-      localStorage: {
-        getItem: key => key === 'pms-project-roadmap' ? JSON.stringify(envelope) : null,
-        setItem: () => {},
-        removeItem: () => {},
-      },
+      localStorage: createCurrentDatasetStorage({ 'pms-project-roadmap': JSON.stringify(envelope) }),
     }
     try {
       return loadTypeScriptModule(path.join(root, 'src/stores/roadmap.ts'), new Map())

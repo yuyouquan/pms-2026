@@ -33,9 +33,9 @@ const historicalProjectEnvelope = JSON.stringify({
   state: {
     projects: [{
       id: '1', name: PROJECT_NAME, type: '整机产品项目', secondaryCategory: '整机-手机',
-      status: '在研', progress: 65, leader: '张三', markets: ['OP'], androidVersion: 'Android 17',
-      chipPlatform: 'MTK', spm: '张三', updatedAt: '刚刚', productLine: 'NOTE', productSeries: 'NOTE 60',
-      marketName: 'NOTE 60', brand: 'TECNO', developMode: '自研', firstSaleTosVersionId: ENUM_VALUE,
+      status: '在研', progress: 65, leader: '演示用户01', markets: ['OP'], androidVersion: 'Android 17',
+      chipPlatform: '示例平台A', spm: '演示用户01', updatedAt: '刚刚', productLine: '示例系列A', productSeries: '示例系列A 60',
+      marketName: '示例系列A 60', brand: '示例品牌A', developMode: '自研', firstSaleTosVersionId: ENUM_VALUE,
       tosVersionName: ENUM_LABEL, tosVersion: ENUM_LABEL, projectCode: 'X6999', platform: 'D9999',
       productType: '新品', startRam: '8GB', versionType: 'Full', str5Date: '2027-01-01',
       launchDate: '2027-02-01', remark: '', healthStatus: 'normal', planStartDate: '', planEndDate: '',
@@ -130,7 +130,7 @@ const openMachineCreateOptions = async page => {
     return Boolean(modal && !modal.querySelector('.ant-spin-spinning'))
   })
   await openFormSelect(page, '项目名')
-  await selectVisibleOption(page, 'X6900-D8600_H1100（EXT-001）')
+  await selectVisibleOption(page, 'DEMO021-DEMOCHIP003_DEMOBOARD003（EXT-001）')
   await page.waitForFunction(() => Array.from(document.querySelectorAll('.ant-form-item-label'))
     .some(element => (element.textContent || '').trim() === '首销 tOS 版本'))
   await openFormSelect(page, '首销 tOS 版本')

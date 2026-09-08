@@ -4,7 +4,7 @@ import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 export type RoadmapSource = 'normal' | 'planned'
 export type RoadmapViewMode = 'table' | 'evolution'
 export type RoadmapProductType = '新品' | '老品'
-export type RoadmapBrand = 'TECNO' | 'Infinix' | 'itel' | '待定' | '其他品牌'
+export type RoadmapBrand = '示例品牌A' | '示例品牌B' | '示例品牌C' | '待定' | '其他品牌'
 export type RoadmapAndroidVersion = 'Android 16' | 'Android 17' | 'Android 18'
 export type RoadmapRam = string
 /** Project records keep configured and retired values as string snapshots. */

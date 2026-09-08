@@ -68,11 +68,11 @@ await shot('06b-transfer-entry-rejected-expanded')
 
 // =========== 7. 维护审核页 ===========
 console.log('7. 维护审核页')
-// 切到维护团队 SPM = 张三 (u001)，他可以审 SPM
+// 切到维护团队 SPM = 演示用户01 (u001)，他可以审 SPM
 // 但 X6768 SPM 已经被驳回，看不到审核按钮... 试 底软/系统 ?
-// X6768 维护团队: SPM=张三, TPM=李四, 底软=赵六, 系统=钱七, 影像=沈十七
+// X6768 维护团队: SPM=演示用户01, TPM=演示用户02, 底软=演示用户04, 系统=钱七, 影像=沈十七
 // 底软 reviewing 中、系统/影像 已通过 — 让我们用 钱七 (系统), 但他已经审核完了...
-// 用赵六（底软审核中）
+// 用演示用户04（底软审核中）
 await page.evaluate(() => {
   const items = Array.from(document.querySelectorAll('.ant-dropdown-menu-item, li[role="menuitem"]'))
   // 重新打开下拉
@@ -83,7 +83,7 @@ await page.evaluate(() => {
 await sleep(500)
 await page.evaluate(() => {
   const items = Array.from(document.querySelectorAll('.ant-dropdown-menu-item, li[role="menuitem"]'))
-  const zhao6 = items.find(i => (i.textContent || '').includes('赵六'))
+  const zhao6 = items.find(i => (i.textContent || '').includes('演示用户04'))
   zhao6?.click()
 })
 await sleep(800)
@@ -93,7 +93,7 @@ await shot('07-transfer-review')
 
 // =========== 8. SQA审核页 ===========
 console.log('8. SQA审核页')
-// app-008 的 sqaReview 是 in_progress，且 SQA 用户是 王五 (u003)
+// app-008 的 sqaReview 是 in_progress，且 SQA 用户是 演示用户03 (u003)
 await page.evaluate(() => {
   const trig = Array.from(document.querySelectorAll('[role="button"], .ant-dropdown-trigger'))
     .find(el => /[一-龥]/.test(el.textContent || '') && el.closest('header, .ant-layout-header'))
@@ -102,7 +102,7 @@ await page.evaluate(() => {
 await sleep(500)
 await page.evaluate(() => {
   const items = Array.from(document.querySelectorAll('.ant-dropdown-menu-item, li[role="menuitem"]'))
-  const wang5 = items.find(i => (i.textContent || '').includes('王五'))
+  const wang5 = items.find(i => (i.textContent || '').includes('演示用户03'))
   wang5?.click()
 })
 await sleep(800)

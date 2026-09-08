@@ -40,15 +40,15 @@ const checks = []
 try {
   await page.goto(base, { waitUntil: 'networkidle0' })
   await openProject('3')
-  await switchUser('钱九')
+  await switchUser('演示用户09')
   await page.waitForFunction(() => document.body.innerText.includes('当前用户未配置该项目空间角色'), { timeout: 4000 })
   assert.equal(await page.$('[aria-label="项目空间导航"]'), null, 'nonmember project content unmounted immediately')
-  assert.equal(await page.evaluate(() => document.body.innerText.includes('X6855_H8917')), false, 'no prior project details leaked')
+  assert.equal(await page.evaluate(() => document.body.innerText.includes('DEMO013_DEMOBOARD010')), false, 'no prior project details leaked')
   checks.push('进入项目后切换非成员：项目内容不可见')
   await page.screenshot({ path: `${output}/nonmember.png` })
 
   await clickText('返回项目列表')
-  await switchUser('李四')
+  await switchUser('演示用户02')
   await openProject('1')
   const action = await page.evaluate(() => {
     const button = [...document.querySelectorAll('button')].find(element => element.textContent.trim() === '申请转维')
@@ -63,11 +63,11 @@ try {
   checks.push('普通成员：转维、计划与角色配置权限生效')
   await page.screenshot({ path: `${output}/read-only.png` })
 
-  await switchUser('钱九')
+  await switchUser('演示用户09')
   await page.waitForSelector('.pms-project-info-core-actions')
   await clickText('编辑', '.pms-project-info-core-actions button')
   await page.waitForSelector('[role="dialog"]')
-  await switchUser('李四')
+  await switchUser('演示用户02')
   assert.equal(await page.$('[role="dialog"]'), null, 'identity switch unmounts prior member edit modal')
   checks.push('成员切换：旧编辑弹窗关闭，不能借用前一个用户权限')
   assert.deepEqual(errors, [])

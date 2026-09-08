@@ -30,16 +30,16 @@ assert.equal(typeof getProjectInfoModalEditHydrationKey, 'function', 'modal must
 assert.equal(typeof shouldHydrateProjectInfoModalEdit, 'function', 'modal must export its edit hydration decision')
 
 const rawRows = [
-  { id: 'jira-incomplete', server: ' jira.transsion.com ', projectKey: ' ', type: ' sw ' },
-  { id: 'jira-complete', server: 'jira-ex.transsion.com:6001', projectKey: ' KN4-tOS16 ', type: 'monkey', shared: true, affectProjects: ' KN4 ' },
+  { id: 'jira-incomplete', server: ' jira.example.com ', projectKey: ' ', type: ' sw ' },
+  { id: 'jira-complete', server: 'jira-overseas.example.com', projectKey: ' DEMO006-tOS16 ', type: 'monkey', shared: true, affectProjects: ' DEMO006 ' },
 ]
-const submitted = normalizeProjectInfoModalSubmitValues({ jiraProjects: rawRows, brand: 'TECNO' })
+const submitted = normalizeProjectInfoModalSubmitValues({ jiraProjects: rawRows, brand: '示例品牌A' })
 assert.equal(submitted.jiraProjects.length, 2, 'submission normalization preserves incomplete JIRA rows instead of filtering them')
 assert.deepEqual(submitted.jiraProjects[0], {
-  id: 'jira-incomplete', server: 'jira.transsion.com', projectKey: '', type: 'sw', shared: false, affectProjects: '',
+  id: 'jira-incomplete', server: 'jira.example.com', projectKey: '', type: 'sw', shared: false, affectProjects: '',
 }, 'submission normalization trims and migrates the incomplete row')
 assert.deepEqual(submitted.jiraProjects[1], {
-  id: 'jira-complete', server: 'jira-ex.transsion.com:6001', projectKey: 'KN4-tOS16', type: 'monkey', shared: true, affectProjects: 'KN4',
+  id: 'jira-complete', server: 'jira-overseas.example.com', projectKey: 'DEMO006-tOS16', type: 'monkey', shared: true, affectProjects: 'DEMO006',
 }, 'submission normalization keeps all complete row values')
 assert.deepEqual(normalizeProjectInfoModalSubmitValues({ jiraProjects: [] }).jiraProjects, [], 'an empty JIRA configuration remains a valid empty submission')
 

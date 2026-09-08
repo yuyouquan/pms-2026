@@ -94,9 +94,9 @@ export default function RoadmapToolbar({
 }: RoadmapToolbarProps) {
   const brandOptions: Array<{ label: string; value: 'all' | 'custom' | RoadmapBrand; disabled?: boolean }> = [
     { label: '全部', value: 'all' },
-    { label: 'TECNO', value: 'TECNO' },
-    { label: 'Infinix', value: 'Infinix' },
-    { label: 'itel', value: 'itel' },
+    { label: '示例品牌A', value: '示例品牌A' },
+    { label: '示例品牌B', value: '示例品牌B' },
+    { label: '示例品牌C', value: '示例品牌C' },
   ]
   if (brandFilter === 'custom') brandOptions.push({ label: '自定义', value: 'custom', disabled: true })
 

@@ -124,13 +124,13 @@ const SUMMARY_VIEW_KIND = PROJECT_VIEW_KINDS.summaryBoard
 const SUMMARY_STICKY_TOP = 47
 const TABLE_BODY_SCROLL_Y = 'calc(100vh - 180px)'
 
-const CATEGORY_ORDER = ['CAMON', 'Note', 'SPARK', 'POVA', 'tOS版本', '技术项目']
+const CATEGORY_ORDER = ['示例系列D', '示例系列A', '示例系列B', '示例系列E', 'tOS版本', '技术项目']
 
 const CATEGORY_THEME: Record<string, { key: string; label?: string; color: string; bg: string; seriesBg: string; accent: string }> = {
-  CAMON: { key: 'camon', color: '#2563eb', bg: '#eff6ff', seriesBg: '#f8fbff', accent: '#3b82f6' },
-  Note: { key: 'note', label: 'NOTE', color: 'var(--pms-brand-strong)', bg: 'var(--pms-brand-surface)', seriesBg: 'color-mix(in srgb, var(--pms-brand) 4%, var(--pms-surface-solid))', accent: 'var(--pms-brand)' },
-  SPARK: { key: 'spark', color: '#059669', bg: '#ecfdf5', seriesBg: '#f4fff9', accent: '#10b981' },
-  POVA: { key: 'pova', color: '#d97706', bg: '#fffbeb', seriesBg: '#fffdf2', accent: '#f59e0b' },
+  示例系列D: { key: 'camon', color: '#2563eb', bg: '#eff6ff', seriesBg: '#f8fbff', accent: '#3b82f6' },
+  示例系列A: { key: 'note', label: '示例系列A', color: 'var(--pms-brand-strong)', bg: 'var(--pms-brand-surface)', seriesBg: 'color-mix(in srgb, var(--pms-brand) 4%, var(--pms-surface-solid))', accent: 'var(--pms-brand)' },
+  示例系列B: { key: 'spark', color: '#059669', bg: '#ecfdf5', seriesBg: '#f4fff9', accent: '#10b981' },
+  示例系列E: { key: 'pova', color: '#d97706', bg: '#fffbeb', seriesBg: '#fffdf2', accent: '#f59e0b' },
   tOS版本: { key: 'tos', color: '#0891b2', bg: '#ecfeff', seriesBg: '#f0fdfa', accent: '#06b6d4' },
   独立软件产品: { key: 'independent', color: '#0f766e', bg: '#ecfdf5', seriesBg: '#f0fdfa', accent: '#14b8a6' },
   技术项目: { key: 'tech', color: '#0f766e', bg: '#ecfdf5', seriesBg: '#f0fdf4', accent: '#14b8a6' },
@@ -161,12 +161,12 @@ const STATUS_DOT_COLORS: Record<SummaryStatus, string> = {
 
 const DEPARTMENT_BY_PROJECT: Record<string, string> = {
   '1': '软件项目一部',
-  '3': '集成维护部',
+  '3': '示例集成领域部',
   '7': '软件项目二部',
   '2': '软件项目一部',
   '6': '软件项目一部',
   '8': '软件项目二部',
-  '4': '集成维护部',
+  '4': '示例集成领域部',
   '9': '软件项目二部',
 }
 
@@ -208,14 +208,14 @@ const splitValues = (value: any) => String(value || '').split(/[,\uff0c、/]/).m
 const getFirstSpm = (value: any) => splitValues(value)[0] || ''
 
 const SPM_DEPARTMENT_MAP: Record<string, string> = {
-  张三: '软件项目一部',
-  李白: '软件项目一部',
-  李四: '软件项目二部',
-  王五: '系统平台部',
-  赵六: '集成维护部',
-  孙七: '质量保障部',
-  周八: '项目管理部',
-  杜甫: '系统平台部',
+  演示用户01: '软件项目一部',
+  演示用户07: '软件项目一部',
+  演示用户02: '软件项目二部',
+  演示用户03: '系统平台部',
+  演示用户04: '示例集成领域部',
+  演示用户05: '质量保障部',
+  演示用户06: '示例项目组',
+  演示用户08: '系统平台部',
 }
 
 const getDepartmentByFirstSpm = (project: any, fallback: string) => {
@@ -230,7 +230,7 @@ const buildMilestones = (project: any, names: string[], rowIndex: number): Summa
   }))
 )
 
-const getMachineCategory = (project: any) => project.productCategory || (project.productLine === 'NOTE' ? 'Note' : project.productLine || 'CAMON')
+const getMachineCategory = (project: any) => project.productCategory || (project.productLine === '示例系列A' ? '示例系列A' : project.productLine || '示例系列D')
 const getMachineSeries = (project: any) => project.productSeries || project.productLine || '未分系列'
 const getSoftwareSeries = (project: any) => {
   if (normalizeSoftwareProjectType(project.type, project.name) === PROJECT_TYPE_TOS_VERSION) {
@@ -394,7 +394,7 @@ const makeSummaryRows = (
         projectName: project.name,
         status,
         spm: project.spm || project.leader || '-',
-        department: getDepartmentByFirstSpm(project, '集成维护部'),
+        department: getDepartmentByFirstSpm(project, '示例集成领域部'),
         milestones,
         milestonesText: milestones
           .map(item => `${item.date} ${item.name}`)
@@ -991,6 +991,10 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     refreshSavedProjectViews()
     const sharedView = parseProjectViewShare(SUMMARY_VIEW_KIND)
     if (sharedView) {
+      if ('expired' in sharedView) {
+        message.warning('分享链接已过期，请使用新版原型重新分享。')
+        return
+      }
       applyProjectViewState(sharedView.state)
       setActiveSavedViewId(null)
       if (sharedView.name) setProjectViewName(sharedView.name)

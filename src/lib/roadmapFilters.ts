@@ -106,7 +106,7 @@ function normalizeRoadmapColumnKey(value: unknown): RoadmapColumnKey | null {
 
 export type RoadmapQuickFilterField = 'brand' | 'productType'
 export type RoadmapQuickFilterValue = 'all' | 'custom' | RoadmapBrand | RoadmapProductType
-const ROADMAP_QUICK_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel'])
+const ROADMAP_QUICK_BRANDS = new Set<RoadmapBrand>(['示例品牌A', '示例品牌B', '示例品牌C'])
 
 export function getRoadmapFilterOperators(
   _field: string,
@@ -236,7 +236,7 @@ export function buildRoadmapFilterFieldDefinitions(
         ...selectableVersions.map(version => ({ label: version.name, value: version.id })),
       ],
     },
-    { key: 'brand', label: '品牌', kind: 'enum', options: ['TECNO', 'Infinix', 'itel', '待定', '其他品牌'].map(option) },
+    { key: 'brand', label: '品牌', kind: 'enum', options: ['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌'].map(option) },
     { key: 'productLine', label: '产品线', kind: 'enum', options: productLines.map(option) },
     { key: 'productSeries', label: '产品系列', kind: 'text' },
     { key: 'marketName', label: '市场名', kind: 'text' },

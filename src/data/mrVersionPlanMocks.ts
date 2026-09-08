@@ -194,9 +194,9 @@ function createTosInstance(projectId: string, tosVersion: string): TosMrVersionI
     templateVersionId: 'mr-template-v1',
     activities: cloneActivities(),
     dates: cloneDates(MR_ACCEPTANCE_DATES[tosVersion]),
-    createdBy: '张三',
+    createdBy: '演示用户01',
     createdAt: MR_ACCEPTANCE_CREATED_AT,
-    updatedBy: '张三',
+    updatedBy: '演示用户01',
     updatedAt: MR_ACCEPTANCE_CREATED_AT,
   }
 }
@@ -260,13 +260,13 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
   const mismatchedTypeTwoA = createMachinePlan('1', '16.3.0.140', '2', {
     ...withoutDate(MR_ACCEPTANCE_DATES['16.3.0.140'], 'mr-node-archive'),
     'mr-node-version-transfer': '2026-05-29',
-  }, '王五')
+  }, '演示用户03')
   const mismatchedTypeTwoB = createMachinePlan('3', '16.3.0.140', '2', {
     ...MR_ACCEPTANCE_DATES['16.3.0.140'],
     'mr-node-mp-intake-deadline': '2026-05-25',
     'mr-node-version-transfer': '2026-05-30',
-  }, '赵六')
-  const cleanTypeOne = createMachinePlan('1', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '王五')
+  }, '演示用户04')
+  const cleanTypeOne = createMachinePlan('1', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '演示用户03')
   const shortGapAndNextBoundary = createMachinePlan('3', '16.3.0.145', '2', {
     ...MR_ACCEPTANCE_DATES['16.3.0.145'],
     'mr-node-version-transfer': '2026-06-28',
@@ -275,8 +275,8 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
     'mr-node-review': '2026-07-10',
     'mr-node-archive': '2026-07-12',
     'mr-node-ota-deploy': '2026-07-22',
-  }, '赵六')
-  const nextCleanTypeOne = createMachinePlan('1', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '王五')
+  }, '演示用户04')
+  const nextCleanTypeOne = createMachinePlan('1', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '演示用户03')
   const cleanTypeTwo = createMachinePlan('3', '16.3.0.150', '2', {
     ...MR_ACCEPTANCE_DATES['16.3.0.150'],
     'mr-node-version-transfer': '2026-07-29',
@@ -285,48 +285,48 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
     'mr-node-review': '2026-08-10',
     'mr-node-archive': '2026-08-12',
     'mr-node-ota-deploy': '2026-08-23',
-  }, '赵六')
+  }, '演示用户04')
 
   const rawPlans = [
-    createMachinePlan('14', '16.3.0.135', '1', MR_ACCEPTANCE_DATES['16.3.0.135'], '周敏'),
-    createMachinePlan('15', '16.3.0.135', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.135'], 7), '陈晨'),
-    createMachinePlan('16', '16.3.0.135', 'N/A', {}, '李白'),
+    createMachinePlan('14', '16.3.0.135', '1', MR_ACCEPTANCE_DATES['16.3.0.135'], '演示成员06'),
+    createMachinePlan('15', '16.3.0.135', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.135'], 7), '演示成员11'),
+    createMachinePlan('16', '16.3.0.135', 'N/A', {}, '演示用户07'),
     mismatchedTypeTwoA,
     mismatchedTypeTwoB,
-    createMachinePlan('7', '16.3.0.140', '1', MR_ACCEPTANCE_DATES['16.3.0.140'], '王五'),
-    createMachinePlan('14', '16.3.0.140', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.140'], 14), '周敏'),
-    createMachinePlan('15', '16.3.0.140', 'N/A', {}, '陈晨'),
-    createMachinePlan('16', '16.3.0.140', '1', MR_ACCEPTANCE_DATES['16.3.0.140'], '李白'),
+    createMachinePlan('7', '16.3.0.140', '1', MR_ACCEPTANCE_DATES['16.3.0.140'], '演示用户03'),
+    createMachinePlan('14', '16.3.0.140', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.140'], 14), '演示成员06'),
+    createMachinePlan('15', '16.3.0.140', 'N/A', {}, '演示成员11'),
+    createMachinePlan('16', '16.3.0.140', '1', MR_ACCEPTANCE_DATES['16.3.0.140'], '演示用户07'),
     cleanTypeOne,
     shortGapAndNextBoundary,
-    createMachinePlan('7', '16.3.0.145', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.145'], 14), '王五'),
-    createMachinePlan('12', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '孙悦'),
-    createMachinePlan('15', '16.3.0.145', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.145'], 7), '陈晨'),
-    createMachinePlan('17', '16.3.0.145', 'N/A', {}, '李白'),
+    createMachinePlan('7', '16.3.0.145', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.145'], 14), '演示用户03'),
+    createMachinePlan('12', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '演示成员12'),
+    createMachinePlan('15', '16.3.0.145', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.145'], 7), '演示成员11'),
+    createMachinePlan('17', '16.3.0.145', 'N/A', {}, '演示用户07'),
     nextCleanTypeOne,
     cleanTypeTwo,
-    createMachinePlan('12', '16.3.0.150', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 14), '孙悦'),
-    createMachinePlan('13', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '吴迪'),
-    createMachinePlan('16', '16.3.0.150', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 7), '李白'),
-    createMachinePlan('17', '16.3.0.150', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 14), '李白'),
-    createMachinePlan('1', '16.3.0.155', '1', MR_ACCEPTANCE_DATES['16.3.0.155'], '王五'),
-    createMachinePlan('3', '16.3.0.155', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 7), '赵六'),
-    createMachinePlan('13', '16.3.0.155', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 14), '吴迪'),
-    createMachinePlan('15', '16.3.0.155', '4', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 21), '陈晨'),
-    createMachinePlan('18', '16.3.0.155', 'N/A', {}, '赵六'),
-    createMachinePlan('1', '16.3.0.160', '1', MR_ACCEPTANCE_DATES['16.3.0.160'], '王五'),
-    createMachinePlan('3', '16.3.0.160', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.160'], 7), '赵六'),
+    createMachinePlan('12', '16.3.0.150', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 14), '演示成员12'),
+    createMachinePlan('13', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '演示成员04'),
+    createMachinePlan('16', '16.3.0.150', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 7), '演示用户07'),
+    createMachinePlan('17', '16.3.0.150', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.150'], 14), '演示用户07'),
+    createMachinePlan('1', '16.3.0.155', '1', MR_ACCEPTANCE_DATES['16.3.0.155'], '演示用户03'),
+    createMachinePlan('3', '16.3.0.155', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 7), '演示用户04'),
+    createMachinePlan('13', '16.3.0.155', '3', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 14), '演示成员04'),
+    createMachinePlan('15', '16.3.0.155', '4', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.155'], 21), '演示成员11'),
+    createMachinePlan('18', '16.3.0.155', 'N/A', {}, '演示用户04'),
+    createMachinePlan('1', '16.3.0.160', '1', MR_ACCEPTANCE_DATES['16.3.0.160'], '演示用户03'),
+    createMachinePlan('3', '16.3.0.160', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.160'], 7), '演示用户04'),
     // These four future rows prove that the same production stop rule removes forbidden releases.
-    createMachinePlan('7', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '王五'),
-    createMachinePlan('12', '16.3.0.155', '1', MR_ACCEPTANCE_DATES['16.3.0.155'], '孙悦'),
-    createMachinePlan('13', '16.3.0.160', '1', MR_ACCEPTANCE_DATES['16.3.0.160'], '吴迪'),
-    createMachinePlan('14', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '周敏'),
+    createMachinePlan('7', '16.3.0.150', '1', MR_ACCEPTANCE_DATES['16.3.0.150'], '演示用户03'),
+    createMachinePlan('12', '16.3.0.155', '1', MR_ACCEPTANCE_DATES['16.3.0.155'], '演示成员12'),
+    createMachinePlan('13', '16.3.0.160', '1', MR_ACCEPTANCE_DATES['16.3.0.160'], '演示成员04'),
+    createMachinePlan('14', '16.3.0.145', '1', MR_ACCEPTANCE_DATES['16.3.0.145'], '演示成员06'),
   ]
   const stopReleaseFixtures: MrStopReleaseRecord[] = [
-    { id: 'mr-stop-7', projectId: '7', projectName: 'X6890-D8500_H1001', stopDate: '2026-06-30', operator: '张三', operatedAt: '2026-08-29T09:10:00.000Z' },
-    { id: 'mr-stop-12', projectId: '12', projectName: 'CN5C-D8400_H992', stopDate: '2026-07-31', operator: '张三', operatedAt: '2026-08-29T09:20:00.000Z' },
-    { id: 'mr-stop-13', projectId: '13', projectName: 'CN5M-D8400_H993', stopDate: '2026-08-31', operator: '吴迪', operatedAt: '2026-08-29T09:30:00.000Z' },
-    { id: 'mr-stop-14', projectId: '14', projectName: 'CN6_H902', stopDate: '2026-05-31', operator: '周敏', operatedAt: '2026-08-29T09:40:00.000Z' },
+    { id: 'mr-stop-7', projectId: '7', projectName: 'DEMO020-DEMOCHIP002_DEMOBOARD002', stopDate: '2026-06-30', operator: '演示用户01', operatedAt: '2026-08-29T09:10:00.000Z' },
+    { id: 'mr-stop-12', projectId: '12', projectName: 'DEMO001-DEMOCHIP001_DEMOBOARD017', stopDate: '2026-07-31', operator: '演示用户01', operatedAt: '2026-08-29T09:20:00.000Z' },
+    { id: 'mr-stop-13', projectId: '13', projectName: 'DEMO002-DEMOCHIP001_DEMOBOARD018', stopDate: '2026-08-31', operator: '演示成员04', operatedAt: '2026-08-29T09:30:00.000Z' },
+    { id: 'mr-stop-14', projectId: '14', projectName: 'DEMO003_DEMOBOARD011', stopDate: '2026-05-31', operator: '演示成员06', operatedAt: '2026-08-29T09:40:00.000Z' },
   ]
   const rawPlansByKey = Object.fromEntries(rawPlans.map(plan => [`${plan.projectId}::${plan.tosVersion}`, plan]))
   const stoppedState = stopReleaseFixtures.reduce((state, record) => applyStopRelease({
@@ -364,7 +364,7 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
         projectId: '1',
         tosProjectId: '19',
         tosVersion: '16.3.0.155',
-        lockedBy: '李白',
+        lockedBy: '演示用户07',
         lockedAt: '2026-09-03T02:00:00.000Z',
       },
     },

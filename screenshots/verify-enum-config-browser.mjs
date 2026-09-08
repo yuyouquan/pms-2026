@@ -36,8 +36,8 @@ const ROWS = {
   'system-type': single('system-type', ['64bit']),
   'kernel-version': single('kernel-version', ['6.6']),
   'chip-mapping': [
-    { id: 'fx-chip-1', chipCode: 'D100', chipModel: 'M100', chipPlatform: 'MTK' },
-    { id: 'fx-chip-2', chipCode: 'D100', chipModel: 'M101', chipPlatform: 'QCOM' },
+    { id: 'fx-chip-1', chipCode: 'D100', chipModel: 'M100', chipPlatform: '示例平台A' },
+    { id: 'fx-chip-2', chipCode: 'D100', chipModel: 'M101', chipPlatform: '示例平台B' },
   ],
   'memory-size': single('memory-size', ['8GB']),
   'project-category-mapping': [
@@ -49,9 +49,9 @@ const ROWS = {
   'build-option': single('build-option', ['build_fx']),
   'build-market': single('build-market', ['fx']),
   'tmg-subdomain-mapping': [
-    { id: 'fx-tmg-1', domain: '系统应用', subdomain: 'AIOS' },
-    { id: 'fx-tmg-2', domain: '系统应用', subdomain: '应用' },
-    { id: 'fx-tmg-3', domain: '基础架构TMG', subdomain: '无' },
+    { id: 'fx-tmg-1', domain: '示例应用领域', subdomain: '示例智能技术' },
+    { id: 'fx-tmg-2', domain: '示例应用领域', subdomain: '应用' },
+    { id: 'fx-tmg-3', domain: '示例架构组', subdomain: '无' },
   ],
   'core-value': single('core-value', ['追赶']),
   'android-version': single('android-version', ['Android 16']),
@@ -273,7 +273,7 @@ try {
     console.log('  PASS tOS prefix/body')
 
     await selectType(page, 'chip-mapping'); await add(page)
-    for (const [label, value] of [['芯片编码', 'D100'], ['芯片型号', 'M100'], ['芯片平台', 'MTK']]) await setInput(page, label, value)
+    for (const [label, value] of [['芯片编码', 'D100'], ['芯片型号', 'M100'], ['芯片平台', '示例平台A']]) await setInput(page, label, value)
     await modalButton(page, '新增'); await waitText(page, '该行已存在'); await setInput(page, '芯片型号', 'M102'); await modalButton(page, '新增'); await waitText(page, 'M102')
     console.log('  PASS chip tuples')
 
@@ -287,7 +287,7 @@ try {
     await add(page); await setInput(page, 'IPM项目分类', '整机缺二级'); await selectOption(page, 'PMS项目分类', '整机产品项目'); await modalButton(page, '新增'); await waitText(page, '不能为空'); await modalButton(page, '取消')
     console.log('  PASS category mapping')
 
-    await selectType(page, 'tmg-subdomain-mapping'); await add(page); await setInput(page, 'TMG及技术领域', '系统应用'); await setInput(page, '子领域', 'AIOS')
+    await selectType(page, 'tmg-subdomain-mapping'); await add(page); await setInput(page, 'TMG及技术领域', '示例应用领域'); await setInput(page, '子领域', '示例智能技术')
     await modalButton(page, '新增'); await waitText(page, '该行已存在'); await setInput(page, '子领域', '图形'); await modalButton(page, '新增'); await waitText(page, '图形')
     console.log('  PASS TMG tuples')
 
@@ -310,11 +310,11 @@ try {
     await modalButton(page, '取消')
     console.log('  PASS package mapping add/edit/duplicate/search/history')
 
-    await selectType(page, 'product-series'); await page.$eval('[data-testid^="enum-edit-"]', element => element.click()); await switchUser(page, '孙七')
+    await selectType(page, 'product-series'); await page.$eval('[data-testid^="enum-edit-"]', element => element.click()); await switchUser(page, '演示用户05')
     await wait(500); await page.keyboard.press('Escape')
     if (await page.$('[data-testid="enum-add-button"]')) throw new Error('viewer retained write controls')
     console.log('  PASS viewer readonly')
-    await switchUser(page, '张三')
+    await switchUser(page, '演示用户01')
     await page.waitForSelector('[data-testid="enum-add-button"]', { visible: true })
     console.log('  PASS management write')
 

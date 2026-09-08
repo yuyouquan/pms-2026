@@ -174,7 +174,7 @@ export function MainHeader() {
           </Space>
         </Col>
         <Col className="pms-main-header__user">
-          <UserSwitcher />
+          <Space size={8}><Tag className="pms-demo-data-tag">虚构演示数据</Tag><UserSwitcher /></Space>
         </Col>
       </Row>
     </div>
@@ -329,7 +329,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
           </div>
         </Col>
         <Col flex="none">
-          <UserSwitcher />
+          <Space size={8}><Tag className="pms-demo-data-tag">虚构演示数据</Tag><UserSwitcher /></Space>
         </Col>
       </Row>
     </div>

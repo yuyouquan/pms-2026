@@ -1,5 +1,7 @@
 'use client'
 
+import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
+
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -383,7 +385,7 @@ export default function ProjectSummaryTable({
     let storedColumns: SortableColumnSettingsValue<string> = defaultColumnSettings
     let storedColumnWidths: Record<string, number> = {}
     try {
-      const raw = window.localStorage.getItem(storageKey)
+      const raw = getPmsLocalStorage().getItem(storageKey)
       const parsed = raw ? JSON.parse(raw) as unknown : {}
       const stored = parsed && typeof parsed === 'object'
         ? parsed as Record<string, unknown>
@@ -419,7 +421,7 @@ export default function ProjectSummaryTable({
   useEffect(() => {
     if (hydratedKey !== hydrationKey) return
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify({
+      getPmsLocalStorage().setItem(storageKey, JSON.stringify({
         filters,
         columns: normalizeProjectListUnitSettings(columnUnitDefinitions, columnSettings),
         columnWidths: normalizeProjectListColumnWidths(fieldDefinitions, columnWidths),

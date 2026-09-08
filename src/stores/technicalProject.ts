@@ -1,3 +1,4 @@
+import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import {
@@ -19,25 +20,25 @@ export const TECHNICAL_PROJECT_STORE_VERSION = 3
 
 export const INITIAL_TECHNICAL_SUBPROJECTS: TechnicalSubproject[] = [
   {
-    id: 'IPM-AI-001', parentProjectId: '9', name: 'AI推理引擎子项目', active: true, ipmOrder: 1,
+    id: 'IPM-AI-001', parentProjectId: '9', name: '示例推理子项目', active: true, ipmOrder: 1,
     configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '16.0', firstMachineProjectId: '1' },
   },
   {
-    id: 'IPM-AI-002', parentProjectId: '9', name: '多模态子项目', active: true, ipmOrder: 2,
+    id: 'IPM-AI-002', parentProjectId: '9', name: '示例多模态子项目', active: true, ipmOrder: 2,
     configuration: { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '16.3', firstMachineProjectId: '7' },
   },
   {
-    id: 'IPM-AI-003', parentProjectId: '9', name: '端侧训练子项目', active: false, ipmOrder: 3,
+    id: 'IPM-AI-003', parentProjectId: '9', name: '示例训练子项目', active: false, ipmOrder: 3,
     configuration: { coreValue: '人无我有', developmentMode: '高校合作', firstTosVersion: '', firstMachineProjectId: '' },
   },
-  { id: 'IPM-BASE-001', parentProjectId: '20', name: '新一代任务调度', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: '自研', firstTosVersion: '16.3', firstMachineProjectId: '1' } },
-  { id: 'IPM-BASE-002', parentProjectId: '20', name: '系统服务治理', active: true, ipmOrder: 2, configuration: { coreValue: '追赶', developmentMode: 'SoC合作', firstTosVersion: '17.1', firstMachineProjectId: '7' } },
-  { id: 'IPM-IMAGE-001', parentProjectId: '21', name: '夜景计算摄影', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: '自研', firstTosVersion: '16.3', firstMachineProjectId: '12' } },
-  { id: 'IPM-IMAGE-002', parentProjectId: '21', name: '端侧视频增强', active: true, ipmOrder: 2, configuration: { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '17.1', firstMachineProjectId: '7' } },
-  { id: 'IPM-AIOS-001', parentProjectId: 'mock-tech-aios-v3', name: '分布式服务框架', active: true, ipmOrder: 1, configuration: { coreValue: '人无我有', developmentMode: '自研', firstTosVersion: '17.1', firstMachineProjectId: '1' } },
-  { id: 'IPM-POWER-001', parentProjectId: 'mock-tech-perf-power', name: '智能能效调度', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '17.1', firstMachineProjectId: '12' } },
-  { id: 'IPM-UX-001', parentProjectId: 'mock-tech-system-experience', name: '高帧动效引擎', active: true, ipmOrder: 1, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '17.2', firstMachineProjectId: '7' } },
-  { id: 'IPM-6G-001', parentProjectId: 'mock-tech-6g-prestudy', name: '6G协议验证平台', active: true, ipmOrder: 1, configuration: { coreValue: '人无我有', developmentMode: '高校合作', firstTosVersion: '17.2', firstMachineProjectId: '1' } },
+  { id: 'IPM-BASE-001', parentProjectId: '20', name: '示例任务调度', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: '自研', firstTosVersion: '16.3', firstMachineProjectId: '1' } },
+  { id: 'IPM-BASE-002', parentProjectId: '20', name: '示例服务治理', active: true, ipmOrder: 2, configuration: { coreValue: '追赶', developmentMode: 'SoC合作', firstTosVersion: '17.1', firstMachineProjectId: '7' } },
+  { id: 'IPM-IMAGE-001', parentProjectId: '21', name: '示例夜景算法', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: '自研', firstTosVersion: '16.3', firstMachineProjectId: '12' } },
+  { id: 'IPM-IMAGE-002', parentProjectId: '21', name: '示例视频增强', active: true, ipmOrder: 2, configuration: { coreValue: '人无我有', developmentMode: '谷歌合作', firstTosVersion: '17.1', firstMachineProjectId: '7' } },
+  { id: 'IPM-示例智能技术-001', parentProjectId: 'mock-tech-aios-v3', name: '示例服务框架', active: true, ipmOrder: 1, configuration: { coreValue: '人无我有', developmentMode: '自研', firstTosVersion: '17.1', firstMachineProjectId: '1' } },
+  { id: 'IPM-POWER-001', parentProjectId: 'mock-tech-perf-power', name: '示例能效调度', active: true, ipmOrder: 1, configuration: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '17.1', firstMachineProjectId: '12' } },
+  { id: 'IPM-UX-001', parentProjectId: 'mock-tech-system-experience', name: '示例动效引擎', active: true, ipmOrder: 1, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '17.2', firstMachineProjectId: '7' } },
+  { id: 'IPM-6G-001', parentProjectId: 'mock-tech-6g-prestudy', name: '示例协议验证平台', active: true, ipmOrder: 1, configuration: { coreValue: '人无我有', developmentMode: '高校合作', firstTosVersion: '17.2', firstMachineProjectId: '1' } },
 ]
 
 type ConfigurationUpdateResult = { ok: true } | { ok: false; reason: 'missing' | 'inactive' | 'invalid' }
@@ -261,7 +262,7 @@ export const useTechnicalProjectStore = create<TechnicalProjectState & Technical
   {
     name: TECHNICAL_PROJECT_STORAGE_KEY,
     version: TECHNICAL_PROJECT_STORE_VERSION,
-    storage: createJSONStorage(() => localStorage),
+    storage: createJSONStorage(() => pmsLocalStorage),
     migrate: migrateTechnicalProjectState,
     merge: mergeTechnicalProjectState,
     partialize: state => ({ subprojects: state.subprojects }),

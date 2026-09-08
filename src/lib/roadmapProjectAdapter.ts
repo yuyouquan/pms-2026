@@ -27,7 +27,7 @@ import type {
   TosVersionConfig,
 } from '@/types/roadmap'
 
-const ROADMAP_BRANDS = new Set<RoadmapBrand>(['TECNO', 'Infinix', 'itel', '待定', '其他品牌'])
+const ROADMAP_BRANDS = new Set<RoadmapBrand>(['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌'])
 const ROADMAP_ANDROID_VERSIONS = new Set<RoadmapAndroidVersion>(['Android 16', 'Android 17', 'Android 18'])
 
 function firstNonBlank(...values: unknown[]): string {

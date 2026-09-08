@@ -1,3 +1,4 @@
+import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
@@ -96,9 +97,9 @@ const memoryStorage: StateStorage = {
 }
 
 const browserStorage: StateStorage = {
-  getItem: name => typeof window === 'undefined' ? null : window.localStorage.getItem(name),
-  setItem: (name, value) => { if (typeof window !== 'undefined') window.localStorage.setItem(name, value) },
-  removeItem: name => { if (typeof window !== 'undefined') window.localStorage.removeItem(name) },
+  getItem: name => typeof window === 'undefined' ? null : getPmsLocalStorage().getItem(name),
+  setItem: (name, value) => { if (typeof window !== 'undefined') getPmsLocalStorage().setItem(name, value) },
+  removeItem: name => { if (typeof window !== 'undefined') getPmsLocalStorage().removeItem(name) },
 }
 
 function failSafeStorage(storage: StateStorage): StateStorage {
@@ -888,7 +889,7 @@ export async function rehydrateMrVersionPlanStore(
     // Corrupt or inaccessible browser storage must not block the MR plan surface.
   }
   try {
-    if (typeof window !== 'undefined') await Promise.resolve(window.localStorage.removeItem(LEGACY_LEVEL3_STORAGE_KEY))
+    if (typeof window !== 'undefined') await Promise.resolve(getPmsLocalStorage().removeItem(LEGACY_LEVEL3_STORAGE_KEY))
   } catch {
     // Legacy cleanup is best effort when storage is unavailable.
   }

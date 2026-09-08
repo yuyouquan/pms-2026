@@ -383,29 +383,29 @@ registerAssertion('quick filters expose the expected linked project-info fields'
   )
   assert.deepEqual(
     getProjectSummaryQuickFilterDefinitions('整机产品项目', [
-      { id: 'machine', name: 'X6870', type: '整机产品项目', firstSaleTosVersion: '17.0.0' },
+      { id: 'machine', name: 'DEMO014', type: '整机产品项目', firstSaleTosVersion: '17.0.0' },
     ]).find(field => field.key === 'firstSaleTosVersion')?.options,
     [{ label: 'tOS17.0.0', value: 'tOS17.0.0' }],
   )
 })
 
 registerAssertion('linked quick filters add and clear enum contains conditions', () => {
-  const updated = updateLinkedQuickFilterCondition([], 'brand', ['TECNO', 'Infinix'])
+  const updated = updateLinkedQuickFilterCondition([], 'brand', ['示例品牌A', '示例品牌B'])
   assert.equal(updated.length, 1)
   assert.equal(updated[0].field, 'brand')
   assert.equal(updated[0].operator, 'contains')
-  assert.deepEqual(updated[0].value, ['TECNO', 'Infinix'])
+  assert.deepEqual(updated[0].value, ['示例品牌A', '示例品牌B'])
   assert.deepEqual(updateLinkedQuickFilterCondition(updated, 'brand', []), [])
 })
 
 registerAssertion('enum contains linked quick filters compose with AND semantics', () => {
   const rows = [
-    { id: '1', brand: 'TECNO', productType: '新品' },
-    { id: '2', brand: 'Infinix', productType: '老品' },
-    { id: '3', brand: 'itel', productType: '新品' },
+    { id: '1', brand: '示例品牌A', productType: '新品' },
+    { id: '2', brand: '示例品牌B', productType: '老品' },
+    { id: '3', brand: '示例品牌C', productType: '新品' },
   ]
   const filtered = applyFilterConditions(rows, [
-    { id: 'brand', field: 'brand', operator: 'contains', value: ['TECNO', 'Infinix'] },
+    { id: 'brand', field: 'brand', operator: 'contains', value: ['示例品牌A', '示例品牌B'] },
     { id: 'productType', field: 'productType', operator: 'contains', value: ['新品'] },
   ])
 
@@ -436,9 +436,9 @@ registerAssertion('stored summary filters reject malformed data and migrate link
 
   assert.deepEqual(
     normalizeStoredProjectSummaryFilters([
-      { id: 'legacy', field: 'brand', operator: 'equals', value: ' TECNO ' },
+      { id: 'legacy', field: 'brand', operator: 'equals', value: ' 示例品牌A ' },
     ], fieldDefinitions),
-    [{ id: 'legacy', field: 'brand', operator: 'equals', value: 'TECNO' }],
+    [{ id: 'legacy', field: 'brand', operator: 'equals', value: '示例品牌A' }],
   )
   assert.deepEqual(
     normalizeStoredProjectSummaryFilters([
@@ -457,14 +457,14 @@ registerAssertion('stored summary filters reject malformed data and migrate link
         id: 'linked',
         field: 'brand',
         operator: 'equalsAny',
-        value: [' TECNO ', 'Infinix', 'TECNO'],
+        value: [' 示例品牌A ', '示例品牌B', '示例品牌A'],
       },
     ], fieldDefinitions),
     [{
       id: 'linked',
       field: 'brand',
       operator: 'contains',
-      value: ['TECNO', 'Infinix'],
+      value: ['示例品牌A', '示例品牌B'],
     }],
   )
 })

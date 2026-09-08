@@ -49,7 +49,7 @@ console.log('2. 项目空间-基础信息（申请转维按钮）')
 // 通过项目卡片进入
 await page.evaluate(() => {
   const cards = Array.from(document.querySelectorAll('[class*="ant-card"]'))
-  const target = cards.find(c => (c.textContent || '').includes('X6855') || (c.textContent || '').includes('X6877'))
+  const target = cards.find(c => (c.textContent || '').includes('DEMO013') || (c.textContent || '').includes('DEMO017'))
   target?.click()
 })
 await sleep(800)
@@ -108,7 +108,7 @@ await sleep(1500)
 if (detailClicked) await shot('05-transfer-detail')
 
 // =========== 6. 资料录入与AI检查页（含驳回 Collapse） ===========
-// 切换用户为系统角色研发侧（X6855 项目里"系统"被驳回，只有该角色看得到 Collapse）
+// 切换用户为系统角色研发侧（DEMO013 项目里"系统"被驳回，只有该角色看得到 Collapse）
 console.log('6. 资料录入与AI检查页')
 // 先回到详情页 / 列表
 const back2 = await clickByContains('button', '返回')

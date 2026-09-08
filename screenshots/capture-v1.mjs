@@ -52,7 +52,7 @@ async function capture() {
     const allCards = await p.$$('.ant-card')
     for (const card of allCards) {
       const text = await p.evaluate(el => el.textContent, card)
-      if (text && text.includes('X6877')) { await card.click(); break }
+      if (text && text.includes('DEMO017')) { await card.click(); break }
     }
     await wait(1000)
   })

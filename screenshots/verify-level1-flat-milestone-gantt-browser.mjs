@@ -1246,7 +1246,7 @@ const enterProject = async (page, project) => {
   if (!projectListReady) throw new Error(`project-list navigation did not hydrate for ${project}`)
   console.log(`browser opened list for ${project}`)
   const category = project.startsWith('tOS') ? 'tOS版本项目'
-    : project === 'AIOS架构演进V3' ? '技术项目'
+    : project === '示例架构演进V3' ? '技术项目'
       : null
   if (category) await clickButtonStartingWith(page, category)
   const cardViewSelected = await page.evaluate(() => {
@@ -1572,7 +1572,7 @@ try {
   } else {
   if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-surface' || ONLY_CASE === 'machine-structure' || ONLY_CASE === 'machine-reorder' || ONLY_CASE === 'machine-invalid' || ONLY_CASE === 'machine-follow-actual') await runCase('machine tree table, governed business nodes and mixed gantt', async (initialPage, errors) => {
     let page = initialPage
-    await enterProject(page, 'X6877-D8400_H991')
+    await enterProject(page, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     assert.ok(await page.$('.pms-plan-view-mode-switcher input[aria-label="横版表格"]:checked'), 'machine level-one plan defaults to horizontal view')
     if (!ONLY_CASE || ONLY_CASE === 'machine' || shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-surface')) {
       await assertHorizontalStageOrder(page, ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'])
@@ -1696,12 +1696,12 @@ try {
       // published follow scope containing MR4, with no paired draft.
       if (preconfiguredFollowMarket) {
         await setFollowMarketConfig(page, followMarket, false)
-        page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+        page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
         await selectView(page, '竖版表格')
         await selectMarketScope(page, mainMarket)
       }
       await setFollowMarketConfig(page, followMarket, true)
-      page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+      page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
       await selectView(page, '竖版表格')
       await selectMarketScope(page, followMarket)
       await page.waitForFunction((selector, name) => document.querySelector(selector)?.textContent?.includes(name), { timeout: TIMEOUT }, table, 'MR4')
@@ -1712,7 +1712,7 @@ try {
       await editTreeDate(page, table, 'MR4', 'actualEndDate', '2028-01-10')
       assert.equal(await treeDate(page, table, 'MR4', 'actualStartDate'), '2028-01-04', 'follow published field patch preserves the other actual field')
       assert.equal(await treeActualDays(page, table, 'MR4'), '6天', 'follow published field patch recomputes end-minus-start actual duration')
-      page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+      page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
       await selectView(page, '竖版表格')
       await selectMarketScope(page, followMarket)
       assert.equal(await treeDate(page, table, 'MR4', 'actualEndDate'), '2028-01-10', 'follow latest-published actual edit survives same-context reopen')
@@ -1729,11 +1729,11 @@ try {
       // live follow scope; this exposes whether the hidden live detach flag
       // really survived the main-market sync.
       await setFollowMarketConfig(page, followMarket, false)
-      page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+      page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
       await selectView(page, '竖版表格')
       await selectMarketScope(page, followMarket)
       await setFollowMarketConfig(page, followMarket, true)
-      page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+      page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
       await selectView(page, '竖版表格')
       await selectMarketScope(page, followMarket)
       assert.equal(await treeDate(page, table, 'MR4', 'actualEndDate'), '2028-01-10', 're-follow snapshot proves the live detached actual completion survived main sync')
@@ -1781,7 +1781,7 @@ try {
     await editTreeDate(page, table, 'MR5', 'planEndDate', '2027-06-05')
     await editTreeDate(page, table, 'MR5', 'actualStartDate', '2027-06-01')
     await editTreeDate(page, table, 'MR5', 'actualEndDate', '2027-06-05')
-    await switchUser(page, '赵六')
+    await switchUser(page, '演示用户04')
     const orderBeforeReorder = await treeTaskOrder(page, table, ['MR4', 'MR5'])
     assert.deepEqual(orderBeforeReorder, ['MR4', 'MR5'], 'SPM reorder starts from the persisted custom-node order')
     await dragTreeTask(page, table, 'MR5', 'MR4')
@@ -1799,10 +1799,10 @@ try {
     await clickDialogButton(page, '确认调整节点顺序？', '取消')
     await waitForDialogToClose(page, '确认调整节点顺序？')
     assert.deepEqual(await treeTaskOrder(page, table, ['MR4', 'MR5']), orderBeforeReorder, 'cancelling reorder leaves the tree unchanged')
-    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await selectView(page, '竖版表格')
-    if (await page.$eval('button[aria-label="切换当前用户"]', node => node.getAttribute('data-current-user')) !== '赵六') {
-      await switchUser(page, '赵六')
+    if (await page.$eval('button[aria-label="切换当前用户"]', node => node.getAttribute('data-current-user')) !== '演示用户04') {
+      await switchUser(page, '演示用户04')
     }
     assert.deepEqual(await treeTaskOrder(page, table, ['MR4', 'MR5']), orderBeforeReorder, 'cancelled tree order survives same-context reopen')
     await dragTreeTask(page, table, 'MR4', 'MR5')
@@ -1822,13 +1822,13 @@ try {
     await pressAriaButton(page, '删除节点 MR5')
     await confirmVisiblePopconfirm(page)
     await page.waitForFunction(selector => !document.querySelector(selector)?.textContent?.includes('MR5'), { timeout: TIMEOUT }, table)
-    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await selectView(page, '竖版表格')
-    if (await page.$eval('button[aria-label="切换当前用户"]', node => node.getAttribute('data-current-user')) !== '赵六') {
-      await switchUser(page, '赵六')
+    if (await page.$eval('button[aria-label="切换当前用户"]', node => node.getAttribute('data-current-user')) !== '演示用户04') {
+      await switchUser(page, '演示用户04')
     }
     assert.ok(!(await textOf(page, table)).includes('MR5') && (await textOf(page, table)).includes('MR4'), 'SPM business deletion survives same-context reopen without removing MR4')
-    await switchUser(page, '张三')
+    await switchUser(page, '演示用户01')
     console.log('browser machine SPM reorder confirmation/cancel contract passed')
 
     assert.deepEqual({
@@ -1921,7 +1921,7 @@ try {
     assert.notEqual(resizedBusinessDays, movedBusiness.duration, 'business resize changes the end-minus-start planned duration')
     console.log(`browser machine business plan 2028-01-04..2028-01-08=4天 -> move ${JSON.stringify(movedBusiness)} -> resize end=${resizedBusinessEnd}, duration=${resizedBusinessDays}`)
 
-    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await selectView(page, '竖版表格')
     await page.waitForSelector(table, { timeout: TIMEOUT })
     assert.ok((await textOf(page, table)).includes('MR4'), `business node ${before} survives same-context new-page persistence`)
@@ -1955,7 +1955,7 @@ try {
   if (shouldRunTask7FocusedBrowserCase(ONLY_CASE, 'machine-summary')) await runCase('machine latest-published summary and governed compare', async (initialPage, errors) => {
     let page = initialPage
     const table = '.pms-level1-tree-table'
-    await enterProject(page, 'X6877-D8400_H991')
+    await enterProject(page, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await selectView(page, '竖版表格')
     // The persisted demo draft predates project-linked MR mock nodes. Recreate
     // it from the latest published snapshot so atomic published/draft actual
@@ -1992,7 +1992,7 @@ try {
     assert.equal(summaryAfter.actualEndDate, changedActualEnd, 'machine latest-published actual edit refreshes the actual-completion boundary')
     assert.deepEqual({ ...summaryAfter, actualEndDate: summaryBefore.actualEndDate }, summaryBefore, 'machine latest-published single actual update preserves the other three summary fields')
 
-    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await selectView(page, '竖版表格')
     await chooseVersion(page, 'V3 (已发布)')
     assert.equal(await treeDate(page, table, actualBoundary.name, 'actualEndDate'), changedActualEnd, 'machine latest-published actual edit survives same-context reopen')
@@ -2026,29 +2026,29 @@ try {
 
   if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'machine' || ONLY_CASE === 'machine-permission') await runCase('machine permission, history and compare', async (initialPage, errors) => {
     let page = initialPage
-    await enterProject(page, 'X6877-D8400_H991')
+    await enterProject(page, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     console.log('browser machine permission entered project')
     await selectView(page, '竖版表格')
     console.log('browser machine permission selected vertical')
     await ensureDraft(page)
     const table = '.pms-level1-tree-table'
-    await switchUser(page, '李四')
-    console.log('browser machine permission switched to 李四')
+    await switchUser(page, '演示用户02')
+    console.log('browser machine permission switched to 演示用户02')
     assert.ok(await page.$(table), 'view-only project member can still see the machine tree table')
     assert.ok((await textOf(page, table)).includes('概念启动'), 'view-only project member can see plan rows before permission assertions')
     assert.equal(await page.$('button[aria-label="添加业务节点 上市阶段"]'), null, 'view-only user cannot add MR from a business stage')
     await selectView(page, '甘特图')
     assert.equal(await page.$('.gantt_task_line.pms-gantt-task-editable'), null, 'view-only gantt is fully locked')
     console.log('browser machine permission view-only contract passed')
-    await switchUser(page, '赵六')
+    await switchUser(page, '演示用户04')
     await selectView(page, '竖版表格')
     assert.ok(await page.$('button[aria-label="添加业务节点 上市阶段"]'), 'project-manager role member receives the stage-bound SPM business action')
     assert.equal(await page.$('button[aria-label="添加一级阶段"]'), null, 'SPM cannot use the super-admin generic stage action')
     assert.equal(await page.$('button[aria-label="删除节点 概念启动"]'), null, 'SPM cannot delete a fixed template node')
     assert.equal(await page.$('button[aria-label="删除节点 开发验证阶段"]'), null, 'SPM cannot delete a fixed template stage')
-    await switchUser(page, '张三')
+    await switchUser(page, '演示用户01')
     await selectView(page, '竖版表格')
-    console.log('browser machine permission switched back to 张三')
+    console.log('browser machine permission switched back to 演示用户01')
     assert.ok(await page.$('button[aria-label="删除节点 概念启动"]'), 'super-admin can delete a fixed template node in a draft')
     assert.ok(await page.$('button[aria-label="删除节点 开发验证阶段"]'), 'super-admin can delete a fixed template stage in a draft')
     assert.equal(await page.$('button[aria-label="添加一级阶段"]'), null, 'super-admin cannot add a level-one stage in a governed draft')
@@ -2062,7 +2062,7 @@ try {
       const text = document.querySelector(selector)?.textContent || ''
       return !text.includes('开发验证阶段') && !text.includes('STR5')
     }, { timeout: TIMEOUT }, table)
-    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await selectView(page, '竖版表格')
     const deletedTemplateText = await textOf(page, table)
     assert.ok(!deletedTemplateText.includes('概念启动') && !deletedTemplateText.includes('开发验证阶段') && !deletedTemplateText.includes('STR5'), 'super-admin fixed node/stage deletion survives same-context new-page persistence')
@@ -2115,7 +2115,7 @@ try {
       latestPublishedSummaryAfterFirstActual,
       'latest actual-end boundary edit leaves the other three already-updated summary fields unchanged',
     )
-    page = await reopenProjectInContext(page, errors, 'X6877-D8400_H991')
+    page = await reopenProjectInContext(page, errors, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await selectView(page, '竖版表格')
     await chooseVersion(page, 'V3 (已发布)')
     assert.equal(await treeDate(page, table, '概念启动', 'actualEndDate'), latestActualDate, 'latest published actual completion survives same-context new-page persistence before comparison')
@@ -2453,7 +2453,7 @@ try {
 
   if (!ONLY_CASE || ONLY_CASE === 'all' || ONLY_CASE === 'technical') await runCase('technical TDT and subproject contracts', async (initialPage, errors) => {
     let page = initialPage
-    await enterProject(page, 'AIOS架构演进V3')
+    await enterProject(page, '示例架构演进V3')
     await page.waitForFunction(() => document.body.innerText.includes('TDT项目计划'), { timeout: TIMEOUT })
     await selectView(page, '竖版表格')
     const tdt = '.technical-plan-vertical-table'
@@ -2491,11 +2491,11 @@ try {
     await assertCompareHasChange(page, tdtMilestoneName)
     await pressAriaButton(page, 'Close')
 
-    page = await reopenProjectInContext(page, errors, 'AIOS架构演进V3')
+    page = await reopenProjectInContext(page, errors, '示例架构演进V3')
     await selectView(page, '竖版表格')
     assert.equal(await flatMilestoneDate(page, tdt, tdtMilestoneName), tdtAfterDate, 'TDT milestone drag survives same-context new-page persistence')
 
-    await clickTabContaining(page, '分布式服务框架计划')
+    await clickTabContaining(page, '示例服务框架计划')
     await selectView(page, '竖版表格')
     await page.waitForSelector(tdt, { timeout: TIMEOUT })
     await assertHeaders(page, tdt, ['序号', '活动名称', '状态', '计划开始时间', '计划完成时间', '计划周期', '实际开始时间', '实际完成时间', '实际周期'])
@@ -2545,7 +2545,7 @@ try {
     assert.ok(subprojectCompareHeaders.includes('活动名称') && subprojectCompareHeaders.includes('计划开始') && subprojectCompareHeaders.includes('实际开始'), `subproject compare exposes activity and planned/actual start columns: ${JSON.stringify(subprojectCompareHeaders)}`)
     await assertCompareHasChange(page, taskName)
     await pressAriaButton(page, 'Close')
-    page = await reopenProjectInContext(page, errors, 'AIOS架构演进V3', '分布式服务框架计划')
+    page = await reopenProjectInContext(page, errors, '示例架构演进V3', '示例服务框架计划')
     await selectView(page, '竖版表格')
     await page.waitForSelector(tdt, { timeout: TIMEOUT })
     assert.ok((await textOf(page, tdt)).includes('第3版转测'), 'subproject custom transfer survives same-context new-page persistence')
