@@ -47,6 +47,7 @@ const splitPeople = value => Array.isArray(value) ? value.flatMap(splitPeople)
   : typeof value === 'string' ? value.split(/[,，、;；]/).map(item => item.trim()).filter(Boolean) : []
 const isDemoPerson = value => /^演示(?:用户|成员|外协)\d{2}$/.test(value)
 const systemActors = new Set(['系统', '系统管理员'])
+const genericActorPlaceholders = new Set(['当前用户'])
 const roleOwners = new Set([...directory.FIXED_ROLES, ...permission.TECHNICAL_FIXED_ROLES, ...permission.TOS_FIXED_ROLES, 'SPM', 'TPM'])
 const peopleFields = new Set([
   'leader', 'spm', 'ppm', 'tpm', 'contact', 'responsible', 'responsiblePerson', 'responsiblePersons',
@@ -58,6 +59,7 @@ const peopleFields = new Set([
 function validPersonField(key, value) {
   return splitPeople(value).every(name => isDemoPerson(name)
     || systemActors.has(name)
+    || genericActorPlaceholders.has(name)
     || (key === 'responsible' && roleOwners.has(name)))
 }
 const isExampleHost = hostname => /^(?:[a-z0-9-]+\.)*example\.(?:com|org|net)$/i.test(hostname)
@@ -334,6 +336,8 @@ check('inline sample person fields remain fictional in component-local data', ()
 })
 
 check('hygiene guards reject plausible accidental real-data substitutions', () => {
+  assert.equal(validPersonField('createdBy', '当前用户'), true)
+  assert.equal(validPersonField('createdBy', '当前用户,普通姓名'), false)
   assert.equal(validPersonField('updatedBy', '普通姓名'), false)
   assert.equal(validPersonField('responsible', '演示用户01,普通姓名'), false)
   for (const value of ['https://example.com.invalid/path', 'https://notexample.com', 'https://192.168.1.8', 'https://service.internal', 'https://user:password@example.com', 'javascript:alert(1)']) {

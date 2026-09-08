@@ -14,6 +14,7 @@ import ProjectListContainer from '@/containers/ProjectListContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
 import JointProjectSpaceContainer from '@/containers/JointProjectSpaceContainer'
+import HrPipelineContainer from '@/containers/HrPipelineContainer'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import type { ProjectItem } from '@/types/app'
 import ProjectSpaceAccessBoundary from '@/components/permission/ProjectSpaceAccessBoundary'
@@ -98,15 +99,8 @@ export default function Home() {
                 />
               )}
 
-              {/* HR Pipeline placeholder */}
-              {activeModule === 'hrPipeline' && (
-                <Card style={{ borderRadius: 8, textAlign: 'center', padding: '80px 0' }}>
-                  <Empty
-                    description={<span style={{ color: '#9ca3af', fontSize: 14 }}>人力资源管道模块开发中...</span>}
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  />
-                </Card>
-              )}
+              {/* HR Pipeline */}
+              {activeModule === 'hrPipeline' && <HrPipelineContainer />}
 
               {/* Config Center */}
               {activeModule === 'config' && <ConfigContainer />}

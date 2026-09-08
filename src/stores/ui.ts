@@ -44,6 +44,7 @@ export interface UiState {
   configTab: string
   configSidebarCollapsed: boolean
   projectSpaceSidebarCollapsed: boolean
+  hrSidebarCollapsed: boolean
   selectedProjectType: string
   projectSpaceModule: string
   planNavigationIntent: PlanNavigationIntent | null
@@ -71,6 +72,7 @@ export interface UiActions {
   setConfigTab: (v: string) => void
   setConfigSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setProjectSpaceSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
+  setHrSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedProjectType: (v: string) => void
   setProjectSpaceModule: (v: string) => void
   setPlanNavigationIntent: (v: PlanNavigationIntent | null) => void
@@ -103,6 +105,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   configTab: 'plan',
   configSidebarCollapsed: false,
   projectSpaceSidebarCollapsed: false,
+  hrSidebarCollapsed: false,
   selectedProjectType: PROJECT_CATEGORY_MACHINE,
   projectSpaceModule: 'basic',
   planNavigationIntent: null,
@@ -164,6 +167,9 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   })),
   setProjectSpaceSidebarCollapsed: (v) => set((s) => ({
     projectSpaceSidebarCollapsed: typeof v === 'function' ? v(s.projectSpaceSidebarCollapsed) : v,
+  })),
+  setHrSidebarCollapsed: (v) => set((s) => ({
+    hrSidebarCollapsed: typeof v === 'function' ? v(s.hrSidebarCollapsed) : v,
   })),
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
   setProjectSpaceModule: (v) => set({ projectSpaceModule: v }),
