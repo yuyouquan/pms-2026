@@ -18,6 +18,8 @@ import {
   DeleteOutlined,
   DownloadOutlined,
   UploadOutlined,
+  CheckCircleOutlined,
+  StopOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { UploadProps } from 'antd'
@@ -32,7 +34,7 @@ interface ConfigTablePanelProps {
 }
 
 export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTablePanelProps) {
-  const { data, deleteRecord, importRecords, setShowEditModal, setEditingId } = useHrConfigStore()
+  const { data, deleteRecord, toggleRecordStatus, importRecords, setShowEditModal, setEditingId } = useHrConfigStore()
 
   const records = data[moduleMeta.key] ?? []
 
@@ -74,44 +76,59 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
       {
         title: '操作',
         key: '_action',
-        width: 100,
+        width: 150,
         fixed: 'right',
         align: 'center',
-        render: (_v: unknown, record: ConfigRecord) => (
-          <Space size={4}>
-            <Tooltip title="编辑">
-              <Button
-                type="text"
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => {
-                  setEditingId(record.id)
-                  setShowEditModal(true)
-                }}
-              />
-            </Tooltip>
-            <Popconfirm
-              title="确认删除"
-              description="确定要删除这条配置吗？"
-              onConfirm={() => {
-                deleteRecord(moduleMeta.key, record.id)
-                message.success('已删除')
-              }}
-              okText="删除"
-              cancelText="取消"
-              okButtonProps={{ danger: true }}
-            >
-              <Tooltip title="删除">
-                <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+        render: (_v: unknown, record: ConfigRecord) => {
+          const isDisabled = record.enabled === false
+          return (
+            <Space size={4}>
+              <Tooltip title={isDisabled ? '启用' : '禁用'}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={isDisabled ? <CheckCircleOutlined /> : <StopOutlined />}
+                  style={isDisabled ? { color: 'var(--pms-brand-strong)' } : { color: 'var(--pms-text-tertiary)' }}
+                  onClick={() => {
+                    toggleRecordStatus(moduleMeta.key, record.id)
+                    message.success(isDisabled ? '已启用' : '已禁用')
+                  }}
+                />
               </Tooltip>
-            </Popconfirm>
-          </Space>
-        ),
+              <Tooltip title="编辑">
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => {
+                    setEditingId(record.id)
+                    setShowEditModal(true)
+                  }}
+                />
+              </Tooltip>
+              <Popconfirm
+                title="确认删除"
+                description="确定要删除这条配置吗？"
+                onConfirm={() => {
+                  deleteRecord(moduleMeta.key, record.id)
+                  message.success('已删除')
+                }}
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+              >
+                <Tooltip title="删除">
+                  <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                </Tooltip>
+              </Popconfirm>
+            </Space>
+          )
+        },
       },
     ]
 
     return [...dataColumns, ...actionColumn]
-  }, [moduleMeta, deleteRecord, setEditingId, setShowEditModal])
+  }, [moduleMeta, deleteRecord, toggleRecordStatus, setEditingId, setShowEditModal])
 
   // ── 导出 ──────────────────────────────────────────────────
   const handleExport = () => {
@@ -243,11 +260,12 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
       </Card>
 
       {/* 数据表格 */}
-      <Card className="pms-hr-config-table-card" bordered={false} styles={{ body: { padding: 0 } }}>
+      <Card className="pms-hr-config-table-card" variant="borderless" styles={{ body: { padding: 0 } }}>
         <Table<ConfigRecord>
           rowKey="id"
           columns={columns}
           dataSource={filteredRecords}
+          rowClassName={(record) => record.enabled === false ? 'pms-config-row-disabled' : ''}
           pagination={{
             pageSize: 20,
             showSizeChanger: true,
@@ -258,6 +276,16 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
           size="small"
         />
       </Card>
+
+      <style jsx global>{`
+        .pms-config-row-disabled {
+          opacity: 0.5;
+          background: var(--pms-brand-surface) !important;
+        }
+        .pms-config-row-disabled td {
+          color: var(--pms-text-tertiary) !important;
+        }
+      `}</style>
     </div>
   )
 }

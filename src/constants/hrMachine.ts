@@ -5,6 +5,7 @@ import type {
   MachineProductLine,
   BudgetType,
   IpmProject,
+  VersionLockState,
 } from '@/types/hrMachine'
 
 /** 品牌选项 */
@@ -40,6 +41,20 @@ export const BUDGET_TYPE_LABELS: Record<BudgetType, string> = {
   annual: '年度预算',
   projectEstimate: '项目概算',
   projectBudget: '项目预算',
+}
+
+/** 预算类型 → Ant Design Tag 颜色映射 */
+export const BUDGET_TYPE_COLORS: Record<BudgetType, string> = {
+  annual: 'purple',
+  projectEstimate: 'orange',
+  projectBudget: 'green',
+}
+
+/** 预算类型 → 行背景 CSS 类名 */
+export const BUDGET_TYPE_ROW_CLASS: Record<BudgetType, string> = {
+  annual: 'hr-machine-budget-annual',
+  projectEstimate: 'hr-machine-budget-estimate',
+  projectBudget: 'hr-machine-budget-budget',
 }
 
 /** 项目等级选项（来源配置中心，此处为占位） */
@@ -83,6 +98,7 @@ export const PROJECT_LIST_COLUMNS = [
   { key: 'brand', label: '品牌', width: 100 },
   { key: 'productLine', label: '产品线', width: 100 },
   { key: 'projectLevel', label: '项目等级', width: 100 },
+  { key: 'projectYear', label: '项目年份', width: 160 },
   { key: 'annualBudget', label: '年度预算', width: 120, align: 'right' as const },
   { key: 'projectEstimate', label: '项目概算', width: 120, align: 'right' as const },
   { key: 'projectBudget', label: '项目预算', width: 120, align: 'right' as const },
@@ -133,10 +149,25 @@ export const PHASE_SPLIT_RULES = [
 export const DEFAULT_PROJECT_FILTERS = {
   brand: [] as import('@/types/hrMachine').MachineBrand[],
   productLine: [] as import('@/types/hrMachine').MachineProductLine[],
-  projectName: '',
+  projectName: [] as string[],
   projectYear: [] as string[],
   showCancelled: false,
 }
+
+/** 项目历史版本空间默认筛选器 */
+export const DEFAULT_HISTORY_VERSION_FILTERS = {
+  budgetType: [] as BudgetType[],
+  projectName: [] as string[],
+  brand: [] as MachineBrand[],
+  productLine: [] as MachineProductLine[],
+  lockState: [] as VersionLockState[],
+}
+
+/** 版本锁定状态选项 */
+export const LOCK_STATE_OPTIONS: { value: VersionLockState; label: string }[] = [
+  { value: 'locked', label: '已锁定' },
+  { value: 'unlocked', label: '编辑中' },
+]
 
 /** 生成版本号 */
 export function generateVersionNumber(majorVersion: number, minorVersion: number): string {
@@ -144,8 +175,8 @@ export function generateVersionNumber(majorVersion: number, minorVersion: number
 }
 
 /** 格式化数字（人月） */
-export function formatPersonMonth(value: number): string {
-  if (value === 0) return '-'
+export function formatPersonMonth(value: number | undefined | null): string {
+  if (!value) return '-'
   return value.toFixed(1)
 }
 

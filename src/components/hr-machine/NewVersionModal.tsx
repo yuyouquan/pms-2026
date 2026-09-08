@@ -23,6 +23,7 @@ const IPM_REQUIRED_TIP = '需要先绑定正式项目编码才能创建此类型
 export default function NewVersionModal({ open, projectId, onCancel }: NewVersionModalProps) {
   const { projects, addVersion } = useHrMachineStore()
   const configData = useHrConfigStore(s => s.data)
+  const [localProjectId, setLocalProjectId] = useState<string>(projectId)
   const [budgetType, setBudgetType] = useState<BudgetType>('annual')
   const [projectLevel, setProjectLevel] = useState<string>('')
   const [levelCoefficient, setLevelCoefficient] = useState<number>(1)
@@ -30,13 +31,22 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   const [submitting, setSubmitting] = useState(false)
 
   const project = useMemo(
-    () => projects.find(p => p.id === projectId),
-    [projects, projectId],
+    () => projects.find(p => p.id === localProjectId),
+    [projects, localProjectId],
   )
 
   const hasIpm = useMemo(
     () => Boolean(project?.ipmProjectCode),
     [project],
+  )
+
+  // 项目下拉选项
+  const projectOptions = useMemo(
+    () => projects.map(p => ({
+      value: p.id,
+      label: `${p.name}（${p.brand} · ${p.productLine}）`,
+    })),
+    [projects],
   )
 
   // 从配置中心获取项目等级和模型版本号选项
@@ -58,6 +68,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
   useEffect(() => {
     if (open) {
+      // 重置本地项目选择为传入的 projectId
+      setLocalProjectId(projectId || '')
       // 默认值：年度预算 + 配置中心第一个等级 + 系数1 + 第一个版本号
       const firstLevel = getConfigProjectLevels(hrModelRecords)[0] ?? ''
       const firstVersion = getConfigModelVersions(hrModelRecords)[0] ?? ''
@@ -66,10 +78,13 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       setLevelCoefficient(1)
       setHrModelVersion(firstVersion)
     }
-  }, [open, hrModelRecords])
+  }, [open, hrModelRecords, projectId])
 
   const handleOk = async () => {
-    if (!projectId) return
+    if (!localProjectId) {
+      message.warning('请先选择项目')
+      return
+    }
     if (!projectLevel || !hrModelVersion) {
       message.warning('请选择项目等级和人力模型版本号')
       return
@@ -81,7 +96,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
     try {
       setSubmitting(true)
-      addVersion(projectId, budgetType, { projectLevel, levelCoefficient, hrModelVersion })
+      addVersion(localProjectId, budgetType, { projectLevel, levelCoefficient, hrModelVersion })
       message.success('版本创建成功')
       onCancel()
     } finally {
@@ -117,7 +132,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       width={520}
     >
       <div style={{ marginTop: 16 }}>
-        {/* 项目信息 */}
+        {/* 项目选择 + 信息 */}
         <div
           style={{
             marginBottom: 16,
@@ -127,27 +142,35 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             fontSize: 13,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: 'var(--pms-text-tertiary)' }}>项目：</span>
-            <span style={{ color: 'var(--pms-text-primary)', fontWeight: 600 }}>
-              {project?.name ?? '-'}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span style={{ color: 'var(--pms-text-tertiary)', whiteSpace: 'nowrap' }}>项目：</span>
+            <Select
+              showSearch
+              value={localProjectId || undefined}
+              onChange={(v) => setLocalProjectId(v)}
+              style={{ width: '100%' }}
+              options={projectOptions}
+              placeholder="请选择项目"
+              optionFilterProp="label"
+            />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--pms-text-tertiary)' }}>IPM：</span>
-            {hasIpm ? (
-              <span style={{ color: 'var(--pms-text-secondary)' }}>
-                <Tag color="green" style={{ marginRight: 6 }}>已绑定</Tag>
-                {project?.ipmProjectCode}
-                {project?.ipmProjectName ? ` · ${project.ipmProjectName}` : ''}
-              </span>
-            ) : (
-              <span style={{ color: 'var(--pms-text-tertiary)' }}>
-                <Tag color="default" style={{ marginRight: 6 }}>未绑定</Tag>
-                仅可创建年度预算版本
-              </span>
-            )}
-          </div>
+          {project && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ color: 'var(--pms-text-tertiary)' }}>IPM：</span>
+              {hasIpm ? (
+                <span style={{ color: 'var(--pms-text-secondary)' }}>
+                  <Tag color="green" style={{ marginRight: 6 }}>已绑定</Tag>
+                  {project.ipmProjectCode}
+                  {project.ipmProjectName ? ` · ${project.ipmProjectName}` : ''}
+                </span>
+              ) : (
+                <span style={{ color: 'var(--pms-text-tertiary)' }}>
+                  <Tag color="default" style={{ marginRight: 6 }}>未绑定</Tag>
+                  仅可创建年度预算版本
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 表单字段 */}
@@ -200,7 +223,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             type="info"
             showIcon
             style={{ marginBottom: 12, borderRadius: 8 }}
-            message={`预估投入 = 模型综合 × 等级系数 = ${estimatedPreview} 人月`}
+            title={`预估投入 = 模型综合 × 等级系数 = ${estimatedPreview} 人月`}
             description="预估投入根据配置中心人力模型数据自动计算"
           />
         )}

@@ -23,6 +23,9 @@ import {
 } from '@/constants/hrPipeline'
 import { resolveConfigModule } from '@/constants/hrConfig'
 import MachineProjectContent from '@/components/hr-machine/MachineProjectContent'
+import TosProjectContent from '@/components/hr-tos/TosProjectContent'
+import TechnicalProjectContent from '@/components/hr-technical/TechnicalProjectContent'
+import CapabilityProjectContent from '@/components/hr-capability/CapabilityProjectContent'
 import ConfigContent from '@/components/hr-config/ConfigContent'
 
 /* ── Icon resolver ─────────────────────────────────────────────────── */
@@ -124,7 +127,7 @@ function HrContentPlaceholder({ leafKey }: { leafKey: string }) {
   const groupLabel = groupKey ? HR_SIDEBAR_NAV.find(g => g.key === groupKey)?.label : ''
 
   return (
-    <Card className="pms-hr-content-card" bordered={false}>
+    <Card className="pms-hr-content-card" variant="borderless">
       <Empty
         description={
           <span style={{ color: '#817b90', fontSize: 13 }}>
@@ -143,6 +146,18 @@ function HrContentRouter({ leafKey }: { leafKey: string }) {
   // Route to specific content based on active leaf
   if (leafKey === 'investment/machine') {
     return <MachineProjectContent />
+  }
+
+  if (leafKey === 'investment/tos') {
+    return <TosProjectContent />
+  }
+
+  if (leafKey === 'investment/tech') {
+    return <TechnicalProjectContent />
+  }
+
+  if (leafKey === 'investment/capability') {
+    return <CapabilityProjectContent />
   }
 
   // 配置中心路由

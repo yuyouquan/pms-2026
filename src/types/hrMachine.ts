@@ -55,6 +55,8 @@ export interface HrMachineVersion {
   majorVersion: number
   /** 小版本号 */
   minorVersion: number
+  /** 创建人 */
+  createdBy: string
   /** 项目等级（来源配置中心，版本级别） */
   projectLevel: string
   /** 等级系数（版本级别） */
@@ -135,9 +137,18 @@ export interface MonthlyInvestment {
 export interface ProjectListFilters {
   brand: MachineBrand[]
   productLine: MachineProductLine[]
-  projectName: string
+  projectName: string[]
   projectYear: string[]
   showCancelled: boolean
+}
+
+/** 项目历史版本空间筛选器（多选，空数组表示不筛选） */
+export interface HistoryVersionFilters {
+  budgetType: BudgetType[]
+  projectName: string[]
+  brand: MachineBrand[]
+  productLine: MachineProductLine[]
+  lockState: VersionLockState[]
 }
 
 /** 新建项目表单 */

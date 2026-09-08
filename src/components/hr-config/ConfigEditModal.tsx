@@ -32,7 +32,7 @@ export default function ConfigEditModal({
       if (editingRecord) {
         const formValues: ConfigFormValues = {}
         moduleMeta.columns.forEach(col => {
-          formValues[col.key] = editingRecord[col.key] ?? null
+          formValues[col.key] = (editingRecord[col.key] as string | number | null) ?? null
         })
         form.setFieldsValue(formValues)
       } else {

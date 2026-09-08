@@ -4,21 +4,18 @@ import { useState, useMemo, useCallback } from 'react'
 import { Card, Table, Select, Button, Space, Switch, Tooltip, Popover } from 'antd'
 import { PlusOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrTosStore } from '@/stores/hrTos'
 import {
-  MACHINE_BRANDS,
-  MACHINE_PRODUCT_LINES,
-  PROJECT_YEARS,
-  IPM_PROJECTS,
+  TOS_IPM_PROJECTS,
   formatPersonMonth,
   formatPercent,
-} from '@/constants/hrMachine'
-import type { HrMachineProject, HrMachineVersion, BudgetType } from '@/types/hrMachine'
+} from '@/constants/hrTos'
+import type { HrTosProject, HrTosVersion, BudgetType } from '@/types/hrTos'
 import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import type { ExportColumn } from '@/utils/exportExcel'
 
 /* ── IPM 项目下拉选项（模块级常量，避免重复计算） ──────────────────── */
-const IPM_PROJECT_OPTIONS = IPM_PROJECTS.map(p => ({
+const IPM_PROJECT_OPTIONS = TOS_IPM_PROJECTS.map(p => ({
   value: p.code,
   label: `${p.code} - ${p.name}`,
 }))
@@ -28,7 +25,7 @@ function IpmCodeCell({
   record,
   bindIpmProject,
 }: {
-  record: HrMachineProject
+  record: HrTosProject
   bindIpmProject: (projectId: string, ipmCode: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -88,30 +85,27 @@ interface ProjectListTabProps {
 }
 
 export default function ProjectListTab({ onSelectProject, onNewProject }: ProjectListTabProps) {
-  const projects = useHrMachineStore(s => s.projects)
-  const filters = useHrMachineStore(s => s.filters)
-  const setFilters = useHrMachineStore(s => s.setFilters)
-  const bindIpmProject = useHrMachineStore(s => s.bindIpmProject)
-  const getLatestVersions = useHrMachineStore(s => s.getLatestVersions)
+  const projects = useHrTosStore(s => s.projects)
+  const filters = useHrTosStore(s => s.filters)
+  const setFilters = useHrTosStore(s => s.setFilters)
+  const bindIpmProject = useHrTosStore(s => s.bindIpmProject)
+  const getLatestVersions = useHrTosStore(s => s.getLatestVersions)
 
-  // 1. 按品牌 / 产品线 / 项目名称（多选）/ 项目年份 / 是否取消暂停 过滤
+  // 1. 按项目名称（多选）/ 是否取消暂停 过滤
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
-      if (filters.brand.length > 0 && !filters.brand.includes(p.brand)) return false
-      if (filters.productLine.length > 0 && !filters.productLine.includes(p.productLine)) return false
       if (filters.projectName.length > 0 && !filters.projectName.includes(p.name)) return false
-      if (filters.projectYear.length > 0 && !filters.projectYear.includes(p.projectYear)) return false
       if (!filters.showCancelled && p.status === 'cancelled') return false
       return true
     })
-  }, [projects, filters.brand, filters.productLine, filters.projectName, filters.projectYear, filters.showCancelled])
+  }, [projects, filters.projectName, filters.showCancelled])
 
   // 2. 为每个项目计算各预算类型的最新版本（通过 store 的 getLatestVersions）
   const projectLatestVersions = useMemo(() => {
-    const map = new Map<string, Record<BudgetType, HrMachineVersion | null>>()
+    const map = new Map<string, Record<BudgetType, HrTosVersion | null>>()
     for (const p of filteredProjects) {
       const latest = getLatestVersions(p.id)
-      const byType: Record<BudgetType, HrMachineVersion | null> = {
+      const byType: Record<BudgetType, HrTosVersion | null> = {
         annual: latest.find(v => v.budgetType === 'annual') ?? null,
         projectEstimate: latest.find(v => v.budgetType === 'projectEstimate') ?? null,
         projectBudget: latest.find(v => v.budgetType === 'projectBudget') ?? null,
@@ -123,10 +117,10 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
 
   // 2b. 为每个项目计算跨预算类型的最新版本（不区分预算类型，取 minorVersion 最高）
   const projectLatestVersionAll = useMemo(() => {
-    const map = new Map<string, HrMachineVersion | null>()
+    const map = new Map<string, HrTosVersion | null>()
     for (const p of filteredProjects) {
       const byType = projectLatestVersions.get(p.id)
-      const candidates: HrMachineVersion[] = []
+      const candidates: HrTosVersion[] = []
       if (byType?.annual) candidates.push(byType.annual)
       if (byType?.projectEstimate) candidates.push(byType.projectEstimate)
       if (byType?.projectBudget) candidates.push(byType.projectBudget)
@@ -152,12 +146,12 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
   }, [filteredProjects, projectLatestVersions])
 
   // 4. 列定义（数字列右对齐；三预算列展示最新版本数据 + 锁定/未锁定颜色标记）
-  const columns: ColumnsType<HrMachineProject> = useMemo(() => {
+  const columns: ColumnsType<HrTosProject> = useMemo(() => {
     /** 取指定项目+预算类型的最新版本 */
     const getLatestForType = (
-      record: HrMachineProject,
+      record: HrTosProject,
       budgetType: BudgetType,
-    ): HrMachineVersion | null => {
+    ): HrTosVersion | null => {
       return projectLatestVersions.get(record.id)?.[budgetType] ?? null
     }
 
@@ -168,7 +162,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         key: 'name',
         width: 220,
         ellipsis: true,
-        render: (text: string, record: HrMachineProject) => (
+        render: (text: string, record: HrTosProject) => (
           <Tooltip title={text}>
             <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600 }}>{text}</span>
             {record.status === 'cancelled' && (
@@ -184,76 +178,36 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         dataIndex: 'ipmProjectCode',
         key: 'ipmProjectCode',
         width: 180,
-        render: (_value: string | null, record: HrMachineProject) => (
+        render: (_value: string | null, record: HrTosProject) => (
           <IpmCodeCell record={record} bindIpmProject={bindIpmProject} />
         ),
       },
       {
-        title: '品牌',
-        dataIndex: 'brand',
-        key: 'brand',
-        width: 100,
+        title: '项目目标',
+        dataIndex: 'projectTarget',
+        key: 'projectTarget',
+        width: 280,
+        ellipsis: true,
         render: (text: string) => (
-          <span style={{ color: 'var(--pms-text-primary)' }}>{text}</span>
+          <Tooltip title={text}>
+            <span style={{ color: 'var(--pms-text-primary)' }}>{text}</span>
+          </Tooltip>
         ),
       },
-      {
-        title: '产品线',
-        dataIndex: 'productLine',
-        key: 'productLine',
-        width: 100,
-      },
-      {
-        title: '项目等级',
-        key: 'projectLevel',
-        width: 100,
-        align: 'center',
-        render: (_v: unknown, record: HrMachineProject) => {
-          // 项目等级来自单项目空间最新版本（不区分预算类型）
-          const latestVersion = projectLatestVersionAll.get(record.id)
-          const level = latestVersion?.projectLevel ?? ''
-          if (!level) return <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
-          return (
-            <span
-              style={{
-                display: 'inline-block',
-                minWidth: 28,
-                padding: '2px 10px',
-                borderRadius: 10,
-                background: 'var(--pms-brand-surface)',
-                color: 'var(--pms-brand-strong)',
-                fontSize: 12,
-                fontWeight: 600,
-                border: '1px solid var(--pms-brand-border)',
-              }}
-            >
-              {level}
-            </span>
-          )
-        },
-      },
-      {
-        title: '项目年份',
-        dataIndex: 'projectYear',
-        key: 'projectYear',
-        width: 160,
-        render: (text: string) => (
-          <span style={{ color: 'var(--pms-text-primary)' }}>{text || '-'}</span>
-        ),
-      },
+
       {
         title: '年度预算',
         key: 'annualBudget',
         width: 120,
         align: 'right',
-        onCell: (record: HrMachineProject) => {
+        onCell: (record: HrTosProject) => {
           const version = getLatestForType(record, 'annual')
           if (!version) return {}
           return {
             className: version.lockState === 'locked' ? 'pms-cell-locked' : 'pms-cell-unlocked',
           }
         },
-        render: (_value: number, record: HrMachineProject) => {
+        render: (_value: number, record: HrTosProject) => {
           const version = getLatestForType(record, 'annual')
           if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
           return formatPersonMonth(version.estimatedInvestment)
@@ -264,14 +218,14 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         key: 'projectEstimate',
         width: 120,
         align: 'right',
-        onCell: (record: HrMachineProject) => {
+        onCell: (record: HrTosProject) => {
           const version = getLatestForType(record, 'projectEstimate')
           if (!version) return {}
           return {
             className: version.lockState === 'locked' ? 'pms-cell-locked' : 'pms-cell-unlocked',
           }
         },
-        render: (_value: number, record: HrMachineProject) => {
+        render: (_value: number, record: HrTosProject) => {
           const version = getLatestForType(record, 'projectEstimate')
           if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
           return formatPersonMonth(version.estimatedInvestment)
@@ -282,14 +236,14 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         key: 'projectBudget',
         width: 120,
         align: 'right',
-        onCell: (record: HrMachineProject) => {
+        onCell: (record: HrTosProject) => {
           const version = getLatestForType(record, 'projectBudget')
           if (!version) return {}
           return {
             className: version.lockState === 'locked' ? 'pms-cell-locked' : 'pms-cell-unlocked',
           }
         },
-        render: (_value: number, record: HrMachineProject) => {
+        render: (_value: number, record: HrTosProject) => {
           const version = getLatestForType(record, 'projectBudget')
           if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
           return formatPersonMonth(version.estimatedInvestment)
@@ -308,25 +262,15 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         key: 'budgetUsageRate',
         width: 120,
         align: 'right',
-        render: (_value: number, record: HrMachineProject) =>
-          formatPercent(record.projectAccounting, record.projectBudget),
+        render: (_value: number, record: HrTosProject) =>
+          record.projectBudget
+            ? formatPercent(record.projectAccounting / record.projectBudget)
+            : '-',
       },
     ]
   }, [projectLatestVersions, projectLatestVersionAll, bindIpmProject])
 
-  // 5. 筛选器选项（多选，不含"全部"选项，空数组=不筛选）
-  const brandOptions = useMemo(
-    () => MACHINE_BRANDS.map(b => ({ value: b.value, label: b.label })),
-    [],
-  )
-  const productLineOptions = useMemo(
-    () => MACHINE_PRODUCT_LINES.map(p => ({ value: p.value, label: p.label })),
-    [],
-  )
-  const yearOptions = useMemo(
-    () => PROJECT_YEARS.map(y => ({ value: y, label: y })),
-    [],
-  )
+  // 5. 筛选器选项
   const projectNameOptions = useMemo(
     () => projects.map(p => ({ value: p.name, label: p.name })),
     [projects],
@@ -342,23 +286,8 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         width: 18,
         formatter: (_v: any, row: any) => row.ipmProjectCode || '-',
       },
-      { key: 'brand', title: '品牌', width: 10 },
-      { key: 'productLine', title: '产品线', width: 10 },
-      {
-        key: 'projectLevel',
-        title: '项目等级',
-        width: 10,
-        formatter: (_v: any, row: any) => {
-          const latestVersion = projectLatestVersionAll.get(row.id)
-          return latestVersion?.projectLevel || '-'
-        },
-      },
-      {
-        key: 'projectYear',
-        title: '项目年份',
-        width: 10,
-        formatter: (_v: any, row: any) => row.projectYear || '-',
-      },
+      { key: 'projectTarget', title: '项目目标', width: 30 },
+
       {
         key: 'annualBudget',
         title: '年度预算',
@@ -401,19 +330,21 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         title: '预算使用率',
         width: 12,
         formatter: (_v: any, row: any) =>
-          formatPercent(row.projectAccounting, row.projectBudget),
+          row.projectBudget
+            ? formatPercent(row.projectAccounting / row.projectBudget)
+            : '-',
       },
     ]
     exportSheet(
       filteredProjects,
       exportColumns,
-      `项目列表_${exportTimestamp()}.xlsx`,
-      '项目列表',
+      `tOS项目列表_${exportTimestamp()}.xlsx`,
+      'tOS项目列表',
     )
   }, [filteredProjects, projectLatestVersions, projectLatestVersionAll])
 
   return (
-    <div className="pms-hr-machine-project-list">
+    <div className="pms-hr-tos-project-list">
       {/* 顶部筛选条 */}
       <Card
         className="pms-toolbar"
@@ -439,48 +370,6 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
                   whiteSpace: 'nowrap',
                 }}
               >
-                品牌
-              </span>
-              <Select
-                mode="multiple"
-                maxTagCount="responsive"
-                style={{ minWidth: 140, maxWidth: 220 }}
-                placeholder="全部品牌"
-                value={filters.brand}
-                options={brandOptions}
-                onChange={value => setFilters({ brand: value as HrMachineProject['brand'][] })}
-              />
-            </Space>
-
-            <Space size={6}>
-              <span
-                style={{
-                  color: 'var(--pms-text-secondary)',
-                  fontSize: 13,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                产品线
-              </span>
-              <Select
-                mode="multiple"
-                maxTagCount="responsive"
-                style={{ minWidth: 140, maxWidth: 220 }}
-                placeholder="全部产品线"
-                value={filters.productLine}
-                options={productLineOptions}
-                onChange={value => setFilters({ productLine: value as HrMachineProject['productLine'][] })}
-              />
-            </Space>
-
-            <Space size={6}>
-              <span
-                style={{
-                  color: 'var(--pms-text-secondary)',
-                  fontSize: 13,
-                  whiteSpace: 'nowrap',
-                }}
-              >
                 项目名称
               </span>
               <Select
@@ -492,27 +381,6 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
                 value={filters.projectName}
                 options={projectNameOptions}
                 onChange={value => setFilters({ projectName: value as string[] })}
-              />
-            </Space>
-
-            <Space size={6}>
-              <span
-                style={{
-                  color: 'var(--pms-text-secondary)',
-                  fontSize: 13,
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                项目年份
-              </span>
-              <Select
-                mode="multiple"
-                maxTagCount="responsive"
-                style={{ minWidth: 180, maxWidth: 260 }}
-                placeholder="全部年份"
-                value={filters.projectYear}
-                options={yearOptions}
-                onChange={value => setFilters({ projectYear: value as string[] })}
               />
             </Space>
 
@@ -547,7 +415,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       </Card>
 
       {/* 项目列表 */}
-      <Table<HrMachineProject>
+      <Table<HrTosProject>
         className="pms-table"
         rowKey="id"
         columns={columns}
@@ -566,22 +434,22 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
               <Table.Summary.Cell index={1} />
               <Table.Summary.Cell index={2} />
               <Table.Summary.Cell index={3} />
-              <Table.Summary.Cell index={4} />
-              <Table.Summary.Cell index={5} />
-              <Table.Summary.Cell index={6} align="right">
+              <Table.Summary.Cell index={4} align="right">
                 {formatPersonMonth(totals.annualBudget)}
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={7} align="right">
+              <Table.Summary.Cell index={5} align="right">
                 {formatPersonMonth(totals.projectEstimate)}
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={8} align="right">
+              <Table.Summary.Cell index={6} align="right">
                 {formatPersonMonth(totals.projectBudget)}
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={9} align="right">
+              <Table.Summary.Cell index={7} align="right">
                 {formatPersonMonth(totals.projectAccounting)}
               </Table.Summary.Cell>
-              <Table.Summary.Cell index={10} align="right">
-                {formatPercent(totals.projectAccounting, totals.projectBudget)}
+              <Table.Summary.Cell index={8} align="right">
+                {totals.projectBudget
+                  ? formatPercent(totals.projectAccounting / totals.projectBudget)
+                  : '-'}
               </Table.Summary.Cell>
             </Table.Summary.Row>
           </Table.Summary>
@@ -589,52 +457,52 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       />
 
       <style jsx global>{`
-        .pms-hr-machine-project-list .pms-table {
+        .pms-hr-tos-project-list .pms-table {
           font-variant-numeric: tabular-nums;
         }
         /* 将合计行（tfoot）提升至表头下方、表体上方显示 */
-        .pms-hr-machine-project-list .pms-table tfoot.ant-table-summary {
+        .pms-hr-tos-project-list .pms-table tfoot.ant-table-summary {
           display: table-header-group;
         }
-        .pms-hr-machine-project-list .pms-table .pms-summary-row > td {
+        .pms-hr-tos-project-list .pms-table .pms-summary-row > td {
           background: var(--pms-brand-surface) !important;
           color: var(--pms-text-primary);
           font-weight: 600;
           border-top: 1px solid var(--pms-brand-border);
         }
         /* 已取消项目：灰色背景 + 半透明 */
-        .pms-hr-machine-project-list .pms-table .pms-row-cancelled > td {
+        .pms-hr-tos-project-list .pms-table .pms-row-cancelled > td {
           background: #f0f0f0 !important;
         }
-        .pms-hr-machine-project-list .pms-table .pms-row-cancelled {
+        .pms-hr-tos-project-list .pms-table .pms-row-cancelled {
           opacity: 0.7;
         }
-        .pms-hr-machine-project-list .pms-table .pms-row-cancelled:hover > td {
+        .pms-hr-tos-project-list .pms-table .pms-row-cancelled:hover > td {
           background: #e8e8e8 !important;
         }
         /* 版本锁定状态：绿色背景 */
-        .pms-hr-machine-project-list .pms-table td.pms-cell-locked {
+        .pms-hr-tos-project-list .pms-table td.pms-cell-locked {
           background: #f0f9eb !important;
         }
-        .pms-hr-machine-project-list .pms-table tr:hover td.pms-cell-locked {
+        .pms-hr-tos-project-list .pms-table tr:hover td.pms-cell-locked {
           background: #e6f4d6 !important;
         }
         /* 版本未锁定状态：灰色背景 */
-        .pms-hr-machine-project-list .pms-table td.pms-cell-unlocked {
+        .pms-hr-tos-project-list .pms-table td.pms-cell-unlocked {
           background: #f5f5f5 !important;
         }
-        .pms-hr-machine-project-list .pms-table tr:hover td.pms-cell-unlocked {
+        .pms-hr-tos-project-list .pms-table tr:hover td.pms-cell-unlocked {
           background: #ececec !important;
         }
         /* IPM 编码列样式 */
-        .pms-hr-machine-project-list .pms-table .pms-ipm-code-cell {
+        .pms-hr-tos-project-list .pms-table .pms-ipm-code-cell {
           cursor: pointer;
           transition: background 0.2s;
           border-radius: 4px;
           padding: 2px 4px;
           margin: -2px -4px;
         }
-        .pms-hr-machine-project-list .pms-table .pms-ipm-code-cell:hover {
+        .pms-hr-tos-project-list .pms-table .pms-ipm-code-cell:hover {
           background: var(--pms-brand-surface);
         }
       `}</style>

@@ -21,6 +21,8 @@ export interface HrConfigActions {
   updateRecord: (moduleKey: ConfigModuleKey, recordId: string, values: ConfigFormValues) => void
   /** 删除记录 */
   deleteRecord: (moduleKey: ConfigModuleKey, recordId: string) => void
+  /** 启用/禁用记录 */
+  toggleRecordStatus: (moduleKey: ConfigModuleKey, recordId: string) => void
   /** 批量导入（追加） */
   importRecords: (moduleKey: ConfigModuleKey, records: ConfigRecord[]) => void
   /** 获取模块数据 */
@@ -69,6 +71,17 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
         data: {
           ...s.data,
           [moduleKey]: (s.data[moduleKey] ?? []).filter(r => r.id !== recordId),
+        },
+      })),
+
+      toggleRecordStatus: (moduleKey, recordId) => set((s) => ({
+        data: {
+          ...s.data,
+          [moduleKey]: (s.data[moduleKey] ?? []).map(r =>
+            r.id === recordId
+              ? { ...r, enabled: r.enabled === false ? true : false }
+              : r,
+          ),
         },
       })),
 

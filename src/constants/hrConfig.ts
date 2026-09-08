@@ -2,6 +2,8 @@
 
 import type { ConfigModuleMeta, ConfigModuleKey, ConfigRecord } from '@/types/hrConfig'
 import type { MilestoneNodes } from '@/types/hrMachine'
+import type { TosMilestoneNodes, TosDepartmentInvestment, TosPhaseKey } from '@/types/hrTos'
+import type { TechMilestoneNodes, TechDepartmentInvestment, TechPhaseKey } from '@/types/hrTechnical'
 
 /* ── 模块元信息 & 列定义 ───────────────────────────────────────────── */
 
@@ -37,18 +39,17 @@ export const CONFIG_MODULES: ConfigModuleMeta[] = [
     key: 'tosPhaseRatio',
     label: 'tOS项目阶段投入比',
     category: 'tOS项目',
-    description: '配置tOS项目各阶段的投入比例',
+    description: '配置tOS项目各版本号下各部门的阶段投入比例',
     columns: [
-      { key: 'phase', label: '项目阶段', width: 140, editable: true, inputType: 'select', options: [
-        { value: '概念阶段', label: '概念阶段' },
-        { value: '计划阶段', label: '计划阶段' },
-        { value: '开发验证阶段', label: '开发验证阶段' },
-        { value: '收编阶段', label: '收编阶段' },
-      ] },
-      { key: 'version', label: '版本号', width: 120, editable: true, inputType: 'text' },
+      { key: 'modelVersion', label: '版本号', width: 120, editable: true, inputType: 'text' },
       { key: 'primaryDepartment', label: '一级部门', width: 120, editable: true, inputType: 'text' },
       { key: 'secondaryDepartment', label: '二级部门', width: 120, editable: true, inputType: 'text' },
-      { key: 'phaseRatio', label: '阶段投入比(%)', width: 130, editable: true, inputType: 'number', align: 'right' },
+      { key: 'planningPhase', label: '规划阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
+      { key: 'conceptPhase', label: '概念阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
+      { key: 'planningPhase2', label: '计划阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
+      { key: 'developmentValidationPhase', label: '开发验证阶段', width: 120, editable: true, inputType: 'number', align: 'right' },
+      { key: 'marketIterationPhase', label: '上市迭代阶段', width: 120, editable: true, inputType: 'number', align: 'right' },
+      { key: 'maintenancePhase', label: '维护阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
     ],
   },
   {
@@ -97,10 +98,11 @@ export const CONFIG_MODULES: ConfigModuleMeta[] = [
     description: '配置技术项目各阶段的工期计算规则及投入比例',
     columns: [
       { key: 'phase', label: '项目阶段', width: 140, editable: true, inputType: 'select', options: [
+        { value: '规划阶段', label: '规划阶段' },
         { value: '概念阶段', label: '概念阶段' },
         { value: '计划阶段', label: '计划阶段' },
         { value: '开发验证阶段', label: '开发验证阶段' },
-        { value: '收编阶段', label: '收编阶段' },
+        { value: '迁移阶段', label: '迁移阶段' },
       ] },
       { key: 'startMilestone', label: '起始里程碑', width: 140, editable: true, inputType: 'text' },
       { key: 'endMilestone', label: '结束里程碑', width: 140, editable: true, inputType: 'text' },
@@ -145,11 +147,12 @@ export function resolveConfigModule(leafKey: string): ConfigModuleKey | null {
 const HR_MODEL_PHASE_KEYS = ['conceptPhase', 'planningPhase', 'developmentPhase', 'validationPhase', 'launchPhase', 'lifecycle'] as const
 
 /**
- * 从配置中心 hrModel 数据中提取去重的项目等级列表
+ * 从配置中心 hrModel 数据中提取去重的项目等级列表（仅启用记录）
  */
 export function getConfigProjectLevels(records: ConfigRecord[]): string[] {
   const levels = new Set<string>()
   records.forEach(r => {
+    if (r.enabled === false) return
     const level = r.projectLevel
     if (level !== null && level !== undefined && level !== '') {
       levels.add(String(level))
@@ -159,11 +162,12 @@ export function getConfigProjectLevels(records: ConfigRecord[]): string[] {
 }
 
 /**
- * 从配置中心 hrModel 数据中提取去重的模型版本号列表
+ * 从配置中心 hrModel 数据中提取去重的模型版本号列表（仅启用记录）
  */
 export function getConfigModelVersions(records: ConfigRecord[]): string[] {
   const versions = new Set<string>()
   records.forEach(r => {
+    if (r.enabled === false) return
     const ver = r.modelVersion
     if (ver !== null && ver !== undefined && ver !== '') {
       versions.add(String(ver))
@@ -183,7 +187,7 @@ export function calcModelSum(
   modelVersion: string,
 ): number {
   return records
-    .filter(r => String(r.projectLevel) === projectLevel && String(r.modelVersion) === modelVersion)
+    .filter(r => r.enabled !== false && String(r.projectLevel) === projectLevel && String(r.modelVersion) === modelVersion)
     .reduce((sum, r) => {
       return sum + HR_MODEL_PHASE_KEYS.reduce((phaseSum, key) => phaseSum + (Number(r[key]) || 0), 0)
     }, 0)
@@ -288,9 +292,9 @@ export function calcDepartmentMonthlySplit(
   levelCoefficient: number,
   milestones: MilestoneNodes,
 ): DepartmentMonthlySplit[] {
-  // 筛选匹配的配置记录（同等级 + 同模型版本下的所有部门）
+  // 筛选匹配的配置记录（同等级 + 同模型版本下的所有部门，仅启用记录）
   const matched = records.filter(
-    (r) => String(r.projectLevel) === projectLevel && String(r.modelVersion) === modelVersion,
+    (r) => r.enabled !== false && String(r.projectLevel) === projectLevel && String(r.modelVersion) === modelVersion,
   )
 
   if (matched.length === 0) return []
@@ -376,20 +380,22 @@ function makeId(module: string, idx: number): string {
 
 export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
   hrModel: [
-    { id: makeId('hrModel', 1), projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 8, developmentPhase: 18, validationPhase: 10, launchPhase: 8, lifecycle: 3 },
-    { id: makeId('hrModel', 2), projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 3, planningPhase: 5, developmentPhase: 12, validationPhase: 7, launchPhase: 5, lifecycle: 2 },
-    { id: makeId('hrModel', 3), projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '硬件部', secondaryDepartment: '结构部', conceptPhase: 2, planningPhase: 2, developmentPhase: 5, validationPhase: 3, launchPhase: 2, lifecycle: 0 },
-    { id: makeId('hrModel', 4), projectLevel: 'A', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 10, developmentPhase: 15, validationPhase: 13, launchPhase: 5, lifecycle: 3 },
-    { id: makeId('hrModel', 5), projectLevel: 'A', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 5, planningPhase: 10, developmentPhase: 15, validationPhase: 12, launchPhase: 5, lifecycle: 2 },
-    { id: makeId('hrModel', 6), projectLevel: 'B', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 8, planningPhase: 10, developmentPhase: 13, validationPhase: 13, launchPhase: 5, lifecycle: 3 },
-    { id: makeId('hrModel', 7), projectLevel: 'C', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 8, planningPhase: 13, developmentPhase: 13, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
-    { id: makeId('hrModel', 8), projectLevel: 'D', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 10, planningPhase: 13, developmentPhase: 10, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
+    { id: makeId('hrModel', 1), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 8, developmentPhase: 18, validationPhase: 10, launchPhase: 8, lifecycle: 3 },
+    { id: makeId('hrModel', 2), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 3, planningPhase: 5, developmentPhase: 12, validationPhase: 7, launchPhase: 5, lifecycle: 2 },
+    { id: makeId('hrModel', 3), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '硬件部', secondaryDepartment: '结构部', conceptPhase: 2, planningPhase: 2, developmentPhase: 5, validationPhase: 3, launchPhase: 2, lifecycle: 0 },
+    { id: makeId('hrModel', 4), enabled: true, projectLevel: 'A', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 10, developmentPhase: 15, validationPhase: 13, launchPhase: 5, lifecycle: 3 },
+    { id: makeId('hrModel', 5), enabled: true, projectLevel: 'A', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 5, planningPhase: 10, developmentPhase: 15, validationPhase: 12, launchPhase: 5, lifecycle: 2 },
+    { id: makeId('hrModel', 6), enabled: true, projectLevel: 'B', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 8, planningPhase: 10, developmentPhase: 13, validationPhase: 13, launchPhase: 5, lifecycle: 3 },
+    { id: makeId('hrModel', 7), enabled: true, projectLevel: 'C', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 8, planningPhase: 13, developmentPhase: 13, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
+    { id: makeId('hrModel', 8), enabled: true, projectLevel: 'D', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 10, planningPhase: 13, developmentPhase: 10, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
   ],
   tosPhaseRatio: [
-    { id: makeId('tosPhaseRatio', 1), phase: '概念阶段', version: 'V1.0', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', phaseRatio: 10 },
-    { id: makeId('tosPhaseRatio', 2), phase: '计划阶段', version: 'V1.0', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', phaseRatio: 15 },
-    { id: makeId('tosPhaseRatio', 3), phase: '开发验证阶段', version: 'V1.0', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', phaseRatio: 55 },
-    { id: makeId('tosPhaseRatio', 4), phase: '收编阶段', version: 'V1.0', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', phaseRatio: 20 },
+    { id: makeId('tosPhaseRatio', 1), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', planningPhase: 8, conceptPhase: 10, planningPhase2: 15, developmentValidationPhase: 50, marketIterationPhase: 10, maintenancePhase: 7 },
+    { id: makeId('tosPhaseRatio', 2), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: '框架组', planningPhase: 5, conceptPhase: 6, planningPhase2: 10, developmentValidationPhase: 35, marketIterationPhase: 7, maintenancePhase: 5 },
+    { id: makeId('tosPhaseRatio', 3), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: '组件组', planningPhase: 3, conceptPhase: 4, planningPhase2: 8, developmentValidationPhase: 25, marketIterationPhase: 5, maintenancePhase: 3 },
+    { id: makeId('tosPhaseRatio', 4), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', planningPhase: 6, conceptPhase: 8, planningPhase2: 12, developmentValidationPhase: 45, marketIterationPhase: 9, maintenancePhase: 6 },
+    { id: makeId('tosPhaseRatio', 5), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: '框架组', planningPhase: 4, conceptPhase: 5, planningPhase2: 8, developmentValidationPhase: 30, marketIterationPhase: 6, maintenancePhase: 4 },
+    { id: makeId('tosPhaseRatio', 6), enabled: true, modelVersion: 'V2025.4', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', planningPhase: 5, conceptPhase: 7, planningPhase2: 10, developmentValidationPhase: 40, marketIterationPhase: 8, maintenancePhase: 5 },
   ],
   tosBrandAllocation: [
     { id: makeId('tosBrand', 1), brand: 'TECNO', productLine: 'CAMON', allocationRatio: 30 },
@@ -412,9 +418,222 @@ export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
     { id: makeId('techTmg', 5), tmg: '通信技术', techDomain: '5G', subDomain: '协议栈' },
   ],
   techPhaseRatio: [
-    { id: makeId('techPhase', 1), phase: '概念阶段', startMilestone: '概念启动', endMilestone: 'STR1', phaseRatio: 10 },
-    { id: makeId('techPhase', 2), phase: '计划阶段', startMilestone: 'STR1', endMilestone: 'STR3', phaseRatio: 15 },
-    { id: makeId('techPhase', 3), phase: '开发验证阶段', startMilestone: 'STR3', endMilestone: 'STR5', phaseRatio: 55 },
-    { id: makeId('techPhase', 4), phase: '收编阶段', startMilestone: 'STR5', endMilestone: '收编完成', phaseRatio: 20 },
+    { id: makeId('techPhase', 1), phase: '规划阶段', startMilestone: '规划启动', endMilestone: 'Charter DCP', phaseRatio: 10 },
+    { id: makeId('techPhase', 2), phase: '概念阶段', startMilestone: 'Charter DCP', endMilestone: 'TDR1', phaseRatio: 15 },
+    { id: makeId('techPhase', 3), phase: '计划阶段', startMilestone: 'TDR1', endMilestone: 'PDCP', phaseRatio: 15 },
+    { id: makeId('techPhase', 4), phase: '开发验证阶段', startMilestone: 'PDCP', endMilestone: 'TDCP-X', phaseRatio: 40 },
+    { id: makeId('techPhase', 5), phase: '迁移阶段', startMilestone: 'TDCP-X', endMilestone: 'EDCP', phaseRatio: 20 },
   ],
+}
+
+/* ── tOS 项目月度预估投入按部门拆分 ────────────────────────────────── */
+
+/** tOS 阶段定义 */
+interface TosPhaseDef {
+  label: string
+  startField: keyof TosMilestoneNodes
+  endField: keyof TosMilestoneNodes
+  configKey: TosPhaseKey
+}
+
+/** tOS 六个阶段的定义 */
+const TOS_PHASE_DEFS: TosPhaseDef[] = [
+  { label: '规划阶段', startField: 'planningKO', endField: 'conceptStart', configKey: 'planningPhase' },
+  { label: '概念阶段', startField: 'conceptStart', endField: 'str1', configKey: 'conceptPhase' },
+  { label: '计划阶段', startField: 'str1', endField: 'str3', configKey: 'planningPhase2' },
+  { label: '开发验证阶段', startField: 'str3', endField: 'str5', configKey: 'developmentValidationPhase' },
+  { label: '上市迭代阶段', startField: 'str5', endField: 'marketIteration', configKey: 'marketIterationPhase' },
+  { label: '维护阶段', startField: 'marketIteration', endField: 'maintenanceEnd', configKey: 'maintenancePhase' },
+]
+
+/**
+ * 从配置中心 tosPhaseRatio 数据中提取去重的模型版本号列表（仅启用记录）
+ */
+export function getTosConfigModelVersions(records: ConfigRecord[]): string[] {
+  const versions = new Set<string>()
+  records.forEach(r => {
+    if (r.enabled === false) return
+    const ver = r.modelVersion
+    if (ver !== null && ver !== undefined && ver !== '') {
+      versions.add(String(ver))
+    }
+  })
+  return [...versions]
+}
+
+/**
+ * 按部门拆分 tOS 项目月度预估投入。
+ *
+ * 逻辑：
+ * 1. 遍历每个部门的预估投入记录（TosDepartmentInvestment）
+ * 2. 对每个部门的每个阶段（需有里程碑日期）：
+ *    - 阶段预估投入 = dept[phase.configKey]（直接使用部门阶段投入值，支持用户编辑后的值）
+ *    - 每日预估 = 阶段预估投入 / 阶段工期
+ *    - 月度预估 = 该阶段在当月的天数 × 每日预估
+ * 3. 汇总所有阶段的月度数据
+ * 4. 修正最后一个月的值，使月度合计与 dept.estimatedInvestment 完全一致
+ */
+export function calcTosDepartmentMonthlySplit(
+  departmentInvestments: TosDepartmentInvestment[],
+  milestones: TosMilestoneNodes,
+): DepartmentMonthlySplit[] {
+  if (!departmentInvestments || departmentInvestments.length === 0) return []
+
+  const results: DepartmentMonthlySplit[] = []
+
+  for (const dept of departmentInvestments) {
+    const primaryDepartment = dept.primaryDepartment
+    const secondaryDepartment = dept.secondaryDepartment
+    const deptEstimatedTotal = dept.estimatedInvestment
+
+    const monthlyData: Record<string, number> = {}
+
+    for (const phase of TOS_PHASE_DEFS) {
+      const startVal = milestones[phase.startField]
+      const endVal = milestones[phase.endField]
+      if (!startVal || !endVal) continue
+
+      const phaseDays = calcDaysInclusive(startVal, endVal)
+      if (phaseDays <= 0) continue
+
+      // 直接使用部门阶段投入值（支持用户编辑后的值）
+      const phaseInvestment = Number(dept[phase.configKey]) || 0
+      if (phaseInvestment === 0) continue
+
+      // 每日预估 = 阶段预估投入 / 阶段工期
+      const dailyRate = phaseInvestment / phaseDays
+
+      // 计算该阶段覆盖的所有月份
+      let current = new Date(startVal)
+      while (current <= new Date(endVal)) {
+        const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
+        const days = daysInMonth(monthKey, startVal, endVal)
+        if (days > 0) {
+          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + Math.round(dailyRate * days * 100) / 100
+        }
+        current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
+      }
+    }
+
+    // Round monthly values to 1 decimal
+    for (const key of Object.keys(monthlyData)) {
+      monthlyData[key] = Math.round(monthlyData[key] * 10) / 10
+    }
+
+    // 修正最后一个月的值，使月度合计与 estimatedTotal 完全一致（消除累计舍入误差）
+    const monthlySum = Object.values(monthlyData).reduce((sum, v) => sum + v, 0)
+    const diff = Math.round((deptEstimatedTotal - monthlySum) * 10) / 10
+    if (Math.abs(diff) >= 0.1 && Object.keys(monthlyData).length > 0) {
+      const sortedKeys = Object.keys(monthlyData).sort()
+      const lastKey = sortedKeys[sortedKeys.length - 1]
+      monthlyData[lastKey] = Math.round((monthlyData[lastKey] + diff) * 10) / 10
+    }
+
+    results.push({
+      primaryDepartment,
+      secondaryDepartment,
+      monthlyData,
+      estimatedTotal: deptEstimatedTotal,
+    })
+  }
+
+  return results
+}
+
+/* ── 技术项目月度预估投入按部门拆分 ────────────────────────────────── */
+
+/** 技术项目 阶段定义 */
+interface TechPhaseDef {
+  label: string
+  startField: keyof TechMilestoneNodes
+  endField: keyof TechMilestoneNodes
+  configKey: TechPhaseKey
+}
+
+/** 技术项目 五个阶段的定义 */
+const TECH_PHASE_DEFS: TechPhaseDef[] = [
+  { label: '规划阶段', startField: 'planningStart', endField: 'charterDCP', configKey: 'planningPhase' },
+  { label: '概念阶段', startField: 'charterDCP', endField: 'tdr1', configKey: 'conceptPhase' },
+  { label: '计划阶段', startField: 'tdr1', endField: 'pdcp', configKey: 'planPhase' },
+  { label: '开发验证阶段', startField: 'pdcp', endField: 'tdcpx', configKey: 'developmentPhase' },
+  { label: '迁移阶段', startField: 'tdcpx', endField: 'edcp', configKey: 'migrationPhase' },
+]
+
+/**
+ * 按部门拆分 技术项目 月度预估投入。
+ *
+ * 逻辑：
+ * 1. 遍历每个部门的预估投入记录（TechDepartmentInvestment）
+ * 2. 对每个部门的每个阶段（需有里程碑日期）：
+ *    - 阶段预估投入 = dept[phase.configKey]（直接使用部门阶段投入值，支持用户编辑后的值）
+ *    - 每日预估 = 阶段预估投入 / 阶段工期
+ *    - 月度预估 = 该阶段在当月的天数 × 每日预估
+ * 3. 汇总所有阶段的月度数据
+ * 4. 修正最后一个月的值，使月度合计与 dept.estimatedInvestment 完全一致
+ */
+export function calcTechDepartmentMonthlySplit(
+  departmentInvestments: TechDepartmentInvestment[],
+  milestones: TechMilestoneNodes,
+): DepartmentMonthlySplit[] {
+  if (!departmentInvestments || departmentInvestments.length === 0) return []
+
+  const results: DepartmentMonthlySplit[] = []
+
+  for (const dept of departmentInvestments) {
+    const primaryDepartment = dept.primaryDepartment
+    const secondaryDepartment = dept.secondaryDepartment
+    const deptEstimatedTotal = dept.estimatedInvestment
+
+    const monthlyData: Record<string, number> = {}
+
+    for (const phase of TECH_PHASE_DEFS) {
+      const startVal = milestones[phase.startField]
+      const endVal = milestones[phase.endField]
+      if (!startVal || !endVal) continue
+
+      const phaseDays = calcDaysInclusive(startVal, endVal)
+      if (phaseDays <= 0) continue
+
+      // 直接使用部门阶段投入值（支持用户编辑后的值）
+      const phaseInvestment = Number(dept[phase.configKey]) || 0
+      if (phaseInvestment === 0) continue
+
+      // 每日预估 = 阶段预估投入 / 阶段工期
+      const dailyRate = phaseInvestment / phaseDays
+
+      // 计算该阶段覆盖的所有月份
+      let current = new Date(startVal)
+      while (current <= new Date(endVal)) {
+        const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
+        const days = daysInMonth(monthKey, startVal, endVal)
+        if (days > 0) {
+          monthlyData[monthKey] = (monthlyData[monthKey] || 0) + Math.round(dailyRate * days * 100) / 100
+        }
+        current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
+      }
+    }
+
+    // Round monthly values to 1 decimal
+    for (const key of Object.keys(monthlyData)) {
+      monthlyData[key] = Math.round(monthlyData[key] * 10) / 10
+    }
+
+    // 修正最后一个月的值，使月度合计与 estimatedTotal 完全一致（消除累计舍入误差）
+    const monthlySum = Object.values(monthlyData).reduce((sum, v) => sum + v, 0)
+    const diff = Math.round((deptEstimatedTotal - monthlySum) * 10) / 10
+    if (Math.abs(diff) >= 0.1 && Object.keys(monthlyData).length > 0) {
+      const sortedKeys = Object.keys(monthlyData).sort()
+      const lastKey = sortedKeys[sortedKeys.length - 1]
+      monthlyData[lastKey] = Math.round((monthlyData[lastKey] + diff) * 10) / 10
+    }
+
+    results.push({
+      primaryDepartment,
+      secondaryDepartment,
+      monthlyData,
+      estimatedTotal: deptEstimatedTotal,
+    })
+  }
+
+  return results
 }

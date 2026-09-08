@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Card,
   Table,
@@ -22,25 +22,30 @@ import {
   ArrowLeftOutlined,
   PlusOutlined,
   LockOutlined,
+  UnlockOutlined,
   DeleteOutlined,
   ExportOutlined,
   StopOutlined,
   LinkOutlined,
+  CopyOutlined,
+  HistoryOutlined,
+  EditOutlined,
+  EyeOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrTosStore } from '@/stores/hrTos'
 import {
-  BUDGET_TYPES,
-  BUDGET_TYPE_LABELS,
+  TOS_BUDGET_TYPES,
+  TOS_BUDGET_TYPE_LABELS,
+  TOS_IPM_PROJECTS,
+  TOS_IPM_REQUIRED_TIP,
   formatPersonMonth,
-  MILESTONE_FIELDS,
-  IPM_PROJECTS,
-} from '@/constants/hrMachine'
-import type { HrMachineVersion, BudgetType, MilestoneNodes } from '@/types/hrMachine'
+  TOS_MILESTONE_FIELDS,
+} from '@/constants/hrTos'
+import type { HrTosVersion, BudgetType, TosMilestoneNodes } from '@/types/hrTos'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
-import { useHrConfigStore } from '@/stores/hrConfig'
-import { getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
+import VersionHistoryModal from './VersionHistoryModal'
 
 interface ProjectDetailSpaceProps {
   projectId: string
@@ -49,12 +54,12 @@ interface ProjectDetailSpaceProps {
 }
 
 /** 预算类型筛选选项（由常量派生，无需每次渲染重建） */
-const BUDGET_TYPE_OPTIONS = BUDGET_TYPES.map((t) => ({ label: t.label, value: t.value }))
+const BUDGET_TYPE_OPTIONS = TOS_BUDGET_TYPES.map((t) => ({ label: t.label, value: t.value }))
 
 /** 全部预算类型值（用于全选） */
 const ALL_BUDGET_TYPE_VALUES = BUDGET_TYPE_OPTIONS.map((o) => o.value) as BudgetType[]
 
-// ── 行内编辑：数字单元格（等级系数等） ──────────────────────────────────
+// ── 行内编辑：数字单元格（预估投入等） ──────────────────────────────────
 // 点击进入编辑模式，Enter / blur 保存，Escape 取消
 function EditableNumberCell({
   value,
@@ -62,17 +67,16 @@ function EditableNumberCell({
   onSave,
   formatter = formatPersonMonth,
 }: {
-  value: number | undefined
+  value: number
   editable: boolean
   onSave: (v: number) => void
   formatter?: (v: number) => string
 }) {
-  const safeValue = value ?? 0
   const [editing, setEditing] = useState(false)
-  const [localValue, setLocalValue] = useState(safeValue)
+  const [localValue, setLocalValue] = useState(value)
 
   if (!editable) {
-    return <span style={{ fontWeight: 600 }}>{formatter(safeValue)}</span>
+    return <span style={{ fontWeight: 600 }}>{formatter(value)}</span>
   }
 
   if (editing) {
@@ -107,12 +111,12 @@ function EditableNumberCell({
     <span
       className="pms-inline-editable"
       onClick={() => {
-        setLocalValue(safeValue)
+        setLocalValue(value)
         setEditing(true)
       }}
       style={{ fontWeight: 600 }}
     >
-      {formatter(safeValue)}
+      {formatter(value)}
     </span>
   )
 }
@@ -171,84 +175,23 @@ function EditableDateCell({
   )
 }
 
-// ── 行内编辑：下拉选择单元格（项目等级、人力模型版本号） ────────────────
-// 点击进入编辑模式，选择后自动保存，关闭弹层则取消
-function EditableSelectCell({
-  value,
-  editable,
-  options,
-  onSave,
-  renderDisplay,
-}: {
-  value: string
-  editable: boolean
-  options: { label: string; value: string }[]
-  onSave: (v: string) => void
-  renderDisplay?: (value: string) => ReactNode
-}) {
-  const [editing, setEditing] = useState(false)
-
-  if (!editable) {
-    if (renderDisplay) return <>{renderDisplay(value)}</>
-    return <span style={{ color: 'var(--pms-text-primary)' }}>{value || '-'}</span>
-  }
-
-  if (editing) {
-    return (
-      <Select
-        size="small"
-        value={value || undefined}
-        open
-        autoFocus
-        style={{ width: '100%' }}
-        options={options}
-        onChange={(v) => {
-          onSave(v)
-          setEditing(false)
-        }}
-        onDropdownVisibleChange={(visible) => {
-          if (!visible) setEditing(false)
-        }}
-        onBlur={() => setEditing(false)}
-      />
-    )
-  }
-
-  return (
-    <span
-      className="pms-inline-editable"
-      onClick={() => setEditing(true)}
-    >
-      {renderDisplay
-        ? renderDisplay(value)
-        : value || <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>}
-    </span>
-  )
-}
-
 export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: ProjectDetailSpaceProps) {
   // ── Store：读取项目、预算类型筛选与版本操作 ──────────────────────────
-  const projects = useHrMachineStore((s) => s.projects)
-  const selectedBudgetTypes = useHrMachineStore((s) => s.selectedBudgetTypes)
-  const setSelectedBudgetTypes = useHrMachineStore((s) => s.setSelectedBudgetTypes)
-  const lockVersion = useHrMachineStore((s) => s.lockVersion)
-  const deleteVersion = useHrMachineStore((s) => s.deleteVersion)
-  const cancelProject = useHrMachineStore((s) => s.cancelProject)
-  const restoreProject = useHrMachineStore((s) => s.restoreProject)
-  const deleteProject = useHrMachineStore((s) => s.deleteProject)
-  const updateVersion = useHrMachineStore((s) => s.updateVersion)
-  const bindIpmProject = useHrMachineStore((s) => s.bindIpmProject)
-
-  // ── 配置中心：项目等级 / 人力模型版本号选项 ──────────────────────────
-  const hrModelRecords = useHrConfigStore((s) => s.data.hrModel ?? [])
-  const projectLevelOptions = useMemo(
-    () => getConfigProjectLevels(hrModelRecords).map((v) => ({ label: v, value: v })),
-    [hrModelRecords],
-  )
-  const modelVersionOptions = useMemo(
-    () => getConfigModelVersions(hrModelRecords).map((v) => ({ label: v, value: v })),
-    [hrModelRecords],
-  )
+  const projects = useHrTosStore((s) => s.projects)
+  const selectedBudgetTypes = useHrTosStore((s) => s.selectedBudgetTypes)
+  const setSelectedBudgetTypes = useHrTosStore((s) => s.setSelectedBudgetTypes)
+  const lockVersion = useHrTosStore((s) => s.lockVersion)
+  const unlockVersion = useHrTosStore((s) => s.unlockVersion)
+  const copyVersion = useHrTosStore((s) => s.copyVersion)
+  const deleteVersion = useHrTosStore((s) => s.deleteVersion)
+  const cancelProject = useHrTosStore((s) => s.cancelProject)
+  const restoreProject = useHrTosStore((s) => s.restoreProject)
+  const deleteProject = useHrTosStore((s) => s.deleteProject)
+  const updateVersion = useHrTosStore((s) => s.updateVersion)
+  const bindIpmProject = useHrTosStore((s) => s.bindIpmProject)
+  const setEditingVersionId = useHrTosStore((s) => s.setEditingVersionId)
+  const setShowVersionDetailModal = useHrTosStore((s) => s.setShowVersionDetailModal)
+  const setVersionDetailReadOnly = useHrTosStore((s) => s.setVersionDetailReadOnly)
 
   // ── 当前项目 ────────────────────────────────────────────────────────
   const project = useMemo(
@@ -257,9 +200,9 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
   )
 
   // ── 按预算类型筛选版本，并按 预算类型 → 版本号降序 排序 ──────────────
-  const filteredVersions = useMemo<HrMachineVersion[]>(() => {
+  const filteredVersions = useMemo<HrTosVersion[]>(() => {
     if (!project) return []
-    const typeOrder = (bt: BudgetType) => BUDGET_TYPES.findIndex((t) => t.value === bt)
+    const typeOrder = (bt: BudgetType) => TOS_BUDGET_TYPES.findIndex((t) => t.value === bt)
     return project.versions
       .filter((v) => selectedBudgetTypes.includes(v.budgetType))
       .sort((a, b) => {
@@ -297,23 +240,26 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
   // ── 项目状态切换弹窗 ────────────────────────────────────────────────
   const [statusModalOpen, setStatusModalOpen] = useState(false)
 
+  // ── 版本操作记录弹窗 ────────────────────────────────────────────────
+  const [historyModalVersionId, setHistoryModalVersionId] = useState<string | null>(null)
+
   // ── 列定义（在早返回之前调用，遵守 Hooks 规则） ─────────────────────
-  const columns = useMemo<ColumnsType<HrMachineVersion>>(() => {
+  const columns = useMemo<ColumnsType<HrTosVersion>>(() => {
     if (!project) return []
 
-    // 里程碑列：由 MILESTONE_FIELDS 动态生成，支持行内编辑
-    const milestoneColumns: ColumnsType<HrMachineVersion> = MILESTONE_FIELDS.map((field) => ({
+    // 里程碑列：由 TOS_MILESTONE_FIELDS 动态生成，支持行内编辑
+    const milestoneColumns: ColumnsType<HrTosVersion> = TOS_MILESTONE_FIELDS.map((field) => ({
       title: field.label,
       key: field.key,
       width: 120,
       align: 'center',
-      render: (_value: unknown, record: HrMachineVersion) => (
+      render: (_value: unknown, record: HrTosVersion) => (
         <EditableDateCell
           value={record.milestones[field.key]}
           editable={record.lockState === 'unlocked'}
           onSave={(v) =>
             updateVersion(project.id, record.id, {
-              milestones: { [field.key]: v } as Partial<MilestoneNodes>,
+              milestones: { [field.key]: v } as Partial<TosMilestoneNodes>,
             })
           }
         />
@@ -330,77 +276,18 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
           <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600 }}>{project.name}</span>
         ),
       },
-      { title: '品牌', key: 'brand', width: 90, render: () => project.brand },
-      { title: '产品线', key: 'productLine', width: 90, render: () => project.productLine },
-      {
-        title: '项目等级',
-        key: 'projectLevel',
-        width: 90,
-        align: 'center',
-        render: (_value: unknown, record: HrMachineVersion) => (
-          <EditableSelectCell
-            value={record.projectLevel}
-            editable={record.lockState === 'unlocked'}
-            options={projectLevelOptions}
-            onSave={(v) => updateVersion(project.id, record.id, { projectLevel: v })}
-            renderDisplay={(v) =>
-              v ? (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    minWidth: 28,
-                    padding: '2px 10px',
-                    borderRadius: 10,
-                    background: 'var(--pms-brand-surface)',
-                    color: 'var(--pms-brand-strong)',
-                    fontSize: 12,
-                    fontWeight: 600,
-                    border: '1px solid var(--pms-brand-border)',
-                  }}
-                >
-                  {v}
-                </span>
-              ) : (
-                <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
-              )
-            }
-          />
-        ),
-      },
-      {
-        title: '等级系数',
-        key: 'levelCoefficient',
-        width: 90,
-        align: 'right',
-        render: (_value: unknown, record: HrMachineVersion) => (
-          <EditableNumberCell
-            value={record.levelCoefficient}
-            editable={record.lockState === 'unlocked'}
-            formatter={(v) => (v ?? 0).toFixed(1)}
-            onSave={(v) => updateVersion(project.id, record.id, { levelCoefficient: v })}
-          />
-        ),
-      },
-      {
-        title: '人力模型版本',
-        key: 'hrModelVersion',
-        width: 120,
-        render: (_value: unknown, record: HrMachineVersion) => (
-          <EditableSelectCell
-            value={record.hrModelVersion}
-            editable={record.lockState === 'unlocked'}
-            options={modelVersionOptions}
-            onSave={(v) => updateVersion(project.id, record.id, { hrModelVersion: v })}
-          />
-        ),
-      },
       {
         title: '预估投入',
         key: 'estimatedInvestment',
         width: 110,
         align: 'right',
-        render: (_value: unknown, record: HrMachineVersion) => (
-          <span style={{ fontWeight: 600 }}>{formatPersonMonth(record.estimatedInvestment)}</span>
+        render: (_value: unknown, record: HrTosVersion) => (
+          <EditableNumberCell
+            value={record.estimatedInvestment}
+            editable={record.lockState === 'unlocked'}
+            formatter={formatPersonMonth}
+            onSave={(v) => updateVersion(project.id, record.id, { estimatedInvestment: v })}
+          />
         ),
       },
       ...milestoneColumns,
@@ -409,8 +296,8 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         key: 'budgetType',
         width: 100,
         align: 'center',
-        render: (_value: unknown, record: HrMachineVersion) => (
-          <Tag color="purple">{BUDGET_TYPE_LABELS[record.budgetType]}</Tag>
+        render: (_value: unknown, record: HrTosVersion) => (
+          <Tag color="purple">{TOS_BUDGET_TYPE_LABELS[record.budgetType]}</Tag>
         ),
       },
       {
@@ -418,18 +305,18 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         key: 'versionNumber',
         width: 90,
         align: 'center',
-        render: (_value: unknown, record: HrMachineVersion) => (
+        render: (_value: unknown, record: HrTosVersion) => (
           <span style={{ fontWeight: 600, color: 'var(--pms-brand-strong)' }}>
             {record.versionNumber}
           </span>
         ),
       },
       {
-        title: '版本锁定',
-        key: 'versionLock',
+        title: '版本状态',
+        key: 'versionStatus',
         width: 100,
         align: 'center',
-        render: (_value: unknown, record: HrMachineVersion) => {
+        render: (_value: unknown, record: HrTosVersion) => {
           if (record.lockState === 'locked') {
             return (
               <Tag icon={<LockOutlined />} color="default">
@@ -441,15 +328,75 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         },
       },
       {
+        title: '版本详情',
+        key: 'versionDetail',
+        width: 140,
+        align: 'center',
+        render: (_value: unknown, record: HrTosVersion) => (
+          <Space size={4}>
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              disabled={record.lockState === 'locked'}
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditingVersionId(record.id)
+                setVersionDetailReadOnly(false)
+                setShowVersionDetailModal(true)
+              }}
+            >
+              编辑
+            </Button>
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={(e) => {
+                e.stopPropagation()
+                setEditingVersionId(record.id)
+                setVersionDetailReadOnly(true)
+                setShowVersionDetailModal(true)
+              }}
+            >
+              详情
+            </Button>
+          </Space>
+        ),
+      },
+      {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 170,
+        width: 220,
         align: 'center',
-        render: (_value: unknown, record: HrMachineVersion) => (
+        render: (_value: unknown, record: HrTosVersion) => (
           <Space size={4}>
-            {lockableIds.has(record.id) && project.status === 'active' ? (
-              <Tooltip title="锁定后该版本将变为只读，不可再编辑">
+            {/* 复制：直接新增一个版本 */}
+            <Tooltip title="复制版本，直接新增一个同预算类型的版本">
+              <Button
+                size="small"
+                icon={<CopyOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  copyVersion(project.id, record.id)
+                  message.success('版本已复制')
+                }}
+              />
+            </Tooltip>
+            {/* 锁定/解锁 */}
+            {record.lockState === 'locked' ? (
+              <Tooltip title="解锁后版本可重新编辑">
+                <Button
+                  size="small"
+                  icon={<UnlockOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    unlockVersion(project.id, record.id)
+                    message.success('版本已解锁')
+                  }}
+                />
+              </Tooltip>
+            ) : lockableIds.has(record.id) && project.status === 'active' ? (
+              <Tooltip title="锁定后该版本将变为只读">
                 <Button
                   type="primary"
                   size="small"
@@ -459,11 +406,10 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
                     lockVersion(project.id, record.id)
                     message.success('版本已锁定')
                   }}
-                >
-                  锁定
-                </Button>
+                />
               </Tooltip>
             ) : null}
+            {/* 删除 */}
             <Popconfirm
               title="删除版本数据"
               description="删除后不可恢复；若所有版本均被删除，该项目将一并删除。"
@@ -474,7 +420,6 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
                 const remaining = project.versions.filter((v) => v.id !== record.id)
                 deleteVersion(project.id, record.id)
                 if (remaining.length === 0) {
-                  // 所有版本被删除 → 项目一并删除，并返回列表
                   deleteProject(project.id)
                   message.success('所有版本已删除，项目已一并删除')
                   onBack()
@@ -488,20 +433,29 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
                 size="small"
                 icon={<DeleteOutlined />}
                 onClick={(e) => e.stopPropagation()}
-              >
-                删除
-              </Button>
+              />
             </Popconfirm>
+            {/* 查看：操作记录 */}
+            <Tooltip title="查看版本操作记录">
+              <Button
+                size="small"
+                icon={<HistoryOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setHistoryModalVersionId(record.id)
+                }}
+              />
+            </Tooltip>
           </Space>
         ),
       },
     ]
-  }, [project, lockableIds, lockVersion, deleteVersion, deleteProject, onBack, updateVersion, projectLevelOptions, modelVersionOptions])
+  }, [project, lockableIds, lockVersion, unlockVersion, copyVersion, deleteVersion, deleteProject, onBack, updateVersion, setEditingVersionId, setShowVersionDetailModal, setVersionDetailReadOnly])
 
   // ── 项目不存在的兜底 ────────────────────────────────────────────────
   if (!project) {
     return (
-      <div className="pms-hr-machine-project-detail">
+      <div className="pms-hr-tos-project-detail">
         <Card
           className="pms-toolbar"
           size="small"
@@ -523,35 +477,31 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
   const handleExport = () => {
     const exportColumns: ExportColumn[] = [
       { key: 'name', title: '项目名称', formatter: () => project.name },
-      { key: 'brand', title: '品牌', formatter: () => project.brand },
-      { key: 'productLine', title: '产品线', formatter: () => project.productLine },
-      { key: 'projectLevel', title: '项目等级', formatter: (_v, row: HrMachineVersion) => row.projectLevel },
-      { key: 'levelCoefficient', title: '等级系数', formatter: (_v, row: HrMachineVersion) => row.levelCoefficient },
-      { key: 'hrModelVersion', title: '人力模型版本', formatter: (_v, row: HrMachineVersion) => row.hrModelVersion },
+      { key: 'projectTarget', title: '项目目标', formatter: () => project.projectTarget },
       {
         key: 'estimatedInvestment',
         title: '预估投入(人月)',
-        formatter: (_v, row: HrMachineVersion) => row.estimatedInvestment,
+        formatter: (_v, row: HrTosVersion) => row.estimatedInvestment,
       },
-      ...MILESTONE_FIELDS.map((f) => ({
+      ...TOS_MILESTONE_FIELDS.map((f) => ({
         key: f.key,
         title: f.label,
-        formatter: (_v: unknown, row: HrMachineVersion) => row.milestones[f.key] ?? '',
+        formatter: (_v: unknown, row: HrTosVersion) => row.milestones[f.key] ?? '',
       })),
       {
         key: 'budgetType',
         title: '预算类型',
-        formatter: (_v, row: HrMachineVersion) => BUDGET_TYPE_LABELS[row.budgetType],
+        formatter: (_v, row: HrTosVersion) => TOS_BUDGET_TYPE_LABELS[row.budgetType],
       },
       {
         key: 'versionNumber',
         title: '版本号',
-        formatter: (_v, row: HrMachineVersion) => row.versionNumber,
+        formatter: (_v, row: HrTosVersion) => row.versionNumber,
       },
       {
         key: 'lockState',
-        title: '版本锁定',
-        formatter: (_v, row: HrMachineVersion) => (row.lockState === 'locked' ? '已锁定' : '编辑中'),
+        title: '版本状态',
+        formatter: (_v, row: HrTosVersion) => (row.lockState === 'locked' ? '已锁定' : '编辑中'),
       },
     ]
     exportSheet(
@@ -586,8 +536,8 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
   const hasIpm = !!project.ipmProjectCode
 
   return (
-    <div className="pms-hr-machine-project-detail">
-      {/* 顶部：返回 + 项目标题 + 状态 + IPM */}
+    <div className="pms-hr-tos-project-detail">
+      {/* 顶部：返回 + 项目标题 + 状态 + 项目目标 + IPM */}
       <div
         style={{
           display: 'flex',
@@ -609,7 +559,7 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
           <Tag color="green">进行中</Tag>
         )}
         <span style={{ color: 'var(--pms-text-secondary)', fontSize: 13 }}>
-          {project.brand} · {project.productLine} · 等级 {project.projectLevel}
+          {project.projectTarget}
         </span>
 
         {/* IPM 编码展示 / 绑定 */}
@@ -642,7 +592,7 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
                   style={{ width: '100%' }}
                   value={ipmSelectValue}
                   onChange={setIpmSelectValue}
-                  options={IPM_PROJECTS.map((p) => ({
+                  options={TOS_IPM_PROJECTS.map((p) => ({
                     value: p.code,
                     label: `${p.code} - ${p.name}`,
                   }))}
@@ -685,7 +635,7 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
           type="warning"
           showIcon
           title="该项目未绑定 IPM 编码"
-          description="仅可创建「年度预算」类型版本。创建「项目概算」或「项目预算」版本前需先绑定 IPM 编码。"
+          description={`仅可创建「年度预算」类型版本。${TOS_IPM_REQUIRED_TIP}。`}
           style={{ marginBottom: 12, borderRadius: 8 }}
         />
       )}
@@ -762,14 +712,14 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
       </Card>
 
       {/* 版本列表 */}
-      <Table<HrMachineVersion>
+      <Table<HrTosVersion>
         className="pms-table"
         rowKey="id"
         columns={columns}
         dataSource={filteredVersions}
         scroll={{ x: 'max-content' }}
         pagination={{ pageSize: 15, showTotal: (t) => '共 ' + t + ' 条版本' }}
-        rowClassName={(record) => (record.lockState === 'locked' ? 'hr-machine-version-locked' : '')}
+        rowClassName={(record) => (record.lockState === 'locked' ? 'hr-tos-version-locked' : '')}
         locale={{ emptyText: '当前筛选条件下暂无版本数据' }}
       />
 
@@ -790,19 +740,27 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
         </p>
       </Modal>
 
+      {/* 版本操作记录弹窗 */}
+      <VersionHistoryModal
+        open={historyModalVersionId !== null}
+        versionId={historyModalVersionId}
+        projectId={project.id}
+        onCancel={() => setHistoryModalVersionId(null)}
+      />
+
       <style jsx global>{`
         /* 已锁定版本：整行高亮（品牌色玻璃态） */
-        .pms-hr-machine-project-detail .pms-table .ant-table-tbody > tr.hr-machine-version-locked > td {
+        .pms-hr-tos-project-detail .pms-table .ant-table-tbody > tr.hr-tos-version-locked > td {
           background: var(--pms-brand-surface) !important;
           color: var(--pms-brand-strong);
           font-weight: 500;
         }
-        .pms-hr-machine-project-detail .pms-table .ant-table-tbody > tr.hr-machine-version-locked:hover > td {
+        .pms-hr-tos-project-detail .pms-table .ant-table-tbody > tr.hr-tos-version-locked:hover > td {
           background: color-mix(in srgb, var(--pms-brand-surface) 72%, #ffffff) !important;
         }
 
         /* 行内可编辑单元格：悬停反馈 */
-        .pms-hr-machine-project-detail .pms-inline-editable {
+        .pms-hr-tos-project-detail .pms-inline-editable {
           cursor: pointer;
           padding: 2px 6px;
           border-radius: 4px;
@@ -811,19 +769,19 @@ export default function ProjectDetailSpace({ projectId, onBack, onNewVersion }: 
           min-width: 24px;
           text-align: center;
         }
-        .pms-hr-machine-project-detail .pms-inline-editable:hover {
+        .pms-hr-tos-project-detail .pms-inline-editable:hover {
           background: var(--pms-brand-surface);
           color: var(--pms-brand-strong);
         }
 
         /* 行内编辑输入框：紧凑样式 */
-        .pms-hr-machine-project-detail .pms-table .ant-inputnumber {
+        .pms-hr-tos-project-detail .pms-table .ant-inputnumber {
           width: 100%;
         }
-        .pms-hr-machine-project-detail .pms-table .ant-picker {
+        .pms-hr-tos-project-detail .pms-table .ant-picker {
           width: 100%;
         }
-        .pms-hr-machine-project-detail .pms-table .ant-select {
+        .pms-hr-tos-project-detail .pms-table .ant-select {
           width: 100%;
         }
       `}</style>

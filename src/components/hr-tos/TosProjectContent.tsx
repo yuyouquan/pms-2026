@@ -1,16 +1,16 @@
 'use client'
 
 import { Segmented } from 'antd'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrTosStore } from '@/stores/hrTos'
 import ProjectListTab from './ProjectListTab'
 import HistoryVersionSpace from './HistoryVersionSpace'
 import MonthlyInvestmentTab from './MonthlyInvestmentTab'
 import NewProjectModal from './NewProjectModal'
 import NewVersionModal from './NewVersionModal'
 import MonthlyEditModal from './MonthlyEditModal'
-import MachineVersionDetailModal from './MachineVersionDetailModal'
+import VersionDetailModal from './VersionDetailModal'
 
-export default function MachineProjectContent() {
+export default function TosProjectContent() {
   const {
     activeTab,
     setActiveTab,
@@ -22,15 +22,17 @@ export default function MachineProjectContent() {
     setShowNewVersionModal,
     showMonthlyEditModal,
     setShowMonthlyEditModal,
-    editingMonthlyId,
-    setEditingMonthlyId,
     showVersionDetailModal,
     setShowVersionDetailModal,
+    versionDetailReadOnly,
+    setVersionDetailReadOnly,
+    editingMonthlyId,
+    setEditingMonthlyId,
     editingVersionId,
     setEditingVersionId,
     projects,
     setHistoryVersionFilters,
-  } = useHrMachineStore()
+  } = useHrTosStore()
 
   // 点击项目名称 → 切换到历史版本空间，并自动筛选该项目
   const handleSelectProject = (id: string) => {
@@ -42,9 +44,9 @@ export default function MachineProjectContent() {
   }
 
   return (
-    <div className="pms-hr-machine-content">
+    <div className="pms-hr-tos-content">
       {/* Top-level TAB switcher */}
-      <div className="pms-hr-machine-tab-bar">
+      <div className="pms-hr-tos-tab-bar">
         <Segmented
           value={activeTab}
           onChange={(v) => setActiveTab(v as 'projectList' | 'monthlyInvestment' | 'historyVersion')}
@@ -57,7 +59,7 @@ export default function MachineProjectContent() {
       </div>
 
       {/* Tab content */}
-      <div className="pms-hr-machine-tab-content">
+      <div className="pms-hr-tos-tab-content">
         {activeTab === 'projectList' && (
           <ProjectListTab
             onSelectProject={handleSelectProject}
@@ -88,12 +90,15 @@ export default function MachineProjectContent() {
           setEditingMonthlyId(null)
         }}
       />
-      <MachineVersionDetailModal
+      <VersionDetailModal
         open={showVersionDetailModal}
         versionId={editingVersionId}
+        projectId={selectedProjectId ?? ''}
+        readOnly={versionDetailReadOnly}
         onCancel={() => {
           setShowVersionDetailModal(false)
           setEditingVersionId(null)
+          setVersionDetailReadOnly(false)
         }}
       />
     </div>

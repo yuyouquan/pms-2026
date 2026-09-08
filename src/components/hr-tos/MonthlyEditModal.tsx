@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { Modal, InputNumber, message, Alert } from 'antd'
-import { useHrMachineStore } from '@/stores/hrMachine'
-import { formatPersonMonth, BUDGET_TYPE_LABELS } from '@/constants/hrMachine'
+import { useHrTosStore } from '@/stores/hrTos'
+import { formatPersonMonth, TOS_BUDGET_TYPE_LABELS } from '@/constants/hrTos'
 
 interface MonthlyEditModalProps {
   open: boolean
@@ -12,12 +12,12 @@ interface MonthlyEditModalProps {
 }
 
 export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyEditModalProps) {
-  const { monthlyInvestments, projects, updateMonthlyInvestment } = useHrMachineStore()
+  const { monthlyInvestments, projects, updateMonthlyInvestment } = useHrTosStore()
   const [editData, setEditData] = useState<Record<string, number>>({})
 
   const investment = useMemo(
     () => monthlyInvestments.find(mi => mi.id === monthlyId),
-    [monthlyInvestments, monthlyInvestments],
+    [monthlyInvestments, monthlyId],
   )
 
   const project = useMemo(
@@ -71,7 +71,7 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
       <div style={{ marginTop: 16 }}>
         <div style={{ marginBottom: 12, display: 'flex', gap: 24, fontSize: 13, color: 'var(--pms-text-secondary)', flexWrap: 'wrap' }}>
           <span>项目名称：<strong style={{ color: 'var(--pms-text-primary)' }}>{project?.name || '-'}</strong></span>
-          <span>预算类型：<strong style={{ color: 'var(--pms-text-primary)' }}>{BUDGET_TYPE_LABELS[investment.budgetType]}</strong></span>
+          <span>预算类型：<strong style={{ color: 'var(--pms-text-primary)' }}>{TOS_BUDGET_TYPE_LABELS[investment.budgetType]}</strong></span>
           <span>版本号：<strong style={{ color: 'var(--pms-text-primary)' }}>{investment.versionNumber}</strong></span>
           <span>一级部门：<strong style={{ color: 'var(--pms-text-primary)' }}>{investment.primaryDepartment || '-'}</strong></span>
           <span>二级部门：<strong style={{ color: 'var(--pms-text-primary)' }}>{investment.secondaryDepartment || '-'}</strong></span>

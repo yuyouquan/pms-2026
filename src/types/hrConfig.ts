@@ -12,7 +12,9 @@ export type ConfigModuleKey =
 /** 配置记录（通用键值对） */
 export interface ConfigRecord {
   id: string
-  [key: string]: string | number | null
+  /** 是否启用（默认 true） */
+  enabled?: boolean
+  [key: string]: string | number | boolean | null | undefined
 }
 
 /** 列定义 */

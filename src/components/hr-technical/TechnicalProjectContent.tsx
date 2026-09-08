@@ -1,16 +1,17 @@
 'use client'
 
 import { Segmented } from 'antd'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import ProjectListTab from './ProjectListTab'
 import HistoryVersionSpace from './HistoryVersionSpace'
 import MonthlyInvestmentTab from './MonthlyInvestmentTab'
 import NewProjectModal from './NewProjectModal'
 import NewVersionModal from './NewVersionModal'
 import MonthlyEditModal from './MonthlyEditModal'
-import MachineVersionDetailModal from './MachineVersionDetailModal'
+import VersionDetailModal from './VersionDetailModal'
+import VersionHistoryModal from './VersionHistoryModal'
 
-export default function MachineProjectContent() {
+export default function TechnicalProjectContent() {
   const {
     activeTab,
     setActiveTab,
@@ -22,29 +23,34 @@ export default function MachineProjectContent() {
     setShowNewVersionModal,
     showMonthlyEditModal,
     setShowMonthlyEditModal,
-    editingMonthlyId,
-    setEditingMonthlyId,
     showVersionDetailModal,
     setShowVersionDetailModal,
+    versionDetailReadOnly,
+    setVersionDetailReadOnly,
+    showVersionHistoryModal,
+    setShowVersionHistoryModal,
+    editingMonthlyId,
+    setEditingMonthlyId,
     editingVersionId,
     setEditingVersionId,
+    editingHistoryVersionId,
+    setEditingHistoryVersionId,
     projects,
     setHistoryVersionFilters,
-  } = useHrMachineStore()
+  } = useHrTechnicalStore()
 
   // 点击项目名称 → 切换到历史版本空间，并自动筛选该项目
   const handleSelectProject = (id: string) => {
     const project = projects.find(p => p.id === id)
     if (!project) return
     setSelectedProjectId(id)
-    setHistoryVersionFilters({ projectName: [project.name] })
+    setHistoryVersionFilters({ projectName: [project.tdtName] })
     setActiveTab('historyVersion')
   }
 
   return (
-    <div className="pms-hr-machine-content">
-      {/* Top-level TAB switcher */}
-      <div className="pms-hr-machine-tab-bar">
+    <div className="pms-hr-tech-content">
+      <div className="pms-hr-tech-tab-bar">
         <Segmented
           value={activeTab}
           onChange={(v) => setActiveTab(v as 'projectList' | 'monthlyInvestment' | 'historyVersion')}
@@ -56,8 +62,7 @@ export default function MachineProjectContent() {
         />
       </div>
 
-      {/* Tab content */}
-      <div className="pms-hr-machine-tab-content">
+      <div className="pms-hr-tech-tab-content">
         {activeTab === 'projectList' && (
           <ProjectListTab
             onSelectProject={handleSelectProject}
@@ -70,7 +75,6 @@ export default function MachineProjectContent() {
         {activeTab === 'historyVersion' && <HistoryVersionSpace />}
       </div>
 
-      {/* Modals */}
       <NewProjectModal
         open={showNewProjectModal}
         onCancel={() => setShowNewProjectModal(false)}
@@ -88,12 +92,23 @@ export default function MachineProjectContent() {
           setEditingMonthlyId(null)
         }}
       />
-      <MachineVersionDetailModal
+      <VersionDetailModal
         open={showVersionDetailModal}
         versionId={editingVersionId}
+        projectId={selectedProjectId ?? ''}
+        readOnly={versionDetailReadOnly}
         onCancel={() => {
           setShowVersionDetailModal(false)
           setEditingVersionId(null)
+          setVersionDetailReadOnly(false)
+        }}
+      />
+      <VersionHistoryModal
+        open={showVersionHistoryModal}
+        versionId={editingHistoryVersionId}
+        onCancel={() => {
+          setShowVersionHistoryModal(false)
+          setEditingHistoryVersionId(null)
         }}
       />
     </div>
