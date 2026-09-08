@@ -113,6 +113,70 @@ export function exportTimestamp(): string {
   return dayjs().format('YYYYMMDD_HHmm')
 }
 
+/**
+ * 导出多 sheet xlsx 文件。
+ * 每个 sheet 包含独立的行数据、列定义和 sheet 名称。
+ */
+export function exportMultiSheet(
+  sheets: {
+    rows: any[]
+    columns: ExportColumn[]
+    sheetName: string
+  }[],
+  filename: string,
+): void {
+  if (!sheets || sheets.length === 0) {
+    message.warning('暂无可导出数据')
+    return
+  }
+  try {
+    const wb = XLSX.utils.book_new()
+
+    for (const { rows, columns, sheetName } of sheets) {
+      if (!rows || rows.length === 0 || !columns || columns.length === 0) {
+        // 空 sheet 也创建，只输出表头
+        const header = columns.map(c => c.title)
+        const ws = XLSX.utils.aoa_to_sheet([header])
+        ws['!cols'] = columns.map(col => ({
+          wch: col.width ?? Math.min(40, Math.ceil(strWidth(col.title) * 1.2) + 2),
+        }))
+        XLSX.utils.book_append_sheet(wb, ws, sheetName)
+        continue
+      }
+
+      const header = columns.map(c => c.title)
+      const body = rows.map(row =>
+        columns.map(col => {
+          const raw = row[col.key]
+          const val = col.formatter ? col.formatter(raw, row) : raw
+          if (val === undefined || val === null || val === '') return '-'
+          return val
+        }),
+      )
+      const aoa: (string | number)[][] = [header, ...body]
+      const ws = XLSX.utils.aoa_to_sheet(aoa)
+
+      const sample = body.slice(0, 100)
+      ws['!cols'] = columns.map((col, ci) => {
+        if (col.width) return { wch: col.width }
+        let maxLen = strWidth(col.title)
+        for (const row of sample) {
+          maxLen = Math.max(maxLen, strWidth(String(row[ci] ?? '')))
+        }
+        return { wch: Math.min(40, Math.ceil(maxLen * 1.2) + 2) }
+      })
+
+      XLSX.utils.book_append_sheet(wb, ws, sheetName)
+    }
+
+    XLSX.writeFile(wb, filename)
+    message.success(`已导出 ${filename}`)
+  } catch (err) {
+    console.error('[exportMultiSheet] failed', err)
+    message.error('导出失败，请重试')
+  }
+}
+
 /** 估算字符显示宽度（CJK / 全角字符算 2，其他算 1） */
 function strWidth(s: string): number {
   let n = 0
