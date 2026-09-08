@@ -102,22 +102,22 @@ assert.deepEqual(matrix.getProjectListFixedColumnKeys('tos'), ['tosVersion'])
 assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-tdt'), [])
 assert.deepEqual(matrix.getProjectListFixedColumnKeys('technical-subproject'), ['projectName'])
 const seriesGroups = matrix.groupProjectListRows([
-  { projectId: '1', productSeries: 'CAMON 50', projectName: 'A' },
+  { projectId: '1', productSeries: '示例系列D 50', projectName: 'A' },
   { projectId: '2', productSeries: 'P', projectName: 'B' },
-  { projectId: '3', productSeries: 'CAMON 50', projectName: 'C' },
+  { projectId: '3', productSeries: '示例系列D 50', projectName: 'C' },
   { projectId: '4', productSeries: '-', projectName: 'D' },
 ], 'productSeries', '未配置产品系列')
 assert.deepEqual(seriesGroups.map(group => [group.key, group.rows.map(row => row.projectId)]), [
-  ['CAMON 50', ['1', '3']],
+  ['示例系列D 50', ['1', '3']],
   ['P', ['2']],
   ['未配置产品系列', ['4']],
 ])
 const hierarchyRows = [
-  { key: '1', projectId: '1', brand: 'TECNO', productLine: 'CAMON', productSeries: 'CAMON 60' },
-  { key: '3', projectId: '3', brand: 'TECNO', productLine: 'CAMON', productSeries: 'CAMON 70' },
-  { key: '2', projectId: '2', brand: 'TECNO', productLine: 'CAMON', productSeries: 'CAMON 60' },
-  { key: '4', projectId: '4', brand: 'Infinix', productLine: '-', productSeries: '' },
-  { key: '5', projectId: '5', brand: 'Infinix', productLine: 'CAMON', productSeries: 'CAMON 60' },
+  { key: '1', projectId: '1', brand: '示例品牌A', productLine: '示例系列D', productSeries: '示例系列D 60' },
+  { key: '3', projectId: '3', brand: '示例品牌A', productLine: '示例系列D', productSeries: '示例系列D 70' },
+  { key: '2', projectId: '2', brand: '示例品牌A', productLine: '示例系列D', productSeries: '示例系列D 60' },
+  { key: '4', projectId: '4', brand: '示例品牌B', productLine: '-', productSeries: '' },
+  { key: '5', projectId: '5', brand: '示例品牌B', productLine: '示例系列D', productSeries: '示例系列D 60' },
 ]
 const hierarchy = matrix.buildMachineProjectHierarchyPage(hierarchyRows, hierarchyRows, new Set())
 assert.deepEqual(hierarchy.map(row => [
@@ -136,7 +136,7 @@ assert.notEqual(hierarchy[0].__productSeriesKey, hierarchy[4].__productSeriesKey
 const collapsed = matrix.buildMachineProjectHierarchyPage(
   hierarchyRows,
   hierarchyRows,
-  new Set(['TECNO::CAMON::CAMON 60']),
+  new Set(['示例品牌A::示例系列D::示例系列D 60']),
 )
 assert.deepEqual(collapsed.map(row => row.projectId), ['1', '3', '4', '5'])
 assert.equal(collapsed[0].__productSeriesProjectCount, 2)
@@ -224,7 +224,7 @@ assert.deepEqual(childMilestones.map(item => item.label), ['第1版转测', 'TDR
 assert.ok(childMilestones.every(item => item.group?.color === '#f2e8ff'))
 
 const rows = matrix.buildTechnicalProjectListRows({
-  projects: [{ id: '9', name: '端侧AI技术', type: '技术项目', status: '在研', technicalTrack: 'AI', tmg: '系统应用', subdomain: 'AIOS', technicalLead: '张三', technicalProjectManager: '李四' }],
+  projects: [{ id: '9', name: '端侧AI技术', type: '技术项目', status: '在研', technicalTrack: 'AI', tmg: '示例应用领域', subdomain: '示例智能技术', technicalLead: '演示用户01', technicalProjectManager: '演示用户02' }],
   subprojects: [{ id: 'IPM-1', parentProjectId: '9', name: '子项目A', active: true, ipmOrder: 1, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '16.0', firstMachineProjectId: '1' } }],
   plansByKey: {
     '9:tdt': { planKey: '9:tdt', templateKind: 'tdt', currentVersionId: 'draft', versions: [
@@ -233,14 +233,14 @@ const rows = matrix.buildTechnicalProjectListRows({
     ] },
     '9:subproject:IPM-1': { planKey: '9:subproject:IPM-1', templateKind: 'subproject', currentVersionId: 'cpub', versions: [{ id: 'cpub', versionNo: 'V1', templateType: 'subproject', status: '已发布', tasks: [{ id: 'c1', name: '第1版转测', parentId: null, order: 1, planEndDate: '2026-03-01' }] }] },
   },
-  machineProjects: [{ id: '1', name: 'X6870' }],
+  machineProjects: [{ id: '1', name: 'DEMO014' }],
   today: '2026-06-01',
 })
 assert.equal(rows.tdt[0]['milestone::规划启动'], '2026-02-01', 'latest published TDT date only')
 assert.equal(rows.tdt[0].subprojectCount, 1)
 assert.equal(rows.children[0].projectName, '子项目A')
 assert.equal(rows.children[0].parentProjectName, '端侧AI技术')
-assert.equal(rows.children[0].firstMachineProject, 'X6870')
+assert.equal(rows.children[0].firstMachineProject, 'DEMO014')
 assert.equal(rows.children[0]['milestone::第1版转测'], '2026-03-01')
 assert.equal(rows.children[0].targetProjectId, '9')
 assert.equal(rows.children[0].targetSubprojectId, 'IPM-1')

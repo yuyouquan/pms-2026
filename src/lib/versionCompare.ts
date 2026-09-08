@@ -116,7 +116,7 @@ export function compareVersionsForTable(
   const newMap = toUniqueMap(newTasks)
   const allIds = new Set([...oldMap.keys(), ...newMap.keys()]);
 
-  const mockModifiers = ['张三', '李四', '王五', '赵六'];
+  const mockModifiers = ['演示用户01', '演示用户02', '演示用户03', '演示用户04'];
   const mockTimes = ['2026-03-10 14:30', '2026-03-11 09:15', '2026-03-11 16:42', '2026-03-12 10:08'];
   let mockIdx = 0;
 

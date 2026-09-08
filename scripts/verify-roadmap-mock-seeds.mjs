@@ -4,6 +4,7 @@ import path from 'node:path'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 import ts from 'typescript'
+import { createCurrentDatasetStorage } from './lib/mock-dataset-storage.mjs'
 
 const root = process.cwd()
 const require = createRequire(import.meta.url)
@@ -108,26 +109,26 @@ if (validPeriod?.periodStartDate !== '2026-01-01' || validPeriod.periodEndDate !
   throw new Error('migration did not preserve a valid period pair')
 }
 
-const planned = initial.plannedProjects.find(project => project.id === 'planned-mock-x6877-android16-new')
-if (!planned) throw new Error('missing planned X6877 roadmap mock')
+const planned = initial.plannedProjects.find(project => project.id === 'planned-mock-demo017-android16-new')
+if (!planned) throw new Error('missing planned DEMO017 roadmap mock')
 if (planned.firstSaleTosVersionId !== '16.3') {
   throw new Error(`Android 16 planned mock must use 16.3, got ${planned.firstSaleTosVersionId}`)
 }
 
 const normal = projectData.initialProjects.find(project => project.id === '1')
-if (!normal) throw new Error('missing normal X6877 project mock')
+if (!normal) throw new Error('missing normal DEMO017 project mock')
 const normalRow = adapter.adaptNormalProject(normal, initial.tosVersions)
 const plannedRow = adapter.adaptPlannedProject(planned)
-if (!normalRow) throw new Error('normal X6877 mock does not adapt to a roadmap row')
+if (!normalRow) throw new Error('normal DEMO017 mock does not adapt to a roadmap row')
 
 const conflicts = adapter.deriveRoadmapPlanningConflicts([normalRow], [plannedRow])
 if (
   conflicts.length !== 1
-  || conflicts[0].key !== 'X6877|Android 16|新品'
+  || conflicts[0].key !== 'DEMO017|Android 16|新品'
   || conflicts[0].normalProjects[0]?.id !== '1'
   || conflicts[0].plannedProjects[0]?.id !== planned.id
 ) {
-  throw new Error(`X6877 conflict was not derived from canonical sources: ${JSON.stringify(conflicts)}`)
+  throw new Error(`DEMO017 conflict was not derived from canonical sources: ${JSON.stringify(conflicts)}`)
 }
 
 if (initial.changeLogs.length !== 4) {
@@ -184,13 +185,7 @@ if (
 function hydrateActualRoadmapStore(envelope) {
   const previousWindow = globalThis.window
   globalThis.window = {
-    localStorage: {
-      getItem: key => key === 'pms-project-roadmap' && envelope !== null
-        ? JSON.stringify(envelope)
-        : null,
-      setItem: () => {},
-      removeItem: () => {},
-    },
+    localStorage: createCurrentDatasetStorage(envelope === null ? {} : { 'pms-project-roadmap': JSON.stringify(envelope) }),
   }
   try {
     const isolatedLoad = createLoader()
@@ -303,8 +298,8 @@ const deletedMockHydrated = hydrateActualRoadmapStore({
     plannedProjects: [userPlanned],
     changeLogs: [
       {
-        ...initial.changeLogs.find(log => log.id === 'roadmap-log-mock-planned-create-x6877'),
-        id: 'roadmap-log-mock-planned-delete-x6877',
+        ...initial.changeLogs.find(log => log.id === 'roadmap-log-mock-planned-create-demo017'),
+        id: 'roadmap-log-mock-planned-delete-demo017',
         action: 'delete',
         occurredAt: '2026-07-23T01:00:00.000Z',
       },

@@ -1,3 +1,4 @@
+import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 export const PROJECT_CREATION_DRAFT_SCHEMA_VERSION = 2
 
 export interface ProjectCreationDraft {
@@ -58,7 +59,7 @@ const getBrowserStorage: ProjectCreationDraftStorageFactory = () => {
     throw new Error('localStorage is unavailable outside the browser')
   }
 
-  return window.localStorage
+  return getPmsLocalStorage()
 }
 
 export class LocalStorageProjectCreationDraftRepository implements ProjectCreationDraftRepository {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import ts from 'typescript'
+import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
 const root = process.cwd()
 const repositoryPath = path.join(root, 'src/lib/projectCreationDraft.ts')
@@ -12,20 +12,13 @@ if (!fs.existsSync(repositoryPath)) {
   throw new Error('Missing src/lib/projectCreationDraft.ts')
 }
 
-const source = fs.readFileSync(repositoryPath, 'utf8')
-const output = ts.transpileModule(source, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText
-const loadedModule = { exports: {} }
-new Function('module', 'exports', output)(loadedModule, loadedModule.exports)
-
 const {
   PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
   LocalStorageProjectCreationDraftRepository,
   defaultProjectCreationDraftRepository,
   isProjectCreationDraftEmpty,
   shouldClearSubmittedProjectCreationDraft,
-} = loadedModule.exports
+} = loadTypeScriptModule(root, 'src/lib/projectCreationDraft.ts')
 
 const createMemoryStorage = () => {
   const records = new Map()
@@ -45,20 +38,20 @@ const storage = createMemoryStorage()
 const repository = new LocalStorageProjectCreationDraftRepository(() => storage)
 const draft = {
   schemaVersion: PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
-  ownerId: '张三',
-  values: { bid: 'BID-1', type: '整机产品项目', responsiblePersons: ['张三'] },
+  ownerId: '演示用户01',
+  values: { bid: 'BID-1', type: '整机产品项目', responsiblePersons: ['演示用户01'] },
   activeGroups: ['basic'],
   updatedAt: '2026-07-20T00:00:00.000Z',
 }
 
 const liSiDraft = {
   schemaVersion: PROJECT_CREATION_DRAFT_SCHEMA_VERSION,
-  ownerId: '李四',
+  ownerId: '演示用户02',
   values: {
     bid: 'BID-2',
     type: '技术项目',
-    responsiblePersons: ['李四'],
-    technicalProjectManager: '王五',
+    responsiblePersons: ['演示用户02'],
+    technicalProjectManager: '演示用户03',
     technicalOther: '跨域协同',
   },
   activeGroups: ['extended'],
@@ -67,37 +60,37 @@ const liSiDraft = {
 
 await repository.save(draft)
 await repository.save(liSiDraft)
-assert.deepEqual(await repository.get('张三'), draft, '张三 should round-trip only their own draft')
-assert.deepEqual(await repository.get('李四'), liSiDraft, '李四 should round-trip only their own draft')
-assert.equal((await repository.get('李四'))?.values.technicalOther, '跨域协同', 'new technical fields must survive draft recovery')
+assert.deepEqual(await repository.get('演示用户01'), draft, '演示用户01 should round-trip only their own draft')
+assert.deepEqual(await repository.get('演示用户02'), liSiDraft, '演示用户02 should round-trip only their own draft')
+assert.equal((await repository.get('演示用户02'))?.values.technicalOther, '跨域协同', 'new technical fields must survive draft recovery')
 assert.equal(storage.keys().length, 2)
 
-const storedKey = storage.keys().find((key) => key.includes(encodeURIComponent('张三')))
+const storedKey = storage.keys().find((key) => key.includes(encodeURIComponent('演示用户01')))
 assert.ok(storedKey, 'storage key should encode the owner ID')
 storage.setItem(storedKey, JSON.stringify({ ...draft, schemaVersion: 1, activeGroups: [] }))
 assert.deepEqual(
-  await repository.get('张三'),
+  await repository.get('演示用户01'),
   { ...draft, schemaVersion: 1, activeGroups: [] },
   'v1 draft values remain readable so the modal can upgrade legacy group state',
 )
 storage.setItem(storedKey, '{malformed')
-assert.equal(await repository.get('张三'), null, 'malformed JSON should be ignored')
+assert.equal(await repository.get('演示用户01'), null, 'malformed JSON should be ignored')
 
 storage.setItem(storedKey, JSON.stringify({ ...draft, schemaVersion: 999 }))
-assert.equal(await repository.get('张三'), null, 'unsupported schema versions should be ignored')
-storage.setItem(storedKey, JSON.stringify({ ...draft, ownerId: '李四' }))
-assert.equal(await repository.get('张三'), null, 'records stored under another owner should be ignored')
+assert.equal(await repository.get('演示用户01'), null, 'unsupported schema versions should be ignored')
+storage.setItem(storedKey, JSON.stringify({ ...draft, ownerId: '演示用户02' }))
+assert.equal(await repository.get('演示用户01'), null, 'records stored under another owner should be ignored')
 storage.setItem(storedKey, JSON.stringify({ ...draft, values: [] }))
-assert.equal(await repository.get('张三'), null, 'draft values must be a record')
+assert.equal(await repository.get('演示用户01'), null, 'draft values must be a record')
 storage.setItem(storedKey, JSON.stringify({ ...draft, activeGroups: ['basic', 1] }))
-assert.equal(await repository.get('张三'), null, 'active groups must contain only strings')
+assert.equal(await repository.get('演示用户01'), null, 'active groups must contain only strings')
 storage.setItem(storedKey, JSON.stringify({ ...draft, updatedAt: 123 }))
-assert.equal(await repository.get('张三'), null, 'updatedAt must be a string')
+assert.equal(await repository.get('演示用户01'), null, 'updatedAt must be a string')
 
 await repository.save(draft)
-await repository.clear('张三')
-assert.equal(await repository.get('张三'), null, 'clear should remove the selected owner draft')
-assert.deepEqual(await repository.get('李四'), liSiDraft, 'clearing 张三 must preserve 李四 draft')
+await repository.clear('演示用户01')
+assert.equal(await repository.get('演示用户01'), null, 'clear should remove the selected owner draft')
+assert.deepEqual(await repository.get('演示用户02'), liSiDraft, 'clearing 演示用户01 must preserve 演示用户02 draft')
 
 assert.equal(isProjectCreationDraftEmpty({}), true)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '待立项' }), true)
@@ -105,14 +98,14 @@ assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'risk', status: '待立
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '进行中' }), false)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '待立项', name: '项目 A' }), false)
 
-const submittedSession = { generation: 4, ownerId: '张三' }
+const submittedSession = { generation: 4, ownerId: '演示用户01' }
 assert.equal(
-  shouldClearSubmittedProjectCreationDraft(submittedSession, { generation: 5, ownerId: '张三' }),
+  shouldClearSubmittedProjectCreationDraft(submittedSession, { generation: 5, ownerId: '演示用户01' }),
   false,
   'a newer session for the same owner must preserve the new same-key draft',
 )
 assert.equal(
-  shouldClearSubmittedProjectCreationDraft(submittedSession, { generation: 5, ownerId: '李四' }),
+  shouldClearSubmittedProjectCreationDraft(submittedSession, { generation: 5, ownerId: '演示用户02' }),
   true,
   'a newer session for another owner must still clear the submitted owner key',
 )
@@ -124,7 +117,7 @@ const failingRepository = new LocalStorageProjectCreationDraftRepository(() => (
   removeItem: () => { throw writeError },
 }))
 await assert.rejects(failingRepository.save(draft), writeError)
-await assert.rejects(failingRepository.clear('张三'), writeError)
+await assert.rejects(failingRepository.clear('演示用户01'), writeError)
 
 const modalSource = fs.readFileSync(modalPath, 'utf8')
 const addProjectModalSource = fs.readFileSync(addProjectModalPath, 'utf8')

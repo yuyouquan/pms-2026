@@ -38,8 +38,8 @@ const TECHNICAL_PLAN_STORAGE_SEED = JSON.stringify({
           tasks: [technicalTask('1', '规划启动', '2026-01-15', '2026-02-10', '2026-01-16', '2026-02-08')],
         }],
       },
-      'mock-tech-aios-v3:subproject:IPM-AIOS-001': {
-        planKey: 'mock-tech-aios-v3:subproject:IPM-AIOS-001', templateKind: 'subproject', currentVersionId: 'tech-ipm-aios-001-v2-draft',
+      'mock-tech-aios-v3:subproject:IPM-示例智能技术-001': {
+        planKey: 'mock-tech-aios-v3:subproject:IPM-示例智能技术-001', templateKind: 'subproject', currentVersionId: 'tech-ipm-aios-001-v2-draft',
         columnSettings: { order: [], visible: [] }, collapsedRows: [],
         versions: [{
           id: 'tech-ipm-aios-001-v1', versionNo: 'V1', templateType: 'subproject', status: '已发布', publishedAt: '2026-02-02T00:00:00Z',
@@ -405,10 +405,10 @@ try {
     })))
     assert.ok(cards.length > 0, '卡片视图必须显示项目卡片')
     assert.ok(cards.every(card => card.role === 'button' && card.label?.startsWith('打开项目 ')), `项目卡片必须暴露可访问打开按钮：${JSON.stringify(cards)}`)
-    assert.ok(cards.some(card => card.title === 'X6877-D8400_H991'), '卡片视图缺少代表整机项目 X6877-D8400_H991')
+    assert.ok(cards.some(card => card.title === 'DEMO017-DEMOCHIP001_DEMOBOARD016'), '卡片视图缺少代表整机项目 DEMO017-DEMOCHIP001_DEMOBOARD016')
     const representativeCardStatus = await page.evaluate(() => {
       const card = Array.from(document.querySelectorAll('.pms-project-card')).find(element => (
-        (element.querySelector('.pms-project-card-title')?.textContent || '').trim() === 'X6877-D8400_H991'
+        (element.querySelector('.pms-project-card-title')?.textContent || '').trim() === 'DEMO017-DEMOCHIP001_DEMOBOARD016'
       ))
       const status = card?.querySelector('.pms-project-card-status')
       const rect = status?.getBoundingClientRect()
@@ -536,7 +536,7 @@ try {
       label: (element.querySelector('.ant-form-item-label')?.textContent || '').replace(/\s+/g, ' ').trim(),
     })))
     assert.ok(fieldOrder.length >= 4, `选择 IPM 项目后必须显示新建字段：${JSON.stringify(fieldOrder)}`)
-    assert.deepEqual(fieldOrder.slice(0, 4).map(field => field.label), ['项目分类', '技术赛道', '子项目名称', '项目状态'], `EXT-006/AI-Engine-V3 外部/IPM 流程起始字段顺序错误：${JSON.stringify(fieldOrder.slice(0, 6))}`)
+    assert.deepEqual(fieldOrder.slice(0, 4).map(field => field.label), ['项目分类', '技术赛道', '子项目名称', '项目状态'], `EXT-006/DEMO-TECH-V3 外部/IPM 流程起始字段顺序错误：${JSON.stringify(fieldOrder.slice(0, 6))}`)
     assert.ok(fieldOrder.every(field => field.key), `新建字段必须保留 data-project-create-field：${JSON.stringify(fieldOrder)}`)
     const createControlState = await page.evaluate(() => Object.fromEntries([
       'secondaryCategory', 'technicalTrack', 'projectName', 'status',
@@ -566,8 +566,8 @@ try {
       assert.ok(createControlState[key].disabled || createControlState[key].readOnly, `${key} IPM 快照控件必须只读或禁用：${JSON.stringify(createControlState)}`)
     }
     assert.equal(createControlState.secondaryCategory.value, '研发级-基础研究-重点项目', `项目分类必须预填 IPM 来源值：${JSON.stringify(createControlState)}`)
-    assert.equal(createControlState.technicalTrack.value, 'AIOS', `技术赛道必须预填非空 IPM 来源值：${JSON.stringify(createControlState)}`)
-    assert.equal(createControlState.projectName.value, 'AI-Engine-V3', `子项目名称必须预填 IPM 来源值：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.technicalTrack.value, '示例智能技术', `技术赛道必须预填非空 IPM 来源值：${JSON.stringify(createControlState)}`)
+    assert.equal(createControlState.projectName.value, 'DEMO-TECH-V3', `子项目名称必须预填 IPM 来源值：${JSON.stringify(createControlState)}`)
     assert.equal(createControlState.status.wrapper, true, `项目状态必须显示：${JSON.stringify(createControlState)}`)
     assert.equal(createControlState.status.isSelect, true, `项目状态必须使用下拉选择：${JSON.stringify(createControlState)}`)
     assert.equal(createControlState.status.selectDisabled, false, `项目状态必须允许用户选择：${JSON.stringify(createControlState)}`)
@@ -585,7 +585,7 @@ try {
     await openMain(page, '项目列表')
     await clickCategory(page, '技术项目')
     await clickAria(page, '卡片视图')
-    await clickProjectCard(page, 'AIOS架构演进V3')
+    await clickProjectCard(page, '示例架构演进V3')
     await page.waitForSelector('[aria-label="技术项目基础信息"]', { visible: true, timeout: TIMEOUT })
     const labels = await page.$$eval('[aria-label="技术项目基础信息"] .pms-project-info-core-label', elements => elements.filter(element => {
       const rect = element.getBoundingClientRect()
@@ -595,9 +595,9 @@ try {
     assert.deepEqual(labels, TECHNICAL_CORE_LABELS, `技术项目核心字段顺序错误：${JSON.stringify(labels)}`)
     assert.equal(labels.includes('TDT和子项目名称'), false, '技术项目核心字段不得显示 TDT和子项目名称')
     await assertLightSurface(page, '[aria-label="技术项目基础信息"] .pms-project-info-core-card', '技术项目核心信息')
-    await clickExact(page, '[role="tab"]', '分布式服务框架', '[aria-label="技术信息分类"]')
-    await page.waitForSelector('table[aria-label="分布式服务框架版本活动"]', { visible: true, timeout: TIMEOUT })
-    const planState = await page.$eval('table[aria-label="分布式服务框架版本活动"]', table => {
+    await clickExact(page, '[role="tab"]', '示例服务框架', '[aria-label="技术信息分类"]')
+    await page.waitForSelector('table[aria-label="示例服务框架版本活动"]', { visible: true, timeout: TIMEOUT })
+    const planState = await page.$eval('table[aria-label="示例服务框架版本活动"]', table => {
       const visible = element => {
         const rect = element.getBoundingClientRect()
         const style = getComputedStyle(element)
@@ -639,14 +639,14 @@ try {
     assert.ok(draftOnlyIndex >= 2, `技术子项目必须显示仅存在于修订版的节点：${JSON.stringify(planState.headers)}`)
     assert.equal(planState.editableDateCells[actualRowIndex]?.[draftOnlyIndex], false, `修订版新增节点不得产生无发布数据的实际日期编辑入口：${JSON.stringify(planState.editableDateCells)}`)
     assert.equal(planState.editableDateCells[actualRowIndex]?.slice(2, draftOnlyIndex).some(Boolean), true, `已有发布节点必须保留实际日期编辑入口：${JSON.stringify(planState.editableDateCells)}`)
-    await assertNoClippingOrOverlap(page, ['[aria-label="技术信息分类"]', 'table[aria-label="分布式服务框架版本活动"] thead'], '技术项目信息')
-    const planElement = await page.$('table[aria-label="分布式服务框架版本活动"]')
+    await assertNoClippingOrOverlap(page, ['[aria-label="技术信息分类"]', 'table[aria-label="示例服务框架版本活动"] thead'], '技术项目信息')
+    const planElement = await page.$('table[aria-label="示例服务框架版本活动"]')
     await planElement.screenshot({ path: join(ARTIFACT_DIR, '02-technical-child-plan.png') })
     await clickExact(page, '[role="menuitem"]', '计划', '[aria-label="项目空间导航"]')
     await page.waitForSelector('[aria-label="技术项目计划"]', { visible: true, timeout: TIMEOUT })
-    await clickExact(page, '[role="tab"]', '分布式服务框架计划', '[aria-label="计划作用域"]')
+    await clickExact(page, '[role="tab"]', '示例服务框架计划', '[aria-label="计划作用域"]')
     await page.waitForFunction(() => {
-      const selected = (document.querySelector('[aria-label="计划作用域"] [role="tab"][aria-selected="true"]')?.textContent || '').includes('分布式服务框架')
+      const selected = (document.querySelector('[aria-label="计划作用域"] [role="tab"][aria-selected="true"]')?.textContent || '').includes('示例服务框架')
       const confirm = Array.from(document.querySelectorAll('.ant-modal button')).some(element => (
         element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === '确认离开'
       ))
@@ -661,7 +661,7 @@ try {
         element.getBoundingClientRect().height > 0 && (element.textContent || '').trim() === '确认离开'
       )), { timeout: TIMEOUT })
     }
-    await page.waitForFunction(() => (document.querySelector('[aria-label="计划作用域"] [role="tab"][aria-selected="true"]')?.textContent || '').includes('分布式服务框架'), { timeout: TIMEOUT })
+    await page.waitForFunction(() => (document.querySelector('[aria-label="计划作用域"] [role="tab"][aria-selected="true"]')?.textContent || '').includes('示例服务框架'), { timeout: TIMEOUT })
     await page.waitForSelector('[aria-label="计划版本"]', { visible: true, timeout: TIMEOUT })
     const technicalWorkspaceState = await page.evaluate(() => ({
       version: (document.querySelector('[aria-label="计划版本"]')?.closest('.ant-select')?.textContent || '').trim(),
@@ -710,7 +710,7 @@ try {
 
   await runScenario('03-machine-tos', async page => {
     const samples = [
-      { category: '整机产品项目', name: 'X6877-D8400_H991' },
+      { category: '整机产品项目', name: 'DEMO017-DEMOCHIP001_DEMOBOARD016' },
       { category: 'tOS版本项目', name: 'tOS16.1' },
     ]
     for (const sample of samples) {
@@ -777,11 +777,11 @@ try {
     await openMain(page, '项目列表')
     await clickCategory(page, '整机产品项目')
     await clickAria(page, '卡片视图')
-    await clickProjectCard(page, 'X6877-D8400_H991')
-    await clickExact(page, 'span', 'X6877-D8400_H991')
+    await clickProjectCard(page, 'DEMO017-DEMOCHIP001_DEMOBOARD016')
+    await clickExact(page, 'span', 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await page.waitForSelector('input[placeholder="搜索项目名称..."]', { visible: true, timeout: TIMEOUT })
-    await page.type('input[placeholder="搜索项目名称..."]', 'X6873_H972')
-    await clickExact(page, 'div', 'X6873_H972')
+    await page.type('input[placeholder="搜索项目名称..."]', 'DEMO015_DEMOBOARD015')
+    await clickExact(page, 'div', 'DEMO015_DEMOBOARD015')
     await page.waitForSelector('.pms-project-information-surface--legacy', { visible: true, timeout: TIMEOUT })
     await assertLightSurface(page, '.pms-project-information-surface--legacy > .ant-card', '能力建设项目基础信息卡片')
     const capabilityState = await page.$eval('.pms-project-information-surface--legacy', element => ({
@@ -789,7 +789,7 @@ try {
       cards: element.querySelectorAll(':scope > .ant-card').length,
       descriptions: element.querySelectorAll('.ant-descriptions').length,
       titleColor: getComputedStyle(Array.from(element.querySelectorAll('#section-header .ant-card-head-title *')).find(candidate => (
-        (candidate.textContent || '').trim() === 'X6873_H972'
+        (candidate.textContent || '').trim() === 'DEMO015_DEMOBOARD015'
       )) || element).color,
     }))
     assert.ok(capabilityState.cards >= 2, `能力建设项目必须保留原有基础信息卡片结构：${JSON.stringify(capabilityState)}`)

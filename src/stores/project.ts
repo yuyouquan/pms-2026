@@ -1,3 +1,4 @@
+import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { initialProjects } from '@/data/projects'
@@ -40,24 +41,24 @@ import { mergeResponsiblePersonsIntoVisibleMembers } from '@/lib/projectResponsi
 import { normalizeLegacyProjectStatus } from '@/lib/projectStatus'
 
 // Default login user (mock)
-export const DEFAULT_LOGIN_USER = '张三'
+export const DEFAULT_LOGIN_USER = '演示用户01'
 
 // Initial project-member assignment (mock seed; runtime value lives in store state below).
 export const INITIAL_PROJECT_MEMBER_MAP: Record<string, string[]> = {
-  '1': ['张三', '李四', '王五', '赵六', '李白', '钱九'],
-  '3': ['王五', '赵六', '孙七'],
-  '2': ['张三', '李四', '王五', '赵六', '孙七'],
-  '6': ['赵六', '李四', '王五'],
-  '4': ['孙七', '李四', '张三'],
-  '5': ['周八', '王五', '李白'],
-  '7': ['李白', '张三', '王五'],
-  '8': ['杜甫', '李白', '张三', '李四', '王五'],
-  '9': ['李四', '张三', '赵六', '孙七'],
-  '10': ['孙七', '周八', '李白', '杜甫', '王五'],
-  '11': ['王五', '李白', '张三', '赵六'],
+  '1': ['演示用户01', '演示用户02', '演示用户03', '演示用户04', '演示用户07', '演示用户09'],
+  '3': ['演示用户03', '演示用户04', '演示用户05'],
+  '2': ['演示用户01', '演示用户02', '演示用户03', '演示用户04', '演示用户05'],
+  '6': ['演示用户04', '演示用户02', '演示用户03'],
+  '4': ['演示用户05', '演示用户02', '演示用户01'],
+  '5': ['演示用户06', '演示用户03', '演示用户07'],
+  '7': ['演示用户07', '演示用户01', '演示用户03'],
+  '8': ['演示用户08', '演示用户07', '演示用户01', '演示用户02', '演示用户03'],
+  '9': ['演示用户02', '演示用户01', '演示用户04', '演示用户05'],
+  '10': ['演示用户05', '演示用户06', '演示用户07', '演示用户08', '演示用户03'],
+  '11': ['演示用户03', '演示用户07', '演示用户01', '演示用户04'],
   ...Object.fromEntries(initialProjects
     .filter(project => project.id.startsWith('mock-machine-'))
-    .map(project => [project.id, ['张三', '李四', '李白']])),
+    .map(project => [project.id, ['演示用户01', '演示用户02', '演示用户07']])),
 }
 
 export const kanbanColumns = [
@@ -478,7 +479,7 @@ const safeProjectStorage: StateStorage = {
   getItem(name) {
     if (typeof window === 'undefined') return null
     try {
-      const stored = window.localStorage.getItem(name)
+      const stored = getPmsLocalStorage().getItem(name)
       if (stored !== null) JSON.parse(stored)
       return stored
     } catch (error) {
@@ -489,7 +490,7 @@ const safeProjectStorage: StateStorage = {
   setItem(name, value) {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.setItem(name, value)
+      getPmsLocalStorage().setItem(name, value)
     } catch (error) {
       console.error(`Failed to persist ${PROJECT_STORAGE_KEY}.`, error)
     }
@@ -497,7 +498,7 @@ const safeProjectStorage: StateStorage = {
   removeItem(name) {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.removeItem(name)
+      getPmsLocalStorage().removeItem(name)
     } catch (error) {
       console.error(`Failed to remove ${PROJECT_STORAGE_KEY}.`, error)
     }

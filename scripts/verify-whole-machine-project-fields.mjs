@@ -66,20 +66,20 @@ const expectedHardwareLabels = [
 ]
 
 const expectedBuildOptions = [
-  'lj8',
-  'lj7',
-  'co7_h8110',
-  'cl9',
-  'cl8',
-  'co7',
-  'x6886',
-  'x6885',
-  'x6871_h962',
-  'x6853_h895',
-  'x6850b',
-  'x6850',
-  'x6850b_h895',
-  'x6850_h895',
+  'demo_build_08',
+  'demo_build_09',
+  'demo_build_10',
+  'demo_build_11',
+  'demo_build_12',
+  'demo_build_13',
+  'demo_build_14',
+  'demo019',
+  'demo_build_15',
+  'demo_build_16',
+  'demo_build_19',
+  'demo_build_20',
+  'demo_build_17',
+  'demo_build_18',
 ]
 
 const expectedBuildMarkets = [
@@ -266,8 +266,8 @@ assert.doesNotMatch(containerSource, /(?:function\s+normalizeJiraProjectRows\s*\
 
 for (const marker of [
   'getJiraRegionLabel',
-  'jira.transsion.com',
-  'jira-ex.transsion.com:6001',
+  'jira.example.com',
+  'jira-overseas.example.com',
   "'sw'",
   "'monkey'",
   '软件库',

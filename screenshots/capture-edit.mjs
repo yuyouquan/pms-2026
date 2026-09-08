@@ -15,11 +15,11 @@ async function capture() {
   await page.goto(BASE, { waitUntil: 'networkidle2' })
   await wait(500)
 
-  // Click first project card (X6877)
+  // Click first project card (DEMO017)
   const allCards = await page.$$('.ant-card')
   for (const card of allCards) {
     const text = await page.evaluate(el => el.textContent, card)
-    if (text && text.includes('X6877')) { await card.click(); break }
+    if (text && text.includes('DEMO017')) { await card.click(); break }
   }
   await wait(1000)
 

@@ -120,9 +120,9 @@ assert.equal(
 const historicalBasicValues = {
   firstLaunchProjects: ['machine-1'],
   firstLaunchProjectChips: 'D1（M1）',
-  applicableBrands: 'TECNO',
-  applicableProductLines: 'CAMON',
-  applicableChipPlatforms: 'MTK',
+  applicableBrands: '示例品牌A',
+  applicableProductLines: '示例系列D',
+  applicableChipPlatforms: '示例平台A',
 }
 const editedTosValues = {
   ...historicalBasicValues,
@@ -177,7 +177,7 @@ assert.equal(machineSubmitValues.developmentMode, 'ODC', 'machine modal submissi
 assert.equal(machineSubmitValues.chipModel, 'M1', 'machine modal submission must retain extended fields')
 
 const completeJiraRow = {
-  id: 'jira-complete', server: 'jira.transsion.com', projectKey: 'KN4-tOS16', type: 'sw', shared: true, affectProjects: 'KN4',
+  id: 'jira-complete', server: 'jira.example.com', projectKey: 'DEMO006-tOS16', type: 'sw', shared: true, affectProjects: 'DEMO006',
 }
 assert.equal(
   rulesModule.validateProjectInfoValues('整机产品项目', { jiraProjects: [] }, { fieldKeys: new Set(['jiraProjects']) }).length,
@@ -185,7 +185,7 @@ assert.equal(
   'an empty JIRA row array is valid for whole-machine project info',
 )
 const incompleteJiraErrors = rulesModule.validateProjectInfoValues('整机产品项目', {
-  jiraProjects: [{ id: 'jira-incomplete', server: 'jira.transsion.com', projectKey: '', type: 'sw', shared: false, affectProjects: '' }],
+  jiraProjects: [{ id: 'jira-incomplete', server: 'jira.example.com', projectKey: '', type: 'sw', shared: false, affectProjects: '' }],
 }, { fieldKeys: new Set(['jiraProjects']) })
 assert.ok(incompleteJiraErrors.some(error => error.fieldKey === 'jiraProjects' && error.groupKey === 'extended' && error.message.startsWith('第 1 行：')),
   'incomplete JIRA rows map to the jiraProjects extended field with a row number')

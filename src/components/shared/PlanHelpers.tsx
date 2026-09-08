@@ -366,13 +366,16 @@ export function sortTeamMembers(members: TMTeamMember[]): TMTeamMember[] {
 export const NOTIFY_DIFF_FIELDS = ['taskName', 'planStartDate', 'planEndDate', 'responsible', 'predecessor'] as const
 
 export const MOCK_USER_MAP: Record<string, FeishuRecipient> = {
-  '张三': { openId: 'ou_mock_zhangsan', email: 'zhangsan@transsion.com', name: '张三' },
-  '李四': { openId: 'ou_mock_lisi',     email: 'lisi@transsion.com',     name: '李四' },
-  '王五': { openId: 'ou_mock_wangwu',   email: 'wangwu@transsion.com',   name: '王五' },
-  '赵六': { openId: 'ou_mock_zhaoliu',  email: 'zhaoliu@transsion.com',  name: '赵六' },
-  '孙七': { openId: 'ou_mock_sunqi',    email: 'sunqi@transsion.com',    name: '孙七' },
-  '周八': { openId: 'ou_mock_zhouba',   email: 'zhouba@transsion.com',   name: '周八' },
-  '吴九': { openId: 'ou_mock_wujiu',    email: 'wujiu@transsion.com',    name: '吴九' },
+  '演示用户01': { openId: 'ou_mock_demo_user_01', email: 'demo_user_01@example.com', name: '演示用户01' },
+  '演示用户02': { openId: 'ou_mock_demo_user_02',     email: 'demo_user_02@example.com',     name: '演示用户02' },
+  '演示用户03': { openId: 'ou_mock_demo_user_03',   email: 'demo_user_03@example.com',   name: '演示用户03' },
+  '演示用户04': { openId: 'ou_mock_demo_user_04',  email: 'demo_user_04@example.com',  name: '演示用户04' },
+  '演示用户05': { openId: 'ou_mock_demo_user_05',    email: 'demo_user_05@example.com',    name: '演示用户05' },
+  '演示用户06': { openId: 'ou_mock_demo_user_06',   email: 'demo_user_06@example.com',   name: '演示用户06' },
+  '演示用户07': { openId: 'ou_mock_demo_user_07', email: 'demo_user_07@example.com', name: '演示用户07' },
+  '演示用户08': { openId: 'ou_mock_demo_user_08', email: 'demo_user_08@example.com', name: '演示用户08' },
+  '演示用户09': { openId: 'ou_mock_demo_user_09', email: 'demo_user_09@example.com', name: '演示用户09' },
+  '演示成员03': { openId: 'ou_mock_demo_member_03',    email: 'demo_member_03@example.com',    name: '演示成员03' },
 }
 
 /** Compute task depth in a flat task list */
@@ -424,15 +427,15 @@ export function shiftDateStrForExport(dateStr: string, deltaDays: number): strin
 // 一级计划待办来自 V4 修订版，二级计划待办来自各自的 V1 修订版
 export const initialTodos = [
   // ═══ 逾期：V4修订版中已过截止日的任务 ═══
-  { id: '1', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: 'OP', responsible: '张三', priority: 'high', deadline: '2026-04-12', status: '进行中', taskDesc: 'V4修订：STR2里程碑已逾期，需确认延期方案', category: 'overdue' as const },
-  { id: '2', projectId: '2', projectName: 'tOS16.0', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: '', responsible: '张三', priority: 'high', deadline: '2026-04-14', status: '进行中', taskDesc: 'V4修订：开发验证阶段计划逾期，请更新', category: 'overdue' as const },
+  { id: '1', projectId: '1', projectName: 'DEMO017-DEMOCHIP001_DEMOBOARD016', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: 'OP', responsible: '演示用户01', priority: 'high', deadline: '2026-04-12', status: '进行中', taskDesc: 'V4修订：STR2里程碑已逾期，需确认延期方案', category: 'overdue' as const },
+  { id: '2', projectId: '2', projectName: 'tOS16.1', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: '', responsible: '演示用户01', priority: 'high', deadline: '2026-04-14', status: '进行中', taskDesc: 'V4修订：开发验证阶段计划逾期，请更新', category: 'overdue' as const },
   // ═══ 即将到期：V4修订版中2天内到期的任务 ═══
-  { id: '3', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level2' as const, planType: '1+N MR版本火车计划', planTabKey: 'plan2', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '张三', priority: 'medium', deadline: '2026-04-17', status: '进行中', taskDesc: 'FR版本火车V1修订：编译验证明天到期', category: 'upcoming' as const },
-  { id: '4', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-04-18', status: '进行中', taskDesc: 'V4修订：STR3节点即将到期', category: 'upcoming' as const },
+  { id: '3', projectId: '1', projectName: 'DEMO017-DEMOCHIP001_DEMOBOARD016', planLevel: 'level2' as const, planType: '1+N MR版本火车计划', planTabKey: 'plan2', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '演示用户01', priority: 'medium', deadline: '2026-04-17', status: '进行中', taskDesc: 'FR版本火车V1修订：编译验证明天到期', category: 'upcoming' as const },
+  { id: '4', projectId: '3', projectName: 'DEMO013_DEMOBOARD010', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: 'OP', responsible: '演示用户02', priority: 'medium', deadline: '2026-04-18', status: '进行中', taskDesc: 'V4修订：STR3节点即将到期', category: 'upcoming' as const },
   // ═══ 待处理：V4修订版中未开始的任务 ═══
-  { id: '5', projectId: '3', projectName: 'X6855_H8917', planLevel: 'level2' as const, planType: '在研版本火车计划', planTabKey: 'plan1', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '李四', priority: 'medium', deadline: '2026-04-25', status: '待处理', taskDesc: '在研版本火车V1修订：Display模块开发待启动', category: 'pending' as const },
-  { id: '6', projectId: '1', projectName: 'X6877-D8400_H991', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: 'TR', responsible: '张三', priority: 'low', deadline: '2026-04-30', status: '待处理', taskDesc: 'V4修订：TR市场上市保障计划待填写', category: 'pending' as const },
-  { id: '7', projectId: '2', projectName: 'tOS16.0', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: '', responsible: '李四', priority: 'low', deadline: '2026-05-10', status: '待处理', taskDesc: 'V4修订：上市保障阶段责任人待分配', category: 'pending' as const },
+  { id: '5', projectId: '3', projectName: 'DEMO013_DEMOBOARD010', planLevel: 'level2' as const, planType: '在研版本火车计划', planTabKey: 'plan1', versionNo: 'V1', versionId: 'v1', market: 'OP', responsible: '演示用户02', priority: 'medium', deadline: '2026-04-25', status: '待处理', taskDesc: '在研版本火车V1修订：Display模块开发待启动', category: 'pending' as const },
+  { id: '6', projectId: '1', projectName: 'DEMO017-DEMOCHIP001_DEMOBOARD016', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: 'TR', responsible: '演示用户01', priority: 'low', deadline: '2026-04-30', status: '待处理', taskDesc: 'V4修订：TR市场上市保障计划待填写', category: 'pending' as const },
+  { id: '7', projectId: '2', projectName: 'tOS16.1', planLevel: 'level1' as const, planType: '一级计划', planTabKey: '', versionNo: 'V4', versionId: 'v4', market: '', responsible: '演示用户02', priority: 'low', deadline: '2026-05-10', status: '待处理', taskDesc: 'V4修订：上市保障阶段责任人待分配', category: 'pending' as const },
 ]
 
 /** Merge L1 and L2 plans for the overview tab */

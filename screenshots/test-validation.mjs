@@ -10,10 +10,10 @@ page.on('pageerror', err => console.log('[pageerror]', err.message))
 console.log('1. Loading', URL)
 await page.goto(URL, { waitUntil: 'networkidle0', timeout: 30000 })
 
-console.log('2. Click X6877 card')
+console.log('2. Click DEMO017 card')
 await page.evaluate(() => {
   const cards = Array.from(document.querySelectorAll('[class*="ant-card"]'))
-  cards.find(c => c.textContent && c.textContent.includes('X6877-D8400_H991'))?.click()
+  cards.find(c => c.textContent && c.textContent.includes('DEMO017-DEMOCHIP001_DEMOBOARD016'))?.click()
 })
 await sleep(800)
 

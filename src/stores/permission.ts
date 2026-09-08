@@ -1,3 +1,4 @@
+import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
@@ -27,9 +28,9 @@ export const TOS_TEAM_PERMISSION_MAPPING = {
   '稳定性代表': 'tosStabilityRepresentative',
   '性能代表': 'tosPerformanceRepresentative',
   '功耗代表': 'tosPowerRepresentative',
-  '系统应用开发代表': 'tosSystemAppDevRepresentative',
-  '底软通信开发代表': 'tosBasebandDevRepresentative',
-  '集成维护开发代表': 'tosIntegrationDevRepresentative',
+  '示例应用领域开发代表': 'tosSystemAppDevRepresentative',
+  '示例通信领域开发代表': 'tosBasebandDevRepresentative',
+  '示例集成领域开发代表': 'tosIntegrationDevRepresentative',
   '软件架设与技术规划部开发代表': 'tosArchitectureDevRepresentative',
   '创新产品开发代表': 'tosInnovationDevRepresentative',
   'TEX AI开发代表': 'tosTexAiDevRepresentative',
@@ -164,17 +165,17 @@ const defaultPermsByRole: Record<string, string[]> = {
 // Default members per fixed role — matches the prior global `roles` initial values
 // so existing 10 mock projects retain the same user-→-role mapping.
 const DEFAULT_ROLE_MEMBERS: Record<string, string[]> = {
-  '系统管理员': ['张三'],
-  '项目经理': ['张三', '赵六'],
-  '产品经理': ['李四', '王五'],
-  '软件SE': ['孙七'],
-  '开发代表': ['王五'],
-  '设计师': ['周八'],
+  '系统管理员': ['演示用户01'],
+  '项目经理': ['演示用户01', '演示用户04'],
+  '产品经理': ['演示用户02', '演示用户03'],
+  '软件SE': ['演示用户05'],
+  '开发代表': ['演示用户03'],
+  '设计师': ['演示用户06'],
   '测试TPM': [],
   'SQA': [],
-  '开发工程师': ['李白', '杜甫'],
-  '测试工程师': ['赵六', '孙七'],
-  '管理层': ['张三'],
+  '开发工程师': ['演示用户07', '演示用户08'],
+  '测试工程师': ['演示用户04', '演示用户05'],
+  '管理层': ['演示用户01'],
   '其他': [],
 }
 
@@ -200,11 +201,11 @@ const withProjectSpecificMockMembers = (projectId: string, roles: Role[]): Role[
   const next = roles.map(role => {
     if (role.name !== '项目经理') return role
     foundProjectManager = true
-    return { ...role, members: [...new Set([...role.members, '钱九'])] }
+    return { ...role, members: [...new Set([...role.members, '演示用户09'])] }
   })
   return foundProjectManager
     ? next
-    : [...next, { name: '项目经理', members: ['钱九'], isFixed: true }]
+    : [...next, { name: '项目经理', members: ['演示用户09'], isFixed: true }]
 }
 
 function buildDefaultRolePermissions(): Record<string, Record<string, boolean>> {
@@ -301,7 +302,7 @@ const safePermissionStorage: StateStorage = {
   getItem(name) {
     if (typeof window === 'undefined') return null
     try {
-      const stored = window.localStorage.getItem(name)
+      const stored = getPmsLocalStorage().getItem(name)
       if (stored !== null) JSON.parse(stored)
       return stored
     } catch (error) {
@@ -312,7 +313,7 @@ const safePermissionStorage: StateStorage = {
   setItem(name, value) {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.setItem(name, value)
+      getPmsLocalStorage().setItem(name, value)
     } catch (error) {
       console.error(`Failed to persist ${PERMISSION_STORAGE_KEY}.`, error)
     }
@@ -320,7 +321,7 @@ const safePermissionStorage: StateStorage = {
   removeItem(name) {
     if (typeof window === 'undefined') return
     try {
-      window.localStorage.removeItem(name)
+      getPmsLocalStorage().removeItem(name)
     } catch (error) {
       console.error(`Failed to remove ${PERMISSION_STORAGE_KEY}.`, error)
     }
@@ -435,9 +436,9 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
 
   // Global roles
   globalRoles: [
-    { name: '管理组', members: ['张三', '李白'], isFixed: true },
-    { name: '编辑组', members: ['李四', '赵六', '王五'], isFixed: true },
-    { name: '查看组', members: ['孙七', '周八', '杜甫'], isFixed: true },
+    { name: '管理组', members: ['演示用户01', '演示用户07'], isFixed: true },
+    { name: '编辑组', members: ['演示用户02', '演示用户04', '演示用户03'], isFixed: true },
+    { name: '查看组', members: ['演示用户05', '演示用户06', '演示用户08'], isFixed: true },
   ],
   globalRolePerms: {
     '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'configCenter:enumEdit': true, 'permissionCenter:manageRoles': true },

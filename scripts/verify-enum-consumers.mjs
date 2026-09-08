@@ -57,19 +57,19 @@ rowsByType['roadmap-tos'] = [
   { id: 'tos-1', value: '18.0' },
 ]
 rowsByType['chip-mapping'] = [
-  { id: 'chip-a', chipCode: 'D6300', chipModel: 'MT6835', chipPlatform: 'MTK' },
-  { id: 'chip-b', chipCode: 'D6300', chipModel: 'MT6789', chipPlatform: 'MTK' },
+  { id: 'chip-a', chipCode: 'D6300', chipModel: 'MT6835', chipPlatform: '示例平台A' },
+  { id: 'chip-b', chipCode: 'D6300', chipModel: 'MT6789', chipPlatform: '示例平台A' },
 ]
 rowsByType['project-category-mapping'] = [
   { id: 'category-1', ipmProjectCategory: ' 整机基线 ', pmsProjectCategory: ' 整机产品项目 ', pmsSecondaryCategory: ' 整机-手机 ' },
   { id: 'category-2', ipmProjectCategory: '技术预研', pmsProjectCategory: '技术项目', pmsSecondaryCategory: '过期的整机二级分类' },
 ]
 rowsByType['tmg-subdomain-mapping'] = [
-  { id: 'tmg-1', domain: '系统应用', subdomain: 'AIOS' },
-  { id: 'tmg-2', domain: '基础架构TMG', subdomain: '无' },
-  { id: 'tmg-3', domain: '系统应用', subdomain: '应用' },
-  { id: 'tmg-4', domain: '系统应用', subdomain: 'AIOS' },
-  { id: 'tmg-5', domain: '性能TMG', subdomain: '无' },
+  { id: 'tmg-1', domain: '示例应用领域', subdomain: '示例智能技术' },
+  { id: 'tmg-2', domain: '示例架构组', subdomain: '无' },
+  { id: 'tmg-3', domain: '示例应用领域', subdomain: '应用' },
+  { id: 'tmg-4', domain: '示例应用领域', subdomain: '示例智能技术' },
+  { id: 'tmg-5', domain: '示例性能组', subdomain: '无' },
 ]
 
 console.log('[enum-consumers] verifying ordered single-value adapters')
@@ -114,19 +114,19 @@ assert.deepEqual(liveChipOptions, [
   { value: 'chip-a', label: 'D6300' },
   { value: 'chip-b', label: 'D6300' },
 ], 'chip options display only the chip code while stable row IDs keep duplicate-code rows distinct')
-assert.equal(consumers.formatPrimaryChipCode('MT6877 / MT6877 / MTK（已停用）'), 'MT6877', 'composite chip labels display only their first code')
-assert.equal(consumers.formatPrimaryChipCode('MT6877'), 'MT6877', 'plain chip codes remain unchanged')
+assert.equal(consumers.formatPrimaryChipCode('DEMOSOC003 / DEMOSOC003 / 示例平台A（已停用）'), 'DEMOSOC003', 'composite chip labels display only their first code')
+assert.equal(consumers.formatPrimaryChipCode('DEMOSOC003'), 'DEMOSOC003', 'plain chip codes remain unchanged')
 assert.equal(consumers.formatPrimaryChipCode(''), '', 'empty chip codes remain empty')
 assert.equal(consumers.formatPrimaryChipCode(undefined), '', 'non-string chip codes fail safely')
 assert.deepEqual(consumers.resolveChipRow(rowsByType, 'chip-a'), {
-  chipCode: 'D6300', chipModel: 'MT6835', chipPlatform: 'MTK',
+  chipCode: 'D6300', chipModel: 'MT6835', chipPlatform: '示例平台A',
 }, 'resolving a live row ID returns the complete chip tuple atomically')
 
-const retiredChip = { chipCode: 'D6300', chipModel: 'MT9999', chipPlatform: 'MTK' }
+const retiredChip = { chipCode: 'D6300', chipModel: 'MT9999', chipPlatform: '示例平台A' }
 const historicalChipOptions = consumers.buildChipOptions(rowsByType, [
   retiredChip,
   retiredChip,
-  { chipCode: 'D6300', chipModel: 'MT6835', chipPlatform: 'MTK' },
+  { chipCode: 'D6300', chipModel: 'MT6835', chipPlatform: '示例平台A' },
 ])
 assert.equal(historicalChipOptions.length, 3, 'only absent chip tuples synthesize one history option')
 assert.deepEqual(historicalChipOptions.slice(0, 2), liveChipOptions, 'live rows are never synthesized or cross-combined from separate columns')
@@ -188,20 +188,20 @@ assert.equal(consumers.findProjectCategoryMapping(rowsByType, '整机'), undefin
 assert.equal(consumers.findProjectCategoryMapping(rowsByType, '未配置分类'), undefined, 'unknown exact categories fail closed')
 
 assert.deepEqual(consumers.getTmgDomains(rowsByType, '历史领域'), [
-  { value: '系统应用', label: '系统应用' },
-  { value: '基础架构TMG', label: '基础架构TMG' },
-  { value: '性能TMG', label: '性能TMG' },
+  { value: '示例应用领域', label: '示例应用领域' },
+  { value: '示例架构组', label: '示例架构组' },
+  { value: '示例性能组', label: '示例性能组' },
   { value: '历史领域', label: '历史领域（已停用）', disabled: true },
 ], 'TMG domains de-duplicate in first-row order and append absent history')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '系统应用', '历史子领域'), {
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '示例应用领域', '历史子领域'), {
   options: [
-    { value: 'AIOS', label: 'AIOS' },
+    { value: '示例智能技术', label: '示例智能技术' },
     { value: '应用', label: '应用' },
     { value: '历史子领域', label: '历史子领域（已停用）', disabled: true },
   ],
   disabled: false,
 }, 'the original three-argument API treats historical subdomain history as belonging to the current domain')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG', '历史子领域', '基础架构TMG'), {
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '示例架构组', '历史子领域', '示例架构组'), {
   options: [
     { value: '无', label: '无' },
     { value: '历史子领域', label: '历史子领域（已停用）', disabled: true },
@@ -209,12 +209,12 @@ assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG', '
   autoValue: '无',
   disabled: true,
 }, 'adapter reports live-only sole-无 auto state; consumer UI must guard its application during initial edit hydration')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '基础架构TMG'), {
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '示例架构组'), {
   options: [{ value: '无', label: '无' }],
   autoValue: '无',
   disabled: true,
 }, 'once no orphan snapshot remains, a sole live 无 auto-selects and disables')
-assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '性能TMG', '历史子领域', '基础架构TMG'), {
+assert.deepEqual(consumers.getTmgSubdomainState(rowsByType, '示例性能组', '历史子领域', '示例架构组'), {
   options: [{ value: '无', label: '无' }],
   autoValue: '无',
   disabled: true,
@@ -234,7 +234,7 @@ assert.doesNotThrow(() => {
   consumers.buildChipOptions(frozenRows, [retiredChip])
   consumers.findProjectCategoryMapping(frozenRows, '技术预研')
   consumers.getTmgDomains(frozenRows, '历史领域')
-  consumers.getTmgSubdomainState(frozenRows, '基础架构TMG', '历史子领域', '基础架构TMG')
+  consumers.getTmgSubdomainState(frozenRows, '示例架构组', '历史子领域', '示例架构组')
 }, 'all consumer adapters accept deeply frozen rows without mutation')
 
 console.log('[enum-consumers] verifying thin hook and compatibility contracts')

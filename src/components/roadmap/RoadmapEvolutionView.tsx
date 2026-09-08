@@ -15,7 +15,7 @@ import type {
 } from '@/types/roadmap'
 import RoadmapProjectCard from './RoadmapProjectCard'
 
-export const EVOLUTION_BRAND_ORDER = ['TECNO', 'Infinix', 'itel'] as const
+export const EVOLUTION_BRAND_ORDER = ['示例品牌A', '示例品牌B', '示例品牌C'] as const
 
 export interface EvolutionBrandGroup {
   brand: (typeof EVOLUTION_BRAND_ORDER)[number]
@@ -25,9 +25,9 @@ export interface EvolutionBrandGroup {
 type EvolutionBrand = (typeof EVOLUTION_BRAND_ORDER)[number]
 
 const EVOLUTION_BRAND_CLASS_NAMES: Record<EvolutionBrand, string> = {
-  TECNO: 'brand-tecno',
-  Infinix: 'brand-infinix',
-  itel: 'brand-itel',
+  示例品牌A: 'brand-demo-a',
+  示例品牌B: 'brand-demo-b',
+  示例品牌C: 'brand-demo-c',
 }
 
 function isEvolutionBrand(brand: RoadmapBrand): brand is EvolutionBrand {
@@ -460,30 +460,30 @@ export default function RoadmapEvolutionView({
           box-shadow: 0 0 0 3px color-mix(in srgb, var(--pms-brand-strong) 10%, transparent);
         }
 
-        .pms-roadmap-evolution-brand-dot.brand-tecno {
+        .pms-roadmap-evolution-brand-dot.brand-demo-a {
           background: #1677ff;
           box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.1);
         }
 
-        .pms-roadmap-evolution-brand-dot.brand-infinix {
+        .pms-roadmap-evolution-brand-dot.brand-demo-b {
           background: #52c41a;
           box-shadow: 0 0 0 3px rgba(82, 196, 26, 0.1);
         }
 
-        .pms-roadmap-evolution-brand-dot.brand-itel {
+        .pms-roadmap-evolution-brand-dot.brand-demo-c {
           background: #ff4d4f;
           box-shadow: 0 0 0 3px rgba(255, 77, 79, 0.1);
         }
 
-        .pms-roadmap-evolution-brand-label.brand-tecno {
+        .pms-roadmap-evolution-brand-label.brand-demo-a {
           color: #0958d9;
         }
 
-        .pms-roadmap-evolution-brand-label.brand-infinix {
+        .pms-roadmap-evolution-brand-label.brand-demo-b {
           color: #237804;
         }
 
-        .pms-roadmap-evolution-brand-label.brand-itel {
+        .pms-roadmap-evolution-brand-label.brand-demo-c {
           color: #cf1322;
         }
 

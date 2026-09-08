@@ -30,10 +30,16 @@ const schemaModule = {
   LEGACY_PROJECT_INFO_SCHEMA_VERSION: 0,
   PROJECT_INFO_SCHEMA_VERSION: 1,
 }
+const datasetStorage = evaluate(
+  'src/lib/mockDatasetStorage.ts',
+  (id) => { throw new Error(`Unexpected module: ${id}`) },
+  { window: undefined },
+)
 const preferences = evaluate(
   'src/lib/projectFieldPreferences.ts',
   (id) => {
     if (id === '@/constants/projectInfoSchema') return schemaModule
+    if (id === '@/lib/mockDatasetStorage') return datasetStorage
     throw new Error(`Unexpected module: ${id}`)
   },
   { window: undefined },

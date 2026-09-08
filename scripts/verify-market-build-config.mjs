@@ -35,7 +35,7 @@ const {
   validateMarketBuildSelections,
 } = evaluateTypeScriptModule(spugProviderPath)
 const fallback = {
-  buildOption: 'ko2_sl303',
+  buildOption: 'demo_build_01',
   buildMarket: 'op',
   branchInfo: 'feature/global',
   jenkinsUrl: 'https://jenkins.example/job/global',
@@ -46,7 +46,7 @@ const spugBuildOptions = await mockSpugBuildOptionsProvider.load()
 const secondSpugBuildOptions = await mockSpugBuildOptionsProvider.load()
 assert.deepEqual(
   JSON.parse(JSON.stringify(spugBuildOptions.buildOptions)),
-  ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b'],
+  ['demo_build_01', 'demo_build_02', 'demo_build_03', 'demo_build_04', 'demo_build_05', 'demo_build_06', 'demo_build_07'],
   'SPUG provider must expose the mock build options asynchronously',
 )
 assert.deepEqual(
@@ -68,7 +68,7 @@ spugBuildOptions.buildOptions.push('mutated-option')
 spugBuildOptions.buildMarkets.push('mutated-market')
 assert.deepEqual(
   JSON.parse(JSON.stringify(secondSpugBuildOptions.buildOptions)),
-  ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b'],
+  ['demo_build_01', 'demo_build_02', 'demo_build_03', 'demo_build_04', 'demo_build_05', 'demo_build_06', 'demo_build_07'],
   'mutating one SPUG response must not affect a later response build options',
 )
 assert.deepEqual(
@@ -141,13 +141,13 @@ assert.deepEqual(
 )
 
 const selectionOptions = {
-  buildOptions: ['ko2', 'x1103b'],
+  buildOptions: ['demo_build_02', 'demo_build_07'],
   buildMarkets: ['op', 'tr'],
 }
 const validSelectionResult = validateMarketBuildSelections([{
-  market: 'OP', buildOption: 'ko2', buildMarket: 'op',
+  market: 'OP', buildOption: 'demo_build_02', buildMarket: 'op',
 }, {
-  market: 'TR', buildOption: 'x1103b', buildMarket: 'tr',
+  market: 'TR', buildOption: 'demo_build_07', buildMarket: 'tr',
 }], selectionOptions)
 assert.equal(validSelectionResult.firstRequiredIssue, undefined, 'valid independent rows must not have a required issue')
 assert.deepEqual(JSON.parse(JSON.stringify(validSelectionResult.unsupportedIssues)), [], 'valid independent rows must not have unsupported issues')
@@ -161,7 +161,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(missingBuildOptionResult.firstRequire
 assert.equal(formatMarketBuildSelectionIssue(missingBuildOptionResult.firstRequiredIssue), '请填写 OP 市场的编译选项', 'missing build option message must identify its market')
 
 const missingBuildMarketResult = validateMarketBuildSelections([{
-  market: 'TR', buildOption: 'x1103b', buildMarket: '  ',
+  market: 'TR', buildOption: 'demo_build_07', buildMarket: '  ',
 }], selectionOptions)
 assert.deepEqual(JSON.parse(JSON.stringify(missingBuildMarketResult.firstRequiredIssue)), {
   field: 'buildMarket', reason: 'required', market: 'TR', value: '  ',
@@ -169,7 +169,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(missingBuildMarketResult.firstRequire
 assert.equal(formatMarketBuildSelectionIssue(missingBuildMarketResult.firstRequiredIssue), '请填写 TR 市场的编译市场', 'missing build market message must identify its market')
 
 const buildOptionRequiredBeforeEarlierBuildMarket = validateMarketBuildSelections([{
-  market: 'OP', buildOption: 'ko2', buildMarket: '',
+  market: 'OP', buildOption: 'demo_build_02', buildMarket: '',
 }, {
   market: 'TR', buildOption: '', buildMarket: 'tr',
 }], selectionOptions)
@@ -180,7 +180,7 @@ assert.deepEqual(JSON.parse(JSON.stringify(buildOptionRequiredBeforeEarlierBuild
 const requiredAndUnsupportedResult = validateMarketBuildSelections([{
   market: 'OP', buildOption: '', buildMarket: 'op',
 }, {
-  market: 'TR', buildOption: 'x1103b', buildMarket: 'legacy-market',
+  market: 'TR', buildOption: 'demo_build_07', buildMarket: 'legacy-market',
 }], selectionOptions)
 assert.deepEqual(JSON.parse(JSON.stringify(requiredAndUnsupportedResult.firstRequiredIssue)), {
   field: 'buildOption', reason: 'required', market: 'OP', value: '',
@@ -252,19 +252,19 @@ const isolatedBuildConfigs = normalizeMarketRows([{
   market: 'OP',
   isMain: true,
   followsMain: false,
-  buildOption: 'ko2',
+  buildOption: 'demo_build_02',
   buildMarket: 'op',
 }, {
   id: 'market-TR',
   market: 'TR',
   isMain: false,
   followsMain: true,
-  buildOption: 'x1103b',
+  buildOption: 'demo_build_07',
   buildMarket: 'tr',
 }])
-assert.equal(isolatedBuildConfigs[0].buildOption, 'ko2', 'main market must retain its own build option')
+assert.equal(isolatedBuildConfigs[0].buildOption, 'demo_build_02', 'main market must retain its own build option')
 assert.equal(isolatedBuildConfigs[0].buildMarket, 'op', 'main market must retain its own build market')
-assert.equal(isolatedBuildConfigs[1].buildOption, 'x1103b', 'following market must retain its own build option')
+assert.equal(isolatedBuildConfigs[1].buildOption, 'demo_build_07', 'following market must retain its own build option')
 assert.equal(isolatedBuildConfigs[1].buildMarket, 'tr', 'following market must retain its own build market')
 
 assert.deepEqual(

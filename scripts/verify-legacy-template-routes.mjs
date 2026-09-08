@@ -9,11 +9,10 @@ import puppeteer from 'puppeteer'
 // match the configuration center reached from the main navigation.
 const baseUrl = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const output = path.resolve(process.env.PMS_LEGACY_OUTPUT || 'output/audit-20260907/legacy-template-routes')
-const browserPath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const browser = await puppeteer.launch({
   headless: true,
-  executablePath: process.env.PMS_CHROME_EXECUTABLE || (fs.existsSync(browserPath) ? browserPath : undefined),
-  args: ['--no-sandbox'],
+  executablePath: process.env.PMS_CHROME_EXECUTABLE || undefined,
+  args: ['--disable-gpu', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'],
 })
 fs.mkdirSync(output, { recursive: true })
 const failures = []
@@ -22,7 +21,7 @@ async function clickText(page, selector, text) {
   await page.waitForFunction((selector, text) => [...document.querySelectorAll(selector)].some(element => (
     element.textContent.replace(/\s+/g, '') === text.replace(/\s+/g, '')
     && element.getBoundingClientRect().width > 0
-  )), {}, selector, text)
+  )), { polling: 100 }, selector, text)
   const clicked = await page.evaluate((selector, text) => {
     const element = [...document.querySelectorAll(selector)].find(element => (
       element.textContent.replace(/\s+/g, '') === text.replace(/\s+/g, '')
@@ -67,10 +66,10 @@ try {
       await page.waitForFunction(name => [...document.querySelectorAll('input.pms-edit-input')].some(input => input.value === name), {}, name)
       await page.click('[aria-label="切换当前用户"]')
       await page.waitForSelector('.pms-user-menu__name')
-      await page.evaluate(() => [...document.querySelectorAll('.pms-user-menu__name')].find(element => element.textContent === '孙七')?.closest('li')?.click())
+      await page.evaluate(() => [...document.querySelectorAll('.pms-user-menu__name')].find(element => element.textContent === '演示用户05')?.closest('li')?.click())
       // Switching sessions while a draft is open uses the canonical edit guard.
       await clickText(page, '.ant-modal-footer button', '确认离开')
-      await page.waitForFunction(() => document.querySelector('[aria-label="切换当前用户"]')?.getAttribute('data-current-user') === '孙七')
+      await page.waitForFunction(() => document.querySelector('[aria-label="切换当前用户"]')?.getAttribute('data-current-user') === '演示用户05')
       await page.waitForFunction(() => !document.querySelector('input.pms-edit-input'))
       const forbidden = await page.evaluate(() => [...document.querySelectorAll('.pms-config-center button')]
         .filter(button => ['发布', '取消修订', '创建修订'].includes(button.textContent.replace(/\s+/g, '')))
@@ -78,11 +77,14 @@ try {
       assert.deepEqual(forbidden, [], `${level}: a viewer cannot edit or publish the shared draft`)
       assert.ok((await page.$eval('.pms-config-center', element => element.textContent)).includes(name), `${level}: viewer sees the same edited template`)
       assert.deepEqual(errors, [], `${level}: browser has no runtime errors`)
-      await page.screenshot({ path: path.join(output, `${level}-shared-viewer.png`), fullPage: true })
+      if (process.env.PMS_CAPTURE_SCREENSHOTS !== '0') {
+        await page.bringToFront()
+        await page.screenshot({ path: path.join(output, `${level}-shared-viewer.png`), fullPage: true })
+      }
       console.log(`PASS ${level}: shared entry, published read-only, persisted cross-route editing, viewer permission gate`)
     } catch (error) {
       failures.push(`${level}: ${error.message}`)
-      await page.screenshot({ path: path.join(output, `${level}-failure.png`), fullPage: true })
+      if (process.env.PMS_CAPTURE_SCREENSHOTS !== '0') await page.screenshot({ path: path.join(output, `${level}-failure.png`), fullPage: true }).catch(() => {})
     } finally {
       await context.close()
     }

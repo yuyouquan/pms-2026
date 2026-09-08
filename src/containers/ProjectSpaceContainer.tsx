@@ -5597,7 +5597,7 @@ export default function ProjectSpaceContainer() {
       newTasks = [
         ...effectiveTasks.map(task => {
           if (task.id === '2.1') return { ...task, taskName: 'STR2(更新)', status: '已完成', progress: 100 }
-          if (task.id === '3') return { ...task, responsible: '李四', planStartDate: '2026-02-20' }
+          if (task.id === '3') return { ...task, responsible: '演示用户02', planStartDate: '2026-02-20' }
           return task
         }),
         { id: '5', order: 5, taskName: '维护', status: '未开始', progress: 0, responsible: '', predecessor: '4', planStartDate: '2026-04-16', planEndDate: '2026-05-15', estimatedDays: 30, actualStartDate: '', actualEndDate: '', actualDays: 0 },
@@ -5832,9 +5832,9 @@ export default function ProjectSpaceContainer() {
                   <Form.Item label="分支信息"><Input placeholder="请输入分支信息" value={createFormValues.branch || ''} onChange={(e) => setCreateFormValues((prev: any) => ({...prev, branch: e.target.value}))} /></Form.Item>
                   <Form.Item label="是否MADA"><Select placeholder="请选择" style={{ width: '100%' }} value={createFormValues.isMada} onChange={(val) => setCreateFormValues((prev: any) => ({...prev, isMada: val}))}><Option value="是">是</Option><Option value="否">否</Option></Select></Form.Item>
                   <Form.Item label="MADA市场"><Input placeholder="请输入MADA市场" value={createFormValues.madaMarket || ''} onChange={(e) => setCreateFormValues((prev: any) => ({...prev, madaMarket: e.target.value}))} /></Form.Item>
-                  <Form.Item label="项目SPM"><Select placeholder="请选择SPM" style={{ width: '100%' }} value={createFormValues.spm} onChange={(val) => setCreateFormValues((prev: any) => ({...prev, spm: val}))}><Option value="李白">李白</Option><Option value="张三">张三</Option></Select></Form.Item>
-                  <Form.Item label="项目TPM"><Select placeholder="请选择TPM" style={{ width: '100%' }} value={createFormValues.tpm} onChange={(val) => setCreateFormValues((prev: any) => ({...prev, tpm: val}))}><Option value="王五">王五</Option><Option value="赵六">赵六</Option></Select></Form.Item>
-                  <Form.Item label="对接人"><Select placeholder="请选择对接人" style={{ width: '100%' }} value={createFormValues.contact} onChange={(val) => setCreateFormValues((prev: any) => ({...prev, contact: val}))}><Option value="孙七">孙七</Option><Option value="周八">周八</Option></Select></Form.Item>
+                  <Form.Item label="项目SPM"><Select placeholder="请选择SPM" style={{ width: '100%' }} value={createFormValues.spm} onChange={(val) => setCreateFormValues((prev: any) => ({...prev, spm: val}))}><Option value="演示用户07">演示用户07</Option><Option value="演示用户01">演示用户01</Option></Select></Form.Item>
+                  <Form.Item label="项目TPM"><Select placeholder="请选择TPM" style={{ width: '100%' }} value={createFormValues.tpm} onChange={(val) => setCreateFormValues((prev: any) => ({...prev, tpm: val}))}><Option value="演示用户03">演示用户03</Option><Option value="演示用户04">演示用户04</Option></Select></Form.Item>
+                  <Form.Item label="对接人"><Select placeholder="请选择对接人" style={{ width: '100%' }} value={createFormValues.contact} onChange={(val) => setCreateFormValues((prev: any) => ({...prev, contact: val}))}><Option value="演示用户05">演示用户05</Option><Option value="演示用户06">演示用户06</Option></Select></Form.Item>
                   <Form.Item label="项目版本号"><Input placeholder="请输入项目版本号" value={createFormValues.projectVersion || ''} onChange={(e) => setCreateFormValues((prev: any) => ({...prev, projectVersion: e.target.value}))} /></Form.Item>
                 </>
               )}

@@ -360,14 +360,14 @@ export const TRANSFER_TO_PMS_USER_MAP: Readonly<Record<string, {
   transferUserName: string
   pmsUserName: string
 }>> = {
-  u001: { transferUserName: '张明辉', pmsUserName: '张三' },
-  u002: { transferUserName: '李思源', pmsUserName: '李四' },
-  u003: { transferUserName: '王建国', pmsUserName: '王五' },
-  u004: { transferUserName: '赵丽华', pmsUserName: '赵六' },
-  u005: { transferUserName: '孙伟强', pmsUserName: '孙七' },
-  u006: { transferUserName: '周文博', pmsUserName: '周八' },
-  u007: { transferUserName: '陈晓峰', pmsUserName: '李白' },
-  u008: { transferUserName: '刘志远', pmsUserName: '杜甫' },
+  u001: { transferUserName: '演示用户01', pmsUserName: '演示用户01' },
+  u002: { transferUserName: '演示用户02', pmsUserName: '演示用户02' },
+  u003: { transferUserName: '演示用户03', pmsUserName: '演示用户03' },
+  u004: { transferUserName: '演示用户04', pmsUserName: '演示用户04' },
+  u005: { transferUserName: '演示用户05', pmsUserName: '演示用户05' },
+  u006: { transferUserName: '演示用户06', pmsUserName: '演示用户06' },
+  u007: { transferUserName: '演示用户07', pmsUserName: '演示用户07' },
+  u008: { transferUserName: '演示用户08', pmsUserName: '演示用户08' },
 }
 
 export function mapTransferOwnerToPmsUser(

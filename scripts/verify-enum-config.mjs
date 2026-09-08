@@ -133,9 +133,9 @@ assert.deepEqual(values.validateAndNormalizeEnumRow('tmg-subdomain-mapping', { d
 }, 'mapping rows report each missing required column')
 assert.deepEqual(values.validateAndNormalizeEnumRow('package-mode-mapping', {
   androidVersion: ' Android 16 ',
-  chipModel: ' MT6877 ',
+  chipModel: ' DEMOSOC003 ',
   packageMode: ' 方式B ',
-}, [{ id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: '方式A' }]), {
+}, [{ id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'DEMOSOC003', packageMode: '方式A' }]), {
   ok: false,
   reason: 'duplicate',
   fieldErrors: { androidVersion: '该组合已存在', chipModel: '该组合已存在' },
@@ -205,17 +205,17 @@ const expectedSingleSeeds = {
   'kernel-version': ['5.10', '5.15', '6.1', '6.6'],
   'chip-mapping': [],
   'memory-size': ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'],
-  'build-option': ['ko2_sl303', 'ko2', 'a681l_sm386', 'lj8k_h781', 'lj8_h781', 'lj7_h782', 'x1103b'],
+  'build-option': ['demo_build_01', 'demo_build_02', 'demo_build_03', 'demo_build_04', 'demo_build_05', 'demo_build_06', 'demo_build_07'],
   'build-market': ['op', 'tr'],
   'core-value': ['追赶', '人无我有', '人有我有'],
   'android-version': [],
   'package-mode-mapping': [],
 }
 const expectedTmgSeeds = [
-  ['基础架构TMG', '无'], ['性能TMG', '无'], ['DFX TMG', '无'], ['UX TMG', '无'],
-  ['系统应用', 'AIOS'], ['系统应用', '应用'], ['系统应用', '图形'], ['系统应用', '内核'], ['系统应用', '多媒体'],
-  ['底软通信', '器件'], ['底软通信', '蜂窝'], ['底软通信', '短距'], ['底软通信', '功耗'],
-  ['集成维护', '三方体验'], ['集成维护', 'GMS'], ['其他', '安全'], ['其他', 'AIOT'],
+  ['示例架构组', '无'], ['示例性能组', '无'], ['示例质量组', '无'], ['示例体验组', '无'],
+  ['示例应用领域', '示例智能技术'], ['示例应用领域', '应用'], ['示例应用领域', '图形'], ['示例应用领域', '内核'], ['示例应用领域', '多媒体'],
+  ['示例通信领域', '器件'], ['示例通信领域', '蜂窝'], ['示例通信领域', '短距'], ['示例通信领域', '功耗'],
+  ['示例集成领域', '三方体验'], ['示例集成领域', 'GMS'], ['其他', '安全'], ['其他', 'AIOT'],
 ]
 const machineProjectCategorySeeds = [
   ['整机产品-基线IPD', '整机-手机'],
@@ -410,21 +410,24 @@ const officialPersistStorage = enumStore.useEnumStore.persist.getOptions().stora
 try {
   let readFailure = null
   let shouldFailWrite = false
-  let storedValue = null
+  const datasetStorage = loadTypeScriptModule(root, 'src/lib/mockDatasetStorage.ts')
+  const storedValues = new Map([[datasetStorage.MOCK_DATASET_VERSION_STORAGE_KEY, datasetStorage.MOCK_DATASET_VERSION]])
   const removedKeys = []
   globalThis.window = {
     localStorage: {
-      getItem: () => {
+      get length() { return storedValues.size },
+      key: index => [...storedValues.keys()][index] ?? null,
+      getItem: name => {
         if (readFailure) throw readFailure
-        return storedValue
+        return storedValues.get(name) ?? null
       },
-      setItem: (_name, value) => {
+      setItem: (name, value) => {
         if (shouldFailWrite) throw new Error('storage blocked')
-        storedValue = value
+        storedValues.set(name, value)
       },
       removeItem: name => {
         removedKeys.push(name)
-        storedValue = null
+        storedValues.delete(name)
       },
     },
   }
@@ -572,12 +575,12 @@ console.log('[flat-consumers] verifying UI source contracts')
 const enumUi = readSource(root, 'src/components/config/EnumConfig.tsx')
 const enumConsumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
 assert.equal(enumConsumers.resolvePackageMode([
-  { id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: ' 整包 ' },
-], ' Android 16 ', ' MT6877 '), '整包', 'package mode lookup uses exact trimmed Android-version and chip-model matching')
+  { id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'DEMOSOC003', packageMode: ' 整包 ' },
+], ' Android 16 ', ' DEMOSOC003 '), '整包', 'package mode lookup uses exact trimmed Android-version and chip-model matching')
 assert.equal(enumConsumers.resolvePackageMode([
-  { id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'MT6877', packageMode: '整包' },
-], 'Android 16', 'mt6877'), '', 'package mode lookup remains case-sensitive and does not fuzzy match')
-assert.equal(enumConsumers.resolvePackageMode([], 'Android 16', 'MT6877'), '', 'package mode lookup returns an empty string when no mapping exists')
+  { id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'DEMOSOC003', packageMode: '整包' },
+], 'Android 16', 'demosoc003'), '', 'package mode lookup remains case-sensitive and does not fuzzy match')
+assert.equal(enumConsumers.resolvePackageMode([], 'Android 16', 'DEMOSOC003'), '', 'package mode lookup returns an empty string when no mapping exists')
 const configUi = readSource(root, 'src/containers/ConfigContainer.tsx')
 const appShell = readSource(root, 'src/containers/AppShell.tsx')
 const globalStyles = readSource(root, 'src/styles/globals.css')

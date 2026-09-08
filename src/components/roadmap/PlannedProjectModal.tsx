@@ -46,7 +46,7 @@ import type {
 } from '@/types/roadmap'
 
 const ANDROID_VERSIONS: readonly RoadmapAndroidVersion[] = ['Android 16', 'Android 17', 'Android 18']
-const BRANDS: readonly RoadmapBrand[] = ['TECNO', 'Infinix', 'itel', '待定', '其他品牌']
+const BRANDS: readonly RoadmapBrand[] = ['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌']
 const PRODUCT_TYPES: readonly RoadmapProductType[] = ['新品', '老品']
 
 const sectionStyle: CSSProperties = {
@@ -409,7 +409,7 @@ export default function PlannedProjectModal({
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="项目名" name="projectCode" rules={[{ required: true, whitespace: true, message: '请输入项目名' }]}>
-                  <Input placeholder="例如 X6877" maxLength={80} autoComplete="off" />
+                  <Input placeholder="例如 DEMO017" maxLength={80} autoComplete="off" />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>

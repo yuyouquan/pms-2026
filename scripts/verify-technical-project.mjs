@@ -19,7 +19,7 @@ assert.match(redesignBrowser, /const isColdCompileTransient = message =>/, 'prew
 assert.match(redesignBrowser, /if \(mainResponseFailed \|\| !pageErrors\.length \|\| !pageErrors\.every\(isColdCompileTransient\)\) throw error/, 'prewarm immediately fails main-response and non-cold-compile errors')
 assert.match(redesignBrowser, /const selectedYear = await page\.waitForFunction\(\(fieldInput, expectedYear\)/, 'year selection locates and clicks the exact year atomically in the current visible panel')
 assert.match(redesignBrowser, /await selectedYear\.dispose\(\)/, 'year selection completes the atomic browser evaluation before reading the input back')
-assert.match(redesignBrowser, /runScenario\('06 machine new and two legacy versions resolve maximum',[\s\S]{0,1200}'pms-enum-values':[\s\S]{0,600}D8600/, 'scenario 06 owns a deterministic chip and product-series enum seed')
+assert.match(redesignBrowser, /runScenario\('06 machine new and two legacy versions resolve maximum',[\s\S]{0,1200}'pms-enum-values':[\s\S]{0,600}DEMOCHIP003/, 'scenario 06 owns a deterministic chip and product-series enum seed')
 const rules = loadTypeScriptModule(root, 'src/lib/technicalProjectRules.ts')
 const constants = loadTypeScriptModule(root, 'src/constants/technicalProject.ts')
 const enumConsumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
@@ -29,40 +29,40 @@ assert.equal(constants.SUBDOMAINS_BY_DOMAIN, undefined, 'technical constants do 
 assert.equal(constants.TECHNICAL_DOMAINS, undefined, 'technical domains come from live enum rows')
 assert.equal(constants.NO_SUBDOMAIN_DOMAINS, undefined, 'sole-无 behavior comes from live rows')
 const configuredTmgRows = enumValues.createInitialEnumRows()
-assert.deepEqual(enumConsumers.getTmgSubdomainState(configuredTmgRows, '系统应用').options.map(option => option.value), ['AIOS', '应用', '图形', '内核', '多媒体'], '系统应用 exposes the exact five seeded children')
-assert.deepEqual(rules.resolveTechnicalProjectFields({ ipm: { projectName: 'AI项目', category: '系统', secondaryCategory: '应用', technicalTrack: 'AIOS' }, tmg: '系统应用', technicalLead: '李四' }, { tmgSubdomains: { 系统应用: ['AIOS', '应用', '图形', '内核', '多媒体'] } }), { projectName: 'AI项目', category: '系统', secondaryCategory: '应用', technicalTrack: 'AIOS', tmg: '系统应用', subdomains: ['AIOS', '应用', '图形', '内核', '多媒体'], technicalLead: '李四', responsiblePersons: ['李四'] }, 'IPM copies only project fields; lead derives persons and system application maps subdomains')
-for (const tmg of ['基础架构TMG', '性能TMG', 'DFX TMG', 'UX TMG']) {
-  const resolved = rules.resolveTechnicalProjectFields({ tmg, technicalLead: '李四' }, { tmgSubdomains: { [tmg]: ['无'] } })
+assert.deepEqual(enumConsumers.getTmgSubdomainState(configuredTmgRows, '示例应用领域').options.map(option => option.value), ['示例智能技术', '应用', '图形', '内核', '多媒体'], '示例应用领域 exposes the exact five seeded children')
+assert.deepEqual(rules.resolveTechnicalProjectFields({ ipm: { projectName: 'AI项目', category: '系统', secondaryCategory: '应用', technicalTrack: '示例智能技术' }, tmg: '示例应用领域', technicalLead: '演示用户02' }, { tmgSubdomains: { 示例应用领域: ['示例智能技术', '应用', '图形', '内核', '多媒体'] } }), { projectName: 'AI项目', category: '系统', secondaryCategory: '应用', technicalTrack: '示例智能技术', tmg: '示例应用领域', subdomains: ['示例智能技术', '应用', '图形', '内核', '多媒体'], technicalLead: '演示用户02', responsiblePersons: ['演示用户02'] }, 'IPM copies only project fields; lead derives persons and system application maps subdomains')
+for (const tmg of ['示例架构组', '示例性能组', '示例质量组', '示例体验组']) {
+  const resolved = rules.resolveTechnicalProjectFields({ tmg, technicalLead: '演示用户02' }, { tmgSubdomains: { [tmg]: ['无'] } })
   assert.deepEqual(resolved.subdomains, ['无'], `${tmg} has the explicit no-subdomain value`)
   assert.equal(resolved.subdomainDisabled, true, `${tmg} disables subdomain editing`)
 }
 assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '' }), /technicalLead/, 'technical lead is required')
-assert.doesNotThrow(() => rules.validateTechnicalProject({ type: '技术项目前置工作', technicalLead: '李四', preProjectId: '', tmg: '系统应用', subdomain: 'AIOS', projectYear: '2026' }), 'pre-project remains optional for every technical project')
-assert.doesNotThrow(() => rules.validateTechnicalProject({ type: '整机产品项目', technicalLead: '李四', preProjectId: '' }), 'other project types do not require preProjectId')
-assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '', subdomain: '' }), /tmg/, 'TMG is required')
-assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '配置领域', subdomain: '配置子领域', projectYear: '2026' }), 'configured string snapshots are not rejected by a hard-coded closed union')
-assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: 'AIOS', projectYear: '26' }), /projectYear/, 'year is four digits')
-assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: 'AIOS', projectYear: '2026', technicalTeam: { technicalLead: '李四', technicalProjectManager: '', testRepresentative: '', qualityRepresentative: '', productRepresentative: '', standardizationRepresentative: '' } }), 'five non-lead roles stay optional')
-assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: 'AIOS', projectYear: '2026', deliverables: { kpi: { kind: 'url', url: 'https://a.example', file: { name: 'a.pdf', size: 1, mimeType: 'application/pdf' } } } }), /deliverable/, 'a deliverable cannot contain URL and file together')
-assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: 'AIOS', projectYear: '2026', deliverables: { kpi: { kind: 'url', url: 'not-a-link' } } }), /deliverable/, 'deliverable links must be valid HTTP(S) URLs')
-assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '李四', tmg: '系统应用', subdomain: 'AIOS', projectYear: '2026', deliverables: { kpi: { kind: 'file', name: 'kpi.pdf', size: 12, mimeType: 'application/pdf' } } }), 'one file metadata object is accepted')
+assert.doesNotThrow(() => rules.validateTechnicalProject({ type: '技术项目前置工作', technicalLead: '演示用户02', preProjectId: '', tmg: '示例应用领域', subdomain: '示例智能技术', projectYear: '2026' }), 'pre-project remains optional for every technical project')
+assert.doesNotThrow(() => rules.validateTechnicalProject({ type: '整机产品项目', technicalLead: '演示用户02', preProjectId: '' }), 'other project types do not require preProjectId')
+assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '演示用户02', tmg: '', subdomain: '' }), /tmg/, 'TMG is required')
+assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '演示用户02', tmg: '配置领域', subdomain: '配置子领域', projectYear: '2026' }), 'configured string snapshots are not rejected by a hard-coded closed union')
+assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '演示用户02', tmg: '示例应用领域', subdomain: '示例智能技术', projectYear: '26' }), /projectYear/, 'year is four digits')
+assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '演示用户02', tmg: '示例应用领域', subdomain: '示例智能技术', projectYear: '2026', technicalTeam: { technicalLead: '演示用户02', technicalProjectManager: '', testRepresentative: '', qualityRepresentative: '', productRepresentative: '', standardizationRepresentative: '' } }), 'five non-lead roles stay optional')
+assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '演示用户02', tmg: '示例应用领域', subdomain: '示例智能技术', projectYear: '2026', deliverables: { kpi: { kind: 'url', url: 'https://a.example', file: { name: 'a.pdf', size: 1, mimeType: 'application/pdf' } } } }), /deliverable/, 'a deliverable cannot contain URL and file together')
+assert.throws(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '演示用户02', tmg: '示例应用领域', subdomain: '示例智能技术', projectYear: '2026', deliverables: { kpi: { kind: 'url', url: 'not-a-link' } } }), /deliverable/, 'deliverable links must be valid HTTP(S) URLs')
+assert.doesNotThrow(() => rules.validateTechnicalProject({ type: 'tdt', technicalLead: '演示用户02', tmg: '示例应用领域', subdomain: '示例智能技术', projectYear: '2026', deliverables: { kpi: { kind: 'file', name: 'kpi.pdf', size: 12, mimeType: 'application/pdf' } } }), 'one file metadata object is accepted')
 assert.equal(rules.switchDeliverableMode({ kind: 'file', name: 'kpi.pdf', size: 12, mimeType: 'application/pdf' }, 'url'), null, 'file to URL mode clears to null instead of creating an empty URL object')
 assert.equal(rules.switchDeliverableMode({ kind: 'url', url: 'https://a.example/kpi' }, 'file'), null, 'URL to file mode clears to null instead of creating empty file metadata')
 assert.equal(rules.switchDeliverableMode(null, 'file'), null, 'switching an empty optional deliverable keeps it null')
 assert.deepEqual(rules.switchDeliverableMode({ kind: 'url', url: 'https://a.example/kpi' }, 'url'), { kind: 'url', url: 'https://a.example/kpi' }, 'reselecting the active mode preserves a valid value')
 const technicalValues = {
-  technicalTrack: 'AIOS', tmg: '系统应用', subdomain: 'AIOS', preProjectId: '', projectYear: '2026', projectValue: '提升体验',
-  technicalLead: '李四', technicalProjectManager: '王五', testRepresentative: '', qualityRepresentative: '赵六', productRepresentative: '', standardizationRepresentative: '',
+  technicalTrack: '示例智能技术', tmg: '示例应用领域', subdomain: '示例智能技术', preProjectId: '', projectYear: '2026', projectValue: '提升体验',
+  technicalLead: '演示用户02', technicalProjectManager: '演示用户03', testRepresentative: '', qualityRepresentative: '演示用户04', productRepresentative: '', standardizationRepresentative: '',
   projectKpi: { kind: 'url', url: 'https://a.example/kpi' }, conceptDesign: null, charterReport: null, pdcpReport: null, tdcpReport: null, edcpReport: null,
 }
 const createdRecord = rules.synchronizeTechnicalProjectRecord({ id: 'tech-1', name: 'AI项目', type: '技术项目' }, technicalValues, { ipmProjectType: '部门级-技术研发' })
-assert.deepEqual(createdRecord.responsiblePersons, ['李四'], 'create derives responsiblePersons from technical lead')
-assert.equal(createdRecord.leader, '李四', 'create derives root leader from technical lead')
+assert.deepEqual(createdRecord.responsiblePersons, ['演示用户02'], 'create derives responsiblePersons from technical lead')
+assert.equal(createdRecord.leader, '演示用户02', 'create derives root leader from technical lead')
 for (const key of Object.keys(technicalValues)) assert.deepEqual(createdRecord[key], createdRecord.fieldValues[key], `create keeps root and fieldValues consistent for ${key}`)
-const editedValues = { ...technicalValues, technicalLead: '张三', technicalProjectManager: '', projectYear: '2027', projectValue: '', projectKpi: null, conceptDesign: { kind: 'file', name: 'design.pdf', size: 30, mimeType: 'application/pdf' } }
+const editedValues = { ...technicalValues, technicalLead: '演示用户01', technicalProjectManager: '', projectYear: '2027', projectValue: '', projectKpi: null, conceptDesign: { kind: 'file', name: 'design.pdf', size: 30, mimeType: 'application/pdf' } }
 const editedRecord = rules.synchronizeTechnicalProjectRecord(createdRecord, editedValues, { ipmProjectType: '部门级-技术研发' })
-assert.deepEqual(editedRecord.responsiblePersons, ['张三'], 'edit resynchronizes owner from the changed lead')
-assert.equal(editedRecord.leader, '张三', 'edit resynchronizes leader from the changed lead')
+assert.deepEqual(editedRecord.responsiblePersons, ['演示用户01'], 'edit resynchronizes owner from the changed lead')
+assert.equal(editedRecord.leader, '演示用户01', 'edit resynchronizes leader from the changed lead')
 for (const key of Object.keys(editedValues)) assert.deepEqual(editedRecord[key], editedRecord.fieldValues[key], `edit keeps root and fieldValues consistent for ${key}`)
 assert.equal(editedRecord.projectKpi, null, 'edit can clear a previously selected deliverable')
 assert.deepEqual(rules.getPreProjectCandidates([{ id: '1', type: '整机产品项目' }, { id: '2', type: 'tOS版本项目' }, { id: '3', type: '技术项目' }], '2').map(item => item.id), ['1', '3'], 'pre-project candidates include every project type except current')
@@ -113,12 +113,16 @@ const nestedReferenceInput = [{ ...configuredChildren[0], planReferences: { vers
 const nestedReferenceSync = rules.synchronizeTechnicalSubprojects(nestedReferenceInput, [{ id: 'child-a', parentProjectId: 'tech-1', name: 'A', ipmOrder: 1 }], 'tech-1')
 nestedReferenceSync.items[0].planReferences.versions[0].id = 'changed'
 assert.equal(nestedReferenceInput[0].planReferences.versions[0].id, 'v1', 'successful sync deep-clones nested plan references')
-const localStorageData = new Map()
+const datasetStorage = loadTypeScriptModule(root, 'src/lib/mockDatasetStorage.ts')
+const localStorageData = new Map([[datasetStorage.MOCK_DATASET_VERSION_STORAGE_KEY, datasetStorage.MOCK_DATASET_VERSION]])
 globalThis.localStorage = {
+  get length() { return localStorageData.size },
+  key: index => [...localStorageData.keys()][index] ?? null,
   getItem: key => localStorageData.get(key) ?? null,
   setItem: (key, value) => { localStorageData.set(key, value) },
   removeItem: key => { localStorageData.delete(key) },
 }
+globalThis.window = { localStorage: globalThis.localStorage }
 const technicalStoreModule = loadTypeScriptModule(root, 'src/stores/technicalProject.ts')
 const technicalStore = technicalStoreModule.createTechnicalProjectStore({ subprojects: configuredChildren })
 let fixtureNotifications = 0
@@ -212,7 +216,7 @@ sameTickGuard.dispose()
 assert.match(readSource(root, 'src/components/workspace/AddProjectModal.tsx'), /synchronizeTechnicalProjectRecord/, 'create synchronizes technical root, fields, and owner through the executable adapter')
 const sourcePool = readSource(root, 'src/data/externalProjectPool.ts')
 assert.match(sourcePool, /ipmProjectCategoryName: '技术项目前置工作'/, 'mock IPM pool exposes the conditional predecessor-work path')
-assert.match(sourcePool, /technicalTrack: 'AIOS'/, 'technical track is supplied by IPM and not manually entered')
+assert.match(sourcePool, /technicalTrack: '示例智能技术'/, 'technical track is supplied by IPM and not manually entered')
 assert.match(sourcePool, /subprojects:\s*\[/, 'IPM fixture includes derived child rows')
 const configModal = readSource(root, 'src/components/technical-project/SubprojectConfigModal.tsx')
 const enumConfig = readSource(root, 'src/components/config/EnumConfig.tsx')
@@ -266,10 +270,10 @@ assert.equal(rules.sanitizeTechnicalDeliverableUrl('javascript:alert(1)'), null,
 assert.equal(rules.sanitizeTechnicalDeliverableUrl('data:text/html,bad'), null, 'data URLs are non-clickable')
 assert.deepEqual(rules.normalizeTechnicalCustomRoles([
   { name: ' 技术项目负责人 ', members: ['恶意重复'] },
-  { name: '架构顾问', members: ['张三', ' 张三 '] },
-  { name: ' 架构顾问 ', members: ['李四'] },
-  { name: '临时角色', members: ['王五'], isFixed: true },
-], constants.TECHNICAL_TEAM_FIELDS.map(field => field.label)), [{ name: '架构顾问', members: ['张三', '李四'], isFixed: false }], 'custom roles normalize, merge duplicates, and exclude fixed role names and fixed records')
+  { name: '架构顾问', members: ['演示用户01', ' 演示用户01 '] },
+  { name: ' 架构顾问 ', members: ['演示用户02'] },
+  { name: '临时角色', members: ['演示用户03'], isFixed: true },
+], constants.TECHNICAL_TEAM_FIELDS.map(field => field.label)), [{ name: '架构顾问', members: ['演示用户01', '演示用户02'], isFixed: false }], 'custom roles normalize, merge duplicates, and exclude fixed role names and fixed records')
 assert.equal(rules.resolveTechnicalChildSelection(['child-a', 'child-b'], 'child-b', false), 'child-b', 'stable child selection is preserved within one project')
 assert.equal(rules.resolveTechnicalChildSelection(['child-a', 'child-b'], 'child-b', true), 'child-a', 'project changes reset selection to the first IPM child')
 assert.equal(typeof rules.resolveTechnicalInformationModules, 'function', 'technical information exposes a pure tab-module resolver')
@@ -446,8 +450,8 @@ for (const title of ['基础信息', '团队信息', '交付物信息']) {
 assert.match(technicalInformationView, /TECHNICAL_PROJECT_SPACE_CORE_FIELDS\.map\(field =>/, 'technical core fields consume the exact nine-field project-space projection')
 assert.match(technicalInformationView, /TECHNICAL_PROJECT_SPACE_BASIC_FIELDS\.map\(field =>/, 'technical TDT basic fields consume the exact four-field project-space projection')
 assert.doesNotMatch(technicalInformationView, /\.\.\.normalizedCustomRoles/, 'custom permission roles do not expand the strict seven-field technical team projection')
-assert.match(technicalInformationView, /sessionStorage\.getItem\(['"]pms:technical-project-list-target-child['"]\)/, 'technical information consumes workbench child targeting')
-assert.match(technicalInformationView, /const targetChildId[\s\S]{0,360}sessionStorage\.removeItem\(['"]pms:technical-project-list-target-child['"]\)[\s\S]{0,160}if \(!target\) return/, 'technical information consumes the one-shot workbench target even when it does not belong to this project')
+assert.match(technicalInformationView, /pmsSessionStorage\.getItem\(['"]pms:technical-project-list-target-child['"]\)/, 'technical information consumes workbench child targeting')
+assert.match(technicalInformationView, /const targetChildId[\s\S]{0,360}pmsSessionStorage\.removeItem\(['"]pms:technical-project-list-target-child['"]\)[\s\S]{0,160}if \(!target\) return/, 'technical information consumes the one-shot workbench target even when it does not belong to this project')
 assert.match(technicalInformationView, /aria-label="技术信息分类"/, 'technical information tab classification has a stable accessible label')
 assert.match(technicalInformationView, /aria-label="技术信息内容"/, 'technical information content has a stable accessible label')
 assert.match(technicalInformationView, /className="pms-project-info-empty">未配置</, 'empty team roles use the shared unconfigured wording')
@@ -583,10 +587,10 @@ const technicalSeeds = projectData.initialProjects.filter(project => project.typ
 assert.equal(technicalSeeds.length, 8, 'technical mock roots contain the required eight TDT projects')
 assert.equal(new Set(technicalSeeds.map(project => project.id)).size, 8, 'technical root IDs are unique')
 const expectedTechnicalFields = {
-  '4': ['芯片平台前瞻', '基础架构TMG', '芯片适配', '孙七', '李四'],
-  '9': ['AIOS', '系统应用', '端侧AI引擎', '李四', '张三'],
-  '20': ['基础架构', '基础架构TMG', '系统框架', '李四', '赵六'],
-  '21': ['计算影像', '系统应用', '影像算法', '王五', '孙七'],
+  '4': ['芯片平台前瞻', '示例架构组', '芯片适配', '演示用户05', '演示用户02'],
+  '9': ['示例智能技术', '示例应用领域', '端侧AI引擎', '演示用户02', '演示用户01'],
+  '20': ['基础架构', '示例架构组', '系统框架', '演示用户02', '演示用户04'],
+  '21': ['计算影像', '示例应用领域', '影像算法', '演示用户03', '演示用户05'],
 }
 for (const [id, expected] of Object.entries(expectedTechnicalFields)) {
   const project = technicalSeeds.find(item => item.id === id)
@@ -635,25 +639,25 @@ assert.equal(permissionModule.TECHNICAL_TEAM_PERMISSION_MAPPING['其他'], 'tech
 const blankManagerValues = projectStoreModule.migrateProjectState({ projects: [{
   ...technicalSeeds.find(project => project.id === '9'), technicalProjectManager: '', fieldValues: { technicalProjectManager: '' },
 }] }, 6).projects.find(project => project.id === '9')
-assert.equal(blankManagerValues?.technicalProjectManager, '张三', 'blank root technical manager is seeded during migration')
-assert.equal(blankManagerValues?.fieldValues?.technicalProjectManager, '张三', 'blank nested technical manager is seeded alongside the root representation')
+assert.equal(blankManagerValues?.technicalProjectManager, '演示用户01', 'blank root technical manager is seeded during migration')
+assert.equal(blankManagerValues?.fieldValues?.technicalProjectManager, '演示用户01', 'blank nested technical manager is seeded alongside the root representation')
 permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
 permissionModule.usePermissionStore.getState().ensureProjectPermissions([blankManagerValues])
-assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '技术项目经理')?.members, ['张三'], 'permission hydration reads the seeded nested technical manager membership')
+assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '技术项目经理')?.members, ['演示用户01'], 'permission hydration reads the seeded nested technical manager membership')
 const technicalOtherProject = {
   ...blankManagerValues,
-  technicalOther: '张三',
-  fieldValues: { ...blankManagerValues.fieldValues, technicalOther: '张三' },
+  technicalOther: '演示用户01',
+  fieldValues: { ...blankManagerValues.fieldValues, technicalOther: '演示用户01' },
 }
 permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
 permissionModule.usePermissionStore.getState().ensureProjectPermissions([technicalOtherProject])
-assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '其他')?.members, ['张三'], 'permission hydration includes Other membership after technical creation')
+assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '其他')?.members, ['演示用户01'], 'permission hydration includes Other membership after technical creation')
 permissionModule.usePermissionStore.getState().syncProjectTeamPermissionMembers({
   ...technicalOtherProject,
-  technicalOther: '李四',
-  fieldValues: { ...technicalOtherProject.fieldValues, technicalOther: '李四' },
+  technicalOther: '演示用户02',
+  fieldValues: { ...technicalOtherProject.fieldValues, technicalOther: '演示用户02' },
 })
-assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '其他')?.members, ['李四'], 'permission sync updates Other membership after technical editing')
+assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '其他')?.members, ['演示用户02'], 'permission sync updates Other membership after technical editing')
 permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
 permissionModule.usePermissionStore.getState().ensureProjectPermissions(technicalSeeds.filter(project => project.id.startsWith('mock-tech-')))
 for (const project of technicalSeeds.filter(project => project.id.startsWith('mock-tech-'))) {

@@ -137,32 +137,32 @@ for (const [role, enabledKeys] of Object.entries(expectedByRole)) {
 }
 
 for (const permission of expectedByRole['项目经理']) {
-  if (!permissionModule.hasPermission('钱九', '1', permission)) {
-    fail(`钱九 should inherit target-project manager permission ${permission}`)
+  if (!permissionModule.hasPermission('演示用户09', '1', permission)) {
+    fail(`演示用户09 should inherit target-project manager permission ${permission}`)
   }
-  if (!permissionModule.hasPermission('张三', '1', permission)) {
-    fail(`张三 global-administrator permission regressed for ${permission}`)
+  if (!permissionModule.hasPermission('演示用户01', '1', permission)) {
+    fail(`演示用户01 global-administrator permission regressed for ${permission}`)
   }
 }
 
 for (const permission of ['basicInfo:编辑', 'plan:一级计划-编辑', 'projectPermission:manageRoles']) {
-  if (permissionModule.hasPermission('钱九', '3', permission)) {
-    fail(`钱九 must not receive ${permission} outside project 1`)
+  if (permissionModule.hasPermission('演示用户09', '3', permission)) {
+    fail(`演示用户09 must not receive ${permission} outside project 1`)
   }
-  if (permissionModule.hasPermission('李四', '1', permission)) {
-    fail(`李四 must remain a regular member without ${permission}`)
+  if (permissionModule.hasPermission('演示用户02', '1', permission)) {
+    fail(`演示用户02 must remain a regular member without ${permission}`)
   }
-  if (permissionModule.hasPermission('李四', '3', permission)) {
-    fail(`李四 must not receive ${permission} in non-target project 3`)
+  if (permissionModule.hasPermission('演示用户02', '3', permission)) {
+    fail(`演示用户02 must not receive ${permission} in non-target project 3`)
   }
-  if (!permissionModule.hasPermission('张三', '3', permission)) {
-    fail(`张三 global-administrator permission regressed in non-target project 3 for ${permission}`)
+  if (!permissionModule.hasPermission('演示用户01', '3', permission)) {
+    fail(`演示用户01 global-administrator permission regressed in non-target project 3 for ${permission}`)
   }
 }
 
-if (!permissionModule.hasPermission('李四', '1', 'basicInfo:查看')) fail('李四 should retain regular-member basic read access')
+if (!permissionModule.hasPermission('演示用户02', '1', 'basicInfo:查看')) fail('演示用户02 should retain regular-member basic read access')
 for (const permission of ['roadmap:view', 'configCenter:planEdit', 'permissionCenter:manageRoles']) {
-  if (permissionModule.hasGlobalPermission('钱九', permission)) fail(`钱九 must not receive global permission ${permission}`)
+  if (permissionModule.hasGlobalPermission('演示用户09', permission)) fail(`演示用户09 must not receive global permission ${permission}`)
 }
 
 assertIncludes(projectManagerBrowserSource, 'const PERMISSION_MATRIX = [', 'project-manager browser coverage')
@@ -177,6 +177,6 @@ assertIncludes(projectManagerBrowserSource, 'PERMISSION_MATRIX.filter', 'project
 assertIncludes(projectManagerBrowserSource, 'for (const testCase of cases)', 'project-manager browser coverage')
 assertIncludes(projectManagerBrowserSource, 'assertDeniedProject', 'project-manager browser inaccessible-project coverage')
 assertIncludes(projectManagerBrowserSource, 'errorCounts', 'project-manager browser raw error counters')
-if (/favicon\.ico/.test(projectManagerBrowserSource)) fail('project-manager browser must not whitelist favicon HTTP failures')
+if (/favicon\.ico/.test(projectManagerBrowserSource)) fail('project-manager browser must not wh示例品牌Cist favicon HTTP failures')
 
 console.log('Project-space permission matrix is aligned with the required table.')

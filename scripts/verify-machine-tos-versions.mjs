@@ -11,7 +11,7 @@ const roadmapAdapter = loadTypeScriptModule(root, 'src/lib/roadmapProjectAdapter
 
 const newMachine = {
   id: 'new',
-  name: 'X6870',
+  name: 'DEMO014',
   type: '整机产品项目',
   productType: '新品',
   firstSaleTosVersion: '14.0.0',
@@ -19,15 +19,15 @@ const newMachine = {
 }
 const oldMachine = {
   id: 'old',
-  name: ' X6870 ',
+  name: ' DEMO014 ',
   type: '整机产品项目',
   productType: '老品',
   firstSaleTosVersion: '',
   currentTosVersion: '15.0.0',
 }
 
-assert.equal(rules.normalizeMachineFamilyName('  X6870  '), 'X6870', 'family matching trims surrounding whitespace')
-assert.notEqual(rules.normalizeMachineFamilyName('x6870'), rules.normalizeMachineFamilyName('X6870'), 'family matching remains case-sensitive')
+assert.equal(rules.normalizeMachineFamilyName('  DEMO014  '), 'DEMO014', 'family matching trims surrounding whitespace')
+assert.notEqual(rules.normalizeMachineFamilyName('demo014'), rules.normalizeMachineFamilyName('DEMO014'), 'family matching remains case-sensitive')
 assert.equal(rules.normalizeMachineTosVersion(' tOS18.preview '), '18.preview', 'arbitrary tOS bodies normalize one prefix')
 assert.equal(rules.normalizeMachineTosVersion('TOS 16.0'), 'TOS 16.0', 'uppercase TOS remains part of a valid snapshot body')
 assert.ok(rules.compareMachineTosVersions('17.10.0', '17.2.0') > 0, 'numeric version bodies sort naturally')
@@ -55,7 +55,7 @@ assert.deepEqual(rules.resolveMachineTosUpdate([newMachine], oldMachine), {
   updates: [{ id: 'new', currentTosVersion: '15.0.0' }],
 }, 'legacy inherits first sale and raises only its unique new machine')
 
-const laterOld = { ...oldMachine, id: 'old-2', name: 'X6870', currentTosVersion: '17.10.0' }
+const laterOld = { ...oldMachine, id: 'old-2', name: 'DEMO014', currentTosVersion: '17.10.0' }
 assert.deepEqual(rules.resolveMachineTosUpdate([newMachine, oldMachine], laterOld), {
   ok: true,
   candidate: { ...laterOld, firstSaleTosVersion: '14.0.0', currentTosVersion: '17.10.0' },
@@ -77,9 +77,9 @@ assert.deepEqual(
   { ok: false, reason: 'invalid-version' },
 )
 
-const otherNew = { ...newMachine, id: 'other-new', name: 'X6880', firstSaleTosVersion: '16.0.0' }
+const otherNew = { ...newMachine, id: 'other-new', name: 'DEMO018', firstSaleTosVersion: '16.0.0' }
 assert.deepEqual(
-  rules.resolveMachineTosUpdate([newMachine, otherNew], { ...otherNew, name: ' X6870 ' }),
+  rules.resolveMachineTosUpdate([newMachine, otherNew], { ...otherNew, name: ' DEMO014 ' }),
   { ok: false, reason: 'duplicate-new-product' },
   'renaming a new machine into another exact trimmed new family is rejected',
 )
@@ -99,7 +99,7 @@ assert.deepEqual(rules.resolveMachineTosUpdate([historicalNew, editedOld], edite
 
 const oldFamilyNew = { ...newMachine, id: 'old-family-new', name: 'OLD', currentTosVersion: '17.10.0' }
 const movingOld = { ...oldMachine, id: 'moving', name: 'OLD', firstSaleTosVersion: '14.0.0', currentTosVersion: '17.10.0' }
-const renamedOld = { ...movingOld, name: 'X6870', currentTosVersion: '15.0.0' }
+const renamedOld = { ...movingOld, name: 'DEMO014', currentTosVersion: '15.0.0' }
 assert.deepEqual(rules.resolveMachineTosUpdate([newMachine, oldFamilyNew, movingOld], renamedOld), {
   ok: true,
   candidate: { ...renamedOld, firstSaleTosVersion: '14.0.0', currentTosVersion: '15.0.0' },
@@ -110,13 +110,13 @@ assert.deepEqual(rules.resolveMachineTosUpdate([newMachine, oldFamilyNew, moving
 }, 'renaming an old machine recomputes both old and new affected families')
 
 assert.deepEqual(
-  projectInfoRules.deriveProjectResponsiblePersons('整机产品项目', { machineSpm: ['李白'] }, ['手填人']),
-  ['李白'],
+  projectInfoRules.deriveProjectResponsiblePersons('整机产品项目', { machineSpm: ['演示用户07'] }, ['手填人']),
+  ['演示用户07'],
   'whole-machine responsibility derives from SPM',
 )
 assert.deepEqual(
-  projectInfoRules.deriveProjectResponsiblePersons('tOS版本项目', { tosVersionProjectManager: ['李四'] }, ['手填人']),
-  ['李四'],
+  projectInfoRules.deriveProjectResponsiblePersons('tOS版本项目', { tosVersionProjectManager: ['演示用户02'] }, ['手填人']),
+  ['演示用户02'],
   'tOS responsibility derives from version project manager',
 )
 assert.deepEqual(
@@ -132,7 +132,7 @@ assert.equal(
 
 const persistedMachineBase = {
   id: 'persisted-machine',
-  name: 'X6870',
+  name: 'DEMO014',
   type: '整机产品项目',
   productType: '新品',
 }
@@ -223,14 +223,14 @@ const deleteNew = {
 const deleteLegacy15 = {
   ...oldMachine,
   id: 'delete-old-15',
-  name: 'X6870',
+  name: 'DEMO014',
   firstSaleTosVersion: '14.0.0',
   currentTosVersion: '15.0.0',
 }
 const deleteLegacy17 = {
   ...oldMachine,
   id: 'delete-old-17',
-  name: 'X6870',
+  name: 'DEMO014',
   firstSaleTosVersion: '14.0.0',
   currentTosVersion: '17.10.0',
 }
@@ -242,7 +242,7 @@ const deleteFixture = (projects, projectId, selectedProject = null) => {
   const unsubscribe = projectStore.useProjectStore.subscribe(() => {
     projectStoreNotifications += 1
   })
-  const deleted = projectStore.useProjectStore.getState().deleteProject(projectId, '张三')
+  const deleted = projectStore.useProjectStore.getState().deleteProject(projectId, '演示用户01')
   unsubscribe()
   return {
     deleted,
@@ -313,9 +313,9 @@ const auditedLegacyToDelete = {
   ...deleteLegacy17,
   id: 'delete-audited-legacy',
   secondaryCategory: '整机-手机',
-  projectCode: 'X6870',
+  projectCode: 'DEMO014',
   androidVersion: 'Android 18',
-  brand: 'TECNO',
+  brand: '示例品牌A',
   startRam: '8GB',
   versionType: 'Full',
   developMode: '自研',
@@ -349,7 +349,7 @@ const validMachineFields = {
   secondaryCategory: '整机-手机',
   status: '待立项',
   androidVersion: 'Android 18',
-  brand: 'TECNO',
+  brand: '示例品牌A',
   startRam: '8GB',
   versionType: 'Full',
   developMode: '自研',
@@ -381,7 +381,7 @@ const unsubscribeSelectedSync = projectStore.useProjectStore.subscribe(() => {
   selectedSyncNotifications += 1
 })
 assert.equal(
-  projectStore.useProjectStore.getState().addProject(validSourceLegacy, '张三', { allowedFirstSaleTosValues: ['14.0.0', '15.0.0'] }),
+  projectStore.useProjectStore.getState().addProject(validSourceLegacy, '演示用户01', { allowedFirstSaleTosValues: ['14.0.0', '15.0.0'] }),
   true,
   'different source BIDs may create same-name linked new and legacy projects',
 )
@@ -404,7 +404,7 @@ const unsubscribeDuplicateBid = projectStore.useProjectStore.subscribe(() => {
   duplicateBidNotifications += 1
 })
 assert.equal(
-  projectStore.useProjectStore.getState().addProject(duplicateBidCandidate, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+  projectStore.useProjectStore.getState().addProject(duplicateBidCandidate, '演示用户01', { allowedFirstSaleTosValues: ['14.0.0'] }),
   false,
   'addProject rejects a reused non-empty source BID',
 )
@@ -422,7 +422,7 @@ const updateBidFixture = {
 projectStore.useProjectStore.setState({ projects: [validSourceNew, updateBidFixture], selectedProject: updateBidFixture })
 const beforeDuplicateBidUpdate = projectStore.useProjectStore.getState().projects
 assert.equal(
-  projectStore.useProjectStore.getState().updateProject(updateBidFixture.id, { sourceBid: 'BID-NEW' }, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+  projectStore.useProjectStore.getState().updateProject(updateBidFixture.id, { sourceBid: 'BID-NEW' }, '演示用户01', { allowedFirstSaleTosValues: ['14.0.0'] }),
   null,
   'updateProject rejects another project source BID',
 )
@@ -460,7 +460,7 @@ assert.deepEqual(
 )
 projectStore.useProjectStore.setState({ projects: [], selectedProject: null })
 assert.equal(
-  projectStore.useProjectStore.getState().addProject(configurableSnapshotProject, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+  projectStore.useProjectStore.getState().addProject(configurableSnapshotProject, '演示用户01', { allowedFirstSaleTosValues: ['14.0.0'] }),
   true,
   'machine create persists current configured version and development strings through the actual project store gate',
 )
@@ -472,7 +472,7 @@ assert.deepEqual(
 const retiredSnapshotUpdate = projectStore.useProjectStore.getState().updateProject(
   configurableSnapshotProject.id,
   { versionType: '已停用版本型', developMode: '已停用开发模式' },
-  '张三',
+  '演示用户01',
   { allowedFirstSaleTosValues: ['14.0.0'] },
 )
 assert.deepEqual(
@@ -493,8 +493,8 @@ assert.deepEqual(
 )
 const unrelatedRetiredUpdate = projectStore.useProjectStore.getState().updateProject(
   configurableSnapshotProject.id,
-  { projectManager: '李四' },
-  '张三',
+  { projectManager: '演示用户02' },
+  '演示用户01',
   { allowedFirstSaleTosValues: ['14.0.0'] },
 )
 assert.deepEqual(
@@ -531,7 +531,7 @@ for (const [index, configuredDevelopMode] of ['联合开发', '外研'].entries(
   )
   projectStore.useProjectStore.setState({ projects: [], selectedProject: null })
   assert.equal(
-    projectStore.useProjectStore.getState().addProject(exactDevelopModeProject, '张三', { allowedFirstSaleTosValues: ['14.0.0'] }),
+    projectStore.useProjectStore.getState().addProject(exactDevelopModeProject, '演示用户01', { allowedFirstSaleTosValues: ['14.0.0'] }),
     true,
     `machine create accepts the configured ${configuredDevelopMode} snapshot through the actual store gate`,
   )
@@ -543,7 +543,7 @@ for (const [index, configuredDevelopMode] of ['联合开发', '外研'].entries(
   const exactDevelopModeUpdate = projectStore.useProjectStore.getState().updateProject(
     exactDevelopModeProject.id,
     { developMode: configuredDevelopMode },
-    '张三',
+    '演示用户01',
     { allowedFirstSaleTosValues: ['14.0.0'] },
   )
   assert.equal(
@@ -581,7 +581,7 @@ assert.doesNotMatch(modalSource, /严格的三段|三段数字/, 'project info n
 assert.doesNotMatch(addSource, /严格的三段|三段数字/, 'project create no longer reports a segment-count restriction')
 assert.doesNotMatch(projectSpaceSource, /严格的三段|三段数字/, 'project-space save no longer reports a segment-count restriction')
 assert.doesNotMatch(roadmapPlannedModalSource, /两位\s*tOS|[23]位\s*tOS/, 'planned roadmap history copy has no segment-count wording')
-assert.ok((externalPoolSource.match(/name:\s*'X6870'/g) || []).length >= 3, 'browser fixtures expose one new and two same-name legacy projects')
+assert.ok((externalPoolSource.match(/name:\s*'DEMO014'/g) || []).length >= 3, 'browser fixtures expose one new and two same-name legacy projects')
 
 const expectedMachineEnumTypes = {
   firstSaleTosVersion: 'first-sale-tos', currentTosVersion: 'first-sale-tos',

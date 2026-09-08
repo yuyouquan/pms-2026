@@ -44,7 +44,8 @@
     "verify:workbench-browser": "node screenshots/verify-workbench-summary-floating-panels.mjs",
     "verify:redesign-browser": "node screenshots/verify-workbench-technical-project-redesign.mjs",
     "verify:liquid-glass": "node scripts/verify-liquid-glass-theme.mjs",
-    "verify:liquid-glass:self-test": "node scripts/verify-liquid-glass-theme-self-test.mjs"
+    "verify:liquid-glass:self-test": "node scripts/verify-liquid-glass-theme-self-test.mjs",
+    "verify:mock-data": "node scripts/verify-mock-data-hygiene.mjs && node scripts/verify-mock-dataset-storage.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

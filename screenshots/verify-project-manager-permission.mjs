@@ -6,15 +6,15 @@ const BASE_URL = process.env.PMS_BASE_URL || 'http://127.0.0.1:3004'
 const TIMEOUT = Number(process.env.PMS_BROWSER_TIMEOUT || 60_000)
 const MATRIX_ONLY = process.env.PMS_MATRIX_ONLY || ''
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
-const TARGET_PROJECT = { projectId: '1', projectName: 'X6877-D8400_H991', category: '整机产品项目' }
-const NON_TARGET_PROJECT = { projectId: '3', projectName: 'X6855_H8917', category: '整机产品项目' }
+const TARGET_PROJECT = { projectId: '1', projectName: 'DEMO017-DEMOCHIP001_DEMOBOARD016', category: '整机产品项目' }
+const NON_TARGET_PROJECT = { projectId: '3', projectName: 'DEMO013_DEMOBOARD010', category: '整机产品项目' }
 const PERMISSION_MATRIX = [
-  { id: 'zhang-target', user: '张三', ...TARGET_PROJECT, accessible: true, canEditBasicInfo: true, canMaintainLevel1: true, canManageRoles: true },
-  { id: 'zhang-non-target', user: '张三', ...NON_TARGET_PROJECT, accessible: true, canEditBasicInfo: true, canMaintainLevel1: true, canManageRoles: true },
-  { id: 'qian-target', user: '钱九', ...TARGET_PROJECT, accessible: true, canEditBasicInfo: true, canMaintainLevel1: true, canManageRoles: true },
-  { id: 'qian-non-target', user: '钱九', ...NON_TARGET_PROJECT, accessible: false, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
-  { id: 'li-target', user: '李四', ...TARGET_PROJECT, accessible: true, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
-  { id: 'li-non-target', user: '李四', ...NON_TARGET_PROJECT, accessible: true, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
+  { id: 'zhang-target', user: '演示用户01', ...TARGET_PROJECT, accessible: true, canEditBasicInfo: true, canMaintainLevel1: true, canManageRoles: true },
+  { id: 'zhang-non-target', user: '演示用户01', ...NON_TARGET_PROJECT, accessible: true, canEditBasicInfo: true, canMaintainLevel1: true, canManageRoles: true },
+  { id: 'qian-target', user: '演示用户09', ...TARGET_PROJECT, accessible: true, canEditBasicInfo: true, canMaintainLevel1: true, canManageRoles: true },
+  { id: 'qian-non-target', user: '演示用户09', ...NON_TARGET_PROJECT, accessible: false, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
+  { id: 'li-target', user: '演示用户02', ...TARGET_PROJECT, accessible: true, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
+  { id: 'li-non-target', user: '演示用户02', ...NON_TARGET_PROJECT, accessible: true, canEditBasicInfo: false, canMaintainLevel1: false, canManageRoles: false },
 ]
 
 const clickExact = async (page, text, selector = 'button,[role="menuitem"],span') => {
@@ -231,7 +231,7 @@ try {
 
   await page.goto(BASE_URL, { waitUntil: 'networkidle2', timeout: TIMEOUT })
   await page.waitForFunction(() => (
-    document.querySelector('button[aria-label="切换当前用户"]')?.getAttribute('data-current-user') === '张三'
+    document.querySelector('button[aria-label="切换当前用户"]')?.getAttribute('data-current-user') === '演示用户01'
     && [...document.querySelectorAll('[role="menuitem"]')].some(item => item.textContent?.trim() === '项目列表')
   ), { timeout: TIMEOUT })
 
@@ -243,7 +243,7 @@ try {
     console.log(`Running ${testCase.id}: ${testCase.user} / ${testCase.projectName}`)
     await returnToProjectList(page)
     await switchUser(page, testCase.user)
-    if (testCase.user === '张三') {
+    if (testCase.user === '演示用户01') {
       assert.match(await page.$eval('button[aria-label="切换当前用户"]', element => element.textContent || ''), /管理组/, `${testCase.id} keeps the global administrator badge`)
     }
     if (!testCase.accessible) {

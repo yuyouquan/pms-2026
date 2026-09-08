@@ -38,7 +38,7 @@ async function pickInSelect(page, modalSelectIndex, optionText) {
 }
 
 try {
-  log('1. Load app as 张三')
+  log('1. Load app as 演示用户01')
   await page.goto(URL, { waitUntil: 'networkidle0', timeout: 30000 })
   await sleep(800)
 
@@ -71,13 +71,13 @@ try {
   log('5. Pick 项目类型 = 产品项目')
   await pickInSelect(page, 1, '产品项目')
 
-  log('6. Manually pick 项目责任人 = 李四 + 张三')
+  log('6. Manually pick 项目责任人 = 演示用户02 + 演示用户01')
   // Open the responsible-persons multi-select and click both options.
   const selects = await page.$$('.ant-modal .ant-select')
   if (!selects[2]) throw new Error('No .ant-select at modal index 2')
   await selects[2].click()
   await sleep(400)
-  for (const name of ['李四', '张三']) {
+  for (const name of ['演示用户02', '演示用户01']) {
     const clicked = await page.evaluate((n) => {
       const items = Array.from(document.querySelectorAll('.ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option'))
       const t = items.find(el => (el.textContent || '').trim() === n)
@@ -113,7 +113,7 @@ try {
   if (!pageState.backBtnVisible) throw new Error('Expected to be in project space (返回工作台 button missing)')
   if (!pageState.titleHasNewProject) throw new Error('Expected tOS19.0 as the project space title')
 
-  log('9. Navigate to 权限配置 in project space, verify 系统管理员 row has 李四')
+  log('9. Navigate to 权限配置 in project space, verify 系统管理员 row has 演示用户02')
   await page.evaluate(() => {
     const items = Array.from(document.querySelectorAll('.ant-menu-item, [role="menuitem"], .ant-menu-title-content'))
     // Find clickable parent containing the text
@@ -139,8 +139,8 @@ try {
       .map(t => (t.textContent || '').trim()).filter(Boolean)
   })
   console.log('   系统管理员 row members:', sysAdminMembers)
-  if (!sysAdminMembers || !sysAdminMembers.some(m => m.includes('李四'))) {
-    throw new Error(`Expected 李四 in 系统管理员 row for new project, got: ${JSON.stringify(sysAdminMembers)}`)
+  if (!sysAdminMembers || !sysAdminMembers.some(m => m.includes('演示用户02'))) {
+    throw new Error(`Expected 演示用户02 in 系统管理员 row for new project, got: ${JSON.stringify(sysAdminMembers)}`)
   }
 
   log('✅ End-to-end smoke test passed.')

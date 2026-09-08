@@ -423,7 +423,7 @@ assert.equal(
 assert.deepEqual(
   linkedPrimaryProject.filter(task => task.parentId === 'stage').map(task => task.planEndDate),
   ['2026-02-26', '2026-03-17'],
-  'the primary X6877 project uses the same baseline milestone dates as its project-space plan',
+  'the primary DEMO017 project uses the same baseline milestone dates as its project-space plan',
 )
 assert.notDeepEqual(
   linkedMockChildren.map(task => task.planEndDate),
@@ -515,7 +515,7 @@ assert.equal(
 
 const machineProjectMock = projectMocks.buildProjectListMockPlanTasks('1', machineUndatedTemplate, {
   projectType: '整机产品项目',
-  projectName: 'X6877-D8400_H991',
+  projectName: 'DEMO017-DEMOCHIP001_DEMOBOARD016',
 })
 const machineBusinessMocks = machineProjectMock.filter(task => task.nodeKind === 'business-period')
 assert.deepEqual(machineBusinessMocks.map(task => task.taskName), ['MR1', 'MR2'], 'machine project mocks add one launch and one lifecycle business period')
@@ -524,7 +524,7 @@ assert.equal(machineBusinessMocks[0].planEndDate < machineBusinessMocks[1].planS
 assert.equal(machineBusinessMocks[0].actualEndDate < machineBusinessMocks[1].actualStartDate, true, 'machine actual business periods never overlap')
 const offsetMachineMock = projectMocks.buildProjectListMockPlanTasks('3', machineUndatedTemplate, {
   projectType: '整机产品项目',
-  projectName: 'X6855_H8917',
+  projectName: 'DEMO013_DEMOBOARD010',
 })
 const offsetMachineStr5 = offsetMachineMock.find(task => task.taskName === 'STR5')
 const offsetMachineMr1 = offsetMachineMock.find(task => task.taskName === 'MR1')
@@ -1348,9 +1348,9 @@ assert.deepEqual(subproject.rows.map(row => ({ start: row.planStartDate, days: r
 ])
 assert.deepEqual(subproject.stageGroups, [])
 
-assert.equal(rules.canMaintainLevel1Plan({ projectType: '整机产品项目', currentUser: '李白', spmUsers: ['李白'], technicalLead: '', globalAdmins: [] }), true)
-assert.equal(rules.canMaintainLevel1Plan({ projectType: '技术项目', currentUser: '王五', spmUsers: ['王五'], technicalLead: '张三', globalAdmins: [] }), false)
-assert.equal(rules.canMaintainLevel1Plan({ projectType: '技术项目', currentUser: '张三', spmUsers: [], technicalLead: '张三', globalAdmins: [] }), true)
+assert.equal(rules.canMaintainLevel1Plan({ projectType: '整机产品项目', currentUser: '演示用户07', spmUsers: ['演示用户07'], technicalLead: '', globalAdmins: [] }), true)
+assert.equal(rules.canMaintainLevel1Plan({ projectType: '技术项目', currentUser: '演示用户03', spmUsers: ['演示用户03'], technicalLead: '演示用户01', globalAdmins: [] }), false)
+assert.equal(rules.canMaintainLevel1Plan({ projectType: '技术项目', currentUser: '演示用户01', spmUsers: [], technicalLead: '演示用户01', globalAdmins: [] }), true)
 assert.equal(rules.canMaintainLevel1Plan({ projectType: '能力建设项目', currentUser: '管理员', spmUsers: [], technicalLead: '', globalAdmins: ['管理员'] }), true)
 
 const launchStage = { ...makeTask('4', null, 3, '上市收编阶段'), stableId: 'stage-launch' }

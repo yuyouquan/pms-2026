@@ -6461,6 +6461,7 @@ body .pms-roadmap-evolution-card.pms-glass-surface.is-conflict {
 }
 
 @media (max-width: 1024px) {
+  .pms-demo-data-tag.ant-tag { display: none; }
   .pms-toolbar {
     gap: 8px;
     padding: 8px 12px;
@@ -8156,4 +8157,14 @@ input.ant-input,
     scroll-behavior: auto !important;
     transition: none !important;
   }
+}
+
+/* Keep the dataset label compact beside the prototype user switcher. */
+.pms-demo-data-tag.ant-tag {
+  margin: 0;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  font-size: var(--pms-font-size-caption, 12px);
+  white-space: nowrap;
 }

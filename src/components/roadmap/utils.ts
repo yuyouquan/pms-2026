@@ -1,3 +1,4 @@
+import { getPmsLocalStorage, MOCK_DATASET_VERSION } from '@/lib/mockDatasetStorage'
 import type { MilestoneInfo, RoadmapViewConfig } from '@/types'
 import React from 'react'
 import type { ColumnsType } from 'antd/es/table'
@@ -57,6 +58,7 @@ export interface SavedProjectView {
 }
 
 export interface ProjectViewSharePayload {
+  datasetVersion: string
   kind: ProjectViewKind
   name?: string
   state: ProjectViewState
@@ -64,7 +66,11 @@ export interface ProjectViewSharePayload {
 }
 
 function canUseBrowserStorage() {
-  return typeof window !== 'undefined' && !!window.localStorage
+  try {
+    return typeof window !== 'undefined' && !!getPmsLocalStorage()
+  } catch {
+    return false
+  }
 }
 
 function normalizeSavedViews(raw: unknown): SavedProjectView[] {
@@ -94,7 +100,7 @@ export function saveProjectView(config: SavedProjectView): void {
     } else {
       views.unshift(nextConfig)
     }
-    window.localStorage.setItem(PROJECT_VIEW_STORAGE_KEY, JSON.stringify(views))
+    getPmsLocalStorage().setItem(PROJECT_VIEW_STORAGE_KEY, JSON.stringify(views))
   } catch {
     // graceful fail
   }
@@ -104,7 +110,7 @@ export function saveProjectView(config: SavedProjectView): void {
 export function loadProjectViews(kind?: ProjectViewKind): SavedProjectView[] {
   if (!canUseBrowserStorage()) return []
   try {
-    const raw = window.localStorage.getItem(PROJECT_VIEW_STORAGE_KEY)
+    const raw = getPmsLocalStorage().getItem(PROJECT_VIEW_STORAGE_KEY)
     const views = normalizeSavedViews(raw ? JSON.parse(raw) : [])
     return kind ? views.filter(view => view.kind === kind) : views
   } catch {
@@ -117,7 +123,7 @@ export function deleteProjectView(id: string): void {
   if (!canUseBrowserStorage()) return
   try {
     const views = loadProjectViews().filter(view => view.id !== id)
-    window.localStorage.setItem(PROJECT_VIEW_STORAGE_KEY, JSON.stringify(views))
+    getPmsLocalStorage().setItem(PROJECT_VIEW_STORAGE_KEY, JSON.stringify(views))
   } catch {
     // graceful fail
   }
@@ -127,6 +133,7 @@ export function deleteProjectView(id: string): void {
 export function createProjectViewShareUrl(kind: ProjectViewKind, state: ProjectViewState, name?: string): string {
   if (typeof window === 'undefined') return ''
   const payload: ProjectViewSharePayload = {
+    datasetVersion: MOCK_DATASET_VERSION,
     kind,
     name,
     state,
@@ -138,14 +145,17 @@ export function createProjectViewShareUrl(kind: ProjectViewKind, state: ProjectV
 }
 
 /** 解析分享链接中的项目视图配置。 */
-export function parseProjectViewShare(expectedKind?: ProjectViewKind): ProjectViewSharePayload | null {
+export function parseProjectViewShare(expectedKind?: ProjectViewKind): ProjectViewSharePayload | { expired: true } | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = new URL(window.location.href).searchParams.get(PROJECT_VIEW_SHARE_PARAM)
     if (!raw) return null
     const parsed = JSON.parse(raw) as ProjectViewSharePayload
-    if (!parsed?.kind || !parsed?.state) return null
+    if (!parsed?.kind) return null
     if (expectedKind && parsed.kind !== expectedKind) return null
+    // Never return names, filters, or row snapshots from a previous prototype dataset.
+    if (parsed.datasetVersion !== MOCK_DATASET_VERSION) return { expired: true }
+    if (!parsed.state) return null
     return parsed
   } catch {
     return null
@@ -599,7 +609,7 @@ export function saveView(config: RoadmapViewConfig): void {
     } else {
       views.push(config)
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(views))
+    getPmsLocalStorage().setItem(STORAGE_KEY, JSON.stringify(views))
   } catch {
     // graceful fail
   }
@@ -608,7 +618,7 @@ export function saveView(config: RoadmapViewConfig): void {
 /** 从 localStorage 加载所有保存的视图 */
 export function loadAllViews(): RoadmapViewConfig[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = getPmsLocalStorage().getItem(STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : []
@@ -621,7 +631,7 @@ export function loadAllViews(): RoadmapViewConfig[] {
 export function deleteView(id: string): void {
   try {
     const views = loadAllViews().filter(v => v.id !== id)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(views))
+    getPmsLocalStorage().setItem(STORAGE_KEY, JSON.stringify(views))
   } catch {
     // graceful fail
   }

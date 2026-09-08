@@ -1,5 +1,7 @@
 'use client'
 
+import { pmsSessionStorage } from '@/lib/mockDatasetStorage'
+
 import { useEffect, useState, useMemo, type CSSProperties } from 'react'
 import {
   App, Row, Col, Button, Card, Empty, Segmented, Pagination, Space, Tooltip,
@@ -394,7 +396,7 @@ export default function ProjectListContainer() {
       return
     }
     if (row.targetSubprojectId) {
-      window.sessionStorage.setItem('pms:technical-project-list-target-child', String(row.targetSubprojectId))
+      pmsSessionStorage.setItem('pms:technical-project-list-target-child', String(row.targetSubprojectId))
     }
     activateProject(project)
     setProjectSpaceModule('basic')

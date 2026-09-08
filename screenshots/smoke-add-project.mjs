@@ -20,13 +20,13 @@ try {
   await page.goto(URL, { waitUntil: 'networkidle0', timeout: 30000 })
   await sleep(800)
 
-  log('2. Current user should be 张三 (admin). Check 新增项目 button is visible.')
+  log('2. Current user should be 演示用户01 (admin). Check 新增项目 button is visible.')
   const btnVisible = await page.evaluate(() => {
     const els = Array.from(document.querySelectorAll('button'))
     return els.some(b => (b.textContent || '').trim().includes('新增项目'))
   })
   console.log('   新增项目 button visible:', btnVisible)
-  if (!btnVisible) throw new Error('Button not found for admin user 张三')
+  if (!btnVisible) throw new Error('Button not found for admin user 演示用户01')
 
   log('3. Click the button — Modal should open with title 新增项目.')
   await page.evaluate(() => {
@@ -53,7 +53,7 @@ try {
     if (!labels.includes(e)) throw new Error(`Missing field label: ${e}`)
   }
 
-  log('5. Close Modal, switch user to 李四 (non-admin), confirm button hidden.')
+  log('5. Close Modal, switch user to 演示用户02 (non-admin), confirm button hidden.')
   await page.evaluate(() => {
     const closeBtns = Array.from(document.querySelectorAll('.ant-modal-close'))
     if (closeBtns[0]) closeBtns[0].click()
@@ -77,7 +77,7 @@ try {
     const items = Array.from(document.querySelectorAll('.ant-dropdown-menu-item, li'))
     const target = items.find(el => {
       const txt = (el.textContent || '').trim()
-      return txt.startsWith('李四') || txt.includes('李四')
+      return txt.startsWith('演示用户02') || txt.includes('演示用户02')
     })
     if (target) target.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -87,7 +87,7 @@ try {
     const spans = Array.from(document.querySelectorAll('header span, [class*="UserSwitcher"] span, span'))
     const u = spans.find(s => {
       const t = (s.textContent || '').trim()
-      return ['张三','李四','王五','赵六','孙七','周八','李白','杜甫'].includes(t)
+      return ['演示用户01','演示用户02','演示用户03','演示用户04','演示用户05','演示用户06','演示用户07','演示用户08'].includes(t)
     })
     return u ? u.textContent.trim() : 'unknown'
   })
@@ -98,8 +98,8 @@ try {
     const els = Array.from(document.querySelectorAll('button'))
     return els.some(b => (b.textContent || '').trim().includes('新增项目'))
   })
-  console.log('   新增项目 button visible for 李四:', btnAfter)
-  if (btnAfter) throw new Error('Button should NOT be visible for non-admin 李四')
+  console.log('   新增项目 button visible for 演示用户02:', btnAfter)
+  if (btnAfter) throw new Error('Button should NOT be visible for non-admin 演示用户02')
 
   log('✅ Smoke test passed.')
   if (errors.length > 0) {

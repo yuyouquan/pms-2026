@@ -55,11 +55,11 @@ export const WHOLE_MACHINE_HARDWARE_CONFIG_FIELDS = [
 ] as const
 
 export const PRODUCT_SERIES_OPTIONS = [
-  { label: 'CAMON 50', value: 'CAMON 50' },
+  { label: '示例系列D 50', value: '示例系列D 50' },
   { label: 'P', value: 'P' },
   { label: 'A', value: 'A' },
-  { label: 'SPARK 30', value: 'SPARK 30' },
-  { label: 'NOTE 50', value: 'NOTE 50' },
+  { label: '示例系列B 30', value: '示例系列B 30' },
+  { label: '示例系列A 50', value: '示例系列A 50' },
 ]
 
 export const TECH_DOMAIN_OPTIONS = [

@@ -25,13 +25,13 @@ for (const token of ['二级分类', '项目状态', '切换为全部项目', '�
 for (const functionName of ['filterProjectsForList', 'countProjectsByCategory', 'matchesAboutMine']) {
   assert.match(filters, new RegExp(`export function ${functionName}`), `project list filters export ${functionName}`)
 }
-const roles = { tech: [{ members: ['李四'] }] }
-assert.equal(filterModule.canEnterProjectSpace('tech', '张三', roles, true), true, 'global admins can enter projects without a project role')
-assert.equal(filterModule.canEnterProjectSpace('tech', '张三', roles, false), false, 'ordinary users without a project role remain blocked')
-assert.equal(filterModule.canEnterProjectSpace('tech', '李四', roles, false), true, 'users with a project role can enter')
+const roles = { tech: [{ members: ['演示用户02'] }] }
+assert.equal(filterModule.canEnterProjectSpace('tech', '演示用户01', roles, true), true, 'global admins can enter projects without a project role')
+assert.equal(filterModule.canEnterProjectSpace('tech', '演示用户01', roles, false), false, 'ordinary users without a project role remain blocked')
+assert.equal(filterModule.canEnterProjectSpace('tech', '演示用户02', roles, false), true, 'users with a project role can enter')
 assert.equal(filterModule.canEnterProjectSpace('tech', '', roles, true), false, 'empty project identities cannot enter even as global admins')
 assert.equal(filterModule.canEnterProjectSpace('tech', '   ', roles, true), false, 'whitespace project identities cannot enter even as global admins')
-assert.equal(filterModule.matchesAboutMine('tech', '张三', roles), false, 'about-mine remains membership-only for global admins')
+assert.equal(filterModule.matchesAboutMine('tech', '演示用户01', roles), false, 'about-mine remains membership-only for global admins')
 assert.doesNotMatch(projectList, /aria-label="项目字段快捷筛选"/, 'legacy quick-filter controls are removed')
 assert.match(projectList, /projectListFilterSummaryHost/, 'project list exposes a host for active filter conditions')
 assert.match(activeFilterSource, /aria-expanded=\{expanded\}/, 'active conditions expose their expanded state')

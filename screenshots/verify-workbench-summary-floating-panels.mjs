@@ -442,7 +442,7 @@ try {
     await clickTodoSource('转维待办')
     await waitForTodoCount(1)
     await openTodoRowWithKeyboard('转维资料录入')
-    await assertText('X6877-D8400_H991 - 资料录入')
+    await assertText('DEMO017-DEMOCHIP001_DEMOBOARD016 - 资料录入')
     await assertText('返回工作台')
     await clickExactText('body', 'button', '返回工作台')
     await assertSelectedTopNav('工作台')
@@ -533,7 +533,7 @@ try {
     await chooseVisibleOption('品牌')
     await assertSelector('[aria-label="品牌筛选值"]')
     await clickAria('品牌筛选值')
-    await chooseVisibleOption('TECNO')
+    await chooseVisibleOption('示例品牌A')
     await page.waitForFunction(initialCount => {
       const rows = Array.from(document.querySelectorAll(
         '.pms-project-summary-table .ant-table-tbody > tr.ant-table-row',
@@ -603,7 +603,7 @@ try {
     await clickCategory('整机产品项目')
     await clickAria('卡片视图')
     console.log('  action: enter project space from a project card')
-    await clickVisibleTextCard('body', 'X6877-D8400_H991')
+    await clickVisibleTextCard('body', 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     console.log('  action: assert project-list return label')
     await assertText('返回项目列表')
     console.log('  action: ordinary admin entry uses the latest published version')
@@ -613,8 +613,8 @@ try {
     await clickExactText('body', 'button', '返回项目列表')
     await assertSelectedTopNav('项目列表')
     console.log('  action: user without draft visibility falls back to published')
-    await switchUser('张三', '李四')
-    await clickVisibleTextCard('body', 'X6877-D8400_H991')
+    await switchUser('演示用户01', '演示用户02')
+    await clickVisibleTextCard('body', 'DEMO017-DEMOCHIP001_DEMOBOARD016')
     await clickExactText('body', '[role="menuitem"]', '计划')
     await assertCurrentPlanVersion('V3 (已发布)')
     console.log('  action: return to project list as restricted user')
@@ -623,7 +623,7 @@ try {
     await assertSelectedTopNav('项目列表')
     await assertSelector('[aria-label="项目列表视图"]')
     console.log('  action: restore admin after permission verification')
-    await switchUser('李四', '张三')
+    await switchUser('演示用户02', '演示用户01')
     await assertSelectedTopNav('项目列表')
   })
 

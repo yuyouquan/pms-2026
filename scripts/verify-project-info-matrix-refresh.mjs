@@ -204,10 +204,10 @@ assert.equal(projectInfoValuesModule.getProjectInfoValue({
 const aggregates = projectInfoRulesModule.deriveTosProjectAggregates([
   'machine-1', 'machine-2',
 ], [
-  { id: 'machine-1', type: '整机产品-手机', name: 'A', brand: 'TECNO', productLine: 'CAMON', chipPlatform: 'MTK', fieldValues: { chipCode: 'D1', chipModel: 'M1' } },
-  { id: 'machine-2', type: '整机产品-手机', name: 'B', brand: 'Infinix', productLine: 'NOTE', chipPlatform: 'UNISOC', fieldValues: { chipCode: 'D2', chipModel: 'M2' } },
+  { id: 'machine-1', type: '整机产品-手机', name: 'A', brand: '示例品牌A', productLine: '示例系列D', chipPlatform: '示例平台A', fieldValues: { chipCode: 'D1', chipModel: 'M1' } },
+  { id: 'machine-2', type: '整机产品-手机', name: 'B', brand: '示例品牌B', productLine: '示例系列A', chipPlatform: '示例平台C', fieldValues: { chipCode: 'D2', chipModel: 'M2' } },
 ], 'tOS17.0')
-assert.equal(aggregates.values.applicableBrands, 'TECNO,Infinix', 'tOS aggregates must use the reference English comma separator')
+assert.equal(aggregates.values.applicableBrands, '示例品牌A,示例品牌B', 'tOS aggregates must use the reference English comma separator')
 assert.equal(aggregates.values.firstLaunchProjectChips, 'D1（M1）,D2（M2）', 'tOS launch-chip aggregates must use the reference English comma separator')
 
 assert.match(schema, /required:\s*boolean/, 'field schema must expose overall required metadata')

@@ -22,18 +22,18 @@ for (const name of [
   'resolveWorkbenchDefaultSelection',
 ]) assert.equal(typeof todos[name], 'function', `missing ${name}`)
 const input = {
-  currentUser: '张三',
+  currentUser: '演示用户01',
   today: '2026-07-31',
   planTodos: [
-    { id: 'plan-overdue', assignee: '张三', dueDate: '2026-07-30', generatedAt: '2026-07-30 09:30:00', title: '逾期任务', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v4', market: 'OP', marketKey: 'project::p1::OP::level1::versions' },
-    { id: 'plan-today', assignee: '张三', dueDate: '2026-07-31', title: '今日任务', projectId: 'p2', projectName: '项目 B', planLevel: 'level2', planKey: 'plan2', versionId: 'v1', status: 'in_progress' },
-    { id: 'plan-done', assignee: '张三', completedAt: '2026-07-30', title: '已完成任务', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v4' },
-    { id: 'plan-other', assignee: '李四' },
+    { id: 'plan-overdue', assignee: '演示用户01', dueDate: '2026-07-30', generatedAt: '2026-07-30 09:30:00', title: '逾期任务', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v4', market: 'OP', marketKey: 'project::p1::OP::level1::versions' },
+    { id: 'plan-today', assignee: '演示用户01', dueDate: '2026-07-31', title: '今日任务', projectId: 'p2', projectName: '项目 B', planLevel: 'level2', planKey: 'plan2', versionId: 'v1', status: 'in_progress' },
+    { id: 'plan-done', assignee: '演示用户01', completedAt: '2026-07-30', title: '已完成任务', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v4' },
+    { id: 'plan-other', assignee: '演示用户02' },
   ],
   transferApplications: [
-    { id: 'transfer-mine', projectId: 'p1', projectName: '项目 A', activeOwner: '张三', generatedAt: '2026-07-29 08:10:00', completed: false, title: '转维录入', view: 'entry', checklist: [{ id: 'checklist' }] },
-    { id: 'transfer-done', activeOwner: '张三', completed: true },
-    { id: 'transfer-other', activeOwner: '李四', completed: false },
+    { id: 'transfer-mine', projectId: 'p1', projectName: '项目 A', activeOwner: '演示用户01', generatedAt: '2026-07-29 08:10:00', completed: false, title: '转维录入', view: 'entry', checklist: [{ id: 'checklist' }] },
+    { id: 'transfer-done', activeOwner: '演示用户01', completed: true },
+    { id: 'transfer-other', activeOwner: '演示用户02', completed: false },
   ],
 }
 const all = todos.aggregateWorkbenchTodos(input)
@@ -83,12 +83,12 @@ const indexedCandidates = todos.buildPlanTodoCandidates({
     { id: 'tos-a', name: 'tOS 项目 A', versionTypes: ['Full'] },
   ],
   sources: [
-    { projectId: 'generic-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', tasks: [{ id: 'g1', taskName: '通用任务', responsible: '张三' }], versions, currentVersionId: 'v4' },
-    { projectId: 'market-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'market', value: 'OP', versionKey: 'project::market-a::OP::level1::versions' }, tasks: [{ id: 'm1', taskName: '市场 A 任务', responsible: '张三' }], versions, currentVersionId: 'v3' },
-    { projectId: 'market-b', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'market', value: 'TR', versionKey: 'project::market-b::TR::level1::versions' }, tasks: [{ id: 'm2', taskName: '市场 B 任务', responsible: '李四' }], versions, currentVersionId: 'v4' },
-    { projectId: 'tos-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'tos', value: 'Full', versionKey: 'project::tos-a::tos-type::Full::level1::versions' }, tasks: [{ id: 't1', taskName: 'Full 任务', responsible: '张三' }], versions, currentVersionId: 'v3' },
-    { projectId: 'generic-a', planLevel: 'level2', planKey: 'plan2', planName: 'FR版本火车计划', tasks: [{ id: 'l2', taskName: '版本评审', responsible: '张三' }], versions, currentVersionId: 'v3' },
-    { projectId: 'missing', planLevel: 'level1', planKey: 'level1', tasks: [{ id: 'bad', taskName: '不应生成', responsible: '张三' }], versions, currentVersionId: 'v3' },
+    { projectId: 'generic-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', tasks: [{ id: 'g1', taskName: '通用任务', responsible: '演示用户01' }], versions, currentVersionId: 'v4' },
+    { projectId: 'market-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'market', value: 'OP', versionKey: 'project::market-a::OP::level1::versions' }, tasks: [{ id: 'm1', taskName: '市场 A 任务', responsible: '演示用户01' }], versions, currentVersionId: 'v3' },
+    { projectId: 'market-b', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'market', value: 'TR', versionKey: 'project::market-b::TR::level1::versions' }, tasks: [{ id: 'm2', taskName: '市场 B 任务', responsible: '演示用户02' }], versions, currentVersionId: 'v4' },
+    { projectId: 'tos-a', planLevel: 'level1', planKey: 'level1', planName: '一级计划', dimension: { kind: 'tos', value: 'Full', versionKey: 'project::tos-a::tos-type::Full::level1::versions' }, tasks: [{ id: 't1', taskName: 'Full 任务', responsible: '演示用户01' }], versions, currentVersionId: 'v3' },
+    { projectId: 'generic-a', planLevel: 'level2', planKey: 'plan2', planName: 'FR版本火车计划', tasks: [{ id: 'l2', taskName: '版本评审', responsible: '演示用户01' }], versions, currentVersionId: 'v3' },
+    { projectId: 'missing', planLevel: 'level1', planKey: 'level1', tasks: [{ id: 'bad', taskName: '不应生成', responsible: '演示用户01' }], versions, currentVersionId: 'v3' },
   ],
 })
 assert.deepEqual(
@@ -121,15 +121,15 @@ const groupedRevisionCandidates = todos.buildPlanTodoCandidates({
     versions,
     currentVersionId: 'v4',
     tasks: [
-      { id: 'a', taskName: '活动 A', responsible: '张三', planEndDate: '2026-09-02' },
-      { id: 'b', taskName: '活动 B', responsible: '张三', planEndDate: '2026-09-03' },
-      { id: 'c', taskName: '活动 C', responsible: '李四', planEndDate: '2026-09-04' },
+      { id: 'a', taskName: '活动 A', responsible: '演示用户01', planEndDate: '2026-09-02' },
+      { id: 'b', taskName: '活动 B', responsible: '演示用户01', planEndDate: '2026-09-03' },
+      { id: 'c', taskName: '活动 C', responsible: '演示用户02', planEndDate: '2026-09-04' },
     ],
   }],
 })
 assert.equal(groupedRevisionCandidates.length, 2, 'one revision plan creates at most one todo per responsible user')
-assert.equal(groupedRevisionCandidates.filter(candidate => candidate.assignee === '张三').length, 1)
-assert.equal(groupedRevisionCandidates.find(candidate => candidate.assignee === '张三')?.dueDate, '2026-09-02')
+assert.equal(groupedRevisionCandidates.filter(candidate => candidate.assignee === '演示用户01').length, 1)
+assert.equal(groupedRevisionCandidates.find(candidate => candidate.assignee === '演示用户01')?.dueDate, '2026-09-02')
 
 const managerFallbackCandidate = todos.buildPlanTodoCandidates({
   projects: [{ id: 'manager-owned', name: '负责人项目' }],
@@ -138,7 +138,7 @@ const managerFallbackCandidate = todos.buildPlanTodoCandidates({
     planLevel: 'level1',
     planKey: 'level1',
     planName: '一级计划',
-    assignees: ['张三'],
+    assignees: ['演示用户01'],
     versions,
     currentVersionId: 'v4',
     tasks: [{ id: 'unassigned', taskName: '未分配活动', responsible: '' }],
@@ -146,14 +146,14 @@ const managerFallbackCandidate = todos.buildPlanTodoCandidates({
 })
 assert.deepEqual(
   managerFallbackCandidate.map(candidate => [candidate.assignee, candidate.status]),
-  [['张三', 'pending']],
+  [['演示用户01', 'pending']],
   'project plan managers receive one plan-level revision todo even when child tasks have no assignee',
 )
 
 const accessFiltered = todos.filterTodoCandidatesByAccess({
-  currentUser: '李四',
+  currentUser: '演示用户02',
   planTodos: indexedCandidates,
-  transferApplications: [{ applicationId: 'ta-secret', projectId: 'market-b', projectName: '整机项目 B', activeOwner: '李四', completed: false, title: '机密转维节点', view: 'review' }],
+  transferApplications: [{ applicationId: 'ta-secret', projectId: 'market-b', projectName: '整机项目 B', activeOwner: '演示用户02', completed: false, title: '机密转维节点', view: 'review' }],
   canViewPlan: (_projectId, planLevel) => planLevel === 'level2',
   canViewTransfer: () => false,
 })
@@ -166,27 +166,27 @@ assert.equal(todos.resolveVisiblePlanVersion(versions, undefined, true), 'v4', '
 const transferFixtures = todos.buildTransferTodoCandidates({
   projects: [{ id: 'p1', name: '项目 A' }],
   applications: [
-    { id: 'review', projectId: 'p1', projectName: '项目 A', status: 'in_progress', createdAt: '2026-07-28 10:00:00', applicantId: 'u001', applicant: '张明辉', plannedReviewDate: '2026-08-01', pipeline: { dataEntry: 'success', maintenanceReview: 'in_progress', sqaReview: 'not_started' }, team: { maintenance: [{ id: 'u003', name: '王建国', role: 'SPM' }], research: [] } },
-    { id: 'sqa', projectId: 'p1', projectName: '项目 A', status: 'in_progress', applicantId: 'u001', applicant: '张明辉', plannedReviewDate: '2026-08-02', pipeline: { dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' }, team: { maintenance: [], research: [{ id: 'u007', name: '陈晓峰', role: 'SQA' }] } },
+    { id: 'review', projectId: 'p1', projectName: '项目 A', status: 'in_progress', createdAt: '2026-07-28 10:00:00', applicantId: 'u001', applicant: '演示用户01', plannedReviewDate: '2026-08-01', pipeline: { dataEntry: 'success', maintenanceReview: 'in_progress', sqaReview: 'not_started' }, team: { maintenance: [{ id: 'u003', name: '演示用户03', role: 'SPM' }], research: [] } },
+    { id: 'sqa', projectId: 'p1', projectName: '项目 A', status: 'in_progress', applicantId: 'u001', applicant: '演示用户01', plannedReviewDate: '2026-08-02', pipeline: { dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' }, team: { maintenance: [], research: [{ id: 'u007', name: '演示用户07', role: 'SQA' }] } },
   ],
 })
 assert.deepEqual(transferFixtures.map(item => [item.view, item.activeOwner, item.sourceLabel]), [
-  ['detail', '张三', '转维资料录入'],
-  ['review', '王五', '转维维护审核'],
-  ['detail', '张三', '转维资料录入'],
-  ['sqa-review', '李白', '转维 SQA 审核'],
+  ['detail', '演示用户01', '转维资料录入'],
+  ['review', '演示用户03', '转维维护审核'],
+  ['detail', '演示用户01', '转维资料录入'],
+  ['sqa-review', '演示用户07', '转维 SQA 审核'],
 ], 'completed history and active nodes use their authoritative owner identities')
 assert.equal(transferFixtures[0].generatedAt, '2026-07-28 10:00:00', 'transfer candidates preserve the application creation timestamp')
 assert.equal(transferFixtures[1].applicationId, 'review', 'transfer routes preserve the real application id rather than the row id')
 assert.equal(transferFixtures[1].id, 'review:review', 'each transfer node keeps a unique workbench row id')
 
 const sameNameProjects = [
-  { id: 'new-project', name: 'X6877(16)' },
-  { id: 'old-project', name: 'X6877(16)' },
+  { id: 'new-project', name: 'DEMO017(16)' },
+  { id: 'old-project', name: 'DEMO017(16)' },
 ]
 const projectRoutingApplication = {
-  id: 'project-routing', projectId: 'old-project', projectName: 'X6877(16)',
-  status: 'in_progress', applicantId: 'u001', applicant: '张明辉',
+  id: 'project-routing', projectId: 'old-project', projectName: 'DEMO017(16)',
+  status: 'in_progress', applicantId: 'u001', applicant: '演示用户01',
   pipeline: { dataEntry: 'in_progress', maintenanceReview: 'not_started', sqaReview: 'not_started' },
   team: { maintenance: [], research: [] },
 }
@@ -219,10 +219,10 @@ assert.deepEqual(
 )
 
 const crossDayCandidates = {
-  currentUser: '张三',
+  currentUser: '演示用户01',
   planTodos: [
-    { id: 'completed-earlier', assignee: '张三', dueDate: '2026-07-01', completed: true, title: '早期已完成', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v3' },
-    { id: 'pending-later', assignee: '张三', dueDate: '2026-07-31', completed: false, title: '稍后待办', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v3' },
+    { id: 'completed-earlier', assignee: '演示用户01', dueDate: '2026-07-01', completed: true, title: '早期已完成', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v3' },
+    { id: 'pending-later', assignee: '演示用户01', dueDate: '2026-07-31', completed: false, title: '稍后待办', projectId: 'p1', projectName: '项目 A', planLevel: 'level1', planKey: 'level1', versionId: 'v3' },
   ],
   transferApplications: [],
 }
@@ -236,10 +236,10 @@ assert.deepEqual(
 
 assert.deepEqual(
   todos.TRANSFER_TO_PMS_USER_MAP.u001,
-  { transferUserName: '张明辉', pmsUserName: '张三' },
+  { transferUserName: '演示用户01', pmsUserName: '演示用户01' },
   'transfer applicant identity maps explicitly into the PMS mock user set',
 )
-assert.equal(todos.mapTransferOwnerToPmsUser('u001', '张明辉'), '张三')
+assert.equal(todos.mapTransferOwnerToPmsUser('u001', '演示用户01'), '演示用户01')
 assert.equal(todos.mapTransferOwnerToPmsUser('u001', '同 ID 的错误姓名'), undefined, 'a mismatched external ID/name pair is not accepted')
 assert.equal(todos.mapTransferOwnerToPmsUser('unmapped-user', '未映射用户'), undefined, 'unmapped transfer identities do not fabricate PMS ownership')
 
@@ -407,7 +407,7 @@ assert.doesNotMatch(browserSource, /__reactProps\$|waitForReactControl/, 'browse
 assert.match(browserSource, /waitForEditableInput/, 'browser verification must wait on public editable-input state')
 assert.match(browserSource, /readProjectRowCount/, 'advanced-filter verification must measure the real visible project rows')
 assert.match(browserSource, /chooseVisibleOption\(['"]品牌['"]\)/, 'advanced-filter verification must choose a real project field')
-assert.match(browserSource, /chooseVisibleOption\(['"]TECNO['"]\)/, 'advanced-filter verification must choose a real project value')
+assert.match(browserSource, /chooseVisibleOption\(['"]示例品牌A['"]\)/, 'advanced-filter verification must choose a real project value')
 assert.match(browserSource, /filteredRowCount\s*<\s*initialRowCount/, 'advanced-filter verification must prove the result set narrows')
 assert.match(browserSource, /waitForProjectRowCount\(initialRowCount\)/, 'advanced-filter verification must prove deleting the condition restores rows')
 assert.match(browserSource, /targetPage\.on\(['"]requestfailed['"]/, 'browser verification must fail on request transport errors')

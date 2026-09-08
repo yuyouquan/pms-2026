@@ -69,15 +69,15 @@ assert.equal(isFilterConditionActive({ id: 'a', field: 'owner', operator: 'isEmp
 assert.equal(isFilterConditionActive({ id: 'a', field: 'owner', operator: 'contains', value: '' }), false)
 
 const rows = [
-  { name: 'Alpha', owner: '张三', status: '进行中', note: '' },
-  { name: 'Beta', owner: '李四', status: '已完成', note: null },
+  { name: 'Alpha', owner: '演示用户01', status: '进行中', note: '' },
+  { name: 'Beta', owner: '演示用户02', status: '已完成', note: null },
   { name: 'Gamma', owner: '', status: '未开始', note: 'ready' },
-  { name: 'Delta', owner: '王五', status: '未开始', note: '-', dueDate: '-' },
-  { name: 'Epsilon', owner: '赵六', status: '未开始', note: '—', dueDate: '—' },
+  { name: 'Delta', owner: '演示用户03', status: '未开始', note: '-', dueDate: '-' },
+  { name: 'Epsilon', owner: '演示用户04', status: '未开始', note: '—', dueDate: '—' },
 ]
 
 assert.deepEqual(
-  plain(applyFilterConditions(rows, [{ id: '1', field: 'owner', operator: 'notEquals', value: '张三' }]).map((row) => row.name)),
+  plain(applyFilterConditions(rows, [{ id: '1', field: 'owner', operator: 'notEquals', value: '演示用户01' }]).map((row) => row.name)),
   ['Beta', 'Gamma', 'Delta', 'Epsilon'],
 )
 
@@ -162,7 +162,7 @@ assert.deepEqual(
 assert.deepEqual(
   plain(normalizeFilterConditions([
     { id: '1', field: 'owner', operator: 'contains', value: '张' },
-    { id: '2', field: 'owner', operator: 'equals', value: '李四' },
+    { id: '2', field: 'owner', operator: 'equals', value: '演示用户02' },
     { id: '3', field: 'note', operator: 'isEmpty', value: 'will-clear' },
   ])),
   [
@@ -178,7 +178,7 @@ assert.deepEqual(
       { value: 'status', label: '状态' },
     ],
     [
-      { id: '1', field: 'owner', operator: 'equals', value: '张三' },
+      { id: '1', field: 'owner', operator: 'equals', value: '演示用户01' },
       { id: '2', field: '', operator: 'equals', value: '' },
     ],
     '2',
