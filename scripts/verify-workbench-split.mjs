@@ -17,8 +17,8 @@ requireSource(root, 'src/stores/ui.ts', /projectSpaceOrigin\b/, 'missing project
 const uiSource = readSource(root, 'src/stores/ui.ts')
 assert.deepEqual(
   getStringUnionTypeMembers(uiSource, 'MainModule'),
-  ['workbench', 'projectList', 'jointProjectSpace', 'roadmap', 'hrPipeline', 'config', 'projectSpace'],
-  'MainModule must include the joint project workspace in the typed seven-module navigation contract',
+  ['workbench', 'projectManagement', 'projectList', 'jointProjectSpace', 'roadmap', 'hrPipeline', 'config', 'projectSpace'],
+  'MainModule must include project management in the typed eight-module navigation contract',
 )
 requireSource(root, 'src/stores/ui.ts', /activeModule:\s*['"]workbench['"]/, 'workbench must be the default module')
 assert.match(uiSource, /export type WorkbenchTab = ['"]todo['"]/, 'legacy workbench origin supports only the task page')
@@ -76,11 +76,11 @@ assert.match(activationSource, /setTransferView\(null\)/, 'shared activation mus
 assert.match(activationSource, /setSelectedProject\(project\)/, 'shared activation must select the project')
 assert.match(activationSource, /setSelectedMarketTab\(selectedMarket\)/, 'shared activation must select the requested or default market')
 assert.match(activationSource, /buildTosTypeRows[\s\S]*?getMainTosType[\s\S]*?setSelectedTosTypeTab/, 'shared activation must select the tOS main type')
-const expectedHeaderOrder = /key:\s*['"]workbench['"],\s*label:\s*['"]工作台['"][\s\S]*?key:\s*['"]projectList['"],\s*label:\s*['"]项目列表['"][\s\S]*?key:\s*['"]jointProjectSpace['"],\s*label:\s*['"]联合项目空间['"][\s\S]*?key:\s*['"]roadmap['"],\s*label:\s*['"]tOS路标['"][\s\S]*?key:\s*['"]hrPipeline['"],\s*label:\s*['"]人力资源管道['"][\s\S]*?key:\s*['"]config['"],\s*label:\s*['"]配置中心['"]/
+const expectedHeaderOrder = /key:\s*['"]workbench['"],\s*label:\s*['"]工作台['"][\s\S]*?key:\s*['"]projectManagement['"],\s*label:\s*['"]项目管理['"][\s\S]*?key:\s*['"]projectList['"],\s*label:\s*['"]项目列表['"][\s\S]*?key:\s*['"]jointProjectSpace['"],\s*label:\s*['"]联合项目空间['"][\s\S]*?key:\s*['"]roadmap['"],\s*label:\s*['"]tOS路标['"][\s\S]*?key:\s*['"]hrPipeline['"],\s*label:\s*['"]人力资源管道['"][\s\S]*?key:\s*['"]config['"],\s*label:\s*['"]配置中心['"]/
 assert.match(
   shellSource,
   expectedHeaderOrder,
-  'main header order must include joint project workspace between project list and roadmap',
+  'main header order must place project management between workbench and project list',
 )
 assert.equal(hasNestedCallExpression(shellSource, 'navigateWithEditGuard', 'returnFromProjectSpace'), true, 'ProjectSpaceHeader calls origin return inside the edit-guard callback')
 

@@ -3,6 +3,7 @@ import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
 
 export type MainModule =
   | 'workbench'
+  | 'projectManagement'
   | 'projectList'
   | 'jointProjectSpace'
   | 'roadmap'

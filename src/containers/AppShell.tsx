@@ -123,7 +123,7 @@ function UserSwitcher() {
   )
 }
 
-// ─── Main mode header (workbench, project list, roadmap, HR, config) ─
+// ─── Main mode header (workbench, project management, project list, roadmap, HR, config) ─
 
 export function MainHeader() {
   const {
@@ -163,6 +163,7 @@ export function MainHeader() {
                 style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
                 items={[
                   { key: 'workbench', label: '工作台' },
+                  { key: 'projectManagement', label: '项目管理' },
                   { key: 'projectList', label: '项目列表' },
                   { key: 'jointProjectSpace', label: '联合项目空间' },
                   { key: 'roadmap', label: 'tOS路标' },

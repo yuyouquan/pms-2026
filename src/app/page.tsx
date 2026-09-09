@@ -85,6 +85,9 @@ export default function Home() {
               {/* Workbench (todo center + work tracker) */}
               {activeModule === 'workbench' && <WorkbenchContainer />}
 
+              {/* Project management space — initially empty */}
+              {activeModule === 'projectManagement' && <section aria-label="项目管理" />}
+
               {/* Dedicated project list */}
               {activeModule === 'projectList' && <ProjectListContainer />}
 
