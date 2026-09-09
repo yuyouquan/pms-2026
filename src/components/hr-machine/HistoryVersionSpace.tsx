@@ -475,14 +475,14 @@ export default function HistoryVersionSpace() {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 190,
+        width: 100,
         align: 'center',
         render: (_value: unknown, record: FlatVersionRow) => {
           const project = projects.find((p) => p.id === record.projectId)
           return (
             <Space size={4}>
               <Button
-                type="default"
+                type="text" aria-label="查看" title="查看"
                 size="small"
                 icon={<EyeOutlined />}
                 onClick={(e) => {
@@ -490,9 +490,7 @@ export default function HistoryVersionSpace() {
                   setEditingVersionId(record.id)
                   setShowVersionDetailModal(true)
                 }}
-              >
-                查看
-              </Button>
+              />
               <Popconfirm
                 title="删除版本数据"
                 description="删除后不可恢复；若所有版本均被删除，该项目将一并删除。"

@@ -265,16 +265,17 @@ export default function HistoryVersionSpace() {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 420,
+        width: 208,
         align: 'center',
         render: (_value: unknown, record: FlatVersionRow) => {
           const project = projects.find(p => p.id === record.projectId)
           const isActive = project?.status === 'active'
           return (
-            <Space size={4} wrap>
+            <Space size={4}>
               {/* 查看 */}
               <Tooltip title="查看本版本各部门预估投入">
                 <Button
+                  type="text" aria-label="查看"
                   size="small"
                   icon={<EyeOutlined />}
                   onClick={e => {
@@ -284,15 +285,13 @@ export default function HistoryVersionSpace() {
                     setVersionDetailReadOnly(true)
                     setShowVersionDetailModal(true)
                   }}
-                >
-                  查看
-                </Button>
+                />
               </Tooltip>
               {/* 编辑 */}
               {record.isLatest && isActive ? (
                 <Tooltip title="编辑各部门各阶段预估投入">
                   <Button
-                    type="default"
+                    type="text" aria-label="编辑"
                     size="small"
                     icon={<EditOutlined />}
                     onClick={e => {
@@ -302,15 +301,14 @@ export default function HistoryVersionSpace() {
                       setVersionDetailReadOnly(false)
                       setShowVersionDetailModal(true)
                     }}
-                  >
-                    编辑
-                  </Button>
+                  />
                 </Tooltip>
               ) : null}
               {/* 复制 */}
               {isActive ? (
                 <Tooltip title="复制此版本创建新版本">
                   <Button
+                    type="text" aria-label="复制"
                     size="small"
                     icon={<CopyOutlined />}
                     onClick={e => {
@@ -318,9 +316,7 @@ export default function HistoryVersionSpace() {
                       copyVersion(record.projectId, record.id)
                       message.success('版本已复制')
                     }}
-                  >
-                    复制
-                  </Button>
+                  />
                 </Tooltip>
               ) : null}
               {/* 删除 */}
@@ -347,6 +343,7 @@ export default function HistoryVersionSpace() {
               {/* 历史 */}
               <Tooltip title="查看版本操作历史">
                 <Button
+                  type="text" aria-label="历史"
                   size="small"
                   icon={<HistoryOutlined />}
                   onClick={e => {
@@ -355,9 +352,7 @@ export default function HistoryVersionSpace() {
                     setEditingHistoryVersionId(record.id)
                     setShowVersionHistoryModal(true)
                   }}
-                >
-                  历史
-                </Button>
+                />
               </Tooltip>
             </Space>
           )

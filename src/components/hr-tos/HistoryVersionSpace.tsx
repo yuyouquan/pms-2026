@@ -277,7 +277,7 @@ export default function HistoryVersionSpace() {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 270,
+        width: 136,
         align: 'center',
         render: (_value: unknown, record: FlatVersionRow) => {
           const project = projects.find((p) => p.id === record.projectId)
@@ -285,6 +285,7 @@ export default function HistoryVersionSpace() {
             <Space size={4}>
               <Tooltip title="查看本版本各部门预估投入">
                 <Button
+                  type="text" aria-label="查看"
                   size="small"
                   icon={<EyeOutlined />}
                   onClick={(e) => {
@@ -294,14 +295,12 @@ export default function HistoryVersionSpace() {
                     setVersionDetailReadOnly(true)
                     setShowVersionDetailModal(true)
                   }}
-                >
-                  查看
-                </Button>
+                />
               </Tooltip>
               {record.isLatest && project?.status === 'active' ? (
                 <Tooltip title="编辑各部门各阶段预估投入">
                   <Button
-                    type="default"
+                    type="text" aria-label="编辑"
                     size="small"
                     icon={<EditOutlined />}
                     onClick={(e) => {
@@ -311,9 +310,7 @@ export default function HistoryVersionSpace() {
                       setVersionDetailReadOnly(false)
                       setShowVersionDetailModal(true)
                     }}
-                  >
-                    编辑
-                  </Button>
+                  />
                 </Tooltip>
               ) : null}
               <Popconfirm
