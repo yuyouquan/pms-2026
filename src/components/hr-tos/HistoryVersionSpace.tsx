@@ -334,14 +334,12 @@ export default function HistoryVersionSpace() {
                   }
                 }}
               >
-                <Button
+                <Button type="text" aria-label="删除" title="删除"
                   danger
                   size="small"
                   icon={<DeleteOutlined />}
                   onClick={(e) => e.stopPropagation()}
-                >
-                  删除
-                </Button>
+                />
               </Popconfirm>
             </Space>
           )
@@ -473,7 +471,7 @@ export default function HistoryVersionSpace() {
 
       {/* 版本列表 */}
       <Table<FlatVersionRow>
-        className="pms-table"
+        className="pms-table pms-hr-investment-table"
         rowKey="id"
         columns={columns}
         dataSource={filteredVersions}

@@ -433,7 +433,7 @@ export default function MonthlyInvestmentTab() {
 
       <div className="pms-solid-surface">
         <Table<MonthlyInvestmentRow>
-          className="pms-table"
+          className="pms-table pms-hr-investment-table"
           rowKey="id"
           columns={columns}
           dataSource={dataSource}

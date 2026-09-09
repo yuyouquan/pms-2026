@@ -254,17 +254,16 @@ export default function VersionDetailModal({
       base.push({
         title: '操作',
         key: 'action',
+        fixed: 'right' as const,
         width: 80,
         align: 'center' as const,
         render: (_value: unknown, record: TechDepartmentInvestment) => (
-          <Button
+          <Button type="text" aria-label="删除" title="删除"
             danger
             size="small"
             icon={<DeleteOutlined />}
             onClick={() => deleteRow(record.id)}
-          >
-            删除
-          </Button>
+          />
         ),
       })
     }
@@ -361,7 +360,7 @@ export default function VersionDetailModal({
 
         {/* 部门预估投入表格 */}
         <Table<TechDepartmentInvestment>
-          className="pms-table"
+          className="pms-table pms-hr-investment-table"
           rowKey="id"
           columns={columns}
           dataSource={editData}

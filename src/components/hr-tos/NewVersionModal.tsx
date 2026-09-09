@@ -273,17 +273,16 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     {
       title: '操作',
       key: 'action',
+      fixed: 'right' as const,
       width: 80,
       align: 'center' as const,
       render: (_value: unknown, record: TosDepartmentInvestment) => (
-        <Button
+        <Button type="text" aria-label="删除" title="删除"
           danger
           size="small"
           icon={<DeleteOutlined />}
           onClick={() => deleteRow(record.id)}
-        >
-          删除
-        </Button>
+        />
       ),
     },
   ], [primaryOptions, getSecondaryOptions])
@@ -430,13 +429,14 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
         {/* 部门预估投入表格 */}
         <Table<TosDepartmentInvestment>
-          className="pms-table"
+          className="pms-table pms-hr-investment-table"
           rowKey="id"
           columns={columns}
           dataSource={editData}
           pagination={false}
           size="small"
-          scroll={{ x: 'max-content', y: 320 }}
+          tableLayout="fixed"
+          scroll={{ x: columns.reduce((total, column) => total + Number(column.width ?? 0), 0), y: 320 }}
           locale={{
             emptyText: '暂无部门预估投入数据，请点击「添加部门」或「导入」',
           }}

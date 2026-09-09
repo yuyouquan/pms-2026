@@ -173,7 +173,7 @@ export default function MachineVersionDetailModal({
           />
 
           <Table<DeptPhaseRow>
-            className="pms-table"
+            className="pms-table pms-hr-investment-table"
             rowKey="id"
             columns={columns}
             dataSource={dataSource}

@@ -342,9 +342,7 @@ export default function HistoryVersionSpace() {
                   }
                 }}
               >
-                <Button danger size="small" icon={<DeleteOutlined />} onClick={e => e.stopPropagation()}>
-                  删除
-                </Button>
+                <Button type="text" aria-label="删除" title="删除" danger size="small" icon={<DeleteOutlined />} onClick={e => e.stopPropagation()}/>
               </Popconfirm>
               {/* 历史 */}
               <Tooltip title="查看版本操作历史">
@@ -475,7 +473,7 @@ export default function HistoryVersionSpace() {
 
       {/* 版本列表 */}
       <Table<FlatVersionRow>
-        className="pms-table"
+        className="pms-table pms-hr-investment-table"
         rowKey="id"
         columns={columns}
         dataSource={filteredVersions}
