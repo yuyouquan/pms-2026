@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useRef } from 'react'
-import { isLatestHrVersion, formatHrBatch } from '@/lib/hrVersionRules'
+import { isLatestHrVersion } from '@/lib/hrVersionRules'
 import { Modal, Table, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -252,7 +252,7 @@ export default function VersionDetailModal({
         >
           <span>项目名称：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.name}</strong></span>
           <span>预算类型：<strong style={{ color: 'var(--pms-text-primary)' }}>{CAPABILITY_BUDGET_TYPE_LABELS[version.budgetType]}</strong></span>
-          <span>版本号：<strong style={{ color: 'var(--pms-text-primary)' }}>{version.versionNumber}</strong><span style={{ marginLeft: 8 }}>{formatHrBatch(version.batch)}</span></span>
+          <span>版本号：<strong style={{ color: 'var(--pms-text-primary)' }}>{version.versionNumber}</strong></span>
           <span>项目起止：<strong style={{ color: 'var(--pms-text-primary)' }}>{version.projectStartTime} ~ {version.projectEndTime}</strong></span>
           <span>预估投入：<strong style={{ color: 'var(--pms-text-primary)' }}>{formatPersonMonth(version.estimatedInvestment)}</strong></span>
         </div>

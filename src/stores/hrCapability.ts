@@ -417,7 +417,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
           estimatedInvestment,
           projectStartTime: form.projectStartTime,
           projectEndTime: form.projectEndTime,
-          departmentInvestments: form.departmentInvestments,
+          departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
           createdAt: nowISO(),
           lockedAt: null,
           operationLogs: [

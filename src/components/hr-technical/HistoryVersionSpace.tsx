@@ -24,7 +24,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { HR_BATCH_OPTIONS, formatHrBatch, isLatestHrVersion } from '@/lib/hrVersionRules'
+import { isLatestHrVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import {
@@ -146,7 +146,7 @@ export default function HistoryVersionSpace() {
           ...version,
           isLatest: isLatestHrVersion(project, version),
           isBound: !!project.ipmProjectCode,
-          sourceHint: isLatestHrVersion(project, version) && source
+          sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
             ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待主市场／主类型一级计划发布' : ''
             : '',
           projectName: project.tdtName,
@@ -188,7 +188,7 @@ export default function HistoryVersionSpace() {
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
           value={record.milestones[field.key]}
-          editable={record.isLatest && !record.isBound}
+          editable={record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
           onSave={v =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<TechMilestoneNodes>,
@@ -212,16 +212,6 @@ export default function HistoryVersionSpace() {
         ),
       },
       {
-        title: '预估投入',
-        key: 'estimatedInvestment',
-        width: 110,
-        align: 'right',
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <span style={{ fontWeight: 600 }}>{formatPersonMonth(record.estimatedInvestment)}</span>
-        ),
-      },
-      ...milestoneColumns,
-      {
         title: '预算类型',
         key: 'budgetType',
         width: 100,
@@ -244,22 +234,15 @@ export default function HistoryVersionSpace() {
         ),
       },
       {
-        title: '批次',
-        key: 'batch',
-        width: 115,
+        title: '预估投入',
+        key: 'estimatedInvestment',
+        width: 110,
+        align: 'right',
         render: (_value: unknown, record: FlatVersionRow) => (
-          <Select
-            aria-label={`${record.projectName} ${TECH_BUDGET_TYPE_LABELS[record.budgetType]} ${record.versionNumber} 批次`}
-            value={record.batch ?? undefined}
-            placeholder="选择批次"
-            options={HR_BATCH_OPTIONS}
-            virtual={false}
-            style={{ width: '100%' }}
-            onClick={event => event.stopPropagation()}
-            onChange={value => updateVersion(record.projectId, record.id, { batch: value })}
-          />
+          <span style={{ fontWeight: 600 }}>{formatPersonMonth(record.estimatedInvestment)}</span>
         ),
       },
+      ...milestoneColumns,
       {
         title: '创建人',
         key: 'createdBy',
@@ -389,15 +372,14 @@ export default function HistoryVersionSpace() {
   const handleExport = () => {
     const sheet1Columns: ExportColumn[] = [
       { key: 'projectName', title: 'TDT项目名称' },
+      { key: 'budgetType', title: '预算类型', formatter: (_v: unknown, row: FlatVersionRow) => TECH_BUDGET_TYPE_LABELS[row.budgetType] },
+      { key: 'versionNumber', title: '版本号' },
       { key: 'estimatedInvestment', title: '预估投入(人月)' },
       ...TECH_MILESTONE_FIELDS.map(f => ({
         key: f.key as string,
         title: f.label,
         formatter: (_v: unknown, row: FlatVersionRow) => row.milestones[f.key] ?? '',
       })),
-      { key: 'budgetType', title: '预算类型', formatter: (_v: unknown, row: FlatVersionRow) => TECH_BUDGET_TYPE_LABELS[row.budgetType] },
-      { key: 'versionNumber', title: '版本号' },
-      { key: 'batch', title: '批次', formatter: (_v: unknown, row: FlatVersionRow) => formatHrBatch(row.batch) },
       { key: 'createdBy', title: '创建人' },
       { key: 'createdAt', title: '创建日期', formatter: (_v: unknown, row: FlatVersionRow) => dayjs(row.createdAt).format('YYYY-MM-DD HH:mm:ss') },
     ]

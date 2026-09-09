@@ -2,7 +2,7 @@
 
 import MonthlyAllocationNotice from '@/components/hr-shared/MonthlyAllocationNotice'
 import { useMemo, useState } from 'react'
-import { formatHrBatch, getMachineProjectYear } from '@/lib/hrVersionRules'
+import { getMachineProjectYear } from '@/lib/hrVersionRules'
 import { Card, Table, Button, Tooltip, Tag, Checkbox, Space, Input, Select } from 'antd'
 import { EditOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -189,13 +189,6 @@ export default function MonthlyInvestmentTab() {
         render: (value: string) => value || '-',
       },
       {
-        title: '批次',
-        dataIndex: 'batch',
-        key: 'batch',
-        width: 90,
-        render: (value: number | null | undefined) => formatHrBatch(value),
-      },
-      {
         title: '预估合计',
         dataIndex: 'estimatedTotal',
         key: 'estimatedTotal',
@@ -261,12 +254,6 @@ export default function MonthlyInvestmentTab() {
         formatter: (value) => BUDGET_TYPE_LABELS[value as BudgetType] ?? String(value),
       },
       { key: 'versionNumber', title: '版本号', width: 10 },
-      {
-        key: 'batch',
-        title: '批次',
-        width: 12,
-        formatter: (value) => formatHrBatch(value == null ? null : Number(value)),
-      },
       {
         key: 'estimatedTotal',
         title: '预估合计',
@@ -450,18 +437,17 @@ export default function MonthlyInvestmentTab() {
                 <Table.Summary.Cell index={4} />
                 <Table.Summary.Cell index={5} />
                 <Table.Summary.Cell index={6} />
-                <Table.Summary.Cell index={7} />
-                <Table.Summary.Cell index={8} align="right">
+                <Table.Summary.Cell index={7} align="right">
                   <span style={{ fontWeight: 700 }}>{formatPersonMonth(totalRow.totalEstimated)}</span>
                 </Table.Summary.Cell>
                 {sortedMonths.map((monthKey, idx) => (
-                  <Table.Summary.Cell key={`total-${monthKey}`} index={9 + idx} align="right">
+                  <Table.Summary.Cell key={`total-${monthKey}`} index={8 + idx} align="right">
                     <span style={{ fontWeight: 600 }}>
                       {formatPersonMonth(totalRow.monthlyTotals[monthKey] || 0)}
                     </span>
                   </Table.Summary.Cell>
                 ))}
-                <Table.Summary.Cell index={9 + sortedMonths.length} />
+                <Table.Summary.Cell index={8 + sortedMonths.length} />
               </Table.Summary.Row>
             </Table.Summary>
           )}

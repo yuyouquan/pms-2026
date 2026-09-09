@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, useRef } from 'react'
-import { isLatestHrVersion, formatHrBatch } from '@/lib/hrVersionRules'
+import { isLatestHrVersion } from '@/lib/hrVersionRules'
 import { Modal, Table, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -328,7 +328,7 @@ export default function VersionDetailModal({
           </span>
           <span>
             版本号：
-            <strong style={{ color: 'var(--pms-text-primary)' }}>{version.versionNumber}</strong><span style={{ marginLeft: 8 }}>{formatHrBatch(version.batch)}</span>
+            <strong style={{ color: 'var(--pms-text-primary)' }}>{version.versionNumber}</strong>
           </span>
           <span>
             预估投入：

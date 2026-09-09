@@ -10,6 +10,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "verify:hr-investment": "node scripts/verify-hr-investment.mjs",
+    "verify:hr-version-refinement": "node scripts/verify-hr-version-refinement.mjs",
+    "verify:hr-model": "node scripts/verify-hr-model.mjs",
     "verify:column-settings": "node scripts/verify-sortable-column-settings.mjs",
     "verify:project-list-header-reorder": "node scripts/verify-project-list-header-reorder.mjs",
     "verify:project-list-header-reorder-browser": "node screenshots/verify-project-list-header-reorder-browser.mjs",

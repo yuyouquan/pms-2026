@@ -1,4 +1,4 @@
-import { allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -585,7 +585,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
 
-          const latest = getLatestVersion(p, form.budgetType)
+          const latest = getHrVersionSeed(p.versions, form.budgetType)
           const minorVersion = nextHrMinorVersion(p.versions, form.budgetType)
 
           const milestones: TechMilestoneNodes = latest
@@ -604,7 +604,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
             createdBy: '当前用户',
             estimatedInvestment: sumDepartmentInvestments(form.departmentInvestments),
             milestones,
-            departmentInvestments: form.departmentInvestments,
+            departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
             createdAt: new Date().toISOString(),
             lockedAt: null,
             operationLogs: [

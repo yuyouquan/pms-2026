@@ -24,7 +24,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { HR_BATCH_OPTIONS, formatHrBatch, isLatestHrVersion } from '@/lib/hrVersionRules'
+import { isLatestHrVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
 import {
@@ -150,7 +150,7 @@ export default function HistoryVersionSpace() {
           ...version,
           isLatest: isLatestHrVersion(project, version),
           isBound: !!project.ipmProjectCode,
-          sourceHint: isLatestHrVersion(project, version) && source
+          sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
             ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待主市场／主类型一级计划发布' : ''
             : '',
           projectName: project.name,
@@ -204,6 +204,28 @@ export default function HistoryVersionSpace() {
         ),
       },
       {
+        title: '预算类型',
+        key: 'budgetType',
+        width: 100,
+        align: 'center',
+        render: (_value: unknown, record: FlatVersionRow) => (
+          <Tag color={CAPABILITY_BUDGET_TYPE_COLORS[record.budgetType]}>
+            {CAPABILITY_BUDGET_TYPE_LABELS[record.budgetType]}
+          </Tag>
+        ),
+      },
+      {
+        title: '版本号',
+        key: 'versionNumber',
+        width: 90,
+        align: 'center',
+        render: (_value: unknown, record: FlatVersionRow) => (
+          <span style={{ fontWeight: 600, color: 'var(--pms-brand-strong)' }}>
+            {record.versionNumber}
+          </span>
+        ),
+      },
+      {
         title: '项目目标',
         key: 'projectTarget',
         width: 200,
@@ -231,7 +253,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableDateCell
             value={record.projectStartTime}
-            editable={record.isLatest && !record.isBound}
+            editable={record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
             onSave={(v) =>
               updateVersion(record.projectId, record.id, {
                 projectStartTime: v ?? '',
@@ -248,51 +270,12 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableDateCell
             value={record.projectEndTime}
-            editable={record.isLatest && !record.isBound}
+            editable={record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
             onSave={(v) =>
               updateVersion(record.projectId, record.id, {
                 projectEndTime: v ?? '',
               })
             }
-          />
-        ),
-      },
-      {
-        title: '预算类型',
-        key: 'budgetType',
-        width: 100,
-        align: 'center',
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <Tag color={CAPABILITY_BUDGET_TYPE_COLORS[record.budgetType]}>
-            {CAPABILITY_BUDGET_TYPE_LABELS[record.budgetType]}
-          </Tag>
-        ),
-      },
-      {
-        title: '版本号',
-        key: 'versionNumber',
-        width: 90,
-        align: 'center',
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <span style={{ fontWeight: 600, color: 'var(--pms-brand-strong)' }}>
-            {record.versionNumber}
-          </span>
-        ),
-      },
-      {
-        title: '批次',
-        key: 'batch',
-        width: 115,
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <Select
-            aria-label={`${record.projectName} ${CAPABILITY_BUDGET_TYPE_LABELS[record.budgetType]} ${record.versionNumber} 批次`}
-            value={record.batch ?? undefined}
-            placeholder="选择批次"
-            options={HR_BATCH_OPTIONS}
-            virtual={false}
-            style={{ width: '100%' }}
-            onClick={event => event.stopPropagation()}
-            onChange={value => updateVersion(record.projectId, record.id, { batch: value })}
           />
         ),
       },
@@ -427,13 +410,12 @@ export default function HistoryVersionSpace() {
     // Sheet1: 项目预估投入列表
     const sheet1Columns: ExportColumn[] = [
       { key: 'projectName', title: '项目名称' },
+      { key: 'budgetType', title: '预算类型', formatter: (_v: unknown, row: FlatVersionRow) => CAPABILITY_BUDGET_TYPE_LABELS[row.budgetType] },
+      { key: 'versionNumber', title: '版本号' },
       { key: 'projectTarget', title: '项目目标' },
       { key: 'estimatedInvestment', title: '预估投入(人月)' },
       { key: 'projectStartTime', title: '项目开始时间' },
       { key: 'projectEndTime', title: '项目结束时间' },
-      { key: 'budgetType', title: '预算类型', formatter: (_v: unknown, row: FlatVersionRow) => CAPABILITY_BUDGET_TYPE_LABELS[row.budgetType] },
-      { key: 'versionNumber', title: '版本号' },
-      { key: 'batch', title: '批次', formatter: (_v: unknown, row: FlatVersionRow) => formatHrBatch(row.batch) },
       { key: 'createdBy', title: '创建人' },
       { key: 'createdAt', title: '创建日期', formatter: (v: unknown) => dayjs(String(v)).format('YYYY-MM-DD HH:mm:ss') },
     ]

@@ -68,7 +68,16 @@ for(let index=0;index<stores.length;index++) {
  add('projectEstimate');add('projectBudget')
  current=store.getState().projects[0]
  eq(current.versions.filter(v=>v.budgetType!=='annual').map(v=>v.versionNumber),['V0.1','V0.1'],category+' independent budgets')
- const latest=current.versions.find(v=>v.budgetType==='annual'&&v.minorVersion===2)
+ const annual=current.versions.find(v=>v.budgetType==='annual'&&v.minorVersion===2)
+ const manualDates=index===3?{projectStartTime:'2026-02-01',projectEndTime:'2027-04-01'}:{milestones:{...formal.resolveHrFormalSource(category,`FORMAL-${category}`).milestones,[index===2?'planningStart':'conceptStart']:'2026-02-01'}}
+ store.getState().updateVersion(project.id,annual.id,manualDates)
+ const manual=store.getState().projects[0].versions.find(v=>v.id===annual.id)
+ eq(index===3?manual.projectStartTime:index===2?manual.milestones.planningStart:manual.milestones.conceptStart,'2026-02-01',category+' bound annual accepts manual dates')
+ store.getState().refreshFormalProjects()
+ const refreshed=store.getState().projects[0].versions.find(v=>v.id===annual.id)
+ eq(index===3?refreshed.projectStartTime:index===2?refreshed.milestones.planningStart:refreshed.milestones.conceptStart,'2026-02-01',category+' annual manual dates survive refresh')
+ current=store.getState().projects[0]
+ const latest=current.versions.find(v=>v.budgetType==='projectEstimate')
  eq(JSON.stringify(current.versions[0].milestones ?? [current.versions[0].projectStartTime,current.versions[0].projectEndTime]),historical,category+' binding preserves historical snapshot')
  eq(index===3?latest.projectStartTime:index===2?latest.milestones.planningStart:latest.milestones.conceptStart,index===2?'2027-04-01':'2026-03-01',category+' uses latest published main plan')
  store.getState().updateVersion(project.id,latest.id,index===3?{projectStartTime:'2044-01-01',batch:3}:{milestones:index===2?{planningStart:'2044-01-01'}:{conceptStart:'2044-01-01'},projectLevel:'C',batch:3})
@@ -141,7 +150,7 @@ planStore.setState({ publishedSnapshots:{ ...planStore.getState().publishedSnaps
 projectStore.setState({projects:projectStore.getState().projects.map(p=>p.id==='verify-machine'?{...p,fieldValues:{softwareProjectLevel:'A'}}:p)})
 machineStore.getState().refreshFormalProjects()
 eq(JSON.stringify(machineStore.getState().projects[0].versions[0]),firstHistory,'plan updates preserve complete historical snapshot')
-eq(machineStore.getState().projects[0].versions.filter(v=>v.minorVersion===2||v.budgetType!=='annual').map(v=>v.milestones.conceptStart),['2029-05-01','2029-05-01','2029-05-01'],'all latest budget versions follow publication')
+eq(machineStore.getState().projects[0].versions.filter(v=>v.minorVersion===2||v.budgetType!=='annual').map(v=>v.milestones.conceptStart),['2026-02-01','2029-05-01','2029-05-01'],'annual manual dates persist while nonannual latest versions follow publication')
 eq(machineStore.getState().projects[0].projectYear,'29年立项29年结项','machine year follows newest created version after publication')
 const legacy = rules.normalizeHrVersionSequence([
  {id:'old-a',budgetType:'annual',minorVersion:0,majorVersion:1,versionNumber:'V1.0',createdAt:'2026-01-01',milestones:{conceptStart:'2025-01-01'}},

@@ -177,6 +177,24 @@ export function getConfigModelVersions(records: ConfigRecord[]): string[] {
   return [...versions]
 }
 
+/** 新建版本只能使用仍启用、且覆盖所选项目等级的模型。 */
+export function isHrModelAvailable(records: ConfigRecord[], projectLevel: string, modelVersion: string): boolean {
+  return Boolean(projectLevel && modelVersion) && records.some(record =>
+    record.enabled !== false && String(record.projectLevel) === projectLevel && String(record.modelVersion) === modelVersion,
+  )
+}
+
+export function getAvailableHrModelSelection(
+  records: ConfigRecord[],
+  seed?: { projectLevel: string; hrModelVersion: string },
+): { projectLevel: string; hrModelVersion: string } {
+  const available = records.filter(record => record.enabled !== false && record.projectLevel && record.modelVersion)
+  const selected = available.find(record => String(record.projectLevel) === seed?.projectLevel && String(record.modelVersion) === seed?.hrModelVersion)
+    ?? available.find(record => String(record.projectLevel) === seed?.projectLevel)
+    ?? available[0]
+  return { projectLevel: selected ? String(selected.projectLevel) : '', hrModelVersion: selected ? String(selected.modelVersion) : '' }
+}
+
 /**
  * 计算配置中心模型综合：给定项目等级 + 模型版本号，
  * 返回所有匹配记录的阶段值总和（模型综合）。

@@ -1,7 +1,8 @@
 'use client'
 
-import { nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
+import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -10,7 +11,6 @@ import {
   Select,
   DatePicker,
   Table,
-  Input,
   InputNumber,
   Button,
   Space,
@@ -40,6 +40,7 @@ interface NewVersionModalProps {
 
 export default function NewVersionModal({ open, onCancel }: NewVersionModalProps) {
   const { message } = App.useApp()
+  const { primaryOptions, getSecondaryOptions, isValidPair } = useHrDepartmentOptions()
   const [form] = Form.useForm()
   const projects = useHrCapabilityStore((s) => s.projects)
   const selectedProjectId = useHrCapabilityStore((s) => s.selectedProjectId)
@@ -62,12 +63,13 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   const ipmBound = !!(project?.ipmProjectCode)
   const canCreateVersion = !ipmRequired || ipmBound
 
+  const followsFormalPlan = ipmBound && budgetType !== 'annual'
   const formalSource = ipmBound ? resolveHrFormalSource('capability', project?.ipmProjectCode ?? null) : null
   const snapshot = project?.versions[project.versions.length - 1]
   const boundStart = formalSource?.project ? formalSource.projectStartTime : snapshot?.projectStartTime
   const boundEnd = formalSource?.project ? formalSource.projectEndTime : snapshot?.projectEndTime
-  const effectiveStart = ipmBound ? (boundStart ? dayjs(boundStart) : null) : startTime
-  const effectiveEnd = ipmBound ? (boundEnd ? dayjs(boundEnd) : null) : endTime
+  const effectiveStart = followsFormalPlan ? (boundStart ? dayjs(boundStart) : null) : startTime
+  const effectiveEnd = followsFormalPlan ? (boundEnd ? dayjs(boundEnd) : null) : endTime
 
   useEffect(() => {
     if (open) {
@@ -78,6 +80,15 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       setEditData([])
     }
   }, [open, selectedProjectId])
+
+  useEffect(() => {
+    if (!open) return
+    const selected = useHrCapabilityStore.getState().projects.find(p => p.id === localProjectId)
+    const seed = selected && budgetType ? getHrVersionSeed(selected.versions, budgetType) : undefined
+    setEditData((seed?.departmentInvestments ?? []).map(row => ({ ...row })))
+    setStartTime(seed?.projectStartTime ? dayjs(seed.projectStartTime) : null)
+    setEndTime(seed?.projectEndTime ? dayjs(seed.projectEndTime) : null)
+  }, [open, localProjectId, budgetType])
 
   const editTotal = useMemo(
     () => editData.reduce((sum, d) => sum + (Number(d.estimatedInvestment) || 0), 0),
@@ -94,7 +105,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
   const updateRow = (id: string, field: keyof CapabilityDepartmentInvestment, value: string | number) => {
     setEditData((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, [field]: value } : d)),
+      prev.map((d) => (d.id === id ? { ...d, [field]: value, ...(field === 'primaryDepartment' && d.primaryDepartment !== value ? { secondaryDepartment: '' } : {}) } : d)),
     )
   }
 
@@ -157,6 +168,10 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
         message.warning('未解析到有效数据，请检查模板格式')
         return false
       }
+      if (parsed.some(row => !isValidPair(row.primaryDepartment, row.secondaryDepartment))) {
+        message.error('导入数据包含无效的一级部门或二级部门，请按部门下拉选项填写')
+        return false
+      }
       setEditData(parsed)
       message.success(`已导入 ${parsed.length} 条部门数据`)
     } catch (err) {
@@ -175,7 +190,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       message.error('请选择预算类型')
       return
     }
-    if (!ipmBound && (!effectiveStart || !effectiveEnd)) {
+    if (!followsFormalPlan && (!effectiveStart || !effectiveEnd)) {
       message.error('请选择项目起止时间')
       return
     }
@@ -185,6 +200,10 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
     }
     if (editData.length === 0) {
       message.error('请至少添加一条部门预估投入')
+      return
+    }
+    if (editData.some(row => !isValidPair(row.primaryDepartment, row.secondaryDepartment))) {
+      message.error('请选择有效的一级部门和对应二级部门')
       return
     }
     if (!canCreateVersion) {
@@ -217,10 +236,15 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       width: 160,
       fixed: 'left' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
-        <Input
-          value={record.primaryDepartment}
-          placeholder="请输入一级部门"
-          onChange={(e) => updateRow(record.id, 'primaryDepartment', e.target.value)}
+        <Select
+          showSearch
+          aria-label="一级部门"
+          value={record.primaryDepartment || undefined}
+          placeholder="请选择一级部门"
+          style={{ width: '100%' }}
+          options={primaryOptions}
+          optionFilterProp="label"
+          onChange={value => updateRow(record.id, 'primaryDepartment', value)}
         />
       ),
     },
@@ -230,10 +254,15 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       width: 160,
       fixed: 'left' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
-        <Input
-          value={record.secondaryDepartment}
-          placeholder="请输入二级部门"
-          onChange={(e) => updateRow(record.id, 'secondaryDepartment', e.target.value)}
+        <Select
+          showSearch
+          aria-label="二级部门"
+          value={record.secondaryDepartment || undefined}
+          placeholder="请选择二级部门"
+          style={{ width: '100%' }}
+          options={getSecondaryOptions(record.primaryDepartment)}
+          disabled={!record.primaryDepartment}
+          onChange={value => updateRow(record.id, 'secondaryDepartment', value)}
         />
       ),
     },
@@ -269,7 +298,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
         </Button>
       ),
     },
-  ], [])
+  ], [primaryOptions, getSecondaryOptions])
 
 
   return (
@@ -313,7 +342,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
         )}
 
         {project && budgetType && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-        {ipmBound && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={formalSource?.project ? '项目起止时间取自正式项目最新已发布一级计划的概念启动和 STR5；尚无已发布计划时无需填写，等待计划发布。' : '当前正式项目编码未找到对应项目，保留已有快照，请在项目列表重新绑定。'} />}
+        {followsFormalPlan && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={formalSource?.project ? '项目起止时间取自正式项目最新已发布一级计划的概念启动和 STR5；尚无已发布计划时无需填写，等待计划发布。' : '当前正式项目编码未找到对应项目，保留已有快照，请在项目列表重新绑定。'} />}
 
         {/* 表单区 */}
         <Form form={form} layout="vertical">
@@ -332,21 +361,21 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
                 }))}
               />
             </Form.Item>
-            <Form.Item label="项目开始时间" required={!ipmBound}>
+            <Form.Item label="项目开始时间" required={!followsFormalPlan}>
               <DatePicker
                 style={{ width: 180 }}
                 placeholder="选择开始时间"
                 value={effectiveStart}
-                disabled={ipmBound}
+                disabled={followsFormalPlan}
                 onChange={setStartTime}
               />
             </Form.Item>
-            <Form.Item label="项目结束时间" required={!ipmBound}>
+            <Form.Item label="项目结束时间" required={!followsFormalPlan}>
               <DatePicker
                 style={{ width: 180 }}
                 placeholder="选择结束时间"
                 value={effectiveEnd}
-                disabled={ipmBound}
+                disabled={followsFormalPlan}
                 onChange={setEndTime}
               />
             </Form.Item>

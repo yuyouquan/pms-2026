@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import { formatHrBatch } from '@/lib/hrVersionRules'
 import { Modal, Table, Tag, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useHrMachineStore } from '@/stores/hrMachine'
@@ -169,11 +168,6 @@ export default function MachineVersionDetailModal({
                 key: 'estimatedInvestment',
                 label: '预估投入(人月)',
                 children: formatPersonMonth(version.estimatedInvestment),
-              },
-              {
-                key: 'batch',
-                label: '批次',
-                children: formatHrBatch(version.batch),
               },
             ]}
           />

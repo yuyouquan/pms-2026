@@ -1,4 +1,4 @@
-import { allowedHrVersionUpdates, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -454,7 +454,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           if (p.id !== projectId) return p
 
           // 找到同预算类型下的最新版本
-          const latest = getLatestVersion(p, budgetType)
+          const latest = getHrVersionSeed(p.versions, budgetType)
           const minorVersion = nextHrMinorVersion(p.versions, budgetType)
 
           // 里程碑：从最新版本复制，若无则空
