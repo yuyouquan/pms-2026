@@ -222,7 +222,7 @@ function DHTMLXGantt({
     }
   }, [columnSettings, tasks, readOnly])
 
-  return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
+  return <div className="pms-gantt" ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
 }
 
 // ========== Drag & Drop Components ==========

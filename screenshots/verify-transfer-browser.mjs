@@ -119,6 +119,8 @@ try {
     const tag=[...document.querySelectorAll('.ant-tag')].find(tag=>tag.textContent.trim()==='SPM');
     return {bodyFont:cell&&getComputedStyle(cell).fontSize,headerFont:header&&getComputedStyle(header).fontSize,buttonHeight:button&&button.getBoundingClientRect().height,pageOverflow:document.documentElement.scrollWidth>innerWidth,roleTag:tag&&{foreground:getComputedStyle(tag).color,background:getComputedStyle(tag).backgroundColor}}
   })
+  assert.equal(style.headerFont, '14px', 'transfer table headers use 14px')
+  assert.equal(style.bodyFont, '12px', 'transfer table content uses 12px')
   observations.push({style})
   console.log('Assigned entry saved',style)
   await clickText('返回')

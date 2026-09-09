@@ -148,6 +148,8 @@
   --pms-line-height-aux: 18px;
   --pms-font-size-compact: var(--pms-font-size-body);
   --pms-control-height: 32px;
+  --pms-table-font-size-header: 14px;
+  --pms-table-font-size-body: 12px;
   --pms-table-head-height: 48px;
   --pms-table-group-head-height: 40px;
   --pms-table-row-height: 40px;
@@ -6684,7 +6686,7 @@ input.ant-input,
 
 /* All Ant table sizes share the same data scale, including edit-mode tables. */
 .ant-table-wrapper .ant-table {
-  font-size: var(--pms-font-size-body);
+  font-size: var(--pms-table-font-size-body);
   font-variant-numeric: tabular-nums;
 }
 
@@ -6694,7 +6696,7 @@ input.ant-input,
   height: var(--pms-table-head-height);
   min-height: var(--pms-table-head-height);
   padding: var(--pms-table-head-padding) !important;
-  font-size: var(--pms-font-size-header) !important;
+  font-size: var(--pms-table-font-size-header) !important;
   font-weight: 600;
   line-height: var(--pms-line-height-header) !important;
 }
@@ -6711,7 +6713,7 @@ input.ant-input,
   height: var(--pms-table-row-height);
   min-height: var(--pms-table-row-height);
   padding: var(--pms-table-cell-padding) !important;
-  font-size: var(--pms-font-size-body) !important;
+  font-size: var(--pms-table-font-size-body) !important;
   line-height: var(--pms-line-height-body) !important;
 }
 
@@ -6776,7 +6778,7 @@ input.ant-input,
 /* Native permission/plan tables share geometry without touching picker tables,
    column widths, sticky offsets, rowspan or cell-level business colors. */
 .pms-page-shell table:not(.ant-table table, .ant-picker-panel table) {
-  font-size: var(--pms-font-size-body);
+  font-size: var(--pms-table-font-size-body);
   line-height: var(--pms-line-height-body);
   font-variant-numeric: tabular-nums;
 }
@@ -6785,7 +6787,7 @@ input.ant-input,
   box-sizing: border-box;
   height: var(--pms-table-head-height);
   padding: var(--pms-table-head-padding) !important;
-  font-size: var(--pms-font-size-header) !important;
+  font-size: var(--pms-table-font-size-header) !important;
   font-weight: 600;
   line-height: var(--pms-line-height-header) !important;
 }
@@ -6799,23 +6801,49 @@ input.ant-input,
   box-sizing: border-box;
   height: var(--pms-table-row-height);
   padding: var(--pms-table-cell-padding) !important;
-  font-size: var(--pms-font-size-body) !important;
+  font-size: var(--pms-table-font-size-body) !important;
   line-height: var(--pms-line-height-body) !important;
 }
 
 .pms-gantt .gantt_grid_data .gantt_cell,
 .pms-gantt .gantt_tree_content,
 .pms-gantt .gantt_task_content {
-  font-size: var(--pms-font-size-body);
+  font-size: var(--pms-table-font-size-body);
   font-variant-numeric: tabular-nums;
 }
 
 .pms-gantt .gantt_grid_head_cell,
 .pms-gantt .gantt_scale_cell {
-  font-size: var(--pms-font-size-header);
+  font-size: var(--pms-table-font-size-header);
   font-weight: 600;
   color: var(--pms-text-primary);
   background: var(--pms-brand-surface);
+}
+
+/* Table text includes links, status tags and editable values. Scope the
+   legacy typography aliases to cells so component-level styles resolve to the
+   table scale as well. Icons, avatars and required markers keep their sizing. */
+:is(.ant-table, .pms-page-shell) table:not(.ant-picker-panel table) > :is(thead, tbody, tfoot) > tr > :is(th, td),
+.pms-jira-project-editor__table :is([role="columnheader"], [role="cell"]),
+.pms-gantt :is(.gantt_cell, .gantt_tree_content, .gantt_task_content, .gantt_grid_head_cell, .gantt_scale_cell) {
+  --pms-table-text-size: var(--pms-table-font-size-body);
+  --pms-font-size-body: var(--pms-table-text-size);
+  --pms-font-size-header: var(--pms-table-text-size);
+  --pms-font-size-aux: var(--pms-table-text-size);
+  --pms-font-size-compact: var(--pms-table-text-size);
+  font-size: var(--pms-table-text-size) !important;
+}
+
+:is(.ant-table, .pms-page-shell) table:not(.ant-picker-panel table) > :is(thead, tbody, tfoot) > tr > th,
+.pms-jira-project-editor__table [role="columnheader"],
+.pms-gantt :is(.gantt_grid_head_cell, .gantt_scale_cell) {
+  --pms-table-text-size: var(--pms-table-font-size-header);
+}
+
+:is(.ant-table, .pms-page-shell) table:not(.ant-picker-panel table) > :is(thead, tbody, tfoot) > tr > :is(th, td) :is(span, div, a, p, strong, b, em, label, input, textarea, button, select):not(.anticon, .anticon *, .ant-avatar, .ant-avatar *, sup, sup *),
+.pms-jira-project-editor__table :is([role="columnheader"], [role="cell"]) :is(span, div, input, button):not(.anticon, .anticon *, sup, sup *),
+.pms-gantt :is(.gantt_tree_content, .gantt_task_content, .gantt_grid_head_cell, .gantt_scale_cell) :is(span, div, a):not(.anticon, .anticon *) {
+  font-size: var(--pms-table-text-size) !important;
 }
 
 .pms-project-list {
@@ -8665,13 +8693,13 @@ input.ant-input,
 .pms-hr-config-table-card .ant-table-thead > tr > th {
   background: var(--pms-surface-glass);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--pms-table-font-size-header);
   color: var(--pms-text-primary);
   border-bottom: 1px solid var(--pms-border);
 }
 
 .pms-hr-config-table-card .ant-table-tbody > tr > td {
-  font-size: 13px;
+  font-size: var(--pms-table-font-size-body);
   color: var(--pms-text-primary);
 }
 

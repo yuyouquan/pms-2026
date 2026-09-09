@@ -39,6 +39,8 @@ assert.doesNotMatch(columnSettingsSource, />确定<\/Button>/, 'field configurat
 
 for (const token of [
   '--pms-font-size-body: 14px',
+  '--pms-table-font-size-header: 14px',
+  '--pms-table-font-size-body: 12px',
   '--pms-control-height: 32px',
   '--pms-table-head-height: 48px',
   '--pms-table-row-height: 40px',

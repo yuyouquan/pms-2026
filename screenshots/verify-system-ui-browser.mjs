@@ -3,8 +3,9 @@ import fs from 'node:fs'
 import puppeteer from 'puppeteer'
 
 const base = process.env.PMS_BASE_URL || 'http://127.0.0.1:3017'
-const output = 'output/audit-20260907/system-ui'
+const output = process.env.PMS_UI_OUTPUT || 'output/audit-20260907/system-ui'
 const captureScreenshots = process.env.PMS_CAPTURE_SCREENSHOTS !== '0'
+const screenshotNames = process.env.PMS_UI_SCREENSHOT_NAMES?.split(',')
 fs.mkdirSync(output, { recursive: true })
 const browser = await puppeteer.launch({ headless: true, protocolTimeout: 30000, args: ['--disable-gpu', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] })
 const page = await browser.newPage()
@@ -35,18 +36,37 @@ const capture = async name => {
       return { text: element.innerText?.trim().slice(0, 40), font: style.fontSize, line: style.lineHeight,
         height: Math.round(rect.height), padding: style.padding, rowSpan: element.rowSpan || 1 }
     })
+    const tableSelector = '.ant-table table, .pms-page-shell table:not(.ant-picker-panel table)'
+    const headers = `${tableSelector.split(', ').map(selector => `${selector} th`).join(', ')}, .gantt_grid_head_cell, .gantt_scale_cell, [role="table"] [role="columnheader"]`
+    const cells = `${tableSelector.split(', ').map(selector => `${selector} tbody tr:not(.ant-table-measure-row) > td, ${selector} tfoot td`).join(', ')}, .gantt_cell, .gantt_task_content, [role="table"] [role="cell"]`
+    const textViolations = []
+    for (const [selector, expected] of [[headers, '14px'], [cells, '12px']]) {
+      for (const cell of document.querySelectorAll(selector)) {
+        if (!visible(cell) || cell.closest('.ant-table-measure-row')) continue
+        for (const element of [cell, ...cell.querySelectorAll('*')]) {
+          if (!visible(element) || element.closest('.anticon, .ant-avatar, sup, .gantt_tree_icon, .gantt_tree_indent, .gantt_folder_open, .gantt_folder_closed, .gantt_file')) continue
+          const text = [...element.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim()
+          const value = element.matches('input, textarea') ? element.value : ''
+          if (!(text || value)) continue
+          const font = getComputedStyle(element).fontSize
+          if (font !== expected) textViolations.push({ text: (text || value).slice(0, 40), font, expected, className: element.className })
+        }
+      }
+    }
     return {
+      textViolations,
       viewport: innerWidth,
       overflow: document.documentElement.scrollWidth - innerWidth,
       body: getComputedStyle(document.body).fontSize,
-      headers: measure('thead th'), cells: measure('tbody tr:not(.ant-table-measure-row) > td'),
+      headers: measure(headers), cells: measure(cells),
       controls: measure('.ant-btn:not(.ant-btn-link):not(.ant-btn-text),.ant-select-single'),
       mainPadding: document.querySelector('.pms-main-content') ? getComputedStyle(document.querySelector('.pms-main-content')).padding : null,
       ganttRows: measure('.gantt_row'),
     }
   })
   results.push({ name, ...metrics })
-  if (captureScreenshots) await page.screenshot({ path: `${output}/${name}.png` })
+  if (metrics.textViolations.length) console.log('TEXT VIOLATIONS', JSON.stringify(metrics.textViolations.slice(0, 8)))
+  if (captureScreenshots && (!screenshotNames || screenshotNames.includes(name))) await page.screenshot({ path: `${output}/${name}.png` })
   console.log(`CAPTURE ${name}: ${metrics.headers.length} headers, ${metrics.cells.length} cells, overflow ${metrics.overflow}`)
 }
 const openProject = async (category, id) => {
@@ -67,6 +87,20 @@ try {
   for (const [label, name] of [['项目列表', 'project-list'], ['联合项目空间', 'joint-mr'], ['tOS路标', 'roadmap'], ['人力资源管道', 'hr-empty'], ['配置中心', 'config-plan']]) {
     await click(label)
     await capture(name)
+    if (name === 'hr-empty') {
+      for (const [label, key] of [['整机产品项目', 'machine'], ['tOS项目', 'tos'], ['技术项目', 'technical'], ['能力建设项目', 'capability']]) {
+        await click(label, '.pms-hr-sidebar-leaf')
+        await capture(`hr-${key}-projects`)
+        await click('项目预估投入空间', '.ant-segmented-item-label')
+        await capture(`hr-${key}-versions`)
+        await click('项目月度预估投入', '.ant-segmented-item-label')
+        await capture(`hr-${key}-monthly`)
+      }
+      for (const [index, label] of ['人力模型', 'tOS阶段投入比', '品牌&产品线分摊比', '模块与部门', 'TMG及技术领域', '技术阶段投入比'].entries()) {
+        await click(label, '.pms-hr-sidebar-leaf')
+        await capture(`hr-config-${index + 1}`)
+      }
+    }
     if (name === 'roadmap') {
       await click('版本演进视图')
       await capture('roadmap-evolution')
@@ -93,7 +127,7 @@ try {
     }
     if (await page.$('[aria-label="甘特图"]')) {
       await page.$eval('[aria-label="甘特图"]', element => element.click())
-      await page.waitForSelector('.gantt_container')
+      await page.waitForSelector('.gantt_grid_head_cell', { visible: true })
       await capture(`${name}-gantt`)
     }
     await click('权限配置')
@@ -136,12 +170,28 @@ try {
   await click('横版表格')
   await capture('share-horizontal')
   await click('甘特图')
-  await page.waitForSelector('.gantt_container')
+  await page.waitForSelector('.gantt_grid_head_cell', { visible: true })
   await capture('share-gantt')
+  for (const route of ['level1-template', 'level2-template']) {
+    await page.goto(`${base}/config/${route}`, { waitUntil: 'networkidle0' })
+    await page.waitForSelector('.pms-config-center-switch')
+    await capture(`legacy-${route}`)
+  }
+  await openProject('整机产品项目', '1')
+  await click('计划')
+  await page.$eval('[aria-label="竖版表格"]', element => element.click())
+  if (await page.$('button[aria-label="创建修订"]')) {
+    await page.click('button[aria-label="创建修订"]')
+    await click('创建正式版本', '[role="menuitem"]')
+  }
+  await page.waitForSelector('.pms-table-edit')
+  await capture('machine-plan-edit')
+  assert.ok(await page.$('.pms-table-edit input'), 'edit-state table has rendered inputs')
   const violations = results.flatMap(result => [
+    ...result.textViolations.map(item => `${result.name}: text ${item.text}: ${item.font}, expected ${item.expected}`),
     ...(result.overflow > 1 ? [`${result.name}: page overflow ${result.overflow}`] : []),
-    ...result.headers.filter(item => item.font !== '16px').map(item => `${result.name}: header ${item.text}: ${item.font}`),
-    ...result.cells.filter(item => item.font !== '14px').map(item => `${result.name}: cell ${item.text}: ${item.font}`),
+    ...result.headers.filter(item => item.font !== '14px').map(item => `${result.name}: header ${item.text}: ${item.font}`),
+    ...result.cells.filter(item => item.font !== '12px').map(item => `${result.name}: cell ${item.text}: ${item.font}`),
     ...result.controls.filter(item => item.height !== 32).map(item => `${result.name}: control ${item.text}: ${item.height}`),
     ...result.ganttRows.filter(item => item.height !== 40).map(item => `${result.name}: Gantt row ${item.height}`),
   ])
