@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, message } from 'antd'
+import { App, Modal, Form, Input } from 'antd'
 import { useHrTosStore } from '@/stores/hrTos'
 
 interface NewProjectModalProps {
@@ -10,6 +10,7 @@ interface NewProjectModalProps {
 }
 
 export default function NewProjectModal({ open, onCancel }: NewProjectModalProps) {
+  const { message } = App.useApp()
   const [form] = Form.useForm()
   const { addProject } = useHrTosStore()
   const [submitting, setSubmitting] = useState(false)

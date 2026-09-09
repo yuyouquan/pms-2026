@@ -1,5 +1,8 @@
 'use client'
 
+import { nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
+
 import { useState, useEffect, useMemo } from 'react'
 import {
   Modal,
@@ -10,7 +13,7 @@ import {
   Button,
   Space,
   Alert,
-  message,
+  App,
   Tooltip,
   Tag,
   Form,
@@ -43,14 +46,16 @@ interface NewVersionModalProps {
 }
 
 export default function NewVersionModal({ open, projectId, onCancel }: NewVersionModalProps) {
+  const { message } = App.useApp()
   const { projects, addVersion } = useHrTosStore()
+  const [localProjectId, setLocalProjectId] = useState(projectId)
   const [budgetType, setBudgetType] = useState<BudgetType>('annual')
   const [editData, setEditData] = useState<TosDepartmentInvestment[]>([])
   const [submitting, setSubmitting] = useState(false)
 
   const project = useMemo(
-    () => projects.find(p => p.id === projectId),
-    [projects, projectId],
+    () => projects.find(p => p.id === localProjectId),
+    [projects, localProjectId],
   )
 
   const hasIpm = useMemo(
@@ -60,10 +65,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
   useEffect(() => {
     if (open) {
+      setLocalProjectId(projectId || '')
       setBudgetType('annual')
       setEditData([])
     }
-  }, [open])
+  }, [open, projectId])
 
   // ── 合计 ────────────────────────────────────────────────────────────
   const editTotal = useMemo(
@@ -262,7 +268,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
   // ── 提交 ────────────────────────────────────────────────────────────
   const handleOk = async () => {
-    if (!projectId) return
+    if (!project) { message.warning('请选择项目'); return }
     if (!hasIpm && TOS_IPM_REQUIRED_TYPES.includes(budgetType)) {
       message.warning(TOS_IPM_REQUIRED_TIP)
       return
@@ -279,7 +285,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
     try {
       setSubmitting(true)
-      addVersion(projectId, { budgetType, departmentInvestments: editData })
+      addVersion(project.id, { budgetType, departmentInvestments: editData })
       message.success('版本创建成功')
       onCancel()
     } finally {
@@ -310,6 +316,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       onCancel={onCancel}
       onOk={handleOk}
       confirmLoading={submitting}
+      okButtonProps={{ disabled: !project }}
       okText="创建"
       cancelText="取消"
       width={1280}
@@ -322,14 +329,21 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             padding: '8px 12px',
             background: 'var(--pms-brand-surface)',
             borderRadius: 8,
-            fontSize: 13,
+            fontSize: 12,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ color: 'var(--pms-text-tertiary)' }}>项目：</span>
-            <span style={{ color: 'var(--pms-text-primary)', fontWeight: 600 }}>
-              {project?.name ?? '-'}
-            </span>
+            <Select
+              showSearch
+              aria-label="选择项目"
+              placeholder="请选择项目"
+              value={localProjectId || undefined}
+              options={projects.map(p => ({ value: p.id, label: p.name }))}
+              optionFilterProp="label"
+              style={{ minWidth: 280 }}
+              onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setEditData([]) }}
+            />
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--pms-text-tertiary)' }}>IPM：</span>
@@ -347,6 +361,9 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             )}
           </div>
         </div>
+
+        {project && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
+        {hasIpm && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={resolveHrFormalSource('tos', project?.ipmProjectCode ?? null).project ? '里程碑取自主市场／主类型最新已发布一级计划；尚无已发布计划时等待计划发布。' : '当前正式项目编码未找到对应项目，请在项目列表重新绑定。'} />}
 
         {/* 表单字段 */}
         <Form layout="vertical">
@@ -412,7 +429,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             borderRadius: 8,
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: 'var(--pms-text-secondary)' }}>
               编辑各阶段预估投入，合计将自动更新
             </span>
@@ -440,10 +457,10 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             版本规则：
           </p>
           <ul style={{ margin: '4px 0 0', paddingLeft: 16, lineHeight: '1.8' }}>
-            <li>首行 V0.1，新增递增 V0.2、V0.3…</li>
-            <li>锁定后版本号不变，仅状态变为已锁定</li>
-            <li>仅最新版本支持锁定操作</li>
-            <li>里程碑节点自动带出，可独立修改</li>
+            <li>同一项目、同一预算类型从 V0.1 开始递增</li>
+            <li>仅最新版本可编辑，历史版本保留原有日期和投入数据</li>
+            <li>所有版本均可修改批次</li>
+            <li>绑定正式项目后，最新版本里程碑随主市场／主类型最新已发布一级计划更新</li>
             <li>预估投入合计由各部门各阶段投入自动汇总</li>
           </ul>
         </div>

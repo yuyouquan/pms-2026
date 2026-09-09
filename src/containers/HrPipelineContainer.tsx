@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import { useHrFormalProjectSync } from '@/hooks/useHrFormalProjectSync'
 import { Card, Empty, Tooltip } from 'antd'
 import type { CSSProperties, ReactNode } from 'react'
 import {
@@ -173,6 +174,7 @@ function HrContentRouter({ leafKey }: { leafKey: string }) {
 /* ── Main container ───────────────────────────────────────────────── */
 
 export default function HrPipelineContainer() {
+  useHrFormalProjectSync()
   const { hrSidebarCollapsed, setHrSidebarCollapsed } = useUiStore()
   const { activeLeaf } = useHrPipelineStore()
 

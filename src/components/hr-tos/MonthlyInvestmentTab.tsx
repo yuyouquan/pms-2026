@@ -1,6 +1,8 @@
 'use client'
 
+import MonthlyAllocationNotice from '@/components/hr-shared/MonthlyAllocationNotice'
 import { useMemo, useState } from 'react'
+import { formatHrBatch } from '@/lib/hrVersionRules'
 import { Card, Table, Button, Tooltip, Tag, Checkbox, Space, Input, Select } from 'antd'
 import { EditOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -144,7 +146,7 @@ export default function MonthlyInvestmentTab() {
               <span style={{ fontWeight: 600, color: 'var(--pms-text-primary)' }}>{value}</span>
             </Tooltip>
             {record.isEdited && (
-              <Tag color="blue" style={{ fontSize: 11, marginInlineEnd: 0 }}>
+              <Tag color="blue" style={{ fontSize: 12, marginInlineEnd: 0 }}>
                 已编辑
               </Tag>
             )}
@@ -177,18 +179,15 @@ export default function MonthlyInvestmentTab() {
         title: '版本号',
         dataIndex: 'versionNumber',
         key: 'versionNumber',
-        width: 140,
-        render: (value: string, record: MonthlyInvestmentRow) => (
-          <Space size={4}>
-            <span>{value || '-'}</span>
-            <Tag
-              color={record.versionLockState === 'locked' ? 'green' : 'default'}
-              style={{ fontSize: 11, marginInlineEnd: 0 }}
-            >
-              {record.versionLockState === 'locked' ? '已锁定' : '未锁定'}
-            </Tag>
-          </Space>
-        ),
+        width: 90,
+        render: (value: string) => value || '-',
+      },
+      {
+        title: '批次',
+        dataIndex: 'batch',
+        key: 'batch',
+        width: 90,
+        render: (value: number | null | undefined) => formatHrBatch(value),
       },
       {
         title: '预估合计',
@@ -255,10 +254,10 @@ export default function MonthlyInvestmentTab() {
       },
       { key: 'versionNumber', title: '版本号', width: 10 },
       {
-        key: 'versionLockState',
-        title: '版本锁定状态',
+        key: 'batch',
+        title: '批次',
         width: 12,
-        formatter: (value) => (value === 'locked' ? '已锁定' : '未锁定'),
+        formatter: (value) => formatHrBatch(value == null ? null : Number(value)),
       },
       {
         key: 'estimatedTotal',
@@ -297,17 +296,16 @@ export default function MonthlyInvestmentTab() {
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 12,
-            flexWrap: 'wrap',
           }}
         >
-          <Space size={12} wrap>
+          <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
             <span
               style={{
                 color: 'var(--pms-text-secondary)',
-                fontSize: 13,
+                fontSize: 12,
                 whiteSpace: 'nowrap',
               }}
             >
@@ -340,7 +338,7 @@ export default function MonthlyInvestmentTab() {
               <span
                 style={{
                   color: 'var(--pms-text-secondary)',
-                  fontSize: 13,
+                  fontSize: 12,
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -361,7 +359,7 @@ export default function MonthlyInvestmentTab() {
               <span
                 style={{
                   color: 'var(--pms-text-secondary)',
-                  fontSize: 13,
+                  fontSize: 12,
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -388,20 +386,19 @@ export default function MonthlyInvestmentTab() {
             />
           </Space>
 
-          <Button icon={<DownloadOutlined />} onClick={handleExport}>
+          <Button icon={<DownloadOutlined />} onClick={handleExport} style={{ flexShrink: 0 }}>
             导出
           </Button>
         </div>
 
-        {/* 第二行：记录数信息 + 颜色图例 */}
+        {/* 第二行：记录数信息 */}
         <div
           style={{
             marginTop: 8,
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 12,
-            flexWrap: 'wrap',
           }}
         >
           <span
@@ -415,52 +412,10 @@ export default function MonthlyInvestmentTab() {
             按配置中心部门拆分，仅展示各预算类型最新版本
           </span>
 
-          <Space size={16}>
-            <span
-              style={{
-                fontSize: 12,
-                color: 'var(--pms-text-secondary)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 14,
-                  height: 14,
-                  background: '#f0f9eb',
-                  border: '1px solid #d9ebd0',
-                  borderRadius: 2,
-                }}
-              />
-              已锁定版本
-            </span>
-            <span
-              style={{
-                fontSize: 12,
-                color: 'var(--pms-text-secondary)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 14,
-                  height: 14,
-                  background: '#f5f5f5',
-                  border: '1px solid #e0e0e0',
-                  borderRadius: 2,
-                }}
-              />
-              未锁定版本
-            </span>
-          </Space>
         </div>
       </Card>
+
+      <MonthlyAllocationNotice records={dataSource} />
 
       <div className="pms-solid-surface">
         <Table<MonthlyInvestmentRow>
@@ -468,11 +423,9 @@ export default function MonthlyInvestmentTab() {
           rowKey="id"
           columns={columns}
           dataSource={dataSource}
-          scroll={{ x: 'max-content' }}
+          tableLayout="fixed"
+          scroll={{ x: columns.reduce((total, column) => total + Number(column.width ?? 0), 0) }}
           pagination={{ pageSize: 15, showTotal: (t) => '共 ' + t + ' 条' }}
-          rowClassName={(record) =>
-            record.versionLockState === 'locked' ? 'pms-row-locked' : 'pms-row-unlocked'
-          }
           onRow={(record) => ({
             style: { cursor: 'pointer' },
             onClick: () => handleEdit(record.id),
@@ -487,19 +440,20 @@ export default function MonthlyInvestmentTab() {
                 <Table.Summary.Cell index={2} />
                 <Table.Summary.Cell index={3} />
                 <Table.Summary.Cell index={4} />
-                <Table.Summary.Cell index={5} align="right">
+                <Table.Summary.Cell index={5} />
+                <Table.Summary.Cell index={6} align="right">
                   <span style={{ fontWeight: 700 }}>
                     {formatPersonMonth(totalRow.totalEstimated)}
                   </span>
                 </Table.Summary.Cell>
                 {sortedMonths.map((monthKey, idx) => (
-                  <Table.Summary.Cell key={`total-${monthKey}`} index={6 + idx} align="right">
+                  <Table.Summary.Cell key={`total-${monthKey}`} index={7 + idx} align="right">
                     <span style={{ fontWeight: 600 }}>
                       {formatPersonMonth(totalRow.monthlyTotals[monthKey] || 0)}
                     </span>
                   </Table.Summary.Cell>
                 ))}
-                <Table.Summary.Cell index={6 + sortedMonths.length} />
+                <Table.Summary.Cell index={7 + sortedMonths.length} />
               </Table.Summary.Row>
             </Table.Summary>
           )}
@@ -529,20 +483,6 @@ export default function MonthlyInvestmentTab() {
         }
         .pms-tos-monthly-investment-tab .pms-table .pms-summary-row:hover > td {
           background: var(--pms-brand-surface) !important;
-        }
-        /* 已锁定版本：绿色背景 */
-        .pms-tos-monthly-investment-tab .pms-table .pms-row-locked > td {
-          background: #f0f9eb !important;
-        }
-        .pms-tos-monthly-investment-tab .pms-table .pms-row-locked:hover > td {
-          background: #e8f5e0 !important;
-        }
-        /* 未锁定版本：灰色背景 */
-        .pms-tos-monthly-investment-tab .pms-table .pms-row-unlocked > td {
-          background: #f5f5f5 !important;
-        }
-        .pms-tos-monthly-investment-tab .pms-table .pms-row-unlocked:hover > td {
-          background: #ececec !important;
         }
       `}</style>
     </div>

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Modal, Table, Input, InputNumber, Button, Space, Alert, message, Upload } from 'antd'
+import { useEffect, useMemo, useState, useRef } from 'react'
+import { isLatestHrVersion, formatHrBatch } from '@/lib/hrVersionRules'
+import { Modal, Table, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import * as XLSX from 'xlsx'
@@ -22,9 +23,10 @@ export default function VersionDetailModal({
   open,
   versionId,
   projectId,
-  readOnly = false,
+  readOnly: requestedReadOnly = false,
   onCancel,
 }: VersionDetailModalProps) {
+  const { message } = App.useApp()
   const projects = useHrTechnicalStore(s => s.projects)
   const updateVersionDepartmentInvestments = useHrTechnicalStore(s => s.updateVersionDepartmentInvestments)
   const setShowVersionDetailModal = useHrTechnicalStore(s => s.setShowVersionDetailModal)
@@ -37,18 +39,23 @@ export default function VersionDetailModal({
     if (!v) return { project: null, version: null }
     return { project: p, version: v }
   }, [projects, projectId, versionId])
+  const readOnly = requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
+  const versionRef = useRef(version)
+  versionRef.current = version
+
 
   // ── 本地编辑态 ──────────────────────────────────────────────────────
   const [editData, setEditData] = useState<TechDepartmentInvestment[]>([])
 
   useEffect(() => {
-    if (open && version) {
-      setEditData(version.departmentInvestments.map(d => ({ ...d })))
+    const initialVersion = versionRef.current
+    if (open && initialVersion) {
+      setEditData(initialVersion.departmentInvestments.map(d => ({ ...d })))
     }
     if (!open) {
       setEditData([])
     }
-  }, [open, version])
+  }, [open, versionId])
 
   // ── 合计 ────────────────────────────────────────────────────────────
   const editTotal = useMemo(
@@ -172,7 +179,7 @@ export default function VersionDetailModal({
 
   // ── 保存 ────────────────────────────────────────────────────────────
   const handleOk = () => {
-    if (!project || !version) return
+    if (!project || !version || readOnly) return
     updateVersionDepartmentInvestments(project.id, version.id, editData)
     message.success('部门预估投入已更新')
   }
@@ -294,7 +301,7 @@ export default function VersionDetailModal({
             marginBottom: 12,
             display: 'flex',
             gap: 24,
-            fontSize: 13,
+            fontSize: 12,
             color: 'var(--pms-text-secondary)',
             flexWrap: 'wrap',
           }}
@@ -311,7 +318,7 @@ export default function VersionDetailModal({
           </span>
           <span>
             版本号：
-            <strong style={{ color: 'var(--pms-text-primary)' }}>{version.versionNumber}</strong>
+            <strong style={{ color: 'var(--pms-text-primary)' }}>{version.versionNumber}</strong><span style={{ marginLeft: 8 }}>{formatHrBatch(version.batch)}</span>
           </span>
           <span>
             预估投入：
@@ -326,7 +333,7 @@ export default function VersionDetailModal({
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message={`各阶段预估投入合计：${formatPersonMonth(editTotal)}`}
+          title={`各阶段预估投入合计：${formatPersonMonth(editTotal)}`}
         />
 
         {/* 操作按钮：编辑模式下可用 */}
@@ -360,7 +367,8 @@ export default function VersionDetailModal({
           dataSource={editData}
           pagination={false}
           size="small"
-          scroll={{ x: 'max-content', y: 320 }}
+          tableLayout="fixed"
+          scroll={{ x: columns.reduce((total, column) => total + Number(column.width ?? 0), 0), y: 320 }}
           locale={{
             emptyText: readOnly
               ? '暂无部门预估投入数据'
@@ -377,7 +385,7 @@ export default function VersionDetailModal({
             borderRadius: 8,
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: 'var(--pms-text-secondary)' }}>
               {readOnly
                 ? '部门预估投入列表合计'

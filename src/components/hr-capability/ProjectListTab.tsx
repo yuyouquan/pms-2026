@@ -1,31 +1,35 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Card, Table, Button, Tooltip, Tag, Switch, Space, Select, Popover, message, Input } from 'antd'
-import { DownloadOutlined, SearchOutlined, LinkOutlined } from '@ant-design/icons'
+import { Card, Table, Button, Tooltip, Tag, Space, Select, Popover, App, Input } from 'antd'
+import { DownloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
 import {
-  CAPABILITY_IPM_PROJECTS,
-  CAPABILITY_BUDGET_TYPE_LABELS,
   formatPersonMonth,
   formatPercent,
 } from '@/constants/hrCapability'
 import type { HrCapabilityProject } from '@/types/hrCapability'
 import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import type { ExportColumn } from '@/utils/exportExcel'
+import { useProjectStore } from '@/stores/project'
+import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 
 interface ProjectListTabProps {
   onSelectProject: (projectId: string) => void
+  onNewProject: () => void
 }
 
 /** IPM 编码单元格：可点击弹出绑定弹框 */
 function IpmCodeCell({ project }: { project: HrCapabilityProject }) {
+  const { message } = App.useApp()
   const bindIpmProject = useHrCapabilityStore((s) => s.bindIpmProject)
   const [open, setOpen] = useState(false)
+  const formalProjects = useProjectStore(s => s.projects)
+  const formalProjectOptions = useMemo(() => getHrFormalProjectOptions('capability', formalProjects), [formalProjects])
 
   const handleSelect = (code: string) => {
-    const ipmProject = CAPABILITY_IPM_PROJECTS.find((p) => p.code === code)
+    const ipmProject = formalProjectOptions.find((p) => p.code === code)
     if (ipmProject) {
       bindIpmProject(project.id, ipmProject.code, ipmProject.name)
       message.success(`已绑定 ${ipmProject.code} - ${ipmProject.name}`)
@@ -34,13 +38,14 @@ function IpmCodeCell({ project }: { project: HrCapabilityProject }) {
   }
 
   const content = (
-    <div style={{ width: 320 }}>
+    <div onClick={e => e.stopPropagation()} style={{ width: 320 }}>
       <Select
         style={{ width: '100%' }}
+        value={project.ipmProjectCode ?? undefined}
         placeholder="选择正式项目编码"
         showSearch
         optionFilterProp="label"
-        options={CAPABILITY_IPM_PROJECTS.map((p) => ({
+        options={formalProjectOptions.map((p) => ({
           label: `${p.code} - ${p.name}`,
           value: p.code,
         }))}
@@ -52,7 +57,7 @@ function IpmCodeCell({ project }: { project: HrCapabilityProject }) {
   if (project.ipmProjectCode) {
     return (
       <Popover content={content} trigger="click" open={open} onOpenChange={setOpen}>
-        <span style={{ cursor: 'pointer', color: 'var(--pms-brand-strong)' }}>
+        <span onClick={e => e.stopPropagation()} style={{ cursor: 'pointer', color: 'var(--pms-brand-strong)' }}>
           <Tooltip title={project.ipmProjectName ?? ''}>
             <Space size={2}>
               <LinkOutlined style={{ fontSize: 12 }} />
@@ -66,20 +71,17 @@ function IpmCodeCell({ project }: { project: HrCapabilityProject }) {
 
   return (
     <Popover content={content} trigger="click" open={open} onOpenChange={setOpen}>
-      <Button type="dashed" size="small" icon={<LinkOutlined />}>
+      <Button type="dashed" size="small" icon={<LinkOutlined />} onClick={e => e.stopPropagation()}>
         绑定IPM
       </Button>
     </Popover>
   )
 }
 
-export default function ProjectListTab({ onSelectProject }: ProjectListTabProps) {
+export default function ProjectListTab({ onSelectProject, onNewProject }: ProjectListTabProps) {
   const projects = useHrCapabilityStore((s) => s.projects)
   const filters = useHrCapabilityStore((s) => s.filters)
   const setFilters = useHrCapabilityStore((s) => s.setFilters)
-  const cancelProject = useHrCapabilityStore((s) => s.cancelProject)
-  const restoreProject = useHrCapabilityStore((s) => s.restoreProject)
-  const deleteProject = useHrCapabilityStore((s) => s.deleteProject)
 
   // 项目名称搜索
   const [searchText, setSearchText] = useState('')
@@ -93,24 +95,15 @@ export default function ProjectListTab({ onSelectProject }: ProjectListTabProps)
     const keyword = searchText.trim().toLowerCase()
     return projects
       .filter((p) => {
-        if (!filters.showCancelled && p.status === 'cancelled') return false
         if (filters.projectName.length > 0 && !filters.projectName.includes(p.name)) return false
         if (keyword && !p.name.toLowerCase().includes(keyword)) return false
         return true
       })
       .map((p) => {
-        const latestVersion = p.versions.length > 0
-          ? p.versions[p.versions.length - 1]
-          : null
-        const hasLocked = p.versions.some((v) => v.lockState === 'locked')
-        const hasUnlocked = p.versions.some((v) => v.lockState === 'unlocked')
         return {
           ...p,
-          latestVersion,
-          hasLocked,
-          hasUnlocked,
-          budgetUsageRate: p.annualBudget > 0 && p.projectAccounting > 0
-            ? p.projectAccounting / p.annualBudget
+          budgetUsageRate: p.projectBudget > 0
+            ? p.projectAccounting / p.projectBudget
             : 0,
         }
       })
@@ -141,9 +134,19 @@ export default function ProjectListTab({ onSelectProject }: ProjectListTabProps)
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ fontWeight: 600, color: 'var(--pms-text-primary)' }}>{value}</span>
           {record.status === 'cancelled' && (
-            <Tag color="red" style={{ fontSize: 11, marginInlineEnd: 0 }}>已取消</Tag>
+            <Tag color="red" style={{ fontSize: 12, marginInlineEnd: 0 }}>已取消</Tag>
           )}
         </div>
+      ),
+    },
+    {
+      title: '正式项目编码',
+      dataIndex: 'ipmProjectCode',
+      key: 'ipmProjectCode',
+      fixed: 'left',
+      width: 140,
+      render: (_value: unknown, record: typeof dataSource[number]) => (
+        <IpmCodeCell project={record} />
       ),
     },
     {
@@ -154,19 +157,10 @@ export default function ProjectListTab({ onSelectProject }: ProjectListTabProps)
       ellipsis: true,
       render: (value: string) => (
         <Tooltip title={value}>
-          <span style={{ color: 'var(--pms-text-secondary)', fontSize: 13 }}>
+          <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12 }}>
             {value?.length > 40 ? `${value.slice(0, 40)}...` : value}
           </span>
         </Tooltip>
-      ),
-    },
-    {
-      title: '正式项目编码',
-      dataIndex: 'ipmProjectCode',
-      key: 'ipmProjectCode',
-      width: 140,
-      render: (_value: unknown, record: typeof dataSource[number]) => (
-        <IpmCodeCell project={record} />
       ),
     },
     {
@@ -225,8 +219,8 @@ export default function ProjectListTab({ onSelectProject }: ProjectListTabProps)
   const handleExport = () => {
     const exportColumns: ExportColumn[] = [
       { key: 'name', title: '项目名称', width: 20 },
-      { key: 'projectTarget', title: '项目目标', width: 30 },
       { key: 'ipmProjectCode', title: '正式项目编码', width: 14 },
+      { key: 'projectTarget', title: '项目目标', width: 30 },
       { key: 'ipmProjectName', title: '正式项目名称', width: 16 },
       { key: 'annualBudget', title: '年度预算', width: 10, formatter: (v) => formatPersonMonth(Number(v)) },
       { key: 'projectEstimate', title: '项目概算', width: 10, formatter: (v) => formatPersonMonth(Number(v)) },
@@ -253,13 +247,12 @@ export default function ProjectListTab({ onSelectProject }: ProjectListTabProps)
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 12,
-            flexWrap: 'wrap',
           }}
         >
-          <Space size={12} wrap>
+          <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
             <Select
               mode="multiple"
               maxTagCount="responsive"
@@ -277,16 +270,11 @@ export default function ProjectListTab({ onSelectProject }: ProjectListTabProps)
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
             />
-            <Space size={4}>
-              <Switch
-                size="small"
-                checked={filters.showCancelled}
-                onChange={(v) => setFilters({ showCancelled: v })}
-              />
-              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 13 }}>显示已取消</span>
-            </Space>
           </Space>
-          <Button icon={<DownloadOutlined />} onClick={handleExport}>导出</Button>
+          <Space size={8} style={{ flexShrink: 0 }}>
+            <Button icon={<DownloadOutlined />} onClick={handleExport}>导出</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={onNewProject}>新建项目</Button>
+          </Space>
         </div>
       </Card>
 
@@ -296,7 +284,8 @@ export default function ProjectListTab({ onSelectProject }: ProjectListTabProps)
           rowKey="id"
           columns={columns}
           dataSource={dataSource}
-          scroll={{ x: 'max-content' }}
+          tableLayout="fixed"
+          scroll={{ x: columns.reduce((total, column) => total + Number(column.width ?? 0), 0) }}
           pagination={{ pageSize: 15, showTotal: (t) => `共 ${t} 条` }}
           onRow={(record) => ({
             style: { cursor: 'pointer' },
@@ -326,7 +315,9 @@ export default function ProjectListTab({ onSelectProject }: ProjectListTabProps)
                 <Table.Summary.Cell index={7} align="right">
                   <span style={{ fontWeight: 700 }}>{formatPersonMonth(totalRow.projectAccounting)}</span>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={8} />
+                <Table.Summary.Cell index={8} align="right">
+                  {totalRow.projectBudget > 0 ? formatPercent(totalRow.projectAccounting / totalRow.projectBudget) : '-'}
+                </Table.Summary.Cell>
               </Table.Summary.Row>
             </Table.Summary>
           )}

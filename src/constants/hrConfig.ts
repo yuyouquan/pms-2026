@@ -1,3 +1,4 @@
+import { roundHrMonthlyAllocation } from '@/lib/hrMonthlyRounding'
 /* ── HR Pipeline Configuration Center Constants ─────────────────────── */
 
 import type { ConfigModuleMeta, ConfigModuleKey, ConfigRecord } from '@/types/hrConfig'
@@ -237,7 +238,8 @@ function calcDaysInclusive(startDate: string, endDate: string): number {
   const start = new Date(startDate)
   const end = new Date(endDate)
   const diff = end.getTime() - start.getTime()
-  return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)) + 1)
+  if (!Number.isFinite(diff) || diff < 0) return 0
+  return Math.round(diff / (1000 * 60 * 60 * 24)) + 1
 }
 
 /** 将日期加 N 天，返回 YYYY-MM-DD */
@@ -358,16 +360,13 @@ export function calcDepartmentMonthlySplit(
       void endMonth
     }
 
-    // Round monthly values
-    for (const key of Object.keys(monthlyData)) {
-      monthlyData[key] = Math.round(monthlyData[key] * 10) / 10
-    }
+    Object.assign(monthlyData, roundHrMonthlyAllocation(monthlyData, totalForDept))
 
     results.push({
       primaryDepartment,
       secondaryDepartment,
       monthlyData,
-      estimatedTotal: Math.round(totalForDept * 10) / 10,
+      estimatedTotal: Math.round(HR_MODEL_PHASE_KEYS.reduce((sum, key) => sum + (Number(record[key]) || 0), 0) * levelCoefficient * 10) / 10,
     })
   }
 
@@ -487,6 +486,7 @@ export function calcTosDepartmentMonthlySplit(
     const deptEstimatedTotal = dept.estimatedInvestment
 
     const monthlyData: Record<string, number> = {}
+    let allocatedTotal = 0
 
     for (const phase of TOS_PHASE_DEFS) {
       const startVal = milestones[phase.startField]
@@ -499,6 +499,7 @@ export function calcTosDepartmentMonthlySplit(
       // 直接使用部门阶段投入值（支持用户编辑后的值）
       const phaseInvestment = Number(dept[phase.configKey]) || 0
       if (phaseInvestment === 0) continue
+      allocatedTotal += phaseInvestment
 
       // 每日预估 = 阶段预估投入 / 阶段工期
       const dailyRate = phaseInvestment / phaseDays
@@ -515,19 +516,7 @@ export function calcTosDepartmentMonthlySplit(
       }
     }
 
-    // Round monthly values to 1 decimal
-    for (const key of Object.keys(monthlyData)) {
-      monthlyData[key] = Math.round(monthlyData[key] * 10) / 10
-    }
-
-    // 修正最后一个月的值，使月度合计与 estimatedTotal 完全一致（消除累计舍入误差）
-    const monthlySum = Object.values(monthlyData).reduce((sum, v) => sum + v, 0)
-    const diff = Math.round((deptEstimatedTotal - monthlySum) * 10) / 10
-    if (Math.abs(diff) >= 0.1 && Object.keys(monthlyData).length > 0) {
-      const sortedKeys = Object.keys(monthlyData).sort()
-      const lastKey = sortedKeys[sortedKeys.length - 1]
-      monthlyData[lastKey] = Math.round((monthlyData[lastKey] + diff) * 10) / 10
-    }
+    Object.assign(monthlyData, roundHrMonthlyAllocation(monthlyData, allocatedTotal))
 
     results.push({
       primaryDepartment,
@@ -585,6 +574,7 @@ export function calcTechDepartmentMonthlySplit(
     const deptEstimatedTotal = dept.estimatedInvestment
 
     const monthlyData: Record<string, number> = {}
+    let allocatedTotal = 0
 
     for (const phase of TECH_PHASE_DEFS) {
       const startVal = milestones[phase.startField]
@@ -597,6 +587,7 @@ export function calcTechDepartmentMonthlySplit(
       // 直接使用部门阶段投入值（支持用户编辑后的值）
       const phaseInvestment = Number(dept[phase.configKey]) || 0
       if (phaseInvestment === 0) continue
+      allocatedTotal += phaseInvestment
 
       // 每日预估 = 阶段预估投入 / 阶段工期
       const dailyRate = phaseInvestment / phaseDays
@@ -613,19 +604,7 @@ export function calcTechDepartmentMonthlySplit(
       }
     }
 
-    // Round monthly values to 1 decimal
-    for (const key of Object.keys(monthlyData)) {
-      monthlyData[key] = Math.round(monthlyData[key] * 10) / 10
-    }
-
-    // 修正最后一个月的值，使月度合计与 estimatedTotal 完全一致（消除累计舍入误差）
-    const monthlySum = Object.values(monthlyData).reduce((sum, v) => sum + v, 0)
-    const diff = Math.round((deptEstimatedTotal - monthlySum) * 10) / 10
-    if (Math.abs(diff) >= 0.1 && Object.keys(monthlyData).length > 0) {
-      const sortedKeys = Object.keys(monthlyData).sort()
-      const lastKey = sortedKeys[sortedKeys.length - 1]
-      monthlyData[lastKey] = Math.round((monthlyData[lastKey] + diff) * 10) / 10
-    }
+    Object.assign(monthlyData, roundHrMonthlyAllocation(monthlyData, allocatedTotal))
 
     results.push({
       primaryDepartment,

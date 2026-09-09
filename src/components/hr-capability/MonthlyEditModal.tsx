@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Modal, Form, InputNumber, Alert, message } from 'antd'
+import { App, Modal, Form, InputNumber, Alert } from 'antd'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
 import { formatPersonMonth } from '@/constants/hrCapability'
 
@@ -17,6 +17,7 @@ function formatMonthLabel(monthKey: string): string {
 }
 
 export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyEditModalProps) {
+  const { message } = App.useApp()
   const monthlyInvestments = useHrCapabilityStore((s) => s.monthlyInvestments)
   const updateMonthlyInvestment = useHrCapabilityStore((s) => s.updateMonthlyInvestment)
   const setShowMonthlyEditModal = useHrCapabilityStore((s) => s.setShowMonthlyEditModal)
@@ -100,7 +101,7 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
           type={isMatch ? 'success' : 'warning'}
           showIcon
           style={{ marginBottom: 12 }}
-          message={`月度合计：${formatPersonMonth(editTotal)} / 预估合计：${formatPersonMonth(estimatedTotal)} ${isMatch ? '（一致）' : '（不一致，请调整）'}`}
+          title={`月度合计：${formatPersonMonth(editTotal)} / 预估合计：${formatPersonMonth(estimatedTotal)} ${isMatch ? '（一致）' : '（不一致，请调整）'}`}
         />
 
         <Form layout="vertical">

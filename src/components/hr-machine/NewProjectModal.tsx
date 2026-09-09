@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, Select, message } from 'antd'
+import { Modal, Form, Input, Select, App } from 'antd'
 import { useHrMachineStore } from '@/stores/hrMachine'
 import {
   MACHINE_BRANDS,
   MACHINE_PRODUCT_LINES,
-  PROJECT_YEARS,
 } from '@/constants/hrMachine'
 import type { MachineBrand, MachineProductLine } from '@/types/hrMachine'
 
@@ -16,6 +15,7 @@ interface NewProjectModalProps {
 }
 
 export default function NewProjectModal({ open, onCancel }: NewProjectModalProps) {
+  const { message } = App.useApp()
   const [form] = Form.useForm()
   const { addProject } = useHrMachineStore()
   const [submitting, setSubmitting] = useState(false)
@@ -26,7 +26,6 @@ export default function NewProjectModal({ open, onCancel }: NewProjectModalProps
       form.setFieldsValue({
         brand: 'TECNO' as MachineBrand,
         productLine: 'CAMON' as MachineProductLine,
-        projectYear: PROJECT_YEARS[0],
       })
     }
   }, [open, form])
@@ -87,16 +86,6 @@ export default function NewProjectModal({ open, onCancel }: NewProjectModalProps
           />
         </Form.Item>
 
-        <Form.Item
-          name="projectYear"
-          label="项目年份"
-          rules={[{ required: true, message: '请选择项目年份' }]}
-        >
-          <Select
-            options={PROJECT_YEARS.map(y => ({ value: y, label: y }))}
-            placeholder="请选择项目年份"
-          />
-        </Form.Item>
       </Form>
     </Modal>
   )

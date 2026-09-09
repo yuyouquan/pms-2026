@@ -1,3 +1,6 @@
+import { allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { synchronizeHrProjects } from '@/lib/hrProjectSync'
+import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type {
@@ -17,7 +20,6 @@ import type {
 import {
   DEFAULT_TECH_PROJECT_FILTERS,
   DEFAULT_TECH_HISTORY_VERSION_FILTERS,
-  TECH_IPM_PROJECTS,
 } from '@/constants/hrTechnical'
 import {
   calcTechDepartmentMonthlySplit,
@@ -214,6 +216,7 @@ function generateDepartmentMonthlyRecords(
     secondaryDepartment: split.secondaryDepartment,
     budgetType: version.budgetType,
     versionNumber: version.versionNumber,
+            batch: version.batch ?? null,
     versionLockState: version.lockState,
     estimatedTotal: split.estimatedTotal,
     monthlyData: split.monthlyData,
@@ -299,23 +302,7 @@ const MOCK_PROJECTS: HrTechnicalProject[] = [
 /**
  * 为所有项目生成月度预估投入数据。
  */
-function createMockMonthlyInvestments(projects: HrTechnicalProject[]): TechMonthlyInvestment[] {
-  const investments: TechMonthlyInvestment[] = []
-  for (const project of projects) {
-    const typeMap = new Map<BudgetType, HrTechnicalVersion>()
-    for (const v of project.versions) {
-      const existing = typeMap.get(v.budgetType)
-      if (!existing || v.minorVersion > existing.minorVersion) {
-        typeMap.set(v.budgetType, v)
-      }
-    }
-    for (const [, version] of typeMap) {
-      const deptRecords = generateDepartmentMonthlyRecords(project.id, version)
-      investments.push(...deptRecords)
-    }
-  }
-  return investments
-}
+
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -336,10 +323,7 @@ function makeLog(
 
 /** 获取指定项目+预算类型下的最新版本 */
 function getLatestVersion(project: HrTechnicalProject, budgetType: BudgetType): HrTechnicalVersion | null {
-  const versions = project.versions
-    .filter(v => v.budgetType === budgetType)
-    .sort((a, b) => b.minorVersion - a.minorVersion)
-  return versions[0] ?? null
+  return getLatestHrVersion(project.versions, budgetType) ?? null
 }
 
 /** 获取指定项目所有预算类型的最新版本 */
@@ -355,10 +339,16 @@ function getLatestVersions(project: HrTechnicalProject): HrTechnicalVersion[] {
 /**
  * 同步月度预估投入：每个预算类型只保留最新版本的数据。
  */
+
+function synchronizeProjects(projects: HrTechnicalProject[]): HrTechnicalProject[] {
+  return synchronizeHrProjects(projects, 'technical')
+}
+
 function syncMonthlyInvestments(
   projects: HrTechnicalProject[],
   existingMonthly: TechMonthlyInvestment[],
 ): TechMonthlyInvestment[] {
+  projects = synchronizeProjects(projects)
   const result: TechMonthlyInvestment[] = []
 
   const existingMap = new Map<string, TechMonthlyInvestment>()
@@ -374,11 +364,13 @@ function syncMonthlyInvestments(
       for (const record of deptRecords) {
         const key = `${record.versionId}|${record.primaryDepartment}|${record.secondaryDepartment}`
         const existing = existingMap.get(key)
-        if (existing && existing.isEdited) {
+        if (existing?.isEdited && existing.estimatedTotal === record.estimatedTotal
+          && Object.keys(existing.monthlyData).sort().join() === Object.keys(record.monthlyData).sort().join()) {
           result.push({
             ...existing,
             versionLockState: version.lockState,
             versionNumber: version.versionNumber,
+            batch: version.batch ?? null,
           })
         } else {
           result.push(record)
@@ -444,9 +436,6 @@ export interface HrTechnicalActions {
 
   addVersion: (projectId: string, form: TechNewVersionForm) => void
   deleteVersion: (projectId: string, versionId: string) => void
-  lockVersion: (projectId: string, versionId: string) => void
-  /** 解锁版本 */
-  unlockVersion: (projectId: string, versionId: string) => void
   /** 复制版本 */
   copyVersion: (projectId: string, versionId: string) => void
 
@@ -455,6 +444,7 @@ export interface HrTechnicalActions {
     projectId: string,
     versionId: string,
     updates: {
+      batch?: number | null
       estimatedInvestment?: number
       milestones?: Partial<TechMilestoneNodes>
     },
@@ -466,6 +456,8 @@ export interface HrTechnicalActions {
     versionId: string,
     departmentInvestments: TechDepartmentInvestment[],
   ) => void
+
+  refreshFormalProjects: () => void
 
   updateMonthlyInvestment: (monthlyId: string, monthlyData: Record<string, number>) => void
 
@@ -483,8 +475,8 @@ const ALL_BUDGET_TYPES: BudgetType[] = ['annual', 'projectEstimate', 'projectBud
 export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>()(
   persist(
     (set, get) => ({
-      projects: MOCK_PROJECTS,
-      monthlyInvestments: createMockMonthlyInvestments(MOCK_PROJECTS),
+      projects: synchronizeProjects(MOCK_PROJECTS),
+      monthlyInvestments: syncMonthlyInvestments(MOCK_PROJECTS, []),
       selectedProjectId: null,
       activeTab: 'projectList',
       filters: { ...DEFAULT_TECH_PROJECT_FILTERS },
@@ -539,11 +531,11 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
           projectBudget: 0,
           projectAccounting: 0,
           versions: [],
-          createdAt: new Date().toISOString().split('T')[0],
+          createdAt: new Date().toISOString(),
         }
         const newProjects = [...s.projects, newProject]
         return {
-          projects: newProjects,
+          projects: synchronizeProjects(newProjects),
           showNewProjectModal: false,
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
@@ -552,7 +544,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
       deleteProject: (projectId) => set((s) => {
         const newProjects = s.projects.filter(p => p.id !== projectId)
         return {
-          projects: newProjects,
+          projects: synchronizeProjects(newProjects),
           selectedProjectId: null,
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
@@ -571,15 +563,11 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
       })),
 
       bindIpmProject: (projectId, ipmCode) => set((s) => {
-        const ipmProject = TECH_IPM_PROJECTS.find(p => p.code === ipmCode)
+        const ipmProject = getHrFormalProjectOptions('technical').find(p => p.code === ipmCode)
         if (!ipmProject) return s
-        return {
-          projects: s.projects.map(p =>
-            p.id === projectId
-              ? { ...p, ipmProjectCode: ipmProject.code, ipmProjectName: ipmProject.name }
-              : p,
-          ),
-        }
+        const newProjects = synchronizeProjects(s.projects.map(p => p.id === projectId
+          ? { ...p, ipmProjectCode: ipmProject.code, ipmProjectName: ipmProject.name } : p))
+        return { projects: newProjects, monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments) }
       }),
 
       addVersion: (projectId, form) => set((s) => {
@@ -598,17 +586,18 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
           if (p.id !== projectId) return p
 
           const latest = getLatestVersion(p, form.budgetType)
-          const minorVersion = latest ? latest.minorVersion + 1 : 1
+          const minorVersion = nextHrMinorVersion(p.versions, form.budgetType)
 
           const milestones: TechMilestoneNodes = latest
             ? { ...latest.milestones }
             : emptyTechMilestones()
 
           const newVersion: HrTechnicalVersion = {
-            id: `${projectId}-${form.budgetType}-v${Date.now()}`,
+            id: `${projectId}-${form.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             projectId,
             budgetType: form.budgetType,
             versionNumber: `V0.${minorVersion}`,
+            batch: null,
             lockState: 'unlocked',
             majorVersion: 0,
             minorVersion,
@@ -616,7 +605,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
             estimatedInvestment: sumDepartmentInvestments(form.departmentInvestments),
             milestones,
             departmentInvestments: form.departmentInvestments,
-            createdAt: new Date().toISOString().split('T')[0],
+            createdAt: new Date().toISOString(),
             lockedAt: null,
             operationLogs: [
               makeLog('created', `创建${form.budgetType === 'annual' ? '年度预算' : form.budgetType === 'projectEstimate' ? '项目概算' : '项目预算'}版本 V0.${minorVersion}`),
@@ -626,7 +615,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
         })
 
         return {
-          projects: newProjects,
+          projects: synchronizeProjects(newProjects),
           showNewVersionModal: false,
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
@@ -639,60 +628,11 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
           return { ...p, versions: newVersions }
         })
         return {
-          projects: newProjects,
+          projects: synchronizeProjects(newProjects),
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
       }),
 
-      lockVersion: (projectId, versionId) => set((s) => {
-        const newProjects = s.projects.map(p => {
-          if (p.id !== projectId) return p
-          const newVersions = p.versions.map(v => {
-            if (v.id !== versionId) {
-              return v
-            }
-            return {
-              ...v,
-              lockState: 'locked' as const,
-              lockedAt: new Date().toISOString().split('T')[0],
-              operationLogs: [
-                ...v.operationLogs,
-                makeLog('locked', `版本 ${v.versionNumber} 锁定`),
-              ],
-            }
-          })
-          return { ...p, versions: newVersions }
-        })
-        return {
-          projects: newProjects,
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
-        }
-      }),
-
-      unlockVersion: (projectId, versionId) => set((s) => {
-        const newProjects = s.projects.map(p => {
-          if (p.id !== projectId) return p
-          const newVersions = p.versions.map(v => {
-            if (v.id !== versionId) {
-              return v
-            }
-            return {
-              ...v,
-              lockState: 'unlocked' as const,
-              lockedAt: null,
-              operationLogs: [
-                ...v.operationLogs,
-                makeLog('unlocked', `版本 ${v.versionNumber} 解锁`),
-              ],
-            }
-          })
-          return { ...p, versions: newVersions }
-        })
-        return {
-          projects: newProjects,
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
-        }
-      }),
 
       copyVersion: (projectId, versionId) => set((s) => {
         const project = s.projects.find(p => p.id === projectId)
@@ -700,18 +640,18 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
         const sourceVersion = project.versions.find(v => v.id === versionId)
         if (!sourceVersion) return s
 
-        const latest = getLatestVersion(project, sourceVersion.budgetType)
-        const minorVersion = latest ? latest.minorVersion + 1 : 1
+        const minorVersion = nextHrMinorVersion(project.versions, sourceVersion.budgetType)
 
         const newVersion: HrTechnicalVersion = {
           ...sourceVersion,
-          id: `${projectId}-${sourceVersion.budgetType}-v${Date.now()}`,
+          id: `${projectId}-${sourceVersion.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           versionNumber: `V0.${minorVersion}`,
+            batch: null,
           lockState: 'unlocked',
           majorVersion: 0,
           minorVersion,
           lockedAt: null,
-          createdAt: new Date().toISOString().split('T')[0],
+          createdAt: new Date().toISOString(),
           milestones: { ...sourceVersion.milestones },
           departmentInvestments: sourceVersion.departmentInvestments.map(d => ({ ...d })),
           operationLogs: [
@@ -738,7 +678,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
         })
 
         return {
-          projects: newProjects,
+          projects: synchronizeProjects(newProjects),
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
       }),
@@ -748,16 +688,19 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
             if (v.id !== versionId) return v
+            const permitted = allowedHrVersionUpdates(p, v, updates)
+            if (Object.keys(permitted).length === 0) return v
 
             const updated: HrTechnicalVersion = {
               ...v,
-              estimatedInvestment: updates.estimatedInvestment ?? v.estimatedInvestment,
-              milestones: updates.milestones ? { ...v.milestones, ...updates.milestones } : v.milestones,
+              batch: permitted.batch === undefined ? v.batch : permitted.batch,
+              estimatedInvestment: permitted.estimatedInvestment ?? v.estimatedInvestment,
+              milestones: permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones,
             }
 
             const logParts: string[] = []
-            if (updates.estimatedInvestment !== undefined) logParts.push('预估投入')
-            if (updates.milestones !== undefined) logParts.push('里程碑节点')
+            if (permitted.estimatedInvestment !== undefined) logParts.push('预估投入')
+            if (permitted.milestones !== undefined) logParts.push('里程碑节点')
             if (logParts.length > 0) {
               updated.operationLogs = [
                 ...v.operationLogs,
@@ -770,7 +713,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
           return { ...p, versions: newVersions }
         })
         return {
-          projects: newProjects,
+          projects: synchronizeProjects(newProjects),
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
       }),
@@ -782,7 +725,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
-            if (v.id !== versionId) return v
+            if (v.id !== versionId || !isLatestHrVersion(p, v)) return v
             return {
               ...v,
               estimatedInvestment: Math.round(newEstimatedTotal * 10) / 10,
@@ -796,12 +739,19 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
           return { ...p, versions: newVersions }
         })
         return {
-          projects: newProjects,
+          projects: synchronizeProjects(newProjects),
           showVersionDetailModal: false,
           versionDetailReadOnly: false,
           editingVersionId: null,
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
+      }),
+
+      refreshFormalProjects: () => set((s) => {
+        const projects = synchronizeProjects(s.projects)
+        const monthlyInvestments = syncMonthlyInvestments(projects, s.monthlyInvestments)
+        if (JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return s
+        return { projects, monthlyInvestments }
       }),
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
@@ -829,6 +779,11 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
     }),
     {
       name: 'pms-hr-technical',
+      merge: (persisted, current) => {
+        const merged = { ...current, ...(persisted as Partial<typeof current>) }
+        const projects = synchronizeProjects(merged.projects)
+        return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
+      },
       version: 1,
     },
   ),

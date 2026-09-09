@@ -1,8 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Button, Segmented, Space } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { Segmented } from 'antd'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
 import ProjectListTab from './ProjectListTab'
 import HistoryVersionSpace from './HistoryVersionSpace'
@@ -55,10 +54,6 @@ export default function CapabilityProjectContent() {
     setActiveTab('historyVersion')
   }
 
-  const handleNewVersion = () => {
-    setShowNewVersionModal(true)
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 12 }}>
       {/* 工具栏 */}
@@ -75,38 +70,17 @@ export default function CapabilityProjectContent() {
           value={activeTab}
           onChange={(v) => setActiveTab(v as string)}
         />
-        <Space>
-          {activeTab === 'projectList' && (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setShowNewProjectModal(true)}
-            >
-              新建项目
-            </Button>
-          )}
-          {activeTab === 'historyVersion' && (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleNewVersion}
-              disabled={!selectedProjectId}
-            >
-              新建版本
-            </Button>
-          )}
-        </Space>
       </div>
 
       {/* 内容区 */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        {activeTab === 'projectList' && <ProjectListTab onSelectProject={handleSelectProject} />}
+        {activeTab === 'projectList' && <ProjectListTab onSelectProject={handleSelectProject} onNewProject={() => setShowNewProjectModal(true)} />}
         {activeTab === 'historyVersion' && <HistoryVersionSpace />}
         {activeTab === 'monthlyInvestment' && <MonthlyInvestmentTab />}
       </div>
 
       {/* 弹窗 */}
-      <NewProjectModal open={useHrCapabilityStore((s) => s.showNewProjectModal)} onCancel={() => {}} />
+      <NewProjectModal open={useHrCapabilityStore((s) => s.showNewProjectModal)} onCancel={() => setShowNewProjectModal(false)} />
       <NewVersionModal open={showNewVersionModal} onCancel={() => setShowNewVersionModal(false)} />
       <VersionDetailModal
         open={showVersionDetailModal}
