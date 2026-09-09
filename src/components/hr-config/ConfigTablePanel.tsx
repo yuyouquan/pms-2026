@@ -82,6 +82,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
       {
         title: '操作',
         key: '_action',
+        className: 'pms-hr-config-actions',
         width: 150,
         fixed: 'right',
         align: 'center',
