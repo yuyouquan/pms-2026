@@ -280,7 +280,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
 
       <div className="pms-solid-surface">
         <Table
-          className="pms-table"
+          className="pms-table pms-hr-investment-table"
           rowKey="id"
           columns={columns}
           dataSource={dataSource}

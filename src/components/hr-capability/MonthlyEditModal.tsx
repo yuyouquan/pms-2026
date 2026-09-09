@@ -78,6 +78,7 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
       onOk={handleOk}
       onCancel={handleCancel}
       okText="保存"
+      okButtonProps={{ disabled: !isMatch }}
       cancelText="取消"
       width={680}
     >

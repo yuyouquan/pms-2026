@@ -43,6 +43,13 @@ export function normalizeHrVersionSequence<T extends HrVersionIdentity>(versions
   })
 }
 
+/** Reuse the same budget first; a first version of another budget starts from the newest project snapshot. */
+export function getHrVersionSeed<T extends HrVersionIdentity>(versions: readonly T[], budgetType: string): T | undefined {
+  return getLatestHrVersion(versions, budgetType) ?? versions.reduce<T | undefined>((latest, version) => (
+    !latest || (Date.parse(version.createdAt || '') || 0) >= (Date.parse(latest.createdAt || '') || 0) ? version : latest
+  ), undefined)
+}
+
 export function getMachineProjectYear(project: { versions: readonly { createdAt: string; milestones: { conceptStart: string | null; str5: string | null } }[] }): string {
   const latest = project.versions.reduce<typeof project.versions[number] | undefined>((current, version) => (
     !current || (Date.parse(version.createdAt) || 0) >= (Date.parse(current.createdAt) || 0) ? version : current
@@ -52,6 +59,15 @@ export function getMachineProjectYear(project: { versions: readonly { createdAt:
   const end = year(latest?.milestones.str5)
   if (!start && !end) return '-'
   return `${start ? `${start}年立项` : '立项待补充'}${end ? `${end}年结项` : '结项待补充'}`
+}
+
+/** Creation and copying share the same project-state and budget prerequisites. */
+export function canCreateHrVersion(
+  project: { status: string; ipmProjectCode: string | null } | null | undefined,
+  budgetType: string | null,
+): boolean {
+  return project?.status === 'active' && !!budgetType
+    && (budgetType === 'annual' || !!project.ipmProjectCode)
 }
 
 /** Enforce edit scope in the store as well as in every UI entry point. */
@@ -64,7 +80,7 @@ export function allowedHrVersionUpdates<T extends object>(
   for (const key of Object.keys(allowed)) {
     if (key === 'batch') {
       if (allowed.batch !== null && !isHrBatch(allowed.batch)) delete allowed.batch
-    } else if (!isLatestHrVersion(project, version) || (project.ipmProjectCode && ['milestones', 'projectStartTime', 'projectEndTime', 'projectLevel'].includes(key))) {
+    } else if (!isLatestHrVersion(project, version) || (project.ipmProjectCode && version.budgetType !== 'annual' && ['milestones', 'projectStartTime', 'projectEndTime', 'projectLevel'].includes(key))) {
       delete allowed[key]
     }
   }

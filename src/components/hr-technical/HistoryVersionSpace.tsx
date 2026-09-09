@@ -24,10 +24,11 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { HR_BATCH_OPTIONS, formatHrBatch, isLatestHrVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, isLatestHrVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import {
+  TECH_IPM_REQUIRED_TIP,
   TECH_BUDGET_TYPES,
   TECH_BUDGET_TYPE_LABELS,
   TECH_BUDGET_TYPE_COLORS,
@@ -146,7 +147,7 @@ export default function HistoryVersionSpace() {
           ...version,
           isLatest: isLatestHrVersion(project, version),
           isBound: !!project.ipmProjectCode,
-          sourceHint: isLatestHrVersion(project, version) && source
+          sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
             ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待主市场／主类型一级计划发布' : ''
             : '',
           projectName: project.tdtName,
@@ -188,7 +189,7 @@ export default function HistoryVersionSpace() {
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
           value={record.milestones[field.key]}
-          editable={record.isLatest && !record.isBound}
+          editable={record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
           onSave={v =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<TechMilestoneNodes>,
@@ -212,16 +213,6 @@ export default function HistoryVersionSpace() {
         ),
       },
       {
-        title: '预估投入',
-        key: 'estimatedInvestment',
-        width: 110,
-        align: 'right',
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <span style={{ fontWeight: 600 }}>{formatPersonMonth(record.estimatedInvestment)}</span>
-        ),
-      },
-      ...milestoneColumns,
-      {
         title: '预算类型',
         key: 'budgetType',
         width: 100,
@@ -244,22 +235,15 @@ export default function HistoryVersionSpace() {
         ),
       },
       {
-        title: '批次',
-        key: 'batch',
-        width: 115,
+        title: '预估投入',
+        key: 'estimatedInvestment',
+        width: 110,
+        align: 'right',
         render: (_value: unknown, record: FlatVersionRow) => (
-          <Select
-            aria-label={`${record.projectName} ${TECH_BUDGET_TYPE_LABELS[record.budgetType]} ${record.versionNumber} 批次`}
-            value={record.batch ?? undefined}
-            placeholder="选择批次"
-            options={HR_BATCH_OPTIONS}
-            virtual={false}
-            style={{ width: '100%' }}
-            onClick={event => event.stopPropagation()}
-            onChange={value => updateVersion(record.projectId, record.id, { batch: value })}
-          />
+          <span style={{ fontWeight: 600 }}>{formatPersonMonth(record.estimatedInvestment)}</span>
         ),
       },
+      ...milestoneColumns,
       {
         title: '创建人',
         key: 'createdBy',
@@ -282,16 +266,17 @@ export default function HistoryVersionSpace() {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 420,
+        width: 208,
         align: 'center',
         render: (_value: unknown, record: FlatVersionRow) => {
           const project = projects.find(p => p.id === record.projectId)
           const isActive = project?.status === 'active'
           return (
-            <Space size={4} wrap>
+            <Space size={4}>
               {/* 查看 */}
               <Tooltip title="查看本版本各部门预估投入">
                 <Button
+                  type="text" aria-label="查看"
                   size="small"
                   icon={<EyeOutlined />}
                   onClick={e => {
@@ -301,15 +286,13 @@ export default function HistoryVersionSpace() {
                     setVersionDetailReadOnly(true)
                     setShowVersionDetailModal(true)
                   }}
-                >
-                  查看
-                </Button>
+                />
               </Tooltip>
               {/* 编辑 */}
               {record.isLatest && isActive ? (
                 <Tooltip title="编辑各部门各阶段预估投入">
                   <Button
-                    type="default"
+                    type="text" aria-label="编辑"
                     size="small"
                     icon={<EditOutlined />}
                     onClick={e => {
@@ -319,15 +302,15 @@ export default function HistoryVersionSpace() {
                       setVersionDetailReadOnly(false)
                       setShowVersionDetailModal(true)
                     }}
-                  >
-                    编辑
-                  </Button>
+                  />
                 </Tooltip>
               ) : null}
               {/* 复制 */}
               {isActive ? (
-                <Tooltip title="复制此版本创建新版本">
+                <Tooltip title={canCreateHrVersion(project, record.budgetType) ? '复制此版本创建新版本' : TECH_IPM_REQUIRED_TIP}>
                   <Button
+                    type="text" aria-label="复制"
+                    disabled={!canCreateHrVersion(project, record.budgetType)}
                     size="small"
                     icon={<CopyOutlined />}
                     onClick={e => {
@@ -335,9 +318,7 @@ export default function HistoryVersionSpace() {
                       copyVersion(record.projectId, record.id)
                       message.success('版本已复制')
                     }}
-                  >
-                    复制
-                  </Button>
+                  />
                 </Tooltip>
               ) : null}
               {/* 删除 */}
@@ -359,13 +340,12 @@ export default function HistoryVersionSpace() {
                   }
                 }}
               >
-                <Button danger size="small" icon={<DeleteOutlined />} onClick={e => e.stopPropagation()}>
-                  删除
-                </Button>
+                <Button type="text" aria-label="删除" title="删除" danger size="small" icon={<DeleteOutlined />} onClick={e => e.stopPropagation()}/>
               </Popconfirm>
               {/* 历史 */}
               <Tooltip title="查看版本操作历史">
                 <Button
+                  type="text" aria-label="历史"
                   size="small"
                   icon={<HistoryOutlined />}
                   onClick={e => {
@@ -374,9 +354,7 @@ export default function HistoryVersionSpace() {
                     setEditingHistoryVersionId(record.id)
                     setShowVersionHistoryModal(true)
                   }}
-                >
-                  历史
-                </Button>
+                />
               </Tooltip>
             </Space>
           )
@@ -389,15 +367,14 @@ export default function HistoryVersionSpace() {
   const handleExport = () => {
     const sheet1Columns: ExportColumn[] = [
       { key: 'projectName', title: 'TDT项目名称' },
+      { key: 'budgetType', title: '预算类型', formatter: (_v: unknown, row: FlatVersionRow) => TECH_BUDGET_TYPE_LABELS[row.budgetType] },
+      { key: 'versionNumber', title: '版本号' },
       { key: 'estimatedInvestment', title: '预估投入(人月)' },
       ...TECH_MILESTONE_FIELDS.map(f => ({
         key: f.key as string,
         title: f.label,
         formatter: (_v: unknown, row: FlatVersionRow) => row.milestones[f.key] ?? '',
       })),
-      { key: 'budgetType', title: '预算类型', formatter: (_v: unknown, row: FlatVersionRow) => TECH_BUDGET_TYPE_LABELS[row.budgetType] },
-      { key: 'versionNumber', title: '版本号' },
-      { key: 'batch', title: '批次', formatter: (_v: unknown, row: FlatVersionRow) => formatHrBatch(row.batch) },
       { key: 'createdBy', title: '创建人' },
       { key: 'createdAt', title: '创建日期', formatter: (_v: unknown, row: FlatVersionRow) => dayjs(row.createdAt).format('YYYY-MM-DD HH:mm:ss') },
     ]
@@ -447,36 +424,35 @@ export default function HistoryVersionSpace() {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>预算类型</span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择预算类型"
-              style={{ minWidth: 180 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.budgetType}
-              onChange={v => setHistoryVersionFilters({ budgetType: v as BudgetType[] })}
-              options={TECH_BUDGET_TYPES}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>预算类型</span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择预算类型"
+                style={{ minWidth: 180 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.budgetType}
+                onChange={v => setHistoryVersionFilters({ budgetType: v as BudgetType[] })}
+                options={TECH_BUDGET_TYPES}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>TDT项目名称</span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择项目名称"
-              style={{ minWidth: 200 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.projectName}
-              onChange={v => setHistoryVersionFilters({ projectName: v as string[] })}
-              options={projectNameOptions}
-              optionFilterProp="label"
-            />
-
-
-            <span style={{ color: 'var(--pms-text-tertiary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              共 {filteredVersions.length} 条版本
-            </span>
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>TDT项目名称</span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择项目名称"
+                style={{ minWidth: 200 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.projectName}
+                onChange={v => setHistoryVersionFilters({ projectName: v as string[] })}
+                options={projectNameOptions}
+                optionFilterProp="label"
+              />
+            </Space>
           </Space>
 
           <Space size={8} style={{ flexShrink: 0 }}>
@@ -494,7 +470,7 @@ export default function HistoryVersionSpace() {
 
       {/* 版本列表 */}
       <Table<FlatVersionRow>
-        className="pms-table"
+        className="pms-table pms-hr-investment-table"
         rowKey="id"
         columns={columns}
         dataSource={filteredVersions}

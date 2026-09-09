@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
+  App,
   Card,
   Table,
   Button,
@@ -10,7 +11,6 @@ import {
   Popconfirm,
   Tag,
   Upload,
-  message,
 } from 'antd'
 import {
   PlusOutlined,
@@ -20,13 +20,16 @@ import {
   UploadOutlined,
   CheckCircleOutlined,
   StopOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { UploadProps } from 'antd'
 import * as XLSX from 'xlsx'
 import type { ConfigModuleMeta, ConfigRecord } from '@/types/hrConfig'
-import { useHrConfigStore } from '@/stores/hrConfig'
+import { getHrModelVersionGroup, useHrConfigStore } from '@/stores/hrConfig'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
+import HrModelStatisticsModal from '@/components/hr-config/HrModelStatisticsModal'
+import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 interface ConfigTablePanelProps {
   moduleMeta: ConfigModuleMeta
@@ -34,7 +37,10 @@ interface ConfigTablePanelProps {
 }
 
 export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTablePanelProps) {
+  const { message, modal } = App.useApp()
   const { data, deleteRecord, toggleRecordStatus, importRecords, setShowEditModal, setEditingId } = useHrConfigStore()
+  const { isValidPair } = useHrDepartmentOptions()
+  const [showStatistics, setShowStatistics] = useState(false)
 
   const records = data[moduleMeta.key] ?? []
 
@@ -76,6 +82,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
       {
         title: '操作',
         key: '_action',
+        className: 'pms-hr-config-actions',
         width: 150,
         fixed: 'right',
         align: 'center',
@@ -90,8 +97,29 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
                   icon={isDisabled ? <CheckCircleOutlined /> : <StopOutlined />}
                   style={isDisabled ? { color: 'var(--pms-brand-strong)' } : { color: 'var(--pms-text-tertiary)' }}
                   onClick={() => {
-                    toggleRecordStatus(moduleMeta.key, record.id)
-                    message.success(isDisabled ? '已启用' : '已禁用')
+                    if (moduleMeta.key === 'hrModel') {
+                      const action = isDisabled ? '启用' : '禁用'
+                      const affectedRecords = getHrModelVersionGroup(records, record)
+                      modal.confirm({
+                        title: `确认${action}模型版本`,
+                        content: (
+                          <div>
+                            <div>模型版本：{String(record.modelVersion ?? '').trim() || '未填写'}</div>
+                            <div>将{action} {affectedRecords.length} 条配置记录，涵盖该版本下全部项目等级和部门。</div>
+                          </div>
+                        ),
+                        okText: action,
+                        cancelText: '取消',
+                        okButtonProps: { danger: !isDisabled },
+                        onOk: () => {
+                          toggleRecordStatus(moduleMeta.key, record.id, isDisabled)
+                          message.success(`模型版本已${action}`)
+                        },
+                      })
+                    } else {
+                      toggleRecordStatus(moduleMeta.key, record.id)
+                      message.success(isDisabled ? '已启用' : '已禁用')
+                    }
                   }}
                 />
               </Tooltip>
@@ -128,7 +156,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
     ]
 
     return [...dataColumns, ...actionColumn]
-  }, [moduleMeta, deleteRecord, toggleRecordStatus, setEditingId, setShowEditModal])
+  }, [moduleMeta, records, deleteRecord, toggleRecordStatus, setEditingId, setShowEditModal, message, modal])
 
   // ── 导出 ──────────────────────────────────────────────────
   const handleExport = () => {
@@ -188,6 +216,16 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
             return record
           })
 
+          if (moduleMeta.key === 'hrModel') {
+            const invalidDepartmentIndex = newRecords.findIndex(record => !isValidPair(
+              String(record.primaryDepartment ?? ''), String(record.secondaryDepartment ?? ''),
+            ))
+            if (invalidDepartmentIndex >= 0) {
+              message.error(`第 ${invalidDepartmentIndex + 2} 行一级部门与二级部门不匹配，请使用现有部门组合`)
+              return
+            }
+          }
+
           importRecords(moduleMeta.key, newRecords)
           message.success(`成功导入 ${newRecords.length} 条记录`)
         } catch {
@@ -240,6 +278,11 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
             >
               新增
             </Button>
+            {moduleMeta.key === 'hrModel' && (
+              <Button icon={<BarChartOutlined />} onClick={() => setShowStatistics(true)}>
+                模型版本统计
+              </Button>
+            )}
             <Upload {...uploadProps}>
               <Button icon={<UploadOutlined />}>导入</Button>
             </Upload>
@@ -258,6 +301,10 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
           </span>
         </div>
       </Card>
+
+      {moduleMeta.key === 'hrModel' && (
+        <HrModelStatisticsModal open={showStatistics} records={data.hrModel} onCancel={() => setShowStatistics(false)} />
+      )}
 
       {/* 数据表格 */}
       <Card className="pms-hr-config-table-card" variant="borderless" styles={{ body: { padding: 0 } }}>

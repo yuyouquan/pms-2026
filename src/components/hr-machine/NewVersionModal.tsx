@@ -1,14 +1,14 @@
 'use client'
 
-import { nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Modal, Select, InputNumber, Form, App, Tooltip, Tag, Alert } from 'antd'
+import { Modal, Select, InputNumber, Form, App, Tooltip, Tag } from 'antd'
 import { useHrMachineStore } from '@/stores/hrMachine'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { BUDGET_TYPES } from '@/constants/hrMachine'
-import { getConfigProjectLevels, getConfigModelVersions, calcEstimatedInvestment } from '@/constants/hrConfig'
+import { getConfigProjectLevels, getConfigModelVersions, calcEstimatedInvestment, getAvailableHrModelSelection, isHrModelAvailable } from '@/constants/hrConfig'
 import type { BudgetType } from '@/types/hrMachine'
 
 interface NewVersionModalProps {
@@ -45,13 +45,15 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   )
 
   const formalSource = hasIpm ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null) : null
-  const effectiveProjectLevel = hasIpm
+  const followsFormalPlan = hasIpm && budgetType !== 'annual'
+  const effectiveProjectLevel = followsFormalPlan
     ? formalSource?.project ? formalSource.projectLevel : project?.versions[project.versions.length - 1]?.projectLevel || project?.projectLevel || ''
     : projectLevel
 
   // 项目下拉选项
   const projectOptions = useMemo(
     () => projects.map(p => ({
+      disabled: p.status !== 'active',
       value: p.id,
       label: `${p.name}（${p.brand} · ${p.productLine}）`,
     })),
@@ -89,13 +91,35 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
   }, [open, projectId])
 
+  useEffect(() => {
+    if (!open) return
+    const selected = useHrMachineStore.getState().projects.find(p => p.id === localProjectId)
+    const seed = selected ? getHrVersionSeed(selected.versions, budgetType) : undefined
+    const records = useHrConfigStore.getState().data.hrModel ?? []
+    const linkedSource = selected?.ipmProjectCode && budgetType !== 'annual'
+      ? resolveHrFormalSource('machine', selected.ipmProjectCode)
+      : null
+    const preferredLevel = linkedSource
+      ? linkedSource.project ? linkedSource.projectLevel : selected?.versions[selected.versions.length - 1]?.projectLevel || selected?.projectLevel || ''
+      : seed?.projectLevel ?? ''
+    const available = getAvailableHrModelSelection(records, { projectLevel: preferredLevel, hrModelVersion: seed?.hrModelVersion ?? '' })
+    setProjectLevel(available.projectLevel)
+    setLevelCoefficient(seed?.levelCoefficient ?? 1)
+    setHrModelVersion(available.hrModelVersion)
+  }, [open, localProjectId, budgetType])
+
   const handleOk = async () => {
+    if (project?.status === 'cancelled') { message.warning('已取消的项目不支持新建版本'); return }
     if (!localProjectId) {
       message.warning('请先选择项目')
       return
     }
-    if ((!hasIpm && !effectiveProjectLevel) || !hrModelVersion) {
+    if ((!followsFormalPlan && !effectiveProjectLevel) || !hrModelVersion) {
       message.warning('请选择项目等级和人力模型版本号')
+      return
+    }
+    if (!isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], effectiveProjectLevel, hrModelVersion)) {
+      message.warning('该项目等级对应的人力模型不可用，请选择启用的模型版本')
       return
     }
     // 前端兜底校验：未绑定 IPM 时不允许创建需要 IPM 的版本
@@ -137,6 +161,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       onOk={handleOk}
       confirmLoading={submitting}
       okText="创建"
+      okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
       cancelText="取消"
       width={520}
     >
@@ -175,7 +200,6 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               ) : (
                 <span style={{ color: 'var(--pms-text-tertiary)' }}>
                   <Tag color="default" style={{ marginRight: 6 }}>未绑定</Tag>
-                  仅可创建年度预算版本
                 </span>
               )}
             </div>
@@ -183,7 +207,6 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         </div>
 
         {project && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-        {hasIpm && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={formalSource?.project ? '项目等级取自正式项目基础信息，里程碑取自主市场最新已发布一级计划。' : '当前正式项目编码未找到对应项目，保留已有快照，请在项目列表重新绑定。'} />}
 
         {/* 表单字段 */}
         <Form layout="vertical">
@@ -196,10 +219,10 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             />
           </Form.Item>
 
-          <Form.Item label="项目等级" required={!hasIpm} tooltip={hasIpm ? '来源于正式项目基础信息' : '下拉值来自配置中心-人力模型'}>
+          <Form.Item label="项目等级" required={!followsFormalPlan} tooltip={followsFormalPlan ? '来源于正式项目基础信息' : '下拉值来自配置中心-人力模型'}>
             <Select
               value={effectiveProjectLevel || undefined}
-              disabled={hasIpm}
+              disabled={followsFormalPlan}
               onChange={(v) => setProjectLevel(v)}
               style={{ width: '100%' }}
               options={projectLevelOptions}
@@ -230,36 +253,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           </Form.Item>
         </Form>
 
-        {/* 预估投入预览 */}
-        {effectiveProjectLevel && hrModelVersion && (
-          <Alert
-            type="info"
-            showIcon
-            style={{ marginBottom: 12, borderRadius: 8 }}
-            title={`预估投入 = 模型综合 × 等级系数 = ${estimatedPreview} 人月`}
-            description="预估投入根据配置中心人力模型数据自动计算"
-          />
-        )}
-
-        {/* 版本规则说明 */}
-        <div
-          style={{
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-            fontSize: 12,
-            color: 'var(--pms-text-tertiary)',
-          }}
-        >
-          <p style={{ margin: 0, fontWeight: 500, color: 'var(--pms-text-secondary)' }}>
-            版本规则：
-          </p>
-          <ul style={{ margin: '4px 0 0', paddingLeft: 16, lineHeight: '1.8' }}>
-            <li>同一项目、同一预算类型从 V0.1 开始递增</li>
-            <li>仅最新版本可编辑，历史版本保留原有日期和投入数据</li>
-            <li>所有版本均可修改批次</li>
-            <li>绑定正式项目后，最新版本里程碑随主市场／主类型最新已发布一级计划更新</li>
-          </ul>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+          <span>预估投入合计</span><strong>{estimatedPreview} 人月</strong>
         </div>
       </div>
     </Modal>

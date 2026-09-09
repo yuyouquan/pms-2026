@@ -22,7 +22,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { HR_BATCH_OPTIONS, formatHrBatch, isLatestHrVersion } from '@/lib/hrVersionRules'
+import { isLatestHrVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrMachineStore } from '@/stores/hrMachine'
 import {
@@ -45,7 +45,7 @@ import type {
 } from '@/types/hrMachine'
 import { exportMultiSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import { useHrConfigStore } from '@/stores/hrConfig'
-import { getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
+import { calcMachineDepartmentInvestments, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 
 /** 扁平化版本行：版本数据 + 所属项目信息 */
 interface FlatVersionRow extends HrMachineVersion {
@@ -233,7 +233,7 @@ function EditableSelectCell({
           onSave(v)
           setEditing(false)
         }}
-        onDropdownVisibleChange={(visible) => {
+        onOpenChange={(visible) => {
           if (!visible) setEditing(false)
         }}
         onBlur={() => setEditing(false)}
@@ -293,7 +293,7 @@ export default function HistoryVersionSpace() {
           ...version,
           isLatest: isLatestHrVersion(project, version),
           isBound: !!project.ipmProjectCode,
-          sourceHint: isLatestHrVersion(project, version) && source
+          sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
             ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待主市场／主类型一级计划发布' : ''
             : '',
           projectName: project.name,
@@ -340,7 +340,7 @@ export default function HistoryVersionSpace() {
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
           value={record.milestones[field.key]}
-          editable={record.isLatest && !record.isBound}
+          editable={record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
           onSave={(v) =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<MilestoneNodes>,
@@ -363,6 +363,26 @@ export default function HistoryVersionSpace() {
           </div>
         ),
       },
+      {
+        title: '预算类型',
+        key: 'budgetType',
+        width: 100,
+        align: 'center',
+        render: (_value: unknown, record: FlatVersionRow) => (
+          <Tag color={BUDGET_TYPE_COLORS[record.budgetType]}>{BUDGET_TYPE_LABELS[record.budgetType]}</Tag>
+        ),
+      },
+      {
+        title: '版本号',
+        key: 'versionNumber',
+        width: 90,
+        align: 'center',
+        render: (_value: unknown, record: FlatVersionRow) => (
+          <span style={{ fontWeight: 600, color: 'var(--pms-brand-strong)' }}>
+            {record.versionNumber}
+          </span>
+        ),
+      },
       { title: '品牌', key: 'brand', width: 90, render: (_v, r) => r.brand },
       { title: '产品线', key: 'productLine', width: 90, render: (_v, r) => r.productLine },
       {
@@ -373,7 +393,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableSelectCell
             value={record.projectLevel}
-            editable={record.isLatest && !record.isBound}
+            editable={record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
             options={projectLevelOptions}
             onSave={(v) => updateVersion(record.projectId, record.id, { projectLevel: v })}
             renderDisplay={(v) =>
@@ -438,43 +458,6 @@ export default function HistoryVersionSpace() {
       },
       ...milestoneColumns,
       {
-        title: '预算类型',
-        key: 'budgetType',
-        width: 100,
-        align: 'center',
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <Tag color={BUDGET_TYPE_COLORS[record.budgetType]}>{BUDGET_TYPE_LABELS[record.budgetType]}</Tag>
-        ),
-      },
-      {
-        title: '版本号',
-        key: 'versionNumber',
-        width: 90,
-        align: 'center',
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <span style={{ fontWeight: 600, color: 'var(--pms-brand-strong)' }}>
-            {record.versionNumber}
-          </span>
-        ),
-      },
-      {
-        title: '批次',
-        key: 'batch',
-        width: 115,
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <Select
-            aria-label={`${record.projectName} ${BUDGET_TYPE_LABELS[record.budgetType]} ${record.versionNumber} 批次`}
-            value={record.batch ?? undefined}
-            placeholder="选择批次"
-            options={HR_BATCH_OPTIONS}
-            virtual={false}
-            style={{ width: '100%' }}
-            onClick={event => event.stopPropagation()}
-            onChange={value => updateVersion(record.projectId, record.id, { batch: value })}
-          />
-        ),
-      },
-      {
         title: '创建人',
         key: 'createdBy',
         width: 90,
@@ -492,14 +475,14 @@ export default function HistoryVersionSpace() {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 190,
+        width: 100,
         align: 'center',
         render: (_value: unknown, record: FlatVersionRow) => {
           const project = projects.find((p) => p.id === record.projectId)
           return (
             <Space size={4}>
               <Button
-                type="default"
+                type="text" aria-label="查看" title="查看"
                 size="small"
                 icon={<EyeOutlined />}
                 onClick={(e) => {
@@ -507,9 +490,7 @@ export default function HistoryVersionSpace() {
                   setEditingVersionId(record.id)
                   setShowVersionDetailModal(true)
                 }}
-              >
-                查看
-              </Button>
+              />
               <Popconfirm
                 title="删除版本数据"
                 description="删除后不可恢复；若所有版本均被删除，该项目将一并删除。"
@@ -528,14 +509,12 @@ export default function HistoryVersionSpace() {
                   }
                 }}
               >
-                <Button
+                <Button type="text" aria-label="删除" title="删除"
                   danger
                   size="small"
                   icon={<DeleteOutlined />}
                   onClick={(e) => e.stopPropagation()}
-                >
-                  删除
-                </Button>
+                />
               </Popconfirm>
             </Space>
           )
@@ -549,6 +528,16 @@ export default function HistoryVersionSpace() {
     // Sheet1: 项目预估投入列表
     const sheet1Columns: ExportColumn[] = [
       { key: 'projectName', title: '项目名称', formatter: (_v, row: FlatVersionRow) => row.projectName },
+      {
+        key: 'budgetType',
+        title: '预算类型',
+        formatter: (_v, row: FlatVersionRow) => BUDGET_TYPE_LABELS[row.budgetType],
+      },
+      {
+        key: 'versionNumber',
+        title: '版本号',
+        formatter: (_v, row: FlatVersionRow) => row.versionNumber,
+      },
       { key: 'brand', title: '品牌', formatter: (_v, row: FlatVersionRow) => row.brand },
       { key: 'productLine', title: '产品线', formatter: (_v, row: FlatVersionRow) => row.productLine },
       { key: 'projectLevel', title: '项目等级', formatter: (_v, row: FlatVersionRow) => row.projectLevel },
@@ -565,17 +554,6 @@ export default function HistoryVersionSpace() {
         formatter: (_v: unknown, row: FlatVersionRow) => row.milestones[f.key] ?? '',
       })),
       {
-        key: 'budgetType',
-        title: '预算类型',
-        formatter: (_v, row: FlatVersionRow) => BUDGET_TYPE_LABELS[row.budgetType],
-      },
-      {
-        key: 'versionNumber',
-        title: '版本号',
-        formatter: (_v, row: FlatVersionRow) => row.versionNumber,
-      },
-      { key: 'batch', title: '批次', formatter: (_v: unknown, row: FlatVersionRow) => formatHrBatch(row.batch) },
-      {
         key: 'createdBy',
         title: '创建人',
         formatter: (_v, row: FlatVersionRow) => row.createdBy ?? '',
@@ -590,34 +568,22 @@ export default function HistoryVersionSpace() {
     // Sheet2: 配置中心人力模型数据 × 等级系数
     const sheet2Rows: Sheet2Row[] = []
     for (const version of filteredVersions) {
-      const configRecords = hrModelRecords.filter(
-        (r) =>
-          r.enabled !== false &&
-          String(r.projectLevel) === version.projectLevel &&
-          String(r.modelVersion) === version.hrModelVersion,
-      )
-      for (const record of configRecords) {
-        const phases: Record<string, number> = {}
-        let total = 0
-        for (const field of PHASE_FIELDS) {
-          const raw = Number(record[field.key] ?? 0)
-          const val = Math.round(raw * version.levelCoefficient * 10) / 10
-          phases[field.key] = val
-          total += val
-        }
+      const departments = calcMachineDepartmentInvestments(hrModelRecords, version.projectLevel, version.hrModelVersion, version.levelCoefficient)
+      for (const department of departments) {
+        const { phases } = department
         sheet2Rows.push({
           projectName: version.projectName,
           versionNumber: version.versionNumber,
           budgetTypeLabel: BUDGET_TYPE_LABELS[version.budgetType],
-          primaryDepartment: String(record.primaryDepartment ?? ''),
-          secondaryDepartment: String(record.secondaryDepartment ?? ''),
+          primaryDepartment: department.primaryDepartment,
+          secondaryDepartment: department.secondaryDepartment,
           conceptPhase: phases.conceptPhase,
           planningPhase: phases.planningPhase,
           developmentPhase: phases.developmentPhase,
           validationPhase: phases.validationPhase,
           launchPhase: phases.launchPhase,
           lifecycle: phases.lifecycle,
-          total: Math.round(total * 10) / 10,
+          total: department.estimatedTotal,
         })
       }
     }
@@ -663,70 +629,73 @@ export default function HistoryVersionSpace() {
           }}
         >
           <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              预算类型
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择预算类型"
-              style={{ minWidth: 180 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.budgetType}
-              onChange={(v) => setHistoryVersionFilters({ budgetType: v as BudgetType[] })}
-              options={BUDGET_TYPES}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                预算类型
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择预算类型"
+                style={{ minWidth: 180 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.budgetType}
+                onChange={(v) => setHistoryVersionFilters({ budgetType: v as BudgetType[] })}
+                options={BUDGET_TYPES}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              项目名称
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择项目名称"
-              style={{ minWidth: 200 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.projectName}
-              onChange={(v) => setHistoryVersionFilters({ projectName: v as string[] })}
-              options={projectNameOptions}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                项目名称
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择项目名称"
+                style={{ minWidth: 200 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.projectName}
+                onChange={(v) => setHistoryVersionFilters({ projectName: v as string[] })}
+                options={projectNameOptions}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              品牌
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择品牌"
-              style={{ minWidth: 150 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.brand}
-              onChange={(v) => setHistoryVersionFilters({ brand: v as MachineBrand[] })}
-              options={MACHINE_BRANDS}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                品牌
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择品牌"
+                style={{ minWidth: 150 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.brand}
+                onChange={(v) => setHistoryVersionFilters({ brand: v as MachineBrand[] })}
+                options={MACHINE_BRANDS}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              产品线
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择产品线"
-              style={{ minWidth: 150 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.productLine}
-              onChange={(v) => setHistoryVersionFilters({ productLine: v as MachineProductLine[] })}
-              options={MACHINE_PRODUCT_LINES}
-              optionFilterProp="label"
-            />
-
-
-            <span style={{ color: 'var(--pms-text-tertiary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              共 {filteredVersions.length} 条版本
-            </span>
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                产品线
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择产品线"
+                style={{ minWidth: 150 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.productLine}
+                onChange={(v) => setHistoryVersionFilters({ productLine: v as MachineProductLine[] })}
+                options={MACHINE_PRODUCT_LINES}
+                optionFilterProp="label"
+              />
+            </Space>
           </Space>
 
           <Space size={8} style={{ flexShrink: 0 }}>
@@ -746,7 +715,7 @@ export default function HistoryVersionSpace() {
 
       {/* 版本列表 */}
       <Table<FlatVersionRow>
-        className="pms-table"
+        className="pms-table pms-hr-investment-table"
         rowKey="id"
         columns={columns}
         dataSource={filteredVersions}

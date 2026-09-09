@@ -1,4 +1,6 @@
-import { allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
+import { appendHrMockProjects, createAdditionalTosProjects } from '@/mock/hrInvestment'
+import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -213,7 +215,7 @@ function generateDepartmentMonthlyRecords(
   )
 
   return splits.map((split: DepartmentMonthlySplit, idx: number) => ({
-    id: `mi-${projectId}-${version.id}-dept${idx}`,
+    id: `mi-${projectId}-${version.id}-source-${split.departmentId ?? idx}`,
     projectId,
     versionId: version.id,
     primaryDepartment: split.primaryDepartment,
@@ -293,6 +295,9 @@ const MOCK_PROJECTS: HrTosProject[] = [
  */
 
 
+const ADDITIONAL_PROJECTS = createAdditionalTosProjects(getHrFormalProjectOptions('tos'))
+const INITIAL_PROJECTS = [...MOCK_PROJECTS, ...ADDITIONAL_PROJECTS]
+
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
 /** 生成操作日志 */
@@ -333,42 +338,13 @@ function synchronizeProjects(projects: HrTosProject[]): HrTosProject[] {
   return synchronizeHrProjects(projects, 'tos')
 }
 
-function syncMonthlyInvestments(
-  projects: HrTosProject[],
-  existingMonthly: TosMonthlyInvestment[],
-): TosMonthlyInvestment[] {
-  projects = synchronizeProjects(projects)
-  const result: TosMonthlyInvestment[] = []
-
-  const existingMap = new Map<string, TosMonthlyInvestment>()
-  for (const m of existingMonthly) {
-    const key = `${m.versionId}|${m.primaryDepartment}|${m.secondaryDepartment}`
-    existingMap.set(key, m)
-  }
-
-  for (const project of projects) {
-    const latestVersions = getLatestVersions(project)
-    for (const version of latestVersions) {
-      const deptRecords = generateDepartmentMonthlyRecords(project.id, version)
-      for (const record of deptRecords) {
-        const key = `${record.versionId}|${record.primaryDepartment}|${record.secondaryDepartment}`
-        const existing = existingMap.get(key)
-        if (existing?.isEdited && existing.estimatedTotal === record.estimatedTotal
-          && Object.keys(existing.monthlyData).sort().join() === Object.keys(record.monthlyData).sort().join()) {
-          result.push({
-            ...existing,
-            versionLockState: version.lockState,
-            versionNumber: version.versionNumber,
-            batch: version.batch ?? null,
-          })
-        } else {
-          result.push(record)
-        }
-      }
-    }
-  }
-  return result
+function syncMonthlyInvestments(projects: HrTosProject[], existingMonthly: TosMonthlyInvestment[]): TosMonthlyInvestment[] {
+  const generated = synchronizeProjects(projects).flatMap(project =>
+    getLatestVersions(project).flatMap(version => generateDepartmentMonthlyRecords(project.id, version)),
+  )
+  return preserveHrMonthlyEdits(generated, existingMonthly)
 }
+
 
 /* ── State / Actions interfaces ────────────────────────────────────── */
 
@@ -458,8 +434,8 @@ const ALL_BUDGET_TYPES: BudgetType[] = ['annual', 'projectEstimate', 'projectBud
 export const useHrTosStore = create<HrTosState & HrTosActions>()(
   persist(
     (set, get) => ({
-      projects: synchronizeProjects(MOCK_PROJECTS),
-      monthlyInvestments: syncMonthlyInvestments(MOCK_PROJECTS, []),
+      projects: synchronizeProjects(INITIAL_PROJECTS),
+      monthlyInvestments: syncMonthlyInvestments(INITIAL_PROJECTS, []),
       selectedProjectId: null,
       activeTab: 'projectList',
       filters: { ...DEFAULT_TOS_PROJECT_FILTERS },
@@ -546,7 +522,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
       addVersion: (projectId, form) => set((s) => {
         const project = s.projects.find(p => p.id === projectId)
-        if (!project) return s
+        if (!project || !canCreateHrVersion(project, form.budgetType)) return s
 
         // IPM 校验
         if (
@@ -559,7 +535,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
 
-          const latest = getLatestVersion(p, form.budgetType)
+          const latest = getHrVersionSeed(p.versions, form.budgetType)
           const minorVersion = nextHrMinorVersion(p.versions, form.budgetType)
 
           const milestones: TosMilestoneNodes = latest
@@ -578,7 +554,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             createdBy: '当前用户',
             estimatedInvestment: sumDepartmentInvestments(form.departmentInvestments),
             milestones,
-            departmentInvestments: form.departmentInvestments,
+            departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
             createdAt: new Date().toISOString(),
             lockedAt: null,
             operationLogs: [
@@ -612,12 +588,13 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         const project = s.projects.find(p => p.id === projectId)
         if (!project) return s
         const sourceVersion = project.versions.find(v => v.id === versionId)
-        if (!sourceVersion) return s
+        if (!sourceVersion || !canCreateHrVersion(project, sourceVersion.budgetType)) return s
 
         const minorVersion = nextHrMinorVersion(project.versions, sourceVersion.budgetType)
 
         const newVersion: HrTosVersion = {
           ...sourceVersion,
+          createdBy: '当前用户',
           id: `${projectId}-${sourceVersion.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           versionNumber: `V0.${minorVersion}`,
             batch: null,
@@ -761,7 +738,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         const projects = synchronizeProjects(merged.projects)
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
-      version: 4,
+      version: 5,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const s = (persistedState ?? {}) as Record<string, unknown>
         // version 2 → 3: projectName string → string[], add historyVersionFilters
@@ -785,6 +762,9 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
               delete v.hrModelVersion
             }
           }
+        }
+        if (fromVersion < 5) {
+          s.projects = appendHrMockProjects((s.projects ?? []) as HrTosProject[], ADDITIONAL_PROJECTS)
         }
         return s as unknown as HrTosState & HrTosActions
       },

@@ -1,4 +1,6 @@
-import { allowedHrVersionUpdates, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
+import { appendHrMockProjects, createAdditionalMachineProjects } from '@/mock/hrInvestment'
+import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -147,7 +149,7 @@ function generateDepartmentMonthlyRecords(
   )
 
   return splits.map((split: DepartmentMonthlySplit, idx: number) => ({
-    id: `mi-${projectId}-${version.id}-dept${idx}`,
+    id: `mi-${projectId}-${version.id}-source-${split.departmentId ?? idx}`,
     projectId,
     versionId: version.id,
     primaryDepartment: split.primaryDepartment,
@@ -196,6 +198,9 @@ const MOCK_PROJECTS: HrMachineProject[] = [
  */
 
 
+const ADDITIONAL_PROJECTS = createAdditionalMachineProjects(getHrFormalProjectOptions('machine'))
+const INITIAL_PROJECTS = [...MOCK_PROJECTS, ...ADDITIONAL_PROJECTS]
+
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
 /** 获取指定项目+预算类型下的最新版本 */
@@ -223,45 +228,13 @@ function synchronizeProjects(projects: HrMachineProject[]): HrMachineProject[] {
   return synchronizeHrProjects(projects, 'machine', (level, model, coefficient) => calcEstimatedInvestment(useHrConfigStore.getState().data.hrModel ?? [], level, model, coefficient))
 }
 
-function syncMonthlyInvestments(
-  projects: HrMachineProject[],
-  existingMonthly: MonthlyInvestment[],
-): MonthlyInvestment[] {
-  projects = synchronizeProjects(projects)
-  const result: MonthlyInvestment[] = []
-
-  // 构建已有数据的查找表：key = versionId + primaryDept + secondaryDept
-  const existingMap = new Map<string, MonthlyInvestment>()
-  for (const m of existingMonthly) {
-    const key = `${m.versionId}|${m.primaryDepartment}|${m.secondaryDepartment}`
-    existingMap.set(key, m)
-  }
-
-  for (const project of projects) {
-    const latestVersions = getLatestVersions(project)
-    for (const version of latestVersions) {
-      // 生成该版本的部门拆分记录
-      const deptRecords = generateDepartmentMonthlyRecords(project.id, version)
-      for (const record of deptRecords) {
-        const key = `${record.versionId}|${record.primaryDepartment}|${record.secondaryDepartment}`
-        const existing = existingMap.get(key)
-        if (existing?.isEdited && existing.estimatedTotal === record.estimatedTotal
-          && Object.keys(existing.monthlyData).sort().join() === Object.keys(record.monthlyData).sort().join()) {
-          // 保留用户已编辑的月度数据，但更新锁定状态和版本号
-          result.push({
-            ...existing,
-            versionLockState: version.lockState,
-            versionNumber: version.versionNumber,
-            batch: version.batch ?? null,
-          })
-        } else {
-          result.push(record)
-        }
-      }
-    }
-  }
-  return result
+function syncMonthlyInvestments(projects: HrMachineProject[], existingMonthly: MonthlyInvestment[]): MonthlyInvestment[] {
+  const generated = synchronizeProjects(projects).flatMap(project =>
+    getLatestVersions(project).flatMap(version => generateDepartmentMonthlyRecords(project.id, version)),
+  )
+  return preserveHrMonthlyEdits(generated, existingMonthly)
 }
+
 
 /* ── State / Actions interfaces ────────────────────────────────────── */
 
@@ -341,8 +314,8 @@ const ALL_BUDGET_TYPES: BudgetType[] = ['annual', 'projectEstimate', 'projectBud
 export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
   persist(
     (set, get) => ({
-      projects: synchronizeProjects(MOCK_PROJECTS),
-      monthlyInvestments: syncMonthlyInvestments(MOCK_PROJECTS, []),
+      projects: synchronizeProjects(INITIAL_PROJECTS),
+      monthlyInvestments: syncMonthlyInvestments(INITIAL_PROJECTS, []),
       selectedProjectId: null,
       activeTab: 'projectList',
       filters: { ...DEFAULT_PROJECT_FILTERS },
@@ -431,7 +404,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
       addVersion: (projectId, budgetType, versionMeta) => set((s) => {
         const project = s.projects.find(p => p.id === projectId)
-        if (!project) return s
+        if (!project || !canCreateHrVersion(project, budgetType)) return s
 
         // IPM 校验：项目概算和项目预算需要绑定 IPM 编码
         if (
@@ -454,7 +427,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           if (p.id !== projectId) return p
 
           // 找到同预算类型下的最新版本
-          const latest = getLatestVersion(p, budgetType)
+          const latest = getHrVersionSeed(p.versions, budgetType)
           const minorVersion = nextHrMinorVersion(p.versions, budgetType)
 
           // 里程碑：从最新版本复制，若无则空
@@ -590,7 +563,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         const projects = synchronizeProjects(merged.projects)
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
-      version: 11,
+      version: 12,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const s = (persistedState ?? {}) as Record<string, unknown>
         // version 8 → 9: projectName string → string[], add historyVersionFilters
@@ -631,6 +604,9 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
               }
             }
           }
+        }
+        if (fromVersion < 12) {
+          s.projects = appendHrMockProjects((s.projects ?? []) as HrMachineProject[], ADDITIONAL_PROJECTS)
         }
         return s as unknown as HrMachineState & HrMachineActions
       },

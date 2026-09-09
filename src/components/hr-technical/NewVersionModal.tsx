@@ -1,14 +1,14 @@
 'use client'
 
-import { nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
+import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 import { useState, useEffect, useMemo } from 'react'
 import {
   Modal,
   Select,
   Table,
-  Input,
   InputNumber,
   Button,
   Space,
@@ -47,6 +47,7 @@ interface NewVersionModalProps {
 
 export default function NewVersionModal({ open, projectId, onCancel }: NewVersionModalProps) {
   const { message } = App.useApp()
+  const { primaryOptions, getSecondaryOptions, isValidPair } = useHrDepartmentOptions()
   const { projects, addVersion } = useHrTechnicalStore()
   const [localProjectId, setLocalProjectId] = useState(projectId)
   const [budgetType, setBudgetType] = useState<BudgetType>('annual')
@@ -71,6 +72,13 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
   }, [open, projectId])
 
+  useEffect(() => {
+    if (!open) return
+    const selected = useHrTechnicalStore.getState().projects.find(p => p.id === localProjectId)
+    const seed = selected && budgetType ? getHrVersionSeed(selected.versions, budgetType) : undefined
+    setEditData((seed?.departmentInvestments ?? []).map(row => ({ ...row })))
+  }, [open, localProjectId, budgetType])
+
   // ── 合计 ────────────────────────────────────────────────────────────
   const editTotal = useMemo(
     () =>
@@ -89,7 +97,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     setEditData(prev =>
       prev.map(d => {
         if (d.id !== id) return d
-        const updated = { ...d, [field]: value }
+        const updated = { ...d, [field]: value, ...(field === 'primaryDepartment' && d.primaryDepartment !== value ? { secondaryDepartment: '' } : {}) }
         const phaseKeys = TECH_PHASE_INVESTMENT_FIELDS.map(f => f.key)
         if (phaseKeys.includes(field as TechPhaseKey)) {
           const rowTotal = phaseKeys.reduce(
@@ -182,6 +190,10 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         message.warning('未解析到有效数据，请检查模板格式')
         return false
       }
+      if (parsed.some(row => !isValidPair(row.primaryDepartment, row.secondaryDepartment))) {
+        message.error('导入数据包含无效的一级部门或二级部门，请按部门下拉选项填写')
+        return false
+      }
       setEditData(parsed)
       message.success(`已导入 ${parsed.length} 条部门数据`)
     } catch (err) {
@@ -199,10 +211,15 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       width: 140,
       fixed: 'left' as const,
       render: (_value: unknown, record: TechDepartmentInvestment) => (
-        <Input
-          value={record.primaryDepartment}
-          placeholder="请输入一级部门"
-          onChange={e => updateRow(record.id, 'primaryDepartment', e.target.value)}
+        <Select
+          showSearch
+          aria-label="一级部门"
+          value={record.primaryDepartment || undefined}
+          placeholder="请选择一级部门"
+          style={{ width: '100%' }}
+          options={primaryOptions}
+          optionFilterProp="label"
+          onChange={value => updateRow(record.id, 'primaryDepartment', value)}
         />
       ),
     },
@@ -212,10 +229,15 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       width: 140,
       fixed: 'left' as const,
       render: (_value: unknown, record: TechDepartmentInvestment) => (
-        <Input
-          value={record.secondaryDepartment}
-          placeholder="请输入二级部门"
-          onChange={e => updateRow(record.id, 'secondaryDepartment', e.target.value)}
+        <Select
+          showSearch
+          aria-label="二级部门"
+          value={record.secondaryDepartment || undefined}
+          placeholder="请选择二级部门"
+          style={{ width: '100%' }}
+          options={getSecondaryOptions(record.primaryDepartment)}
+          disabled={!record.primaryDepartment}
+          onChange={value => updateRow(record.id, 'secondaryDepartment', value)}
         />
       ),
     },
@@ -249,23 +271,23 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     {
       title: '操作',
       key: 'action',
+      fixed: 'right' as const,
       width: 80,
       align: 'center' as const,
       render: (_value: unknown, record: TechDepartmentInvestment) => (
-        <Button
+        <Button type="text" aria-label="删除" title="删除"
           danger
           size="small"
           icon={<DeleteOutlined />}
           onClick={() => deleteRow(record.id)}
-        >
-          删除
-        </Button>
+        />
       ),
     },
-  ], [])
+  ], [primaryOptions, getSecondaryOptions])
 
   // ── 提交 ────────────────────────────────────────────────────────────
   const handleOk = async () => {
+    if (project?.status === 'cancelled') { message.warning('已取消的项目不支持新建版本'); return }
     if (!project) { message.warning('请选择项目'); return }
     if (!hasIpm && TECH_IPM_REQUIRED_TYPES.includes(budgetType)) {
       message.warning(TECH_IPM_REQUIRED_TIP)
@@ -275,9 +297,9 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       message.warning('请至少添加一条部门预估投入数据')
       return
     }
-    const hasEmpty = editData.some(d => !d.primaryDepartment || !d.secondaryDepartment)
+    const hasEmpty = editData.some(d => !isValidPair(d.primaryDepartment, d.secondaryDepartment))
     if (hasEmpty) {
-      message.warning('请填写所有部门名称')
+      message.warning('请选择有效的一级部门和对应二级部门')
       return
     }
     try {
@@ -313,7 +335,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       onCancel={onCancel}
       onOk={handleOk}
       confirmLoading={submitting}
-      okButtonProps={{ disabled: !project }}
+      okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
       okText="创建"
       cancelText="取消"
       width={1280}
@@ -336,7 +358,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               aria-label="选择项目"
               placeholder="请选择项目"
               value={localProjectId || undefined}
-              options={projects.map(p => ({ value: p.id, label: p.tdtName }))}
+              options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.tdtName }))}
               optionFilterProp="label"
               style={{ minWidth: 280 }}
               onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setEditData([]) }}
@@ -360,7 +382,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         </div>
 
         {project && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-        {hasIpm && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={resolveHrFormalSource('technical', project?.ipmProjectCode ?? null).project ? '里程碑取自主市场／主类型最新已发布一级计划；尚无已发布计划时等待计划发布。' : '当前正式项目编码未找到对应项目，请在项目列表重新绑定。'} />}
+        {hasIpm && budgetType !== 'annual' && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={resolveHrFormalSource('technical', project?.ipmProjectCode ?? null).project ? '里程碑取自主市场／主类型最新已发布一级计划；尚无已发布计划时等待计划发布。' : '当前正式项目编码未找到对应项目，请在项目列表重新绑定。'} />}
 
         {/* 表单字段 */}
         <Form layout="vertical">
@@ -405,13 +427,14 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
         {/* 部门预估投入表格 */}
         <Table<TechDepartmentInvestment>
-          className="pms-table"
+          className="pms-table pms-hr-investment-table"
           rowKey="id"
           columns={columns}
           dataSource={editData}
           pagination={false}
           size="small"
-          scroll={{ x: 'max-content', y: 320 }}
+          tableLayout="fixed"
+          scroll={{ x: columns.reduce((total, column) => total + Number(column.width ?? 0), 0), y: 320 }}
           locale={{
             emptyText: '暂无部门预估投入数据，请点击「添加部门」或「导入」',
           }}
@@ -456,8 +479,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           <ul style={{ margin: '4px 0 0', paddingLeft: 16, lineHeight: '1.8' }}>
             <li>同一项目、同一预算类型从 V0.1 开始递增</li>
             <li>仅最新版本可编辑，历史版本保留原有日期和投入数据</li>
-            <li>所有版本均可修改批次</li>
-            <li>绑定正式项目后，最新版本里程碑随主市场／主类型最新已发布一级计划更新</li>
+            <li>年度预算最新版本采用手动里程碑；其他预算类型绑定后随正式项目最新已发布一级计划更新</li>
             <li>预估投入合计由各部门各阶段投入自动汇总</li>
           </ul>
         </div>

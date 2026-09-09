@@ -8513,6 +8513,17 @@ input.ant-input,
 
 /* ── Cancelled project row ───────────────────────────────────────── */
 
+/* Fixed investment columns need opaque surfaces, including while hovered.
+   Keep specificity below the existing budget and cancelled-row palettes. */
+.pms-hr-investment-table tbody td.ant-table-cell-fix {
+  background: var(--pms-surface-solid) !important;
+  opacity: 1;
+}
+
+.pms-table.pms-hr-investment-table .ant-table-tbody > tr:hover > td {
+  background: color-mix(in srgb, var(--pms-brand) 6%, var(--pms-surface-solid)) !important;
+}
+
 .pms-table .pms-row-cancelled > td {
   background: #f0f0f0 !important;
   opacity: 0.7;
@@ -8703,6 +8714,20 @@ input.ant-input,
   color: var(--pms-text-primary);
 }
 
-.pms-hr-config-table-card .ant-table-tbody > tr:hover > td {
-  background: var(--bg-hover) !important;
+.pms-hr-config-table-card .ant-table-thead > tr > th.pms-hr-config-actions {
+  position: sticky !important;
+  z-index: 4;
+}
+
+/* Fixed actions must cover the phase values scrolling beneath them. */
+.pms-hr-config-table-card .ant-table-tbody > tr > td.pms-hr-config-actions {
+  background: var(--pms-surface-solid) !important;
+}
+
+.pms-hr-config-table-card .ant-table-tbody > tr.pms-config-row-disabled > td.pms-hr-config-actions {
+  background: var(--pms-brand-surface) !important;
+}
+
+.pms-hr-config-panel .pms-hr-config-table-card .ant-table-tbody > tr:hover > td {
+  background: color-mix(in srgb, var(--pms-brand) 6%, var(--pms-surface-solid)) !important;
 }

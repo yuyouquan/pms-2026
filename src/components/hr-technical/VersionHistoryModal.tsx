@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo } from 'react'
-import { formatHrBatch } from '@/lib/hrVersionRules'
 import { Modal, Tag, Timeline, Empty } from 'antd'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import {
@@ -59,7 +58,6 @@ export default function VersionHistoryModal({ open, versionId, onCancel }: Versi
               </Tag>
             </span>
             <span>版本号：<strong style={{ color: 'var(--pms-text-primary)' }}>{version.version.versionNumber}</strong></span>
-            <span>批次：<strong>{formatHrBatch(version.version.batch)}</strong></span>
           </div>
 
           {logs.length > 0 ? (

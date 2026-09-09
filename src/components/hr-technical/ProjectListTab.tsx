@@ -393,7 +393,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
 
       {/* 项目列表 */}
       <Table<HrTechnicalProject>
-        className="pms-table"
+        className="pms-table pms-hr-investment-table"
         rowKey="id"
         columns={columns}
         dataSource={filteredProjects}
