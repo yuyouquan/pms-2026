@@ -471,55 +471,56 @@ export default function HistoryVersionSpace() {
           }}
         >
           <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              预算类型
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择预算类型"
-              style={{ minWidth: 180 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.budgetType}
-              onChange={(v) => setHistoryVersionFilters({ budgetType: v as BudgetType[] })}
-              options={CAPABILITY_BUDGET_TYPES}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                预算类型
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择预算类型"
+                style={{ minWidth: 180 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.budgetType}
+                onChange={(v) => setHistoryVersionFilters({ budgetType: v as BudgetType[] })}
+                options={CAPABILITY_BUDGET_TYPES}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              项目名称
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择项目名称"
-              style={{ minWidth: 200 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.projectName}
-              onChange={(v) => setHistoryVersionFilters({ projectName: v as string[] })}
-              options={projectNameOptions}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                项目名称
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择项目名称"
+                style={{ minWidth: 200 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.projectName}
+                onChange={(v) => setHistoryVersionFilters({ projectName: v as string[] })}
+                options={projectNameOptions}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              项目年度
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择年度"
-              style={{ minWidth: 140 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.projectYear}
-              onChange={(v) => setHistoryVersionFilters({ projectYear: v as string[] })}
-              options={CAPABILITY_PROJECT_YEAR_OPTIONS}
-              optionFilterProp="label"
-            />
-
-
-            <span style={{ color: 'var(--pms-text-tertiary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              共 {filteredVersions.length} 条版本
-            </span>
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                项目年度
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择年度"
+                style={{ minWidth: 140 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.projectYear}
+                onChange={(v) => setHistoryVersionFilters({ projectYear: v as string[] })}
+                options={CAPABILITY_PROJECT_YEAR_OPTIONS}
+                optionFilterProp="label"
+              />
+            </Space>
           </Space>
 
           <Space size={8} style={{ flexShrink: 0 }}>

@@ -645,70 +645,73 @@ export default function HistoryVersionSpace() {
           }}
         >
           <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              预算类型
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择预算类型"
-              style={{ minWidth: 180 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.budgetType}
-              onChange={(v) => setHistoryVersionFilters({ budgetType: v as BudgetType[] })}
-              options={BUDGET_TYPES}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                预算类型
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择预算类型"
+                style={{ minWidth: 180 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.budgetType}
+                onChange={(v) => setHistoryVersionFilters({ budgetType: v as BudgetType[] })}
+                options={BUDGET_TYPES}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              项目名称
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择项目名称"
-              style={{ minWidth: 200 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.projectName}
-              onChange={(v) => setHistoryVersionFilters({ projectName: v as string[] })}
-              options={projectNameOptions}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                项目名称
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择项目名称"
+                style={{ minWidth: 200 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.projectName}
+                onChange={(v) => setHistoryVersionFilters({ projectName: v as string[] })}
+                options={projectNameOptions}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              品牌
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择品牌"
-              style={{ minWidth: 150 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.brand}
-              onChange={(v) => setHistoryVersionFilters({ brand: v as MachineBrand[] })}
-              options={MACHINE_BRANDS}
-              optionFilterProp="label"
-            />
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                品牌
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择品牌"
+                style={{ minWidth: 150 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.brand}
+                onChange={(v) => setHistoryVersionFilters({ brand: v as MachineBrand[] })}
+                options={MACHINE_BRANDS}
+                optionFilterProp="label"
+              />
+            </Space>
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              产品线
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择产品线"
-              style={{ minWidth: 150 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.productLine}
-              onChange={(v) => setHistoryVersionFilters({ productLine: v as MachineProductLine[] })}
-              options={MACHINE_PRODUCT_LINES}
-              optionFilterProp="label"
-            />
-
-
-            <span style={{ color: 'var(--pms-text-tertiary)', fontSize: 12, whiteSpace: 'nowrap' }}>
-              共 {filteredVersions.length} 条版本
-            </span>
+            <Space size={12} className="pms-hr-filter-field">
+              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                产品线
+              </span>
+              <Select
+                mode="multiple"
+                allowClear
+                placeholder="选择产品线"
+                style={{ minWidth: 150 }}
+                maxTagCount="responsive"
+                value={historyVersionFilters.productLine}
+                onChange={(v) => setHistoryVersionFilters({ productLine: v as MachineProductLine[] })}
+                options={MACHINE_PRODUCT_LINES}
+                optionFilterProp="label"
+              />
+            </Space>
           </Space>
 
           <Space size={8} style={{ flexShrink: 0 }}>
