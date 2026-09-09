@@ -8,15 +8,13 @@ import {
   Space,
   Select,
   Tag,
-  message,
+  App,
   Popconfirm,
   Tooltip,
   DatePicker,
 } from 'antd'
 import {
   PlusOutlined,
-  LockOutlined,
-  UnlockOutlined,
   DeleteOutlined,
   ExportOutlined,
   EyeOutlined,
@@ -24,6 +22,8 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import { HR_BATCH_OPTIONS, formatHrBatch, isLatestHrVersion } from '@/lib/hrVersionRules'
+import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrTosStore } from '@/stores/hrTos'
 import {
   TOS_BUDGET_TYPES,
@@ -33,7 +33,6 @@ import {
   formatPersonMonth,
   TOS_MILESTONE_FIELDS,
   TOS_PHASE_INVESTMENT_FIELDS,
-  TOS_LOCK_STATE_OPTIONS,
 } from '@/constants/hrTos'
 import type {
   HrTosVersion,
@@ -41,13 +40,15 @@ import type {
   BudgetType,
   TosMilestoneNodes,
   TosDepartmentInvestment,
-  VersionLockState,
 } from '@/types/hrTos'
 import { exportMultiSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 
 /** 扁平化版本行：版本数据 + 所属项目信息 */
 interface FlatVersionRow extends HrTosVersion {
   projectName: string
+  isLatest: boolean
+  isBound: boolean
+  sourceHint: string
   projectTarget: string
   projectStatus: HrTosProject['status']
 }
@@ -113,14 +114,13 @@ interface Sheet2Row extends TosDepartmentInvestment {
 }
 
 export default function HistoryVersionSpace() {
+  const { message } = App.useApp()
   // ── Store ──────────────────────────────────────────────────────────
   const projects = useHrTosStore((s) => s.projects)
   const historyVersionFilters = useHrTosStore((s) => s.historyVersionFilters)
   const setHistoryVersionFilters = useHrTosStore((s) => s.setHistoryVersionFilters)
   const selectedProjectId = useHrTosStore((s) => s.selectedProjectId)
   const setSelectedProjectId = useHrTosStore((s) => s.setSelectedProjectId)
-  const lockVersion = useHrTosStore((s) => s.lockVersion)
-  const unlockVersion = useHrTosStore((s) => s.unlockVersion)
   const deleteVersion = useHrTosStore((s) => s.deleteVersion)
   const deleteProject = useHrTosStore((s) => s.deleteProject)
   const updateVersion = useHrTosStore((s) => s.updateVersion)
@@ -139,9 +139,15 @@ export default function HistoryVersionSpace() {
   const allFlatVersions = useMemo<FlatVersionRow[]>(() => {
     const rows: FlatVersionRow[] = []
     for (const project of projects) {
+      const source = project.ipmProjectCode ? resolveHrFormalSource('tos', project.ipmProjectCode) : null
       for (const version of project.versions) {
         rows.push({
           ...version,
+          isLatest: isLatestHrVersion(project, version),
+          isBound: !!project.ipmProjectCode,
+          sourceHint: isLatestHrVersion(project, version) && source
+            ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待主市场／主类型一级计划发布' : ''
+            : '',
           projectName: project.name,
           projectTarget: project.projectTarget,
           projectStatus: project.status,
@@ -160,7 +166,6 @@ export default function HistoryVersionSpace() {
       .filter((row) => {
         if (f.budgetType.length > 0 && !f.budgetType.includes(row.budgetType)) return false
         if (f.projectName.length > 0 && !f.projectName.includes(row.projectName)) return false
-        if (f.lockState.length > 0 && !f.lockState.includes(row.lockState)) return false
         return true
       })
       .sort((a, b) => {
@@ -174,24 +179,6 @@ export default function HistoryVersionSpace() {
       })
   }, [allFlatVersions, historyVersionFilters])
 
-  // ── 可锁定版本判定（跨项目，每个项目每个预算类型仅最新未锁定版本可锁定） ──
-  const lockableIds = useMemo(() => {
-    const lockable = new Set<string>()
-    const budgetTypes: BudgetType[] = ['annual', 'projectEstimate', 'projectBudget']
-    for (const project of projects) {
-      for (const bt of budgetTypes) {
-        const versionsOfType = project.versions
-          .filter((v) => v.budgetType === bt)
-          .sort((a, b) => b.minorVersion - a.minorVersion)
-        const latest = versionsOfType[0]
-        if (latest && latest.lockState === 'unlocked') {
-          lockable.add(latest.id)
-        }
-      }
-    }
-    return lockable
-  }, [projects])
-
   // ── 列定义 ────────────────────────────────────────────────────────
   const columns = useMemo<ColumnsType<FlatVersionRow>>(() => {
     const milestoneColumns: ColumnsType<FlatVersionRow> = TOS_MILESTONE_FIELDS.map((field) => ({
@@ -202,7 +189,7 @@ export default function HistoryVersionSpace() {
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
           value={record.milestones[field.key]}
-          editable={record.lockState === 'unlocked'}
+          editable={record.isLatest && !record.isBound}
           onSave={(v) =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<TosMilestoneNodes>,
@@ -219,9 +206,10 @@ export default function HistoryVersionSpace() {
         width: 170,
         fixed: 'left',
         render: (_value: unknown, record: FlatVersionRow) => (
-          <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600 }}>
-            {record.projectName}
-          </span>
+          <div>
+            <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600 }}>{record.projectName}</span>
+            {record.sourceHint && <div style={{ color: 'var(--pms-text-secondary)', fontSize: 12 }}>{record.sourceHint}</div>}
+          </div>
         ),
       },
       {
@@ -268,6 +256,23 @@ export default function HistoryVersionSpace() {
         ),
       },
       {
+        title: '批次',
+        key: 'batch',
+        width: 115,
+        render: (_value: unknown, record: FlatVersionRow) => (
+          <Select
+            aria-label={`${record.projectName} ${TOS_BUDGET_TYPE_LABELS[record.budgetType]} ${record.versionNumber} 批次`}
+            value={record.batch ?? undefined}
+            placeholder="选择批次"
+            options={HR_BATCH_OPTIONS}
+            virtual={false}
+            style={{ width: '100%' }}
+            onClick={event => event.stopPropagation()}
+            onChange={value => updateVersion(record.projectId, record.id, { batch: value })}
+          />
+        ),
+      },
+      {
         title: '创建人',
         key: 'createdBy',
         width: 90,
@@ -279,33 +284,17 @@ export default function HistoryVersionSpace() {
       {
         title: '创建日期',
         key: 'createdAt',
-        width: 110,
+        width: 180,
         align: 'center',
         render: (_value: unknown, record: FlatVersionRow) => (
-          <span style={{ color: 'var(--pms-text-secondary)' }}>{record.createdAt}</span>
+          <span style={{ color: 'var(--pms-text-secondary)' }}>{dayjs(record.createdAt).format('YYYY-MM-DD HH:mm:ss')}</span>
         ),
-      },
-      {
-        title: '版本锁定',
-        key: 'versionLock',
-        width: 100,
-        align: 'center',
-        render: (_value: unknown, record: FlatVersionRow) => {
-          if (record.lockState === 'locked') {
-            return (
-              <Tag icon={<LockOutlined />} color="default">
-                已锁定
-              </Tag>
-            )
-          }
-          return <Tag color="processing">编辑中</Tag>
-        },
       },
       {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 310,
+        width: 270,
         align: 'center',
         render: (_value: unknown, record: FlatVersionRow) => {
           const project = projects.find((p) => p.id === record.projectId)
@@ -326,7 +315,7 @@ export default function HistoryVersionSpace() {
                   查看
                 </Button>
               </Tooltip>
-              {record.lockState === 'unlocked' && project?.status === 'active' ? (
+              {record.isLatest && project?.status === 'active' ? (
                 <Tooltip title="编辑各部门各阶段预估投入">
                   <Button
                     type="default"
@@ -343,42 +332,6 @@ export default function HistoryVersionSpace() {
                     编辑
                   </Button>
                 </Tooltip>
-              ) : null}
-              {lockableIds.has(record.id) && project?.status === 'active' ? (
-                <Tooltip title="锁定后该版本将变为只读，不可再编辑">
-                  <Button
-                    type="primary"
-                    size="small"
-                    icon={<LockOutlined />}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      lockVersion(record.projectId, record.id)
-                      message.success('版本已锁定')
-                    }}
-                  >
-                    锁定
-                  </Button>
-                </Tooltip>
-              ) : null}
-              {record.lockState === 'locked' ? (
-                <Popconfirm
-                  title="解锁版本"
-                  description="解锁后该版本可继续编辑。"
-                  okText="确认解锁"
-                  cancelText="取消"
-                  onConfirm={() => {
-                    unlockVersion(record.projectId, record.id)
-                    message.success('版本已解锁')
-                  }}
-                >
-                  <Button
-                    size="small"
-                    icon={<UnlockOutlined />}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    解锁
-                  </Button>
-                </Popconfirm>
               ) : null}
               <Popconfirm
                 title="删除版本数据"
@@ -412,7 +365,7 @@ export default function HistoryVersionSpace() {
         },
       },
     ]
-  }, [projects, lockableIds, lockVersion, unlockVersion, deleteVersion, deleteProject, updateVersion, setShowVersionDetailModal, setEditingVersionId, setVersionDetailReadOnly, setSelectedProjectId])
+  }, [projects, deleteVersion, deleteProject, updateVersion, setShowVersionDetailModal, setEditingVersionId, setVersionDetailReadOnly, setSelectedProjectId])
 
   // ── 导出 ──────────────────────────────────────────────────────────
   const handleExport = () => {
@@ -424,12 +377,13 @@ export default function HistoryVersionSpace() {
       ...TOS_MILESTONE_FIELDS.map((f) => ({
         key: f.key as string,
         title: f.label,
+        formatter: (_v: unknown, row: FlatVersionRow) => row.milestones[f.key] ?? '',
       })),
       { key: 'budgetType', title: '预算类型', formatter: (_v: unknown, row: FlatVersionRow) => TOS_BUDGET_TYPE_LABELS[row.budgetType] },
       { key: 'versionNumber', title: '版本号' },
+      { key: 'batch', title: '批次', formatter: (_v: unknown, row: FlatVersionRow) => formatHrBatch(row.batch) },
       { key: 'createdBy', title: '创建人' },
-      { key: 'createdAt', title: '创建日期' },
-      { key: 'lockState', title: '版本锁定', formatter: (_v: unknown, row: FlatVersionRow) => (row.lockState === 'locked' ? '已锁定' : '编辑中') },
+      { key: 'createdAt', title: '创建日期', formatter: (_v: unknown, row: FlatVersionRow) => dayjs(row.createdAt).format('YYYY-MM-DD HH:mm:ss') },
     ]
 
     // Sheet2: 各项目各一级部门各二级部门各阶段的预估投入明细
@@ -479,14 +433,13 @@ export default function HistoryVersionSpace() {
         <div
           style={{
             display: 'flex',
-            alignItems: 'center',
+            alignItems: 'flex-start',
             justifyContent: 'space-between',
             gap: 12,
-            flexWrap: 'wrap',
           }}
         >
-          <Space size={12} wrap>
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 13, whiteSpace: 'nowrap' }}>
+          <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
               预算类型
             </span>
             <Select
@@ -501,7 +454,7 @@ export default function HistoryVersionSpace() {
               optionFilterProp="label"
             />
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 13, whiteSpace: 'nowrap' }}>
+            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
               项目名称
             </span>
             <Select
@@ -516,32 +469,17 @@ export default function HistoryVersionSpace() {
               optionFilterProp="label"
             />
 
-            <span style={{ color: 'var(--pms-text-secondary)', fontSize: 13, whiteSpace: 'nowrap' }}>
-              是否锁定
-            </span>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder="选择锁定状态"
-              style={{ minWidth: 140 }}
-              maxTagCount="responsive"
-              value={historyVersionFilters.lockState}
-              onChange={(v) => setHistoryVersionFilters({ lockState: v as VersionLockState[] })}
-              options={TOS_LOCK_STATE_OPTIONS}
-              optionFilterProp="label"
-            />
 
             <span style={{ color: 'var(--pms-text-tertiary)', fontSize: 12, whiteSpace: 'nowrap' }}>
               共 {filteredVersions.length} 条版本
             </span>
           </Space>
 
-          <Space size={8}>
+          <Space size={8} style={{ flexShrink: 0 }}>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => setShowNewVersionModal(true)}
-              disabled={!selectedProjectId}
             >
               新增版本
             </Button>
@@ -558,33 +496,25 @@ export default function HistoryVersionSpace() {
         rowKey="id"
         columns={columns}
         dataSource={filteredVersions}
-        scroll={{ x: 'max-content' }}
+        tableLayout="fixed"
+        scroll={{ x: columns.reduce((total, column) => total + Number(column.width ?? 0), 0) }}
         pagination={{ pageSize: 15, showTotal: (t) => '共 ' + t + ' 条版本' }}
         rowClassName={(record) => {
           const budgetClass = TOS_BUDGET_TYPE_ROW_CLASS[record.budgetType] ?? ''
-          const lockedClass = record.lockState === 'locked' ? 'hr-tos-version-locked' : ''
-          return `${budgetClass} ${lockedClass}`.trim()
+          return budgetClass
         }}
         locale={{ emptyText: '当前筛选条件下暂无版本数据' }}
       />
 
       <style jsx global>{`
         .pms-hr-tos-history-version .pms-table .ant-table-tbody > tr.hr-tos-budget-annual > td {
-          background: rgba(114, 46, 209, 0.05) !important;
+          background: #f8f5fd !important;
         }
         .pms-hr-tos-history-version .pms-table .ant-table-tbody > tr.hr-tos-budget-estimate > td {
-          background: rgba(245, 154, 35, 0.05) !important;
+          background: #fffbf4 !important;
         }
         .pms-hr-tos-history-version .pms-table .ant-table-tbody > tr.hr-tos-budget-budget > td {
-          background: rgba(82, 196, 26, 0.05) !important;
-        }
-        .pms-hr-tos-history-version .pms-table .ant-table-tbody > tr.hr-tos-version-locked > td {
-          background: var(--pms-brand-surface) !important;
-          color: var(--pms-brand-strong);
-          font-weight: 500;
-        }
-        .pms-hr-tos-history-version .pms-table .ant-table-tbody > tr.hr-tos-version-locked:hover > td {
-          background: color-mix(in srgb, var(--pms-brand-surface) 72%, #ffffff) !important;
+          background: #f6fcf3 !important;
         }
         .pms-hr-tos-history-version .pms-inline-editable {
           cursor: pointer;

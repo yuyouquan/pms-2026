@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import { formatHrBatch } from '@/lib/hrVersionRules'
 import { Modal, Tag, Timeline, Empty } from 'antd'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import {
@@ -50,7 +51,7 @@ export default function VersionHistoryModal({ open, versionId, onCancel }: Versi
     >
       {version ? (
         <div style={{ marginTop: 16 }}>
-          <div style={{ marginBottom: 16, display: 'flex', gap: 24, fontSize: 13, color: 'var(--pms-text-secondary)', flexWrap: 'wrap' }}>
+          <div style={{ marginBottom: 16, display: 'flex', gap: 24, fontSize: 12, color: 'var(--pms-text-secondary)', flexWrap: 'wrap' }}>
             <span>TDT项目：<strong style={{ color: 'var(--pms-text-primary)' }}>{version.project.tdtName}</strong></span>
             <span>预算类型：
               <Tag color={TECH_BUDGET_TYPE_COLORS[version.version.budgetType]} style={{ marginLeft: 4 }}>
@@ -58,11 +59,7 @@ export default function VersionHistoryModal({ open, versionId, onCancel }: Versi
               </Tag>
             </span>
             <span>版本号：<strong style={{ color: 'var(--pms-text-primary)' }}>{version.version.versionNumber}</strong></span>
-            <span>状态：
-              <Tag color={version.version.lockState === 'locked' ? 'red' : 'default'} style={{ marginLeft: 4 }}>
-                {version.version.lockState === 'locked' ? '已锁定' : '编辑中'}
-              </Tag>
-            </span>
+            <span>批次：<strong>{formatHrBatch(version.version.batch)}</strong></span>
           </div>
 
           {logs.length > 0 ? (
@@ -78,7 +75,7 @@ export default function VersionHistoryModal({ open, versionId, onCancel }: Versi
                         <span style={{ color: 'var(--pms-text-primary)', fontWeight: 500 }}>{log.operator}</span>
                         <span style={{ color: 'var(--pms-text-tertiary)', fontSize: 12 }}>{log.timestamp}</span>
                       </div>
-                      <div style={{ color: 'var(--pms-text-secondary)', fontSize: 13 }}>{log.description}</div>
+                      <div style={{ color: 'var(--pms-text-secondary)', fontSize: 12 }}>{log.description}</div>
                     </div>
                   ),
                 }

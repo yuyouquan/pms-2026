@@ -3,7 +3,7 @@
 /** 预算类型 */
 export type BudgetType = 'annual' | 'projectEstimate' | 'projectBudget'
 
-/** 版本锁定状态 */
+/** 旧数据兼容字段，不再用于控制编辑 */
 export type VersionLockState = 'locked' | 'unlocked'
 
 /** 项目状态 */
@@ -85,11 +85,13 @@ export interface HrTechnicalVersion {
   projectId: string
   /** 预算类型 */
   budgetType: BudgetType
-  /** 版本号，如 V0.1, V1.0, V2.3 */
+  /** 版本号，如 V0.1、V0.2 */
   versionNumber: string
-  /** 版本锁定状态 */
+  /** 所属批次，所有历史版本均可更新 */
+  batch?: number | null
+  /** 旧数据兼容字段，不再用于控制编辑 */
   lockState: VersionLockState
-  /** 大版本号，锁定后递增 */
+  /** 兼容旧数据的大版本字段；当前编号固定为 0 */
   majorVersion: number
   /** 小版本号 */
   minorVersion: number
@@ -159,7 +161,9 @@ export interface TechMonthlyInvestment {
   budgetType: BudgetType
   /** 版本号 */
   versionNumber: string
-  /** 版本锁定状态 */
+  /** 所属批次，所有历史版本均可更新 */
+  batch?: number | null
+  /** 旧数据兼容字段，不再用于控制编辑 */
   versionLockState: VersionLockState
   /** 预估合计 */
   estimatedTotal: number

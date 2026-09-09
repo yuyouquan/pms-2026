@@ -1,6 +1,9 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
+
+import { useEffect, useMemo, useState } from 'react'
 import {
   Modal,
   Form,
@@ -12,7 +15,7 @@ import {
   Button,
   Space,
   Alert,
-  message,
+  App,
   Upload,
 } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
@@ -36,26 +39,45 @@ interface NewVersionModalProps {
 }
 
 export default function NewVersionModal({ open, onCancel }: NewVersionModalProps) {
+  const { message } = App.useApp()
   const [form] = Form.useForm()
   const projects = useHrCapabilityStore((s) => s.projects)
   const selectedProjectId = useHrCapabilityStore((s) => s.selectedProjectId)
   const addVersion = useHrCapabilityStore((s) => s.addVersion)
   const setShowNewVersionModal = useHrCapabilityStore((s) => s.setShowNewVersionModal)
 
+  const [localProjectId, setLocalProjectId] = useState(selectedProjectId ?? '')
   const [editData, setEditData] = useState<CapabilityDepartmentInvestment[]>([])
   const [budgetType, setBudgetType] = useState<BudgetType | null>(null)
   const [startTime, setStartTime] = useState<dayjs.Dayjs | null>(null)
   const [endTime, setEndTime] = useState<dayjs.Dayjs | null>(null)
 
   const project = useMemo(
-    () => projects.find((p) => p.id === selectedProjectId) ?? null,
-    [projects, selectedProjectId],
+    () => projects.find((p) => p.id === localProjectId) ?? null,
+    [projects, localProjectId],
   )
 
   // 检查 IPM 绑定限制
   const ipmRequired = budgetType ? CAPABILITY_IPM_REQUIRED_TYPES.includes(budgetType) : false
   const ipmBound = !!(project?.ipmProjectCode)
   const canCreateVersion = !ipmRequired || ipmBound
+
+  const formalSource = ipmBound ? resolveHrFormalSource('capability', project?.ipmProjectCode ?? null) : null
+  const snapshot = project?.versions[project.versions.length - 1]
+  const boundStart = formalSource?.project ? formalSource.projectStartTime : snapshot?.projectStartTime
+  const boundEnd = formalSource?.project ? formalSource.projectEndTime : snapshot?.projectEndTime
+  const effectiveStart = ipmBound ? (boundStart ? dayjs(boundStart) : null) : startTime
+  const effectiveEnd = ipmBound ? (boundEnd ? dayjs(boundEnd) : null) : endTime
+
+  useEffect(() => {
+    if (open) {
+      setLocalProjectId(selectedProjectId ?? '')
+      setBudgetType('annual')
+      setStartTime(null)
+      setEndTime(null)
+      setEditData([])
+    }
+  }, [open, selectedProjectId])
 
   const editTotal = useMemo(
     () => editData.reduce((sum, d) => sum + (Number(d.estimatedInvestment) || 0), 0),
@@ -153,11 +175,11 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       message.error('请选择预算类型')
       return
     }
-    if (!startTime || !endTime) {
+    if (!ipmBound && (!effectiveStart || !effectiveEnd)) {
       message.error('请选择项目起止时间')
       return
     }
-    if (endTime < startTime) {
+    if (effectiveEnd && effectiveStart && effectiveEnd.isBefore(effectiveStart)) {
       message.error('项目结束时间不能早于开始时间')
       return
     }
@@ -172,11 +194,12 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
     addVersion(project.id, {
       budgetType,
-      projectStartTime: startTime.format('YYYY-MM-DD'),
-      projectEndTime: endTime.format('YYYY-MM-DD'),
+      projectStartTime: effectiveStart?.format('YYYY-MM-DD') ?? '',
+      projectEndTime: effectiveEnd?.format('YYYY-MM-DD') ?? '',
       departmentInvestments: editData,
     })
     message.success('版本创建成功')
+    onCancel()
     resetState()
     setShowNewVersionModal(false)
   }
@@ -248,7 +271,6 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
     },
   ], [])
 
-  if (!project) return null
 
   return (
     <Modal
@@ -260,6 +282,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       okText="创建"
       cancelText="取消"
       width={900}
+      okButtonProps={{ disabled: !project }}
     >
       <div style={{ marginTop: 16 }}>
         {/* 项目信息 */}
@@ -268,13 +291,13 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
             marginBottom: 12,
             display: 'flex',
             gap: 24,
-            fontSize: 13,
+            fontSize: 12,
             color: 'var(--pms-text-secondary)',
             flexWrap: 'wrap',
           }}
         >
-          <span>项目名称：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.name}</strong></span>
-          {project.ipmProjectCode && (
+          <Space><span>项目名称：</span><Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.map(p => ({ value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setStartTime(null); setEndTime(null); setEditData([]) }} /></Space>
+          {project?.ipmProjectCode && (
             <span>IPM编码：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.ipmProjectCode}</strong></span>
           )}
         </div>
@@ -285,9 +308,12 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
             type="warning"
             showIcon
             style={{ marginBottom: 12 }}
-            message={CAPABILITY_IPM_REQUIRED_TIP}
+            title={CAPABILITY_IPM_REQUIRED_TIP}
           />
         )}
+
+        {project && budgetType && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
+        {ipmBound && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={formalSource?.project ? '项目起止时间取自正式项目最新已发布一级计划的概念启动和 STR5；尚无已发布计划时无需填写，等待计划发布。' : '当前正式项目编码未找到对应项目，保留已有快照，请在项目列表重新绑定。'} />}
 
         {/* 表单区 */}
         <Form form={form} layout="vertical">
@@ -306,19 +332,21 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
                 }))}
               />
             </Form.Item>
-            <Form.Item label="项目开始时间" required>
+            <Form.Item label="项目开始时间" required={!ipmBound}>
               <DatePicker
                 style={{ width: 180 }}
                 placeholder="选择开始时间"
-                value={startTime}
+                value={effectiveStart}
+                disabled={ipmBound}
                 onChange={setStartTime}
               />
             </Form.Item>
-            <Form.Item label="项目结束时间" required>
+            <Form.Item label="项目结束时间" required={!ipmBound}>
               <DatePicker
                 style={{ width: 180 }}
                 placeholder="选择结束时间"
-                value={endTime}
+                value={effectiveEnd}
+                disabled={ipmBound}
                 onChange={setEndTime}
               />
             </Form.Item>
@@ -369,7 +397,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
             borderRadius: 8,
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
             <span style={{ color: 'var(--pms-text-secondary)' }}>
               编辑各部门预估投入，合计将自动更新
             </span>

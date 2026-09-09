@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { Modal, InputNumber, message, Alert } from 'antd'
+import { App, Modal, InputNumber, Alert } from 'antd'
 import { useHrTosStore } from '@/stores/hrTos'
 import { formatPersonMonth, TOS_BUDGET_TYPE_LABELS } from '@/constants/hrTos'
 
@@ -12,6 +12,7 @@ interface MonthlyEditModalProps {
 }
 
 export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyEditModalProps) {
+  const { message } = App.useApp()
   const { monthlyInvestments, projects, updateMonthlyInvestment } = useHrTosStore()
   const [editData, setEditData] = useState<Record<string, number>>({})
 

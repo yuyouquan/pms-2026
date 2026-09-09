@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import { formatHrBatch } from '@/lib/hrVersionRules'
 import { Modal, Table, Tag, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useHrMachineStore } from '@/stores/hrMachine'
@@ -162,7 +163,7 @@ export default function MachineVersionDetailModal({
                 ),
               },
               { key: 'projectLevel', label: '项目等级', children: version.projectLevel || '-' },
-              { key: 'levelCoefficient', label: '等级系数', children: (version.levelCoefficient ?? 0).toFixed(1) },
+              { key: 'levelCoefficient', label: '等级系数', children: (version.levelCoefficient ?? 0).toFixed(2) },
               { key: 'hrModelVersion', label: '人力模型版本', children: version.hrModelVersion || '-' },
               {
                 key: 'estimatedInvestment',
@@ -170,9 +171,9 @@ export default function MachineVersionDetailModal({
                 children: formatPersonMonth(version.estimatedInvestment),
               },
               {
-                key: 'lockState',
-                label: '版本状态',
-                children: version.lockState === 'locked' ? '已锁定' : '编辑中',
+                key: 'batch',
+                label: '批次',
+                children: formatHrBatch(version.batch),
               },
             ]}
           />
@@ -183,7 +184,8 @@ export default function MachineVersionDetailModal({
             columns={columns}
             dataSource={dataSource}
             pagination={false}
-            scroll={{ x: 'max-content' }}
+            tableLayout="fixed"
+            scroll={{ x: columns.reduce((total, column) => total + Number(column.width ?? 0), 0) }}
             size="small"
             summary={() => (
               <Table.Summary fixed>
@@ -213,7 +215,7 @@ export default function MachineVersionDetailModal({
           />
 
           <div style={{ marginTop: 8, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>
-            数据来源：配置中心-人力模型（项目等级 {version.projectLevel || '-'} / 模型版本 {version.hrModelVersion || '-'}），各阶段值已乘以等级系数 {(version.levelCoefficient ?? 0).toFixed(1)}。
+            数据来源：配置中心-人力模型（项目等级 {version.projectLevel || '-'} / 模型版本 {version.hrModelVersion || '-'}），各阶段值已乘以等级系数 {(version.levelCoefficient ?? 0).toFixed(2)}。
           </div>
         </>
       ) : (

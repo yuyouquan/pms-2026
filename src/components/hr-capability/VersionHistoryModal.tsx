@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo } from 'react'
+import { formatHrBatch } from '@/lib/hrVersionRules'
 import { Modal, Tag, Timeline, Empty } from 'antd'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
 import {
@@ -55,7 +56,7 @@ export default function VersionHistoryModal({ open, versionId, onCancel }: Versi
               marginBottom: 16,
               display: 'flex',
               gap: 24,
-              fontSize: 13,
+              fontSize: 12,
               color: 'var(--pms-text-secondary)',
               flexWrap: 'wrap',
             }}
@@ -74,12 +75,7 @@ export default function VersionHistoryModal({ open, versionId, onCancel }: Versi
               版本号：
               <strong style={{ color: 'var(--pms-text-primary)' }}>{version.version.versionNumber}</strong>
             </span>
-            <span>
-              状态：
-              <Tag color={version.version.lockState === 'locked' ? 'red' : 'default'} style={{ marginLeft: 4 }}>
-                {version.version.lockState === 'locked' ? '已锁定' : '编辑中'}
-              </Tag>
-            </span>
+            <span>批次：<strong>{formatHrBatch(version.version.batch)}</strong></span>
           </div>
 
           {logs.length > 0 ? (
@@ -106,7 +102,7 @@ export default function VersionHistoryModal({ open, versionId, onCancel }: Versi
                           {log.timestamp}
                         </span>
                       </div>
-                      <div style={{ color: 'var(--pms-text-secondary)', fontSize: 13 }}>
+                      <div style={{ color: 'var(--pms-text-secondary)', fontSize: 12 }}>
                         {log.description}
                       </div>
                     </div>

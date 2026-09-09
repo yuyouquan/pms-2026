@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Modal, Form, Input, Select, message } from 'antd'
+import { App, Modal, Form, Input, Select } from 'antd'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import { TECH_PLANNING_YEAR_OPTIONS } from '@/constants/hrTechnical'
 
@@ -11,6 +11,7 @@ interface NewProjectModalProps {
 }
 
 export default function NewProjectModal({ open, onCancel }: NewProjectModalProps) {
+  const { message } = App.useApp()
   const [form] = Form.useForm()
   const { addProject } = useHrTechnicalStore()
   const [submitting, setSubmitting] = useState(false)

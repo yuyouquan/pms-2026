@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Modal, Form, Input, message } from 'antd'
+import { App, Modal, Form, Input } from 'antd'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
 
 interface NewProjectModalProps {
@@ -10,6 +10,7 @@ interface NewProjectModalProps {
 }
 
 export default function NewProjectModal({ open, onCancel }: NewProjectModalProps) {
+  const { message } = App.useApp()
   const [form] = Form.useForm()
   const addProject = useHrCapabilityStore((s) => s.addProject)
   const setShowNewProjectModal = useHrCapabilityStore((s) => s.setShowNewProjectModal)

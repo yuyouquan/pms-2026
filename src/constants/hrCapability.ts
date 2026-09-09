@@ -1,3 +1,4 @@
+import { roundHrMonthlyAllocation } from '@/lib/hrMonthlyRounding'
 /* ── HR Pipeline - Capability Building Project Constants ─────────────── */
 
 import type {
@@ -140,10 +141,5 @@ export function calcCapabilityMonthlySplit(
     cursor.setDate(cursor.getDate() + 1)
   }
 
-  // 四舍五入到1位小数
-  for (const key of Object.keys(monthlyData)) {
-    monthlyData[key] = Math.round(monthlyData[key] * 10) / 10
-  }
-
-  return monthlyData
+  return roundHrMonthlyAllocation(monthlyData, estimatedInvestment)
 }

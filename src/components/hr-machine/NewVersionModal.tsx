@@ -1,7 +1,10 @@
 'use client'
 
+import { nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
+
 import { useState, useEffect, useMemo } from 'react'
-import { Modal, Select, InputNumber, Form, message, Tooltip, Tag, Alert } from 'antd'
+import { Modal, Select, InputNumber, Form, App, Tooltip, Tag, Alert } from 'antd'
 import { useHrMachineStore } from '@/stores/hrMachine'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { BUDGET_TYPES } from '@/constants/hrMachine'
@@ -21,6 +24,7 @@ const IPM_REQUIRED_TYPES: BudgetType[] = ['projectEstimate', 'projectBudget']
 const IPM_REQUIRED_TIP = '需要先绑定正式项目编码才能创建此类型版本'
 
 export default function NewVersionModal({ open, projectId, onCancel }: NewVersionModalProps) {
+  const { message } = App.useApp()
   const { projects, addVersion } = useHrMachineStore()
   const configData = useHrConfigStore(s => s.data)
   const [localProjectId, setLocalProjectId] = useState<string>(projectId)
@@ -40,6 +44,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     [project],
   )
 
+  const formalSource = hasIpm ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null) : null
+  const effectiveProjectLevel = hasIpm
+    ? formalSource?.project ? formalSource.projectLevel : project?.versions[project.versions.length - 1]?.projectLevel || project?.projectLevel || ''
+    : projectLevel
+
   // 项目下拉选项
   const projectOptions = useMemo(
     () => projects.map(p => ({
@@ -50,7 +59,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   )
 
   // 从配置中心获取项目等级和模型版本号选项
-  const hrModelRecords = configData.hrModel ?? []
+  const hrModelRecords = useMemo(() => configData.hrModel ?? [], [configData.hrModel])
   const projectLevelOptions = useMemo(
     () => getConfigProjectLevels(hrModelRecords).map(l => ({ value: l, label: l })),
     [hrModelRecords],
@@ -62,30 +71,30 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
   // 预估投入预览
   const estimatedPreview = useMemo(() => {
-    if (!projectLevel || !hrModelVersion) return 0
-    return calcEstimatedInvestment(hrModelRecords, projectLevel, hrModelVersion, levelCoefficient)
-  }, [hrModelRecords, projectLevel, hrModelVersion, levelCoefficient])
+    if (!effectiveProjectLevel || !hrModelVersion) return 0
+    return calcEstimatedInvestment(hrModelRecords, effectiveProjectLevel, hrModelVersion, levelCoefficient)
+  }, [hrModelRecords, effectiveProjectLevel, hrModelVersion, levelCoefficient])
 
   useEffect(() => {
     if (open) {
       // 重置本地项目选择为传入的 projectId
       setLocalProjectId(projectId || '')
       // 默认值：年度预算 + 配置中心第一个等级 + 系数1 + 第一个版本号
-      const firstLevel = getConfigProjectLevels(hrModelRecords)[0] ?? ''
-      const firstVersion = getConfigModelVersions(hrModelRecords)[0] ?? ''
+      const firstLevel = getConfigProjectLevels(useHrConfigStore.getState().data.hrModel ?? [])[0] ?? ''
+      const firstVersion = getConfigModelVersions(useHrConfigStore.getState().data.hrModel ?? [])[0] ?? ''
       setBudgetType('annual')
       setProjectLevel(firstLevel)
       setLevelCoefficient(1)
       setHrModelVersion(firstVersion)
     }
-  }, [open, hrModelRecords, projectId])
+  }, [open, projectId])
 
   const handleOk = async () => {
     if (!localProjectId) {
       message.warning('请先选择项目')
       return
     }
-    if (!projectLevel || !hrModelVersion) {
+    if ((!hasIpm && !effectiveProjectLevel) || !hrModelVersion) {
       message.warning('请选择项目等级和人力模型版本号')
       return
     }
@@ -96,7 +105,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
     try {
       setSubmitting(true)
-      addVersion(localProjectId, budgetType, { projectLevel, levelCoefficient, hrModelVersion })
+      addVersion(localProjectId, budgetType, { projectLevel: effectiveProjectLevel, levelCoefficient, hrModelVersion })
       message.success('版本创建成功')
       onCancel()
     } finally {
@@ -139,7 +148,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             padding: '8px 12px',
             background: 'var(--pms-brand-surface)',
             borderRadius: 8,
-            fontSize: 13,
+            fontSize: 12,
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
@@ -147,7 +156,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             <Select
               showSearch
               value={localProjectId || undefined}
-              onChange={(v) => setLocalProjectId(v)}
+              onChange={(v) => { setLocalProjectId(v); setBudgetType('annual') }}
               style={{ width: '100%' }}
               options={projectOptions}
               placeholder="请选择项目"
@@ -173,6 +182,9 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           )}
         </div>
 
+        {project && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
+        {hasIpm && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={formalSource?.project ? '项目等级取自正式项目基础信息，里程碑取自主市场最新已发布一级计划。' : '当前正式项目编码未找到对应项目，保留已有快照，请在项目列表重新绑定。'} />}
+
         {/* 表单字段 */}
         <Form layout="vertical">
           <Form.Item label="预算类型" required>
@@ -184,9 +196,10 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             />
           </Form.Item>
 
-          <Form.Item label="项目等级" required tooltip="下拉值来自配置中心-人力模型">
+          <Form.Item label="项目等级" required={!hasIpm} tooltip={hasIpm ? '来源于正式项目基础信息' : '下拉值来自配置中心-人力模型'}>
             <Select
-              value={projectLevel || undefined}
+              value={effectiveProjectLevel || undefined}
+              disabled={hasIpm}
               onChange={(v) => setProjectLevel(v)}
               style={{ width: '100%' }}
               options={projectLevelOptions}
@@ -218,7 +231,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         </Form>
 
         {/* 预估投入预览 */}
-        {projectLevel && hrModelVersion && (
+        {effectiveProjectLevel && hrModelVersion && (
           <Alert
             type="info"
             showIcon
@@ -242,10 +255,10 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             版本规则：
           </p>
           <ul style={{ margin: '4px 0 0', paddingLeft: 16, lineHeight: '1.8' }}>
-            <li>首行 V0.1，新增递增 V0.2、V0.3…</li>
-            <li>锁定后版本号不变，仅状态变为已锁定</li>
-            <li>仅最新版本支持锁定操作</li>
-            <li>里程碑节点自动带出，可独立修改</li>
+            <li>同一项目、同一预算类型从 V0.1 开始递增</li>
+            <li>仅最新版本可编辑，历史版本保留原有日期和投入数据</li>
+            <li>所有版本均可修改批次</li>
+            <li>绑定正式项目后，最新版本里程碑随主市场／主类型最新已发布一级计划更新</li>
           </ul>
         </div>
       </div>
