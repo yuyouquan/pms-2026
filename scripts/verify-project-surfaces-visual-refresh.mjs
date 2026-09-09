@@ -87,9 +87,8 @@ for (const scopeClass of projectSurfaceScopeClasses) {
   )
 }
 
-const projectSurfaceReducedMotion = globalStylesSource.slice(
-  globalStylesSource.lastIndexOf('@media (prefers-reduced-motion: reduce)'),
-)
+const projectSurfaceReducedMotion = [...globalStylesSource.matchAll(/@media \(prefers-reduced-motion: reduce\)\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g)]
+  .map(match => match[1]).join('\n')
 for (const scopeClass of projectSurfaceScopeClasses) {
   assert.match(
     projectSurfaceReducedMotion,

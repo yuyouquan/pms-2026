@@ -135,7 +135,7 @@ function RequirementGantt({
     }
   }, [data, dimension, orderedGanttColumns])
 
-  return <div ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
+  return <div className="pms-gantt" ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
 }
 
 interface RequirementDevPlanProps {
