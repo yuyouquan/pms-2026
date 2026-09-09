@@ -5,6 +5,7 @@ import { Modal, Table, Tag, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useHrMachineStore } from '@/stores/hrMachine'
 import { useHrConfigStore } from '@/stores/hrConfig'
+import { calcMachineDepartmentInvestments } from '@/constants/hrConfig'
 import {
   BUDGET_TYPE_LABELS,
   BUDGET_TYPE_COLORS,
@@ -58,30 +59,14 @@ export default function MachineVersionDetailModal({
   const dataSource = useMemo<DeptPhaseRow[]>(() => {
     if (!version) return []
 
-    const matched = hrModelRecords.filter(
-      (r) =>
-        r.enabled !== false &&
-        String(r.projectLevel) === version.projectLevel &&
-        String(r.modelVersion) === version.hrModelVersion,
-    )
-
-    return matched.map((r, idx) => {
-      const phases: Record<string, number> = {}
-      let total = 0
-      for (const f of PHASE_FIELDS) {
-        const raw = Number(r[f.key]) || 0
-        const val = Math.round(raw * version.levelCoefficient * 10) / 10
-        phases[f.key] = val
-        total += val
-      }
-      return {
-        id: `${version.id}-dept-${idx}`,
-        primaryDepartment: String(r.primaryDepartment ?? ''),
-        secondaryDepartment: String(r.secondaryDepartment ?? ''),
-        phases,
-        total: Math.round(total * 10) / 10,
-      }
-    })
+    return calcMachineDepartmentInvestments(hrModelRecords, version.projectLevel, version.hrModelVersion, version.levelCoefficient)
+      .map(department => ({
+        id: `${version.id}-${department.id}`,
+        primaryDepartment: department.primaryDepartment,
+        secondaryDepartment: department.secondaryDepartment,
+        phases: department.phases,
+        total: department.estimatedTotal,
+      }))
   }, [version, hrModelRecords])
 
   // ── 列定义 ──────────────────────────────────────────────────────

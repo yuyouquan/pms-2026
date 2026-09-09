@@ -24,10 +24,11 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { isLatestHrVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, isLatestHrVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import {
+  TECH_IPM_REQUIRED_TIP,
   TECH_BUDGET_TYPES,
   TECH_BUDGET_TYPE_LABELS,
   TECH_BUDGET_TYPE_COLORS,
@@ -306,9 +307,10 @@ export default function HistoryVersionSpace() {
               ) : null}
               {/* 复制 */}
               {isActive ? (
-                <Tooltip title="复制此版本创建新版本">
+                <Tooltip title={canCreateHrVersion(project, record.budgetType) ? '复制此版本创建新版本' : TECH_IPM_REQUIRED_TIP}>
                   <Button
                     type="text" aria-label="复制"
+                    disabled={!canCreateHrVersion(project, record.budgetType)}
                     size="small"
                     icon={<CopyOutlined />}
                     onClick={e => {

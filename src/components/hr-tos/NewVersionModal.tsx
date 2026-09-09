@@ -1,6 +1,6 @@
 'use client'
 
-import { getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
@@ -289,6 +289,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
   // ── 提交 ────────────────────────────────────────────────────────────
   const handleOk = async () => {
+    if (project?.status === 'cancelled') { message.warning('已取消的项目不支持新建版本'); return }
     if (!project) { message.warning('请选择项目'); return }
     if (!hasIpm && TOS_IPM_REQUIRED_TYPES.includes(budgetType)) {
       message.warning(TOS_IPM_REQUIRED_TIP)
@@ -337,7 +338,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       onCancel={onCancel}
       onOk={handleOk}
       confirmLoading={submitting}
-      okButtonProps={{ disabled: !project }}
+      okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
       okText="创建"
       cancelText="取消"
       width={1280}
@@ -360,7 +361,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               aria-label="选择项目"
               placeholder="请选择项目"
               value={localProjectId || undefined}
-              options={projects.map(p => ({ value: p.id, label: p.name }))}
+              options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))}
               optionFilterProp="label"
               style={{ minWidth: 280 }}
               onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setEditData([]) }}

@@ -1,6 +1,6 @@
 'use client'
 
-import { getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
@@ -182,6 +182,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   }
 
   const handleOk = async () => {
+    if (project?.status === 'cancelled') { message.warning('已取消的项目不支持新建版本'); return }
     if (!project) {
       message.error('请先选择项目')
       return
@@ -310,7 +311,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       okText="创建"
       cancelText="取消"
       width={900}
-      okButtonProps={{ disabled: !project }}
+      okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
     >
       <div style={{ marginTop: 16 }}>
         {/* 项目信息 */}
@@ -324,7 +325,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
             flexWrap: 'wrap',
           }}
         >
-          <Space><span>项目名称：</span><Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.map(p => ({ value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setStartTime(null); setEndTime(null); setEditData([]) }} /></Space>
+          <Space><span>项目名称：</span><Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setStartTime(null); setEndTime(null); setEditData([]) }} /></Space>
           {project?.ipmProjectCode && (
             <span>IPM编码：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.ipmProjectCode}</strong></span>
           )}

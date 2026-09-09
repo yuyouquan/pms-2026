@@ -61,6 +61,15 @@ export function getMachineProjectYear(project: { versions: readonly { createdAt:
   return `${start ? `${start}年立项` : '立项待补充'}${end ? `${end}年结项` : '结项待补充'}`
 }
 
+/** Creation and copying share the same project-state and budget prerequisites. */
+export function canCreateHrVersion(
+  project: { status: string; ipmProjectCode: string | null } | null | undefined,
+  budgetType: string | null,
+): boolean {
+  return project?.status === 'active' && !!budgetType
+    && (budgetType === 'annual' || !!project.ipmProjectCode)
+}
+
 /** Enforce edit scope in the store as well as in every UI entry point. */
 export function allowedHrVersionUpdates<T extends object>(
   project: { ipmProjectCode: string | null; versions: readonly HrVersionIdentity[] },

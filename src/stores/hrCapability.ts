@@ -1,6 +1,8 @@
 'use client'
 
-import { allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
+import { appendHrMockProjects, createAdditionalCapabilityProjects } from '@/mock/hrInvestment'
+import { canCreateHrVersion, allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -194,6 +196,9 @@ function createMockProjects(): HrCapabilityProject[] {
   return projects
 }
 
+const ADDITIONAL_PROJECTS = createAdditionalCapabilityProjects(getHrFormalProjectOptions('capability'))
+const INITIAL_PROJECTS = [...createMockProjects(), ...ADDITIONAL_PROJECTS]
+
 /** 从每个预算类型的最新版本生成部门月度投入记录。 */
 function generateDepartmentMonthlyRecords(
   project: HrCapabilityProject,
@@ -305,27 +310,20 @@ function syncProjectBudgetFields(project: HrCapabilityProject): void {
 }
 
 function syncMonthlyInvestments(projects: HrCapabilityProject[], existingMonthly: CapabilityMonthlyInvestment[]): CapabilityMonthlyInvestment[] {
-  const records: CapabilityMonthlyInvestment[] = []
-  const existingByDepartment = new Map(existingMonthly.map(record => [`${record.versionId}|${record.primaryDepartment}|${record.secondaryDepartment}`, record]))
-  for (const project of synchronizeProjects(projects)) {
-    for (const budgetType of ['annual', 'projectEstimate', 'projectBudget'] as const) {
-      const version = getLatestHrVersion(project.versions, budgetType)
-      if (!version) continue
-      for (const record of generateDepartmentMonthlyRecords(project, version)) {
-        const existing = existingByDepartment.get(`${record.versionId}|${record.primaryDepartment}|${record.secondaryDepartment}`)
-        const sameBasis = existing?.estimatedTotal === record.estimatedTotal
-          && Object.keys(existing.monthlyData).sort().join() === Object.keys(record.monthlyData).sort().join()
-        records.push(existing?.isEdited && sameBasis ? { ...record, id: existing.id, monthlyData: existing.monthlyData, isEdited: true } : record)
-      }
-    }
-  }
-  return records
+  const generated = synchronizeProjects(projects).flatMap(project =>
+    (['annual', 'projectEstimate', 'projectBudget'] as const).flatMap(budgetType => {
+      const latest = getLatestHrVersion(project.versions, budgetType)
+      return latest ? generateDepartmentMonthlyRecords(project, latest) : []
+    }),
+  )
+  return preserveHrMonthlyEdits(generated, existingMonthly)
 }
+
 
 export const useHrCapabilityStore = create<HrCapabilityState>()(
   persist(
     (set, get) => ({
-      projects: synchronizeProjects(createMockProjects()),
+      projects: synchronizeProjects(INITIAL_PROJECTS),
       monthlyInvestments: [],
 
       selectedProjectId: null,
@@ -397,7 +395,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
 
       addVersion: (projectId, form) => {
         const project = get().projects.find((p) => p.id === projectId)
-        if (!project) return
+        if (!project || !canCreateHrVersion(project, form.budgetType)) return
 
         const estimatedInvestment = sumDepartmentInvestments(form.departmentInvestments)
         const majorVersion = 0
@@ -439,13 +437,14 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         const project = get().projects.find((p) => p.id === projectId)
         if (!project) return
         const source = project.versions.find((v) => v.id === versionId)
-        if (!source) return
+        if (!source || !canCreateHrVersion(project, source.budgetType)) return
 
         const minorVersion = nextHrMinorVersion(project.versions, source.budgetType)
         const operator = '当前用户'
 
         const newVersion: HrCapabilityVersion = {
           ...source,
+          createdBy: '当前用户',
           id: uid('cap-ver'),
           versionNumber: `V0.${minorVersion}`,
           batch: null,
@@ -572,7 +571,14 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
     }),
     {
       name: 'pms-hr-capability',
-      version: 1,
+      version: 2,
+      migrate: (persistedState: unknown, fromVersion: number) => {
+        const s = (persistedState ?? {}) as Record<string, unknown>
+        if (fromVersion < 2) {
+          s.projects = appendHrMockProjects((s.projects ?? []) as HrCapabilityProject[], ADDITIONAL_PROJECTS)
+        }
+        return s
+      },
       merge: (persisted, current) => {
         const merged = { ...current, ...(persisted as Partial<typeof current>) }
         const projects = synchronizeProjects(merged.projects)

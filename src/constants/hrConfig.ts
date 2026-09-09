@@ -284,8 +284,31 @@ function daysInMonth(monthKey: string, phaseStart: string, phaseEnd: string): nu
   return Math.round((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 60 * 60 * 24)) + 1
 }
 
+/** Round once across departments, then reconcile each department's phase values to its share. */
+export function calcMachineDepartmentInvestments(records: ConfigRecord[], projectLevel: string, modelVersion: string, coefficient: number) {
+  const matched = records.filter(record => record.enabled !== false
+    && String(record.projectLevel) === projectLevel && String(record.modelVersion) === modelVersion)
+  const rawTotals = Object.fromEntries(matched.map((record, index) => [String(index),
+    HR_MODEL_PHASE_KEYS.reduce((sum, key) => sum + (Number(record[key]) || 0), 0) * coefficient,
+  ]))
+  const totals = roundHrMonthlyAllocation(rawTotals, Object.values(rawTotals).reduce((sum, value) => sum + value, 0))
+  return matched.map((record, index) => {
+    const estimatedTotal = totals[String(index)] ?? 0
+    const rawPhases = Object.fromEntries(HR_MODEL_PHASE_KEYS.map(key => [key, (Number(record[key]) || 0) * coefficient]))
+    return {
+      id: record.id,
+      primaryDepartment: String(record.primaryDepartment ?? ''),
+      secondaryDepartment: String(record.secondaryDepartment ?? ''),
+      phases: roundHrMonthlyAllocation(rawPhases, estimatedTotal),
+      estimatedTotal,
+    }
+  })
+}
+
 /** 单个部门的月度拆分结果 */
 export interface DepartmentMonthlySplit {
+  /** Stable source row ID, including when several rows share department names. */
+  departmentId?: string
   primaryDepartment: string
   secondaryDepartment: string
   /** 月度投入：key = 'YYYY-MM' → value = 人月 */
@@ -312,18 +335,10 @@ export function calcDepartmentMonthlySplit(
   levelCoefficient: number,
   milestones: MilestoneNodes,
 ): DepartmentMonthlySplit[] {
-  // 筛选匹配的配置记录（同等级 + 同模型版本下的所有部门，仅启用记录）
-  const matched = records.filter(
-    (r) => r.enabled !== false && String(r.projectLevel) === projectLevel && String(r.modelVersion) === modelVersion,
-  )
-
-  if (matched.length === 0) return []
-
+  const departments = calcMachineDepartmentInvestments(records, projectLevel, modelVersion, levelCoefficient)
   const results: DepartmentMonthlySplit[] = []
-
-  for (const record of matched) {
-    const primaryDepartment = String(record.primaryDepartment ?? '')
-    const secondaryDepartment = String(record.secondaryDepartment ?? '')
+  for (const department of departments) {
+    const { primaryDepartment, secondaryDepartment, estimatedTotal } = department
 
     const monthlyData: Record<string, number> = {}
     let totalForDept = 0
@@ -351,11 +366,11 @@ export function calcDepartmentMonthlySplit(
       }
 
       // 配置中心阶段值
-      const phaseInvestment = Number(record[phase.configKey]) || 0
+      const phaseInvestment = department.phases[phase.configKey] || 0
       if (phaseInvestment === 0) continue
 
       // 每日预估 = 阶段值 × 等级系数 / 工期
-      const dailyRate = (phaseInvestment * levelCoefficient) / phaseDays
+      const dailyRate = phaseInvestment / phaseDays
 
       // 计算该阶段覆盖的所有月份
       const startMonth = phaseStart.substring(0, 7) // YYYY-MM
@@ -372,7 +387,7 @@ export function calcDepartmentMonthlySplit(
         current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
       }
 
-      totalForDept += phaseInvestment * levelCoefficient
+      totalForDept += phaseInvestment
       // Suppress unused variable warning for startMonth/endMonth
       void startMonth
       void endMonth
@@ -381,10 +396,11 @@ export function calcDepartmentMonthlySplit(
     Object.assign(monthlyData, roundHrMonthlyAllocation(monthlyData, totalForDept))
 
     results.push({
+      departmentId: department.id,
       primaryDepartment,
       secondaryDepartment,
       monthlyData,
-      estimatedTotal: Math.round(HR_MODEL_PHASE_KEYS.reduce((sum, key) => sum + (Number(record[key]) || 0), 0) * levelCoefficient * 10) / 10,
+      estimatedTotal,
     })
   }
 
@@ -537,6 +553,7 @@ export function calcTosDepartmentMonthlySplit(
     Object.assign(monthlyData, roundHrMonthlyAllocation(monthlyData, allocatedTotal))
 
     results.push({
+      departmentId: dept.id,
       primaryDepartment,
       secondaryDepartment,
       monthlyData,
@@ -625,6 +642,7 @@ export function calcTechDepartmentMonthlySplit(
     Object.assign(monthlyData, roundHrMonthlyAllocation(monthlyData, allocatedTotal))
 
     results.push({
+      departmentId: dept.id,
       primaryDepartment,
       secondaryDepartment,
       monthlyData,

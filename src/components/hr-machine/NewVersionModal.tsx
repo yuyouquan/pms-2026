@@ -1,6 +1,6 @@
 'use client'
 
-import { getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -53,6 +53,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   // 项目下拉选项
   const projectOptions = useMemo(
     () => projects.map(p => ({
+      disabled: p.status !== 'active',
       value: p.id,
       label: `${p.name}（${p.brand} · ${p.productLine}）`,
     })),
@@ -108,6 +109,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   }, [open, localProjectId, budgetType])
 
   const handleOk = async () => {
+    if (project?.status === 'cancelled') { message.warning('已取消的项目不支持新建版本'); return }
     if (!localProjectId) {
       message.warning('请先选择项目')
       return
@@ -159,6 +161,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       onOk={handleOk}
       confirmLoading={submitting}
       okText="创建"
+      okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
       cancelText="取消"
       width={520}
     >

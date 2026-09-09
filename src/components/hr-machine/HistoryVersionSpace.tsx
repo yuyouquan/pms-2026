@@ -45,7 +45,7 @@ import type {
 } from '@/types/hrMachine'
 import { exportMultiSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import { useHrConfigStore } from '@/stores/hrConfig'
-import { getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
+import { calcMachineDepartmentInvestments, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 
 /** 扁平化版本行：版本数据 + 所属项目信息 */
 interface FlatVersionRow extends HrMachineVersion {
@@ -568,34 +568,22 @@ export default function HistoryVersionSpace() {
     // Sheet2: 配置中心人力模型数据 × 等级系数
     const sheet2Rows: Sheet2Row[] = []
     for (const version of filteredVersions) {
-      const configRecords = hrModelRecords.filter(
-        (r) =>
-          r.enabled !== false &&
-          String(r.projectLevel) === version.projectLevel &&
-          String(r.modelVersion) === version.hrModelVersion,
-      )
-      for (const record of configRecords) {
-        const phases: Record<string, number> = {}
-        let total = 0
-        for (const field of PHASE_FIELDS) {
-          const raw = Number(record[field.key] ?? 0)
-          const val = Math.round(raw * version.levelCoefficient * 10) / 10
-          phases[field.key] = val
-          total += val
-        }
+      const departments = calcMachineDepartmentInvestments(hrModelRecords, version.projectLevel, version.hrModelVersion, version.levelCoefficient)
+      for (const department of departments) {
+        const { phases } = department
         sheet2Rows.push({
           projectName: version.projectName,
           versionNumber: version.versionNumber,
           budgetTypeLabel: BUDGET_TYPE_LABELS[version.budgetType],
-          primaryDepartment: String(record.primaryDepartment ?? ''),
-          secondaryDepartment: String(record.secondaryDepartment ?? ''),
+          primaryDepartment: department.primaryDepartment,
+          secondaryDepartment: department.secondaryDepartment,
           conceptPhase: phases.conceptPhase,
           planningPhase: phases.planningPhase,
           developmentPhase: phases.developmentPhase,
           validationPhase: phases.validationPhase,
           launchPhase: phases.launchPhase,
           lifecycle: phases.lifecycle,
-          total: Math.round(total * 10) / 10,
+          total: department.estimatedTotal,
         })
       }
     }

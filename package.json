@@ -9,6 +9,7 @@
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "verify:hr-investment-audit": "node scripts/verify-hr-investment-audit.mjs",
     "verify:hr-investment": "node scripts/verify-hr-investment.mjs",
     "verify:hr-version-refinement": "node scripts/verify-hr-version-refinement.mjs",
     "verify:hr-model": "node scripts/verify-hr-model.mjs",
