@@ -63,7 +63,7 @@ function ConflictProjectCard({
   onDeletePlannedProject,
 }: ConflictProjectCardProps) {
   const isNormal = kind === 'normal'
-  const projectDisplayName = buildRoadmapDisplayName(
+  const projectDisplayName = project.source === 'planned' ? project.displayName : buildRoadmapDisplayName(
     project.projectCode,
     project.androidVersion,
     project.productType,

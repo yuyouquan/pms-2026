@@ -1,3 +1,5 @@
+import { isFormalProject } from '@/types/projectRegistry'
+import type { ProjectItem } from '@/types/app'
 import { isExternalMachineDevelopment } from '@/constants/projectInfoSchema'
 import { isMachineProjectType } from '@/constants/projectTypes'
 import type { JiraProjectConfig } from '@/lib/jiraProject'
@@ -122,6 +124,10 @@ export const deriveStartingRam = (memorySize: unknown) => {
 }
 
 export const getProjectInfoValue = (project: ProjectInfoProject, key: string): ProjectInfoValue | undefined => {
+  if (key === 'startingRam' && !isFormalProject(project as unknown as ProjectItem)) {
+    const storedRam = project.fieldValues?.startingRam ?? project.startRam
+    if (typeof storedRam === 'string') return storedRam
+  }
   if (key === 'startingRam') {
     const derivedStartingRam = deriveStartingRam(getProjectInfoValue(project, 'memorySize'))
     if (derivedStartingRam) return derivedStartingRam

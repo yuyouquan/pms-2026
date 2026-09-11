@@ -13,6 +13,8 @@
  * This is the LARGEST container, reading from ALL 5 stores.
  */
 
+import { buildManualProjectSpaceUpdate } from '@/lib/manualProjectCompletion'
+import { isFormalProject } from '@/types/projectRegistry'
 import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
 import {
   Card, Tabs, Table, Button, Progress, Tag, Space, Row, Col, Badge,
@@ -2946,7 +2948,6 @@ export default function ProjectSpaceContainer() {
     setBasicInfoJiraErrors([])
     const currentJiraProjects = Array.isArray((p as any).jiraProjects) ? (p as any).jiraProjects.map((row: JiraProjectConfig) => ({ ...row })) : []
     setEditingProjectFields({
-      projectCode: p.projectCode || p.model || '',
       androidVersion: p.androidVersion || p.operatingSystem || '',
       firstSaleTosVersionId: normalizeTosSnapshot(p.firstSaleTosVersionId || p.tosVersionName) || '',
       brand: p.brand || '',
@@ -3052,7 +3053,7 @@ export default function ProjectSpaceContainer() {
     )
     const updatedBase = {
       ...selectedProject,
-      type: payload.projectType,
+      type: selectedProject.type,
       leader: payload.responsiblePersons[0] || '',
       responsiblePersons: payload.responsiblePersons,
       secondaryCategory: payload.projectSecondaryCategory,
@@ -3094,14 +3095,14 @@ export default function ProjectSpaceContainer() {
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : selectedProject.versionType || ''
-    const updated = isMachineProjectType(selectedProject.type)
+    let updated = isMachineProjectType(selectedProject.type)
       ? {
           ...merged,
           firstSaleTosVersionId,
           firstSaleTosVersion: submittedFirstSaleTos,
           currentTosVersionId,
           currentTosVersion: submittedCurrentTos,
-          projectCode: typeof payload.infoValues.projectModel === 'string' ? payload.infoValues.projectModel : selectedProject.projectCode,
+          projectCode: selectedProject.projectCode,
           startRam: typeof payload.infoValues.startingRam === 'string' ? payload.infoValues.startingRam : selectedProject.startRam,
           versionType: rawVersionType,
           developMode: typeof payload.infoValues.developmentMode === 'string' ? payload.infoValues.developmentMode : selectedProject.developMode,
@@ -3113,8 +3114,14 @@ export default function ProjectSpaceContainer() {
             { ipmProjectType: payload.projectSecondaryCategory || String(selectedProject.ipmProjectType || '') },
           ) as unknown as typeof merged
         : merged
-    if (isMachineProjectType(selectedProject.type)) {
-      const resolution = resolveMachineTosUpdate(projects as any[], updated as any)
+    if (!isFormalProject(selectedProject)) updated = buildManualProjectSpaceUpdate(selectedProject, payload) as unknown as typeof updated
+    // Preserve canonical identity exactly, including absent optional source/code fields.
+    for (const key of ['name', 'type', 'projectCode', 'sourceBid', 'projectAttribute', 'boundFormalProjectId', 'createdBy', 'createdAt'] as const) {
+      if (Object.hasOwn(selectedProject, key)) (updated as any)[key] = selectedProject[key]
+      else delete (updated as any)[key]
+    }
+    if (isFormalProject(selectedProject) && isMachineProjectType(selectedProject.type)) {
+      const resolution = resolveMachineTosUpdate(projects.filter(isFormalProject) as any[], updated as any)
       if (!resolution.ok) {
         const reasonMessage = resolution.reason === 'missing-new-product'
           ? '未找到项目名完全相同的新品项目，无法保存老品项目'
@@ -4624,7 +4631,7 @@ export default function ProjectSpaceContainer() {
       let content: React.ReactNode = field.key === 'firstSaleTosVersionId'
         ? firstSaleTosVersionName
         : getProjectFieldValue(field)
-      if (field.key === 'projectCode') content = editableField('projectCode', p.projectCode || p.model)
+      if (field.key === 'projectCode') content = <span>{p.projectCode || '—'}</span>
       if (field.key === 'androidVersion') content = editableField('androidVersion', p.androidVersion || p.operatingSystem)
       if (field.key === 'firstSaleTosVersionId') content = editableField('firstSaleTosVersionId', firstSaleTosVersionName, { type: 'select', choices: machineTosOptions })
       if (field.key === 'brand') content = editableField('brand', p.brand)

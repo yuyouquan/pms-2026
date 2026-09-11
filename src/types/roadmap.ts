@@ -293,7 +293,7 @@ export interface RoadmapStoreActions {
   setTosVersionDetails: (currentId: string | null, input: TosVersionDetailsInput) => RoadmapMutationResult
   deleteTosVersionDetails: (id: string) => RoadmapMutationResult
   setTosTargets: (id: string, targets: string[]) => RoadmapMutationResult
-  recordNormalProjectChange: (input: RoadmapNormalChangeInput) => RoadmapMutationResult
+  recordNormalProjectChange: (input: RoadmapNormalChangeInput, source?: RoadmapSource) => RoadmapMutationResult
 }
 
 export type RoadmapStore = RoadmapStoreState & RoadmapStoreActions

@@ -210,8 +210,8 @@ export default function RoadmapToolbar({
               <Tooltip title="tOS 版本维护">
                 <Button aria-label="tOS 版本维护" icon={<SlidersOutlined />} onClick={onOpenTosMaintenance} style={compactControlStyle} />
               </Tooltip>
-              <Tooltip title="创建项目">
-                <Button aria-label="创建项目" icon={<PlusOutlined />} onClick={onCreatePlannedProject} style={compactControlStyle} />
+              <Tooltip title="前往项目配置创建项目">
+                <Button aria-label="前往项目配置" icon={<PlusOutlined />} onClick={onCreatePlannedProject} style={compactControlStyle} />
               </Tooltip>
             </>
           ) : null}

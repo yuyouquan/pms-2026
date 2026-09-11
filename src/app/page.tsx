@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Modal, Button, Space } from 'antd'
+import { useRoadmapRegistryMigration } from '@/hooks/useRoadmapRegistryMigration'
+import { isFormalProject } from '@/types/projectRegistry'
+import { Alert, Modal, Button, Space } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -27,6 +29,7 @@ const globalStyles = `
 `
 
 export default function Home() {
+  const roadmapMigrationConflicts = useRoadmapRegistryMigration()
   // ═══════ Routing-level store hooks ═══════
   const {
     activeModule,
@@ -60,10 +63,12 @@ export default function Home() {
   const handleViewProjectFromRoadmap = (projectId: string, market?: string) => {
     const project = projects.find(p => p.id === projectId)
     if (!project) return
+    useUiStore.getState().navigateWithEditGuard(() => {
     activateProject(project, { market })
     enterProjectSpace({ module: 'roadmap' })
-    setProjectSpaceModule('plan')
+    setProjectSpaceModule(isFormalProject(project) ? 'plan' : 'basic')
     setProjectPlanLevel('level1')
+    }, false)
   }
 
   // ═══════ Render ═══════
@@ -80,6 +85,7 @@ export default function Home() {
           <>
             {/* Main header (logo + nav + user switcher) */}
             <MainHeader />
+            {roadmapMigrationConflicts.map(conflict => <Alert key={conflict} type="warning" showIcon message={conflict} />)}
 
             <div className="pms-main-content" style={{ padding: 24 }}>
               {/* Workbench (todo center + work tracker) */}

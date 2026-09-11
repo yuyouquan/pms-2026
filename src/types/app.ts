@@ -82,6 +82,10 @@ export interface ProjectItem extends ProjectRegistryMetadata {
   platform?: string;
   startRam?: RoadmapRam;
   str5Date?: string;
+  str5Estimated?: boolean;
+  launchEstimated?: boolean;
+  /** Original roadmap record retained losslessly during one-time migration. */
+  legacyRoadmapSnapshot?: import('@/types/roadmap').PlannedRoadmapProject;
   remark?: string;
   market?: string;
   ppm?: string;

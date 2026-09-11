@@ -973,133 +973,21 @@ registerAssertion('initial roadmap state has exact semantic-descending versions 
   ) throw new Error(`initial roadmap UI state is wrong: ${JSON.stringify(initial)}`)
 })
 
-registerAssertion('planned project CRUD enforces duplicates and audit semantics', () => {
-  const storeModule = loadIsolatedRoadmapStore()
-  const store = resetRoadmapStore(storeModule)
-  const createResult = store.getState().createPlannedProject(createPlannedInput())
-  if (!createResult.ok) throw new Error(`valid create failed: ${JSON.stringify(createResult)}`)
-  let state = store.getState()
-  const created = state.plannedProjects[0]
-  if (!created || created.displayName !== 'DEMO017' || created.status !== '待规划' || created.createdBy !== '演示用户01' || created.updatedBy !== '演示用户01') {
-    throw new Error(`created planned project is wrong: ${JSON.stringify(created)}`)
-  }
-  if (state.changeLogs[0]?.action !== 'create' || state.changeLogs[0]?.snapshot?.firstSaleTosVersionId !== 'tOS17.2') {
-    throw new Error(`create audit is wrong: ${JSON.stringify(state.changeLogs[0])}`)
-  }
-  const duplicate = store.getState().createPlannedProject(createPlannedInput({ actor: '演示用户02' }))
-  if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error(`own duplicate was accepted: ${JSON.stringify(duplicate)}`)
-  const externalDuplicate = store.getState().createPlannedProject(createPlannedInput({ projectCode: 'A100' }), {
-    allRows: [{
-      id: 'normal-a100', source: 'normal', projectCode: 'A100', androidVersion: 'Android 16', productType: '新品',
-    }],
-  })
-  if (externalDuplicate.ok || externalDuplicate.reason !== 'duplicate') throw new Error('caller-supplied normal row was ignored')
-
-  const updated = store.getState().updatePlannedProject(created.id, createPlannedInput({
-    productType: '老品',
-    androidVersion: 'Android 17',
-    productSeries: '示例系列B 70',
-    remark: '已更新',
-    actor: '演示用户02',
-  }))
-  if (!updated.ok) throw new Error(`valid update failed: ${JSON.stringify(updated)}`)
-  state = store.getState()
-  const after = state.plannedProjects[0]
-  if (after.displayName !== 'DEMO017(Android 17)' || after.createdAt !== created.createdAt || after.createdBy !== '演示用户01' || after.updatedBy !== '演示用户02') {
-    throw new Error(`updated planned project is wrong: ${JSON.stringify(after)}`)
-  }
-  if (state.changeLogs[0]?.action !== 'update' || state.changeLogs[0]?.changes.map(change => change.field).join(',') !== 'productType,remark') {
-    throw new Error(`update audit is wrong: ${JSON.stringify(state.changeLogs[0])}`)
-  }
-  const logCount = state.changeLogs.length
-  const excludedOnly = store.getState().updatePlannedProject(created.id, createPlannedInput({
-    productType: '老品', androidVersion: 'Android 18', productSeries: '示例系列B 80', remark: '已更新', actor: '演示用户03',
-  }))
-  if (!excludedOnly.ok || store.getState().changeLogs.length !== logCount) {
-    throw new Error('Android/product-series-only update must mutate without an ordinary update log')
-  }
-  const deleted = store.getState().deletePlannedProject(created.id, '演示用户04')
-  if (!deleted.ok || store.getState().plannedProjects.length || store.getState().changeLogs[0]?.action !== 'delete') {
-    throw new Error(`delete behavior is wrong: ${JSON.stringify(store.getState())}`)
-  }
-  const missing = store.getState().deletePlannedProject(created.id, '演示用户04')
-  if (missing.ok || missing.reason !== 'not-found') throw new Error('missing delete needs a not-found result')
-})
-
-registerAssertion('planned project validation uses the current tOS catalog and caller comparison rows', () => {
-  const storeModule = loadIsolatedRoadmapStore()
-  const store = resetRoadmapStore(storeModule)
-  const malformedInput = { ...createPlannedInput() }
-  delete malformedInput.chipCode
-  const malformed = store.getState().createPlannedProject(malformedInput)
-  if (malformed.ok || malformed.reason !== 'invalid' || !malformed.errors.chipCode) {
-    throw new Error(`malformed runtime input needs a validation result: ${JSON.stringify(malformed)}`)
-  }
-  const invalid = store.getState().createPlannedProject(createPlannedInput({ firstSaleTosVersionId: 'tos-99-0' }))
-  if (invalid.ok || invalid.reason !== 'invalid' || !invalid.errors.firstSaleTosVersionId) {
-    throw new Error(`unknown tOS version was accepted: ${JSON.stringify(invalid)}`)
-  }
-  const comparisonRows = [{ id: 'normal-1', ...createPlannedInput(), displayName: 'DEMO017', source: 'normal', status: '进行中', readOnly: true }]
-  const duplicate = store.getState().createPlannedProject(createPlannedInput(), { allRows: comparisonRows })
-  if (duplicate.ok || duplicate.reason !== 'duplicate') throw new Error('caller comparison row was ignored')
-})
-
-registerAssertion('planned-project edit preserves an unchanged deleted tOS snapshot but rejects a replacement', () => {
-  const previousWindow = globalThis.window
-  globalThis.window = {
-    localStorage: createCurrentDatasetStorage(),
-  }
-  try {
-    const loader = createTypeScriptModuleLoader()
-    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
-    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
-    const store = resetRoadmapStore(storeModule)
-    const enumStore = enumModule.useEnumStore
-
-    enumStore.setState(state => ({
-      hasHydrated: true,
-      hydrationError: null,
-      rowsByType: {
-        ...state.rowsByType,
-        'first-sale-tos': [{ id: 'first-preview', value: '18.preview' }],
-        'chip-mapping': [{ id: 'chip-g100', chipCode: 'G100', chipModel: 'DEMOSOC007', chipPlatform: '示例平台A' }],
-      },
-    }))
-    const created = store.getState().createPlannedProject(createPlannedInput({
-      firstSaleTosVersionId: 'tOS18.preview',
-    }))
-    if (!created.ok) throw new Error(`live arbitrary tOS fixture could not be created: ${JSON.stringify(created)}`)
-    const project = store.getState().plannedProjects[0]
-
-    enumStore.setState(state => ({
-      rowsByType: {
-        ...state.rowsByType,
-        'first-sale-tos': [],
-        'chip-mapping': [{ id: 'chip-g100', chipCode: 'G100', chipModel: 'DEMOSOC007', chipPlatform: '示例平台A' }],
-      },
-    }))
-    store.setState({
-      plannedProjects: [{ ...project, firstSaleTosVersionId: 'tOS 18.preview' }],
-    })
-    const unchanged = store.getState().updatePlannedProject(project.id, createPlannedInput({
-      firstSaleTosVersionId: '18.preview',
-      remark: 'only another field changed',
-    }))
-    if (!unchanged.ok || store.getState().plannedProjects[0]?.firstSaleTosVersionId !== '18.preview') {
-      throw new Error(`unchanged deleted snapshot was rejected: ${JSON.stringify(unchanged)}`)
+registerAssertion('retired planned CRUD rejects writes without changing archived legacy data', () => {
+  const module = createTypeScriptModuleLoader()(roadmapStorePath)
+  const store = resetRoadmapStore(module)
+  const snapshot = JSON.stringify(store.getState())
+  for (const actor of ['演示用户01','演示用户07','演示用户02']) {
+    for (const result of [store.getState().createPlannedProject(createPlannedInput({actor})), store.getState().updatePlannedProject('legacy',createPlannedInput({actor})), store.getState().deletePlannedProject('legacy',actor)]) {
+      if (result.ok || result.reason !== 'invalid') throw new Error('retired write path accepted mutation')
     }
-    const replacement = store.getState().updatePlannedProject(project.id, createPlannedInput({
-      firstSaleTosVersionId: '16.0',
-      remark: 'attempt replacement',
-    }))
-    if (replacement.ok || replacement.reason !== 'invalid') {
-      throw new Error(`deleted replacement snapshot was accepted: ${JSON.stringify(replacement)}`)
-    }
-  } finally {
-    if (previousWindow === undefined) delete globalThis.window
-    else globalThis.window = previousWindow
   }
+  if (JSON.stringify(store.getState()) !== snapshot) throw new Error('retired writes changed data or audit history')
 })
+
+
+
+
 
 registerAssertion('roadmap detail edit preserves its retired canonical tOS snapshot only when unchanged', () => {
   const previousWindow = globalThis.window
@@ -1210,14 +1098,9 @@ registerAssertion('configured tOS bodies round-trip through options planned stor
     ])) throw new Error(`option pipeline rewrote configured bodies: ${JSON.stringify(liveOptions)}`)
 
     const submittedValues = ['TOSbeta', 'tosbeta', '技术预览', 'tOS18.preview']
-    for (const [index, value] of submittedValues.entries()) {
-      const result = store.getState().createPlannedProject(createPlannedInput({
-        projectCode: `CANON-${index + 1}`,
-        firstSaleTosVersionId: value,
-      }))
-      if (!result.ok) throw new Error(`store create rejected ${value}: ${JSON.stringify(result)}`)
-    }
-    const storedBodies = store.getState().plannedProjects.map(project => project.firstSaleTosVersionId).reverse()
+    const migrated = storeModule.migrateRoadmapState({ ...storeModule.createInitialRoadmapState(), plannedProjects: submittedValues.map((value,index) => ({ ...createPlannedInput({firstSaleTosVersionId:value}), id: 'body-'+index, status:'待规划', createdAt:'2026-01-01T00:00:00Z',updatedAt:'2026-01-01T00:00:00Z', createdBy:'演示用户01',updatedBy:'演示用户01' })) }, 0)
+    store.setState(migrated)
+    const storedBodies = store.getState().plannedProjects.map(project => project.firstSaleTosVersionId)
     if (JSON.stringify(storedBodies) !== JSON.stringify(['TOSbeta', 'tosbeta', '技术预览', '18.preview'])) {
       throw new Error(`store create collapsed legal bodies: ${JSON.stringify(storedBodies)}`)
     }
@@ -1225,14 +1108,8 @@ registerAssertion('configured tOS bodies round-trip through options planned stor
     enumStore.setState(state => ({
       rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
     }))
-    for (const project of [...store.getState().plannedProjects]) {
-      const result = store.getState().updatePlannedProject(project.id, createPlannedInput({
-        projectCode: project.projectCode,
-        firstSaleTosVersionId: project.firstSaleTosVersionId,
-        remark: 'history edit',
-      }))
-      if (!result.ok) throw new Error(`history edit rejected ${project.firstSaleTosVersionId}: ${JSON.stringify(result)}`)
-    }
+    const remigrated = storeModule.sanitizeRoadmapCurrentState(storeModule.partializeRoadmapState(store.getState()))
+    if (JSON.stringify(remigrated.plannedProjects.map(project => project.firstSaleTosVersionId)) !== JSON.stringify(storedBodies)) throw new Error('retired snapshot was lost after reload')
     const historyOptions = consumers.buildEnumOptions(
       enumStore.getState().rowsByType,
       'first-sale-tos',
@@ -1521,27 +1398,7 @@ registerAssertion('roadmap duplicate-comparison contract uses source-aware allRo
   if (typesSource.includes('duplicateKeys')) throw new Error('ambiguous duplicateKeys boundary remains')
 })
 
-registerAssertion('roadmap update excludes only its current planned row from natural allRows', () => {
-  const storeModule = loadIsolatedRoadmapStore()
-  const store = resetRoadmapStore(storeModule)
-  if (!store.getState().createPlannedProject(createPlannedInput()).ok) throw new Error('fixture create failed')
-  const created = store.getState().plannedProjects[0]
-  const allRows = [
-    { ...created, source: 'planned', readOnly: false },
-    {
-      ...created,
-      id: 'normal-unrelated',
-      source: 'normal',
-      projectCode: 'NORMAL-1',
-      displayName: 'NORMAL-1',
-      readOnly: true,
-    },
-  ]
-  const updated = store.getState().updatePlannedProject(created.id, createPlannedInput({ remark: '正常更新' }), { allRows })
-  if (!updated.ok || store.getState().plannedProjects[0].remark !== '正常更新') {
-    throw new Error(`current planned row was treated as an external duplicate: ${JSON.stringify(updated)}`)
-  }
-})
+
 
 function persistedPlannedProject(projectCode, overrides = {}) {
   return {
@@ -1648,8 +1505,7 @@ registerAssertion('roadmap migration deterministically repairs IDs across persis
   store.setState(migrated)
   const repairedProject = migrated.plannedProjects.find(project => project.projectCode === 'A2')
   const updateInput = { ...repairedProject, actor: '演示用户02', remark: '修复后可编辑' }
-  if (!store.getState().updatePlannedProject(repairedProject.id, updateInput).ok) throw new Error('repaired project ID cannot be updated')
-  if (!store.getState().deletePlannedProject(repairedProject.id, '演示用户02').ok) throw new Error('repaired project ID cannot be deleted')
+  if (store.getState().updatePlannedProject(repairedProject.id, updateInput).ok || store.getState().deletePlannedProject(repairedProject.id, '演示用户01').ok) throw new Error('legacy data bypassed retired write boundary')
 })
 
 registerAssertion('normal change actions reject invalid shapes and round-trip through persistence', () => {
@@ -1852,7 +1708,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
       id: 'normal-merge',
       type: '整机-手机',
       currentTosVersionId: normal.firstSaleTosVersionId,
-    }],
+    }, { ...normal, ...plannedInput, name: plannedInput.displayName, type: '整机产品项目', projectAttribute: 'roadmap', secondaryCategory: plannedInput.machineProjectType }],
     [plannedInput],
     versions,
   )
@@ -2102,6 +1958,22 @@ registerAssertion('global roadmap permissions combine all global roles and prese
   }
 })
 
+// Active formal writes must carry authoritative registry identity; legacy snapshots below
+// still exercise full roadmap completeness, permission, audit and persistence rules.
+function applyFormalFixtureIdentity(loader, fixture, sourceBid = 'EXT-001') {
+  globalThis.window ??= { localStorage: createCurrentDatasetStorage() }
+  const external = loader(path.join(root, 'src/data/externalProjectPool.ts'))
+  const source = external.EXTERNAL_PROJECT_POOL.find(project => project.bid === sourceBid)
+  const enums = loader(path.join(root, 'src/stores/enums.ts')).useEnumStore
+  enums.setState({ hasHydrated: true, hydrationError: null })
+  const consumers = loader(path.join(root, 'src/lib/enumConsumers.ts'))
+  const mapping = consumers.findProjectCategoryMapping(enums.getState().rowsByType, source.ipmProjectCategoryName)
+  Object.assign(fixture, { name: source.name, projectCode: external.fetchByBid(sourceBid).projectCode?.trim() || '',
+    sourceBid, projectAttribute: 'formal', type: mapping.pmsProjectCategory, secondaryCategory: mapping.pmsSecondaryCategory,
+    createdBy: '演示用户01', createdAt: '2026-01-01T00:00:00.000Z', responsiblePersons: ['演示用户01'] })
+  return fixture
+}
+
 registerAssertion('shared project actions audit only legal normal machine snapshots once', () => {
   const projectSource = fs.readFileSync(path.join(root, 'src/stores/project.ts'), 'utf8')
   if (!projectSource.includes('updateProject:') || !projectSource.includes('deleteProject:')) {
@@ -2121,7 +1993,7 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
   projectStore.setState({
     projects: [],
     selectedProject: null,
-    currentLoginUser: '默认操作人',
+    currentLoginUser: '演示用户01',
   })
 
   const validMachine = {
@@ -2134,11 +2006,12 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
     developMode: '自研', remark: '',
   }
 
-  const validCreateResult = projectStore.getState().addProject(validMachine, '创建人', {
+  applyFormalFixtureIdentity(loader, validMachine)
+  const validCreateResult = projectStore.getState().addProject(validMachine, '演示用户01', {
     allowedFirstSaleTosValues: ['18.0.0'],
   })
   let logs = roadmapStore.getState().changeLogs
-  if (validCreateResult !== true || logs.length !== 1 || logs[0].action !== 'create' || logs[0].actor !== '创建人' || !logs[0].snapshot) {
+  if (validCreateResult !== true || logs.length !== 1 || logs[0].action !== 'create' || logs[0].actor !== '演示用户01' || !logs[0].snapshot) {
     throw new Error(`valid machine create did not emit one snapshot log: ${JSON.stringify(logs)}`)
   }
 
@@ -2154,7 +2027,7 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
     versionType: externalWithoutRoadmapFields.versionType,
     developMode: externalWithoutRoadmapFields.developMode,
   }
-  const invalidCreateResult = projectStore.getState().addProject(invalidExternalMachine, '创建人')
+  const invalidCreateResult = projectStore.getState().addProject(invalidExternalMachine, '演示用户01')
   if (
     invalidCreateResult !== false
     || projectStore.getState().projects.some(project => project.id === invalidExternalMachine.id)
@@ -2164,7 +2037,7 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
   }
 
   projectStore.setState({ selectedProject: validMachine })
-  const updated = projectStore.getState().updateProject(validMachine.id, { brand: '示例品牌B' }, '修改人')
+  const updated = projectStore.getState().updateProject(validMachine.id, { brand: '示例品牌B' }, '演示用户07')
   logs = roadmapStore.getState().changeLogs
   if (!updated || updated.brand !== '示例品牌B' || projectStore.getState().selectedProject?.brand !== '示例品牌B') {
     throw new Error('updateProject did not update both canonical and selected project state')
@@ -2173,16 +2046,16 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
     throw new Error(`valid machine update did not emit exactly one diff log: ${JSON.stringify(logs)}`)
   }
 
-  projectStore.getState().updateProject(validMachine.id, { progress: 50 }, '修改人')
+  projectStore.getState().updateProject(validMachine.id, { progress: 50 }, '演示用户07')
   if (roadmapStore.getState().changeLogs.length !== 2) throw new Error('non-roadmap update emitted an empty audit log')
 
-  const rejectedUpdate = projectStore.getState().updateProject(validMachine.id, { productType: '未知' }, '修改人')
+  const rejectedUpdate = projectStore.getState().updateProject(validMachine.id, { productType: '未知' }, '演示用户07')
   const projectAfterRejectedUpdate = projectStore.getState().projects.find(project => project.id === validMachine.id)
   if (rejectedUpdate !== null || projectAfterRejectedUpdate?.productType !== '新品' || roadmapStore.getState().changeLogs.length !== 2) {
     throw new Error('invalid machine update mutated canonical state or emitted an audit log')
   }
 
-  const deleted = projectStore.getState().deleteProject(validMachine.id, '删除人')
+  const deleted = projectStore.getState().deleteProject(validMachine.id, '演示用户01')
   logs = roadmapStore.getState().changeLogs
   if (!deleted || projectStore.getState().projects.length || projectStore.getState().selectedProject !== null) {
     throw new Error('deleteProject did not remove and deselect the project')
@@ -2195,13 +2068,13 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
   if (projectStore.getState().addProject(validDelete, undefined, { allowedFirstSaleTosValues: ['18.0.0'] }) !== true) {
     throw new Error('valid delete fixture was rejected')
   }
-  projectStore.getState().deleteProject(validDelete.id, '删除人')
+  projectStore.getState().deleteProject(validDelete.id, '演示用户01')
   logs = roadmapStore.getState().changeLogs
-  if (logs[0].action !== 'delete' || logs[0].actor !== '删除人' || !logs[0].snapshot) {
+  if (logs[0].action !== 'delete' || logs[0].actor !== '演示用户01' || !logs[0].snapshot) {
     throw new Error(`valid machine delete did not emit a snapshot log: ${JSON.stringify(logs[0])}`)
   }
 
-  const nonMachine = { ...validMachine, id: 'normal-tech', type: '技术项目' }
+  const nonMachine = applyFormalFixtureIdentity(loader, { ...validMachine, id: 'normal-tech', type: '技术项目' }, 'EXT-006')
   const beforeNonMachine = roadmapStore.getState().changeLogs.length
   if (projectStore.getState().addProject(nonMachine, '演示用户01') !== true) throw new Error('non-machine create compatibility changed')
   projectStore.getState().updateProject(nonMachine.id, { projectDescription: '不应审计' }, '演示用户01')
@@ -2247,40 +2120,41 @@ registerAssertion('whole-machine project mutations require current hydrated firs
     developMode: '自研', remark: '',
   }
 
+  applyFormalFixtureIdentity(loader, machine)
   enumStore.setState(state => ({
     hasHydrated: false,
     hydrationError: null,
     rowsByType: { ...state.rowsByType, 'first-sale-tos': [{ id: 'first-18', value: '18.0.0' }] },
   }))
-  if (projectStore.getState().addProject(machine, '创建人') !== false) {
+  if (projectStore.getState().addProject(machine, '演示用户01') !== false) {
     throw new Error('unhydrated enum defaults were trusted for a new whole-machine project')
   }
-  if (!projectStore.getState().addProject(machine, '创建人', { allowedFirstSaleTosValues: ['18.0.0'] })) {
-    throw new Error('explicit current three-part allow-list was ignored')
-  }
+  if (projectStore.getState().addProject(machine, '演示用户01', { allowedFirstSaleTosValues: ['18.0.0'] })) throw new Error('explicit completeness option bypassed registry hydration')
+  enumStore.setState({ hasHydrated: true })
+  if (!projectStore.getState().addProject(machine, '演示用户01')) throw new Error('hydrated current first-sale fixture rejected')
 
   enumStore.setState(state => ({
     hasHydrated: true,
     hydrationError: null,
     rowsByType: { ...state.rowsByType, 'first-sale-tos': [] },
   }))
-  const historicalUpdate = projectStore.getState().updateProject(machine.id, { brand: '示例品牌B' }, '修改人')
+  const historicalUpdate = projectStore.getState().updateProject(machine.id, { brand: '示例品牌B' }, '演示用户07')
   if (!historicalUpdate || historicalUpdate.firstSaleTosVersionId !== '18.0.0') {
     throw new Error('deleting an enum option made an unchanged historical project value unsavable')
   }
-  const replacedWithDeleted = projectStore.getState().updateProject(machine.id, { firstSaleTosVersionId: '18.1.0' }, '修改人')
+  const replacedWithDeleted = projectStore.getState().updateProject(machine.id, { firstSaleTosVersionId: '18.1.0' }, '演示用户07')
   if (replacedWithDeleted !== null || projectStore.getState().projects[0]?.firstSaleTosVersionId !== '18.0.0') {
     throw new Error('a deleted or unknown three-part value was accepted as a new selection')
   }
 
-  const second = { ...machine, id: 'enum-boundary-2', name: 'X9200', projectCode: 'X9200' }
-  if (projectStore.getState().addProject(second, '创建人') !== false) {
+  const second = applyFormalFixtureIdentity(loader, { ...machine, id: 'enum-boundary-2' }, 'EXT-002')
+  if (projectStore.getState().addProject(second, '演示用户01') !== false) {
     throw new Error('a deleted historical value remained selectable for new projects')
   }
   enumStore.setState(state => ({
     rowsByType: { ...state.rowsByType, 'first-sale-tos': [{ id: 'first-18', value: '18.0.0' }] },
   }))
-  if (!projectStore.getState().addProject(second, '创建人')) {
+  if (!projectStore.getState().addProject(second, '演示用户01')) {
     throw new Error('a same-session current three-part enum addition was not visible to project validation')
   }
   } finally {
@@ -2334,7 +2208,7 @@ registerAssertion('normal projects and their audit logs survive the same reload 
     const loader = createTypeScriptModuleLoader(moduleCache)
     const projectModule = loader(path.join(root, 'src/stores/project.ts'))
     const roadmapModule = loader(path.join(root, 'src/stores/roadmap.ts'))
-    return { projectModule, roadmapModule }
+    return { projectModule, roadmapModule, loader }
   }
 
   const validMachine = {
@@ -2349,7 +2223,8 @@ registerAssertion('normal projects and their audit logs survive the same reload 
 
   try {
     const first = loadStores()
-    if (!first.projectModule.useProjectStore.getState().addProject(validMachine, '创建人', {
+    applyFormalFixtureIdentity(first.loader, validMachine)
+    if (!first.projectModule.useProjectStore.getState().addProject(validMachine, '演示用户01', {
       allowedFirstSaleTosValues: ['18.0.0'],
     })) {
       throw new Error('valid persisted fixture was rejected')
@@ -2367,7 +2242,7 @@ registerAssertion('normal projects and their audit logs survive the same reload 
     ))
     if (!createLog) throw new Error('normal create audit disappeared after reload')
 
-    if (!second.projectModule.useProjectStore.getState().deleteProject(validMachine.id, '删除人')) {
+    if (!second.projectModule.useProjectStore.getState().deleteProject(validMachine.id, '演示用户01')) {
       throw new Error('persisted normal project could not be deleted')
     }
     const third = loadStores()
@@ -2594,25 +2469,12 @@ registerAssertion('roadmap maintenance submissions use same-tick locks around ev
   }
 })
 
-registerAssertion('planned-project close guard confirms only touched drafts and bypasses successful completion', () => {
-  const source = fs.readFileSync(path.join(root, 'src/components/roadmap/PlannedProjectModal.tsx'), 'utf8')
-  if (!source.includes('form.isFieldsTouched()') || !source.includes("title: '放弃未保存的修改？'")) {
-    throw new Error('planned-project modal does not distinguish untouched and dirty close requests')
-  }
-  if (!source.includes('dirtyRef.current && form.isFieldsTouched()') || !source.includes('onValuesChange')) {
-    throw new Error('planned-project modal must distinguish user changes from programmatic initialization')
-  }
-  if (!source.includes('onCancel={requestClose}') || !source.includes('<Button onClick={requestClose}>取消</Button>')) {
-    throw new Error('planned-project close affordances do not share the close guard')
-  }
-  if ((source.match(/onChanged\?\.\(\)\s+clearDraftAndClose\(\)/g) ?? []).length < 1
-    || !source.includes('onDeletePlannedProject(editingProject.id)')) {
-    throw new Error('successful save must clear its draft and shared deletion must bypass the discard confirmation')
-  }
-  const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
-  if (!moduleSource.includes('requestDeletePlannedProject(projectId, closePlannedProjectModal)')) {
-    throw new Error('successful shared deletion does not close the planned-project editor directly')
-  }
+registerAssertion('roadmap creation shortcut and space entry replace independent modal creation', () => {
+  const source = fs.readFileSync(path.join(root,'src/components/roadmap/ProjectRoadmapModule.tsx'),'utf8')
+  if (source.includes('<PlannedProjectModal') || source.includes('setPlannedModalOpen')) throw new Error('independent editor is still mounted')
+  if (!source.includes('openProjectConfiguration()') || !source.includes('onViewProject(projectId)')) throw new Error('registry shortcut or shared-space entry missing')
+  const page = fs.readFileSync(path.join(root,'src/app/page.tsx'),'utf8')
+  if (!page.includes('navigateWithEditGuard') || !page.includes("isFormalProject(project) ? 'plan' : 'basic'")) throw new Error('space navigation lacks edit guard or manual completion landing')
 })
 
 registerAssertion('roadmap typed filters enforce kind-specific operators with AND semantics', () => {
@@ -2938,10 +2800,10 @@ registerAssertion('roadmap module composes controls and overlays without standal
     "hasPermission('roadmap:view')",
     "hasPermission('roadmap:edit')",
     'adaptNormalProject',
-    'adaptPlannedProject',
+    'adaptRegistryRoadmapProject',
     'deriveRoadmapPlanningConflicts',
     'applyRoadmapFilters',
-    'PlannedProjectModal',
+    'openProjectConfiguration',
     'useEnumStore',
     'openSharedTosEnumConfig',
     'configuredFilterCount',
@@ -3047,7 +2909,7 @@ registerAssertion('single-version roadmap table preserves sorting, targets, sour
     'setSelectedConflictKey',
     'requestDeletePlannedProject',
     'Modal.confirm',
-    'deletePlannedProject',
+    'deleteConfiguredProject',
   ]) {
     if (!moduleSource.includes(contract)) throw new Error(`ProjectRoadmapModule table integration is missing ${contract}`)
   }
@@ -4112,79 +3974,7 @@ registerAssertion('tOS roadmap normalizes the chip-code domain and migrates lega
   }
 })
 
-registerAssertion('planned tOS roadmap projects require an active configured chip code', () => {
-  const previousWindow = globalThis.window
-  globalThis.window = {
-    localStorage: createCurrentDatasetStorage(),
-  }
-  try {
-    const loader = createTypeScriptModuleLoader()
-    const storeModule = loader(path.join(root, 'src/stores/roadmap.ts'))
-    const enumModule = loader(path.join(root, 'src/stores/enums.ts'))
-    const store = resetRoadmapStore(storeModule)
-    const enumStore = enumModule.useEnumStore
-    const input = { ...createPlannedInput(), chipCode: 'DEMOCHIP003' }
-    delete input.platform
 
-    enumStore.setState(state => ({
-      hasHydrated: true,
-      hydrationError: null,
-      rowsByType: {
-        ...state.rowsByType,
-        'first-sale-tos': [{ id: 'first-17-2', value: '17.2' }],
-        'chip-mapping': [],
-      },
-    }))
-    const missingConfig = store.getState().createPlannedProject(input)
-    if (missingConfig.ok
-      || missingConfig.reason !== 'invalid'
-      || missingConfig.errors.chipCode !== '请先在配置中心维护芯片编码') {
-      throw new Error(`missing chip configuration did not block save clearly: ${JSON.stringify(missingConfig)}`)
-    }
-
-    enumStore.setState(state => ({
-      rowsByType: {
-        ...state.rowsByType,
-        'chip-mapping': [{ id: 'chip-demochip003', chipCode: 'DEMOCHIP003', chipModel: 'DEMOSOC007', chipPlatform: '示例平台A' }],
-      },
-    }))
-    const created = store.getState().createPlannedProject(input)
-    if (!created.ok || store.getState().plannedProjects[0]?.chipCode !== 'DEMOCHIP003') {
-      throw new Error(`configured chip code was not saved: ${JSON.stringify(created)}`)
-    }
-    const project = store.getState().plannedProjects[0]
-    enumStore.setState(state => ({
-      rowsByType: { ...state.rowsByType, 'chip-mapping': [] },
-    }))
-    const noConfigHistorical = store.getState().updatePlannedProject(project.id, { ...input, remark: '只修改备注' })
-    if (!noConfigHistorical.ok) {
-      throw new Error(`unchanged historical chip code was blocked without configuration: ${JSON.stringify(noConfigHistorical)}`)
-    }
-    const noConfigReplacement = store.getState().updatePlannedProject(project.id, { ...input, chipCode: 'D9999' })
-    if (noConfigReplacement.ok
-      || noConfigReplacement.reason !== 'invalid'
-      || noConfigReplacement.errors.chipCode !== '请先在配置中心维护芯片编码') {
-      throw new Error(`chip replacement was not blocked without configuration: ${JSON.stringify(noConfigReplacement)}`)
-    }
-    enumStore.setState(state => ({
-      rowsByType: {
-        ...state.rowsByType,
-        'chip-mapping': [{ id: 'chip-demochip004', chipCode: 'DEMOCHIP004', chipModel: 'DEMOSOC005', chipPlatform: '示例平台A' }],
-      },
-    }))
-    const historical = store.getState().updatePlannedProject(project.id, { ...input, remark: '保留历史值' })
-    if (!historical.ok) throw new Error(`unchanged retired chip code could not be preserved: ${JSON.stringify(historical)}`)
-    const invalidReplacement = store.getState().updatePlannedProject(project.id, { ...input, chipCode: 'D9999' })
-    if (invalidReplacement.ok
-      || invalidReplacement.reason !== 'invalid'
-      || !invalidReplacement.errors.chipCode) {
-      throw new Error(`unknown replacement chip code was accepted: ${JSON.stringify(invalidReplacement)}`)
-    }
-  } finally {
-    if (previousWindow === undefined) delete globalThis.window
-    else globalThis.window = previousWindow
-  }
-})
 
 registerAssertion('tOS roadmap UI uses searchable chip-code selection and chip-code export labels', () => {
   const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8')
@@ -4235,12 +4025,16 @@ if (focus && !selectedAssertions.length) {
 
 const failures = []
 for (const { name, assertion } of selectedAssertions) {
+  const originalWindow = globalThis.window
   try {
     assertion()
     console.log(`PASS ${name}`)
   } catch (error) {
     failures.push({ name, error })
     console.error(`FAIL ${name}: ${error.message}`)
+  } finally {
+    if (originalWindow === undefined) delete globalThis.window
+    else globalThis.window = originalWindow
   }
 }
 

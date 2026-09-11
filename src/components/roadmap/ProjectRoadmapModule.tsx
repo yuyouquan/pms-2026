@@ -14,7 +14,9 @@ import {
 } from '@/lib/roadmapFilters'
 import {
   adaptNormalProject,
-  adaptPlannedProject,
+  projectRegistryToPlanned,
+  adaptRegistryRoadmapProject,
+  canPositionRoadmapRow,
   deriveRoadmapPlanningConflicts,
   resolveNormalProjectChipCode,
 } from '@/lib/roadmapProjectAdapter'
@@ -43,7 +45,8 @@ import type {
   RoadmapViewMode,
   TosVersionConfig,
 } from '@/types/roadmap'
-import PlannedProjectModal from './PlannedProjectModal'
+import { canManageProjectRegistry, deleteConfiguredProject } from '@/lib/projectRegistry'
+import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
 import RoadmapColumnSettingsDrawer from './RoadmapColumnSettingsDrawer'
 import RoadmapChangeLogDrawer from './RoadmapChangeLogDrawer'
 import RoadmapConflictDrawer from './RoadmapConflictDrawer'
@@ -105,17 +108,18 @@ interface ProjectRoadmapModuleProps {
 }
 
 export default function ProjectRoadmapModule({
-  projects,
+  projects: allProjects,
   onViewProject,
   renderTableView,
   renderEvolutionView,
 }: ProjectRoadmapModuleProps) {
+  const projects = useMemo(() => allProjects.filter(project => getProjectAttribute(project) !== 'budget'), [allProjects])
   const currentLoginUser = useProjectStore(state => state.currentLoginUser)
   const hasPermission = useHasGlobalPermission(currentLoginUser)
   const canView = hasPermission('roadmap:view')
   const canEdit = hasPermission('roadmap:edit')
 
-  const plannedProjects = useRoadmapStore(state => state.plannedProjects)
+  const plannedProjects = useMemo(() => projects.filter(project => getProjectAttribute(project) === 'roadmap').map(projectRegistryToPlanned), [projects])
   const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
   const enumTosOptions = useSingleEnumOptions('roadmap-tos')
   const {
@@ -167,7 +171,6 @@ export default function ProjectRoadmapModule({
   const setColumnSettings = useRoadmapStore(state => state.setColumnSettings)
   const setSort = useRoadmapStore(state => state.setSort)
   const setSelectedConflictKey = useRoadmapStore(state => state.setSelectedConflictKey)
-  const deletePlannedProject = useRoadmapStore(state => state.deletePlannedProject)
   const roadmapHydrationStartedRef = useRef(false)
 
   useEffect(() => {
@@ -232,8 +235,6 @@ export default function ProjectRoadmapModule({
     [normalizedFilters],
   )
 
-  const [plannedModalOpen, setPlannedModalOpen] = useState(false)
-  const [editingPlannedProjectId, setEditingPlannedProjectId] = useState<string | null>(null)
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
@@ -276,8 +277,8 @@ export default function ProjectRoadmapModule({
     [projects, versions],
   )
   const plannedRows = useMemo(
-    () => plannedProjects.map(adaptPlannedProject),
-    [plannedProjects],
+    () => projects.map(adaptRegistryRoadmapProject).filter(isPresent),
+    [projects],
   )
   const conflicts = useMemo(
     () => deriveRoadmapPlanningConflicts(normalRows, plannedRows),
@@ -413,23 +414,8 @@ export default function ProjectRoadmapModule({
     }
   }
 
-  const editingProject = useMemo(
-    () => plannedProjects.find(project => project.id === editingPlannedProjectId) ?? null,
-    [editingPlannedProjectId, plannedProjects],
-  )
-  const openCreatePlannedProject = () => {
-    setEditingPlannedProjectId(null)
-    setPlannedModalOpen(true)
-  }
-  const openPlannedProjectEditor = (projectId: string) => {
-    if (!canEdit || !plannedProjects.some(project => project.id === projectId)) return
-    setEditingPlannedProjectId(projectId)
-    setPlannedModalOpen(true)
-  }
-  const closePlannedProjectModal = () => {
-    setPlannedModalOpen(false)
-    setEditingPlannedProjectId(null)
-  }
+  const openCreatePlannedProject = () => navigateWithEditGuard(() => useUiStore.getState().openProjectConfiguration(), false)
+  const openPlannedProjectEditor = (projectId: string) => onViewProject(projectId)
   const toggleTarget = (versionId: string) => {
     setCollapsedTargetVersionIds(current => {
       const next = new Set(current)
@@ -472,7 +458,7 @@ export default function ProjectRoadmapModule({
     setConflictDrawerOpen(true)
   }
   const requestDeletePlannedProject = (projectId: string, onDeleted?: () => void) => {
-    if (!canEdit) return
+    if (!canManageProjectRegistry(currentLoginUser)) return
     const project = plannedProjects.find(candidate => candidate.id === projectId)
     if (!project) {
       message.error('待规划项目不存在，请刷新后重试')
@@ -490,9 +476,9 @@ export default function ProjectRoadmapModule({
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: () => {
-        const result = deletePlannedProject(project.id, currentLoginUser)
+        const result = deleteConfiguredProject(project.id, currentLoginUser)
         if (!result.ok) {
-          message.error(result.reason === 'not-found' ? '待规划项目不存在，请刷新后重试' : '删除失败，请重试')
+          message.error(result.message)
           return Promise.reject(new Error('planned-project-delete-failed'))
         }
         message.success('待规划项目已删除，修改记录已保留')
@@ -571,7 +557,7 @@ export default function ProjectRoadmapModule({
     columnOrder,
     visibleColumns,
     sort,
-    canEdit,
+    canEdit: canManageProjectRegistry(currentLoginUser),
     onViewProject,
     onSelectedTosVersionChange: setSelectedTosVersionId,
     onSortChange: setSort,
@@ -585,9 +571,11 @@ export default function ProjectRoadmapModule({
   }
   const evolutionRenderContext: RoadmapViewRenderContext = {
     ...renderContext,
+    rows: filteredRows.filter(canPositionRoadmapRow),
     versions: maintainedVersions,
   }
 
+  const undatedRoadmapCount = filteredRows.filter(row => !canPositionRoadmapRow(row)).length
   const content = viewMode === 'table'
     ? renderTableView?.(renderContext) ?? <RoadmapTableView {...renderContext} />
     : renderEvolutionView?.(evolutionRenderContext) ?? <RoadmapEvolutionView {...evolutionRenderContext} />
@@ -673,6 +661,7 @@ export default function ProjectRoadmapModule({
         </Flex>
       ) : null}
 
+      {viewMode === 'evolution' && undatedRoadmapCount > 0 && <Alert type="info" showIcon message={`${undatedRoadmapCount} 个路标项目尚未补充日期，可在表格中进入项目空间补充后查看演进位置`} />}
       {content ?? (
         <div style={{ padding: '48px 16px' }}>
           <Empty
@@ -683,20 +672,10 @@ export default function ProjectRoadmapModule({
       )}
       </div>
 
-      <PlannedProjectModal
-        open={plannedModalOpen}
-        onCancel={closePlannedProjectModal}
-        editingProject={editingProject}
-        allRows={allRows}
-        tosVersions={selectableVersions}
-        currentUser={currentLoginUser}
-        canEdit={canEdit}
-        onDeletePlannedProject={projectId => requestDeletePlannedProject(projectId, closePlannedProjectModal)}
-      />
       <TosVersionMaintenanceModal
         open={tosMaintenanceOpen}
         onCancel={() => setTosMaintenanceOpen(false)}
-        normalProjects={projects}
+        normalProjects={projects.filter(isFormalProject)}
         plannedProjects={plannedProjects}
         canEdit={canEdit}
       />

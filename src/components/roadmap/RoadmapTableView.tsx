@@ -34,6 +34,7 @@ interface RoadmapTableViewProps {
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
   canEdit: boolean
+  onViewProject: (projectId: string) => void
   onSortChange: (sort: RoadmapSortState) => void
   onOpenProjectHistory: (projectId: string) => void
   onOpenConflict: (conflictKey: string) => void
@@ -100,6 +101,7 @@ export default function RoadmapTableView({
   visibleColumns,
   sort,
   canEdit,
+  onViewProject,
   onSortChange,
   onOpenProjectHistory,
   onOpenConflict,
@@ -186,9 +188,9 @@ export default function RoadmapTableView({
         }
         if (column.key !== 'displayName') return formattedValue
         return (
-          <Typography.Text className="roadmap-table-project-name" title={formattedValue} strong>
+          <Typography.Link className="roadmap-table-project-name" title={formattedValue} strong onClick={() => onViewProject(row.id)}>
             {formattedValue}
-          </Typography.Text>
+          </Typography.Link>
         )
       },
     }))

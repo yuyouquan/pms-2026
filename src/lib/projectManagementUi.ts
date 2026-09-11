@@ -1,3 +1,4 @@
+import { sameManualInfoValue } from '@/lib/manualProjectCompletion'
 import type { ProjectItem } from '@/types/app'
 import {
   MACHINE_PROJECT_INFO_FIELDS,
@@ -46,6 +47,9 @@ const FIELD_LABELS = new Map<string, string>([
   ['projectCode', '项目编码'], ['createdBy', '创建人'], ['createdAt', '创建时间'],
   ['responsiblePersons', '责任人'], ['boundFormalProjectId', '绑定正式项目'],
   ['planStartDate', '计划开始时间'], ['planEndDate', '计划结束时间'],
+  ['str5Date', 'STR5时间'], ['launchDate', '上市时间'], ['str5Estimated', 'STR5为预估时间'], ['launchEstimated', '上市为预估时间'], ['remark', '备注'],
+  ['firstSaleTosVersionId', '首销tOS版本'], ['tosVersionName', '首销tOS版本'], ['currentTosVersionId', '当前tOS版本'], ['startRam', '起步RAM'], ['developMode', '开发模式'],
+  ['machineTeamRoles', '整机团队'], ['tosTeamRoles', 'tOS团队'],
   ['leader', '项目负责人'], ['spm', 'SPM'], ['technicalLead', '技术项目负责人'],
   ...[
     ...MACHINE_PROJECT_INFO_FIELDS,
@@ -58,6 +62,7 @@ const FIELD_LABELS = new Map<string, string>([
 
 function readableValue(value: unknown, projects: readonly Pick<ProjectItem, 'id' | 'name'>[], field: string): string {
   if (value == null || value === '') return '—'
+  if (typeof value === 'boolean') return value ? '是' : '否'
   if (field === 'projectAttribute' && typeof value === 'string' && value in PROJECT_ATTRIBUTE_LABELS) {
     return PROJECT_ATTRIBUTE_LABELS[value as keyof typeof PROJECT_ATTRIBUTE_LABELS]
   }
@@ -110,11 +115,13 @@ export function buildProjectRegistryHistoryRows(
         after: snapshotSummary(entry.after, projects),
       }]
     }
+    const displayed = new Set<string>()
     return entry.changes.flatMap((change, index) => {
+      if (change.field === 'updatedAt') return []
       const changes = change.field === 'fieldValues'
         ? changedNestedFields(change.before, change.after)
         : [change]
-      return changes.map((item, nestedIndex) => ({
+      return changes.filter(item => !sameManualInfoValue(item.before, item.after)).map((item, nestedIndex) => ({
         key: `${entry.id}-${index}-${nestedIndex}`,
         action: ACTION_LABELS[entry.action],
         actor: entry.actor,
@@ -122,7 +129,12 @@ export function buildProjectRegistryHistoryRows(
         field: FIELD_LABELS.get(item.field) ?? '项目资料',
         before: readableValue(item.before, projects, item.field),
         after: readableValue(item.after, projects, item.field),
-      }))
+      })).filter(row => {
+        const key = `${row.field}|${row.before}|${row.after}`
+        if (displayed.has(key)) return false
+        displayed.add(key)
+        return true
+      })
     })
   })
 }

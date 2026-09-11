@@ -1,3 +1,4 @@
+import { validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
 import { getProjectAttribute, isFormalProject, type ProjectRegistryHistoryEntry } from '@/types/projectRegistry'
 import { createRegistryHistoryEntry, validateRegistryCreation, validateRegistryProject } from '@/lib/projectRegistryRules'
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
@@ -15,7 +16,7 @@ import {
 } from '@/constants/projectTypes'
 import { buildMarketRowsFromMarkets, type MarketConfigRow } from '@/lib/marketRules'
 import { buildTosTypeRows, type TosTypeConfigRow } from '@/lib/tosTypeRules'
-import { adaptNormalProject } from '@/lib/roadmapProjectAdapter'
+import { adaptNormalProject, adaptRegistryRoadmapProject } from '@/lib/roadmapProjectAdapter'
 import { createRoadmapAuditSnapshot, diffRoadmapProjectFields } from '@/lib/roadmapAudit'
 import { buildRoadmapDisplayName } from '@/lib/roadmapValidation'
 import {
@@ -85,7 +86,7 @@ type ProjectPatch = Partial<Omit<ProjectItem, 'type' | 'secondaryCategory'>> & {
 }
 type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 export type ProjectListViewMode = 'list' | 'card' | 'calendar'
-type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode; registryHistory: ProjectRegistryHistoryEntry[] }
+type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode; registryHistory: ProjectRegistryHistoryEntry[]; migratedRoadmapIds: string[] }
 
 export const PROJECT_STORE_VERSION = 10
 
@@ -171,7 +172,7 @@ function migrateMachineThreePartReference(value: unknown): unknown {
 }
 
 function migrateMachineTosHistory(project: Project): Project {
-  if (!isMachineProjectType(project.type)) return project
+  if (!isFormalProject(project) || !isMachineProjectType(project.type)) return project
   const migrated = { ...project }
   if (['升级', '切换', '换代'].includes(String(migrated.productType || '').trim())) {
     migrated.productType = '老品'
@@ -232,6 +233,7 @@ const initialTosTypeConfigsByProjectId = initialProjects.reduce((acc, project) =
 
 export interface ProjectState {
   registryHistory: ProjectRegistryHistoryEntry[]
+  migratedRoadmapIds: string[]
   projects: Project[]
   selectedProject: Project | null
   currentLoginUser: string
@@ -428,7 +430,7 @@ const fillMissingSeedProjectFields = (persisted: Project, seed: Project): Projec
 
 export function migrateProjectState(persistedState: unknown, version: number): PersistedProjectState {
   if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
-    return { projects: initialProjectState.map(cloneProjectSeed), projectListView: 'list', registryHistory: [] }
+    return { projects: initialProjectState.map(cloneProjectSeed), projectListView: 'list', registryHistory: [], migratedRoadmapIds: [] }
   }
 
   const projectListView: ProjectListViewMode = persistedState.projectListView === 'card'
@@ -440,6 +442,7 @@ export function migrateProjectState(persistedState: unknown, version: number): P
   const registryHistory = Array.isArray(persistedState.registryHistory)
     ? persistedState.registryHistory.filter((entry): entry is ProjectRegistryHistoryEntry => isRecord(entry) && typeof entry.projectId === 'string' && typeof entry.timestamp === 'string')
     : []
+  const migratedRoadmapIds = Array.isArray(persistedState.migratedRoadmapIds) ? persistedState.migratedRoadmapIds.filter((id): id is string => typeof id === 'string') : []
   const seenIds = new Set<string>()
   const projects = persistedState.projects.flatMap(value => {
     if (!isRecord(value)) return []
@@ -458,12 +461,12 @@ export function migrateProjectState(persistedState: unknown, version: number): P
       id,
       name,
       type,
-      secondaryCategory: classification.secondaryCategory,
+      secondaryCategory: value.projectAttribute === 'budget' || value.projectAttribute === 'roadmap' ? value.secondaryCategory : classification.secondaryCategory,
     } as Project)]
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
-    return { projects: initialProjectState.map(cloneProjectSeed), projectListView, registryHistory }
+    return { projects: initialProjectState.map(cloneProjectSeed), projectListView, registryHistory, migratedRoadmapIds }
   }
   const migrationNow = new Date().toISOString()
   const migratedProjects = (version < 9
@@ -479,11 +482,11 @@ export function migrateProjectState(persistedState: unknown, version: number): P
         ]
       })()
     : projects).map(project => withEosTransitionTime(project, undefined, migrationNow))
-  return { projects: migratedProjects, projectListView, registryHistory }
+  return { projects: migratedProjects, projectListView, registryHistory, migratedRoadmapIds }
 }
 
 export function partializeProjectState(state: ProjectState & ProjectActions): PersistedProjectState {
-  return { projects: state.projects, projectListView: state.projectListView, registryHistory: state.registryHistory }
+  return { projects: state.projects, projectListView: state.projectListView, registryHistory: state.registryHistory, migratedRoadmapIds: state.migratedRoadmapIds }
 }
 
 const safeProjectStorage: StateStorage = {
@@ -523,8 +526,8 @@ function recordNormalProjectAudit(
   actor: string,
 ): void {
   const roadmapState = useRoadmapStore.getState()
-  const beforeRow = before ? adaptNormalProject(before as unknown as ProjectItem, []) : null
-  const afterRow = after ? adaptNormalProject(after as unknown as ProjectItem, []) : null
+  const beforeRow = before ? adaptNormalProject(before as unknown as ProjectItem, []) ?? adaptRegistryRoadmapProject(before) : null
+  const afterRow = after ? adaptNormalProject(after as unknown as ProjectItem, []) ?? adaptRegistryRoadmapProject(after) : null
 
   let auditRow: RoadmapProjectRow | null = null
   if (action === 'create') auditRow = afterRow
@@ -535,7 +538,7 @@ function recordNormalProjectAudit(
     if (!changes.length) return
     roadmapState.recordNormalProjectChange({
       projectId: afterRow.id,
-      projectDisplayName: buildRoadmapDisplayName(
+      projectDisplayName: afterRow.source === 'planned' ? after!.name : buildRoadmapDisplayName(
         afterRow.projectCode,
         afterRow.androidVersion,
         afterRow.productType,
@@ -544,14 +547,14 @@ function recordNormalProjectAudit(
       actor,
       tosVersionName: `tOS${afterRow.firstSaleTosVersionId}`,
       changes: changes as [RoadmapFieldChange, ...RoadmapFieldChange[]],
-    })
+    }, afterRow.source)
     return
   }
 
   if (!auditRow) return
   roadmapState.recordNormalProjectChange({
     projectId: auditRow.id,
-    projectDisplayName: buildRoadmapDisplayName(
+    projectDisplayName: auditRow.source === 'planned' ? (after || before)!.name : buildRoadmapDisplayName(
       auditRow.projectCode,
       auditRow.androidVersion,
       auditRow.productType,
@@ -561,7 +564,7 @@ function recordNormalProjectAudit(
     tosVersionName: `tOS${auditRow.firstSaleTosVersionId}`,
     changes: [],
     snapshot: createRoadmapAuditSnapshot(auditRow, []),
-  })
+  }, auditRow.source)
 }
 
 function appendRegistryAudits(history: ProjectRegistryHistoryEntry[], before: readonly Project[], after: readonly Project[], actor: string): ProjectRegistryHistoryEntry[] {
@@ -578,6 +581,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   (set, get) => ({
     projects: initialProjectState,
     registryHistory: [],
+    migratedRoadmapIds: [],
     selectedProject: null,
     currentLoginUser: DEFAULT_LOGIN_USER,
     projectSearchText2: '',
@@ -641,7 +645,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       if (hasDuplicateProjectSourceBid(get().projects, projectToAdd)) return false
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
       if (isMachineProjectType(projectToAdd.type) && options?.registryOperation !== 'create') {
-        const resolution = resolveMachineTosUpdate(get().projects, projectToAdd)
+        const resolution = resolveMachineTosUpdate(get().projects.filter(isFormalProject), projectToAdd)
         if (!resolution.ok) return false
         projectToAdd = synchronizeMachineTosValues(
           resolution.candidate,
@@ -707,8 +711,8 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       projectToSave = withEosTransitionTime(projectToSave, existing)
       if (hasDuplicateProjectSourceBid(get().projects, projectToSave)) return null
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
-      if (isMachineProjectType(projectToSave.type) && !registryUpdate) {
-        const resolution = resolveMachineTosUpdate(get().projects, projectToSave)
+      if (isFormalProject(projectToSave) && isMachineProjectType(projectToSave.type) && !registryUpdate) {
+        const resolution = resolveMachineTosUpdate(get().projects.filter(isFormalProject), projectToSave)
         if (!resolution.ok) return null
         projectToSave = synchronizeMachineTosValues(
           resolution.candidate,
@@ -718,6 +722,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         if (!isValidMachineProjectMutation(projectToSave, options, existing)) return null
         machineResolution = resolution
       }
+      if (!isFormalProject(projectToSave) && validateManualProjectCompletion(projectToSave, existing, useEnumStore.getState().rowsByType)) return null
       if (machineResolution) {
         const resolution = machineResolution
         set(state => {
@@ -759,13 +764,13 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       if (isFormalProject(existing) && isMachineProjectType(existing.type) && existing.productType === '老品' && existing.firstSaleTosVersion) {
         const familyName = normalizeMachineFamilyName(existing.name)
         const matchingNewProjects = projects.filter(project => (
-          isMachineProjectType(project.type)
+          isFormalProject(project) && isMachineProjectType(project.type)
           && project.productType === '新品'
           && normalizeMachineFamilyName(project.name) === familyName
         ))
         if (matchingNewProjects.length > 1) return false
         if (matchingNewProjects.length === 1) {
-          const resolution = resolveMachineTosUpdate(projects, matchingNewProjects[0])
+          const resolution = resolveMachineTosUpdate(projects.filter(isFormalProject), matchingNewProjects[0])
           if (!resolution.ok) return false
           recomputedNewProject = synchronizeMachineTosValues(
             resolution.candidate,

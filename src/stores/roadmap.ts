@@ -26,9 +26,7 @@ import { normalizeMachineSecondaryCategory } from '@/constants/projectTypes'
 import {
   buildRoadmapDisplayName,
   formatRoadmapTosValue,
-  formatTosVersionFull,
   isExactIsoDate,
-  isExactRoadmapDuplicate,
   normalizeLegacyRoadmapProductType,
   normalizeLegacyTosVersionName,
   normalizeRoadmapTosReference,
@@ -45,7 +43,6 @@ import {
   type RoadmapBrand,
   type RoadmapChangeLog,
   type RoadmapColumnKey,
-  type RoadmapDuplicateComparison,
   type RoadmapFilterCondition,
   type RoadmapMutationResult,
   type RoadmapNormalChangeInput,
@@ -828,43 +825,10 @@ export function mergeRoadmapPersistedState(
   if (persistedState === null || persistedState === undefined) {
     return roadmapStorageReadFailed ? { ...currentState, ...migrated } : currentState
   }
-  const mock = createInitialRoadmapMockState(migrated.tosVersions)
-  const mockLogIds = new Set(mock.changeLogs.map(log => log.id))
-  const changeLogs = [
-    ...mock.changeLogs,
-    ...migrated.changeLogs.filter(log => !mockLogIds.has(log.id)),
-  ].sort((left, right) => (
-    Date.parse(right.occurredAt) - Date.parse(left.occurredAt) || left.id.localeCompare(right.id)
-  ))
+  // Existing persisted projects and logs are authoritative, including explicit deletion.
+  // Fresh installs receive mock data in the initial state only.
+  return { ...currentState, ...migrated }
 
-  const plannedSeed = mock.plannedProjects[0]
-  if (!plannedSeed) {
-    return {
-      ...currentState,
-      ...migrated,
-      changeLogs,
-    }
-  }
-  const seedWasDeleted = migrated.changeLogs.some(log => (
-    log.source === 'planned'
-    && log.action === 'delete'
-    && log.projectId === plannedSeed.id
-  ))
-  const canResolveSeedTos = migrated.tosVersions.some(version => version.id === plannedSeed.firstSaleTosVersionId)
-  const projectsWithoutSeed = migrated.plannedProjects.filter(project => project.id !== plannedSeed.id)
-  const hasEquivalentPlannedProject = isExactRoadmapDuplicate(plannedSeed, projectsWithoutSeed)
-  const plannedProjects = seedWasDeleted
-    ? projectsWithoutSeed
-    : canResolveSeedTos && !hasEquivalentPlannedProject
-      ? [plannedSeed, ...projectsWithoutSeed]
-      : projectsWithoutSeed
-
-  return {
-    ...currentState,
-    ...migrated,
-    plannedProjects,
-    changeLogs,
-  }
 }
 
 const safeRoadmapStorage: StateStorage = {
@@ -909,40 +873,15 @@ function currentRoadmapTosEnumValues(): string[] {
     .filter(Boolean)
 }
 
-function currentFirstSaleTosEnumValues(): string[] {
-  return useEnumStore.getState().rowsByType['first-sale-tos'].map(row => row.value)
-    .map(normalizeRoadmapTosValue)
-    .filter(Boolean)
-}
 
-function currentChipCodeEnumValues(): string[] {
-  return currentChipMappings()
-    .map(row => row.chipCode.trim())
-    .filter(Boolean)
-}
+
+
 
 function currentChipMappings(): ChipMappingRow[] {
   return useEnumStore.getState().rowsByType['chip-mapping']
 }
 
-function validateChipCodeSelection(
-  chipCode: string,
-  existingChipCode?: string,
-): Record<string, string> {
-  const activeChipCodes = currentChipCodeEnumValues()
-  const normalizedChipCode = typeof chipCode === 'string' ? chipCode.trim() : ''
-  const historicalChipCode = existingChipCode?.trim()
-  if (!activeChipCodes.length) {
-    return historicalChipCode && normalizedChipCode === historicalChipCode
-      ? {}
-      : { chipCode: '请先在配置中心维护芯片编码' }
-  }
-  const allowedChipCodes = new Set(activeChipCodes)
-  if (historicalChipCode) allowedChipCodes.add(historicalChipCode)
-  return allowedChipCodes.has(normalizedChipCode)
-    ? {}
-    : { chipCode: '请选择配置中心中有效的芯片编码' }
-}
+
 
 function currentTosEnumVersions(): TosVersionConfig[] {
   return currentRoadmapTosEnumValues().map(value => {
@@ -961,50 +900,13 @@ function currentTosEnumVersions(): TosVersionConfig[] {
   })
 }
 
-function isDuplicate(
-  fields: RoadmapProjectFields,
-  plannedProjects: readonly PlannedRoadmapProject[],
-  excludedId: string | undefined,
-  comparison: RoadmapDuplicateComparison | undefined,
-): boolean {
-  const comparisonRows = (comparison?.allRows ?? []).filter(row => !(
-    excludedId && row.source === 'planned' && row.id === excludedId
-  ))
-  if (isExactRoadmapDuplicate(fields, plannedProjects, excludedId)) return true
-  if (isExactRoadmapDuplicate(fields, comparisonRows)) return true
-  return false
-}
 
-function versionName(versions: readonly TosVersionConfig[], id: string): string {
-  return versions.find(version => version.id === id)?.name ?? formatRoadmapTosValue(id)
-}
 
-function createPlannedChangeLog(
-  action: 'create' | 'delete',
-  project: PlannedRoadmapProject,
-  actor: string,
-  occurredAt: string,
-  versions: readonly TosVersionConfig[],
-): RoadmapChangeLog {
-  return {
-    id: createCollisionResistantId('roadmap-log'),
-    projectId: project.id,
-    projectDisplayName: buildRoadmapDisplayName(project.projectCode, project.androidVersion, project.productType),
-    source: 'planned',
-    action,
-    actor,
-    occurredAt,
-    tosVersionName: versionName(versions, project.firstSaleTosVersionId),
-    changes: [],
-    snapshot: createRoadmapAuditSnapshot(project, versions),
-  }
-}
 
-function deriveAvailableTosId(major: number, minor: number, versions: readonly TosVersionConfig[]): string {
-  const base = `tos-${major}-${minor}`
-  if (!versions.some(version => version.id === base)) return base
-  return `${base}-${createCollisionResistantId('version').split('-').at(-1)}`
-}
+
+
+
+
 
 function createUniqueRuntimeId(prefix: string, existingIds: ReadonlySet<string>): string {
   const id = createCollisionResistantId(prefix)
@@ -1109,87 +1011,10 @@ export const useRoadmapStore = create<RoadmapStore>()(
       }),
       setSort: sort => set({ sort: sanitizeSort(sort) }),
       setSelectedConflictKey: selectedConflictKey => set({ selectedConflictKey }),
-      createPlannedProject: (rawInput, comparison) => {
-        const input = normalizeProjectInput(rawInput)
-        const errors = validatePlannedProject(input, [], undefined, new Set(currentFirstSaleTosEnumValues()))
-        Object.assign(errors, validateChipCodeSelection(input.chipCode))
-        if (!input.actor) errors.actor = '操作人不能为空'
-        if (Object.keys(errors).length) return mutationFailure(errors)
-        const fields = toProjectFields(input)
-        if (isDuplicate(fields, get().plannedProjects, undefined, comparison)) return { ok: false, reason: 'duplicate' }
-
-        const occurredAt = nowIso()
-        const project: PlannedRoadmapProject = {
-          ...fields,
-          id: createCollisionResistantId('planned'),
-          status: '待规划',
-          createdAt: occurredAt,
-          createdBy: input.actor,
-          updatedAt: occurredAt,
-          updatedBy: input.actor,
-        }
-        const log = createPlannedChangeLog('create', project, input.actor, occurredAt, get().tosVersions)
-        set(state => ({
-          plannedProjects: [project, ...state.plannedProjects],
-          changeLogs: [log, ...state.changeLogs],
-        }))
-        return { ok: true }
-      },
-      updatePlannedProject: (id, rawInput, comparison) => {
-        const existing = get().plannedProjects.find(project => project.id === id)
-        if (!existing) return { ok: false, reason: 'not-found' }
-        const input = normalizeProjectInput(rawInput)
-        const allowedTosValues = new Set(currentFirstSaleTosEnumValues())
-        const existingTosSnapshot = normalizeRoadmapTosReference(existing.firstSaleTosVersionId)
-        if (existingTosSnapshot) allowedTosValues.add(existingTosSnapshot)
-        const errors = validatePlannedProject(input, [], undefined, allowedTosValues)
-        Object.assign(errors, validateChipCodeSelection(input.chipCode, existing.chipCode))
-        if (!input.actor) errors.actor = '操作人不能为空'
-        if (Object.keys(errors).length) return mutationFailure(errors)
-        const fields = toProjectFields(input)
-        if (isDuplicate(fields, get().plannedProjects, id, comparison)) return { ok: false, reason: 'duplicate' }
-
-        const occurredAt = nowIso()
-        const updated: PlannedRoadmapProject = {
-          ...existing,
-          ...fields,
-          createdAt: existing.createdAt,
-          createdBy: existing.createdBy,
-          updatedAt: occurredAt,
-          updatedBy: input.actor,
-        }
-        const versions = get().tosVersions
-        const changes = diffRoadmapProjectFields(existing, updated, versions)
-        const log: RoadmapChangeLog | null = changes.length ? {
-          id: createCollisionResistantId('roadmap-log'),
-          projectId: updated.id,
-          projectDisplayName: buildRoadmapDisplayName(updated.projectCode, updated.androidVersion, updated.productType),
-          source: 'planned',
-          action: 'update',
-          actor: input.actor,
-          occurredAt,
-          tosVersionName: versionName(versions, updated.firstSaleTosVersionId),
-          changes,
-        } : null
-        set(state => ({
-          plannedProjects: state.plannedProjects.map(project => project.id === id ? updated : project),
-          changeLogs: log ? [log, ...state.changeLogs] : state.changeLogs,
-        }))
-        return { ok: true }
-      },
-      deletePlannedProject: (id, actor) => {
-        const existing = get().plannedProjects.find(project => project.id === id)
-        if (!existing) return { ok: false, reason: 'not-found' }
-        const normalizedActor = actor.trim()
-        if (!normalizedActor) return mutationFailure({ actor: '操作人不能为空' })
-        const occurredAt = nowIso()
-        const log = createPlannedChangeLog('delete', existing, normalizedActor, occurredAt, get().tosVersions)
-        set(state => ({
-          plannedProjects: state.plannedProjects.filter(project => project.id !== id),
-          changeLogs: [log, ...state.changeLogs],
-        }))
-        return { ok: true }
-      },
+      // Retired write boundary retained for old callers, never a second project registry.
+      createPlannedProject: () => mutationFailure({ project: '请从项目管理 → 项目配置创建项目' }),
+      updatePlannedProject: () => mutationFailure({ project: '请进入项目空间补充信息' }),
+      deletePlannedProject: () => mutationFailure({ project: '请从项目配置删除项目' }),
       setTosVersionDetails: (currentId, rawInput) => {
         const versionId = normalizeRoadmapTosValue(rawInput.versionId)
         const currentSnapshot = normalizeRoadmapTosValue(currentId)
@@ -1268,7 +1093,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
         })
         return { ok: true }
       },
-      recordNormalProjectChange: (input: RoadmapNormalChangeInput) => {
+      recordNormalProjectChange: (input: RoadmapNormalChangeInput, source = 'normal') => {
         const existingIds = new Set(get().changeLogs.map(log => log.id))
         const requestedId = typeof input.id === 'string' ? input.id.trim() : ''
         const id = requestedId && !existingIds.has(requestedId)
@@ -1277,7 +1102,7 @@ export const useRoadmapStore = create<RoadmapStore>()(
         const log: RoadmapChangeLog = {
           ...input,
           id,
-          source: 'normal',
+          source,
           occurredAt: input.occurredAt && isValidIsoTimestamp(input.occurredAt) ? input.occurredAt : nowIso(),
           changes: input.changes ?? [],
         } as RoadmapChangeLog
