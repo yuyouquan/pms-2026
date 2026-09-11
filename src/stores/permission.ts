@@ -1,7 +1,7 @@
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import { PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
+import { GLOBAL_PERM_OPTIONS, PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
 import { initialProjects } from '@/data/projects'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
 import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
@@ -240,7 +240,7 @@ function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = [])
   return [...fixed, ...existing.filter(role => !role.isFixed)]
 }
 
-type PersistedPermissionState = Pick<PermissionState, 'rolesByProject' | 'rolePermissionsByProject'>
+type PersistedPermissionState = Pick<PermissionState, 'rolesByProject' | 'rolePermissionsByProject'> & Partial<Pick<PermissionState, 'globalRoles' | 'globalRolePerms'>>
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -286,6 +286,21 @@ const sanitizeRolePermissionsByProject = (value: unknown): Record<string, Record
   }))
 }
 
+/** A missing model grant inherits once; explicit grants remain independent. */
+export function initializeHrModelPermissions(permissions: Record<string, Record<string, boolean>>) {
+  return Object.fromEntries(Object.entries(permissions).map(([role, grants]) => [role, {
+    ...grants, 'configCenter:hrModelEdit': grants['configCenter:hrModelEdit'] ?? grants['configCenter:planEdit'] === true,
+  }]))
+}
+
+const sanitizeGlobalPermissions = (value: unknown) => {
+  if (!isRecord(value)) return undefined
+  const keys = new Set(GLOBAL_PERM_OPTIONS.map(item => item.key))
+  return initializeHrModelPermissions(Object.fromEntries(Object.entries(value).flatMap(([role, grants]) => (
+    role.trim() && isRecord(grants) ? [[role.trim(), Object.fromEntries(Object.entries(grants).filter(([key, enabled]) => keys.has(key) && typeof enabled === 'boolean')) as Record<string, boolean>]] : []
+  ))))
+}
+
 export function migratePermissionState(persistedState: unknown, version: number): PersistedPermissionState {
   if (!isRecord(persistedState)) return { rolesByProject: {}, rolePermissionsByProject: {} }
   const rolesByProject = sanitizeRolesByProject(persistedState.rolesByProject)
@@ -293,6 +308,8 @@ export function migratePermissionState(persistedState: unknown, version: number)
     rolesByProject['1'] = withProjectSpecificMockMembers('1', rolesByProject['1'])
   }
   return {
+    ...(Array.isArray(persistedState.globalRoles) ? { globalRoles: sanitizeRolesByProject({ global: persistedState.globalRoles }).global ?? [] } : {}),
+    ...(isRecord(persistedState.globalRolePerms) ? { globalRolePerms: sanitizeGlobalPermissions(persistedState.globalRolePerms) } : {}),
     rolesByProject,
     rolePermissionsByProject: sanitizeRolePermissionsByProject(persistedState.rolePermissionsByProject),
   }
@@ -300,6 +317,8 @@ export function migratePermissionState(persistedState: unknown, version: number)
 
 export function partializePermissionState(state: PermissionState & PermissionActions): PersistedPermissionState {
   return {
+    globalRoles: state.globalRoles,
+    globalRolePerms: state.globalRolePerms,
     rolesByProject: state.rolesByProject,
     rolePermissionsByProject: state.rolePermissionsByProject,
   }
@@ -448,9 +467,9 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     { name: '查看组', members: ['演示用户05', '演示用户06', '演示用户08'], isFixed: true },
   ],
   globalRolePerms: {
-    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'configCenter:enumEdit': true, 'permissionCenter:manageRoles': true },
-    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
-    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
+    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:hrModelEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'configCenter:enumEdit': true, 'permissionCenter:manageRoles': true },
+    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:hrModelEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
+    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:hrModelEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
   },
   globalPermTab: 'roles',
   showGlobalAddRole: false,
@@ -534,7 +553,7 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
 
   // Global setters
   setGlobalRoles: (v) => set((s) => ({ globalRoles: typeof v === 'function' ? v(s.globalRoles) : v })),
-  setGlobalRolePerms: (v) => set((s) => ({ globalRolePerms: typeof v === 'function' ? v(s.globalRolePerms) : v })),
+  setGlobalRolePerms: (v) => set((s) => ({ globalRolePerms: initializeHrModelPermissions(typeof v === 'function' ? v(s.globalRolePerms) : v) })),
   setGlobalPermTab: (v) => set({ globalPermTab: v }),
   setShowGlobalAddRole: (v) => set({ showGlobalAddRole: v }),
   setGlobalNewRoleName: (v) => set({ globalNewRoleName: v }),
@@ -551,6 +570,8 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     const migrated = migratePermissionState(persistedState, PERMISSION_STORAGE_VERSION)
     return {
       ...currentState,
+      globalRoles: migrated.globalRoles ?? currentState.globalRoles,
+      globalRolePerms: initializeHrModelPermissions(migrated.globalRolePerms ?? currentState.globalRolePerms),
       rolesByProject: { ...currentState.rolesByProject, ...migrated.rolesByProject },
       rolePermissionsByProject: {
         ...currentState.rolePermissionsByProject,

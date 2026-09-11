@@ -1,3 +1,5 @@
+import { hasGlobalPermission } from '@/stores/permission'
+import { useProjectStore } from '@/stores/project'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ConfigModuleKey, ConfigRecord, ConfigFormValues } from '@/types/hrConfig'
@@ -16,6 +18,8 @@ function inheritModelVersionStatus(records: ConfigRecord[], record: ConfigRecord
   const group = getHrModelVersionGroup(records.filter(item => item.id !== record.id), record)
   return { ...record, enabled: (group[0] ?? record).enabled !== false }
 }
+
+export const canEditHrConfig = (moduleKey: ConfigModuleKey) => moduleKey !== 'hrModel' || hasGlobalPermission(useProjectStore.getState().currentLoginUser, 'configCenter:hrModelEdit')
 
 /* ── State / Actions interfaces ────────────────────────────────────── */
 
@@ -56,6 +60,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       showEditModal: false,
 
       addRecord: (moduleKey, values) => set((s) => {
+        if (!canEditHrConfig(moduleKey)) return s
         const record: ConfigRecord = {
           id: `cfg-${moduleKey}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           ...values,
@@ -74,6 +79,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       }),
 
       updateRecord: (moduleKey, recordId, values) => set((s) => {
+        if (!canEditHrConfig(moduleKey)) return s
         const records = s.data[moduleKey] ?? []
         return {
           data: {
@@ -89,7 +95,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
         }
       }),
 
-      deleteRecord: (moduleKey, recordId) => set((s) => ({
+      deleteRecord: (moduleKey, recordId) => set((s) => !canEditHrConfig(moduleKey) ? s : ({
         data: {
           ...s.data,
           [moduleKey]: (s.data[moduleKey] ?? []).filter(r => r.id !== recordId),
@@ -97,6 +103,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       })),
 
       toggleRecordStatus: (moduleKey, recordId, requestedEnabled) => set((s) => {
+        if (!canEditHrConfig(moduleKey)) return s
         const records = s.data[moduleKey] ?? []
         const selected = records.find(record => record.id === recordId)
         if (!selected) return s
@@ -113,6 +120,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       }),
 
       importRecords: (moduleKey, records) => set((s) => {
+        if (!canEditHrConfig(moduleKey)) return s
         const combined = [...(s.data[moduleKey] ?? [])]
         records.forEach(record => {
           combined.push(moduleKey === 'hrModel' ? inheritModelVersionStatus(combined, record) : record)

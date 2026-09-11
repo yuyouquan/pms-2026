@@ -4,6 +4,8 @@ import { useEffect, useMemo } from 'react'
 import { App, Modal, Form, Input, InputNumber, Select, Row, Col } from 'antd'
 import type { ConfigModuleMeta, ConfigFormValues } from '@/types/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
+import { useProjectStore } from '@/stores/project'
+import { useHasGlobalPermission } from '@/stores/permission'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 interface ConfigEditModalProps {
@@ -19,6 +21,9 @@ export default function ConfigEditModal({
   recordId,
   onCancel,
 }: ConfigEditModalProps) {
+  const actor = useProjectStore(state => state.currentLoginUser)
+  const hasGlobalPermission = useHasGlobalPermission(actor)
+  const canEdit = moduleMeta.key !== 'hrModel' || hasGlobalPermission('configCenter:hrModelEdit')
   const [form] = Form.useForm<ConfigFormValues>()
   const { message } = App.useApp()
   const { data, addRecord, updateRecord } = useHrConfigStore()
@@ -47,6 +52,7 @@ export default function ConfigEditModal({
   }, [open, editingRecord, form, moduleMeta.columns])
 
   const handleOk = async () => {
+    if (!canEdit) return
     try {
       const values = await form.validateFields()
       if (isEdit && recordId) {
@@ -64,7 +70,7 @@ export default function ConfigEditModal({
   return (
     <Modal
       title={`${isEdit ? '编辑' : '新增'}${moduleMeta.label}`}
-      open={open}
+      open={open && canEdit}
       onOk={handleOk}
       onCancel={onCancel}
       destroyOnHidden

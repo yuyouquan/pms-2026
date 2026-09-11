@@ -494,23 +494,13 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         const project = s.projects.find(p => p.id === projectId)
         if (!project || !canCreateHrVersion(project, form.budgetType)) return s
 
-        // IPM 校验
-        if (
-          (form.budgetType === 'projectEstimate' || form.budgetType === 'projectBudget') &&
-          !project.ipmProjectCode
-        ) {
-          return s
-        }
-
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
 
           const latest = getHrVersionSeed(p.versions, form.budgetType)
           const minorVersion = nextHrMinorVersion(p.versions, form.budgetType)
 
-          const milestones: TosMilestoneNodes = latest
-            ? { ...latest.milestones }
-            : emptyTosMilestones()
+          const milestones: TosMilestoneNodes = { ...(latest?.milestones ?? emptyTosMilestones()), ...form.milestones }
 
           const newVersion: HrTosVersion = {
             id: `${projectId}-${form.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

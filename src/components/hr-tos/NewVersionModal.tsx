@@ -1,11 +1,12 @@
 'use client'
 
-import { getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { canAccessHrProject, getHrRegistryProject, getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
+import { HrVersionMilestoneFields, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
 import { useState, useEffect, useMemo } from 'react'
 import {
   Modal,
@@ -62,8 +63,10 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     [projects, localProjectId],
   )
 
+  const milestoneForm = useHrVersionMilestones('tos', project, budgetType, open)
+
   const hasIpm = useMemo(
-    () => Boolean(project?.ipmProjectCode),
+    () => isHrFormalRecord(project) || Boolean(getHrRegistryProject(project)?.boundFormalProjectId),
     [project],
   )
 
@@ -294,10 +297,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   const handleOk = async () => {
     if (project?.status === 'cancelled') { message.warning('已取消的项目不支持新建版本'); return }
     if (!project) { message.warning('请选择项目'); return }
-    if (!hasIpm && TOS_IPM_REQUIRED_TYPES.includes(budgetType)) {
-      message.warning(TOS_IPM_REQUIRED_TIP)
-      return
-    }
+    if (!canCreateHrVersion(project, budgetType)) { message.warning('当前项目无新建版本权限'); return }
     if (editData.length === 0) {
       message.warning('请至少添加一条部门预估投入数据')
       return
@@ -310,7 +310,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
     try {
       setSubmitting(true)
-      addVersion(project.id, { budgetType, departmentInvestments: editData })
+      addVersion(project.id, { budgetType, departmentInvestments: editData, milestones: milestoneForm.values })
       message.success('版本创建成功')
       onCancel()
     } finally {
@@ -318,20 +318,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
   }
 
-  const budgetOptions = TOS_BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value)).map(bt => {
-    const restricted = !hasIpm && TOS_IPM_REQUIRED_TYPES.includes(bt.value)
-    return {
-      value: bt.value,
-      label: restricted ? (
-        <Tooltip title={TOS_IPM_REQUIRED_TIP}>
-          <span style={{ color: 'var(--pms-text-tertiary)' }}>{bt.label}</span>
-        </Tooltip>
-      ) : (
-        bt.label
-      ),
-      disabled: restricted,
-    }
-  })
+  const budgetOptions = TOS_BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value))
 
   return (
     <Modal
@@ -364,7 +351,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               aria-label="选择项目"
               placeholder="请选择项目"
               value={localProjectId || undefined}
-              options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))}
+              options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))}
               optionFilterProp="label"
               style={{ minWidth: 280 }}
               onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setEditData([]) }}
@@ -374,8 +361,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
             <span style={{ color: 'var(--pms-text-tertiary)' }}>IPM：</span>
             {hasIpm ? (
               <span style={{ color: 'var(--pms-text-secondary)' }}>
-                <Tag color="green" style={{ marginRight: 6 }}>已绑定</Tag>
-                {project?.ipmProjectCode}
+                <Tag color="green" style={{ marginRight: 6 }}>{isHrFormalRecord(project) ? '正式项目' : '已绑定'}</Tag>
+                {project?.ipmProjectCode || '—'}
                 {project?.ipmProjectName ? ` · ${project.ipmProjectName}` : ''}
               </span>
             ) : (
@@ -391,7 +378,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         {isHrFormalRecord(project) && budgetType !== 'annual' && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={resolveHrFormalSource('tos', project?.ipmProjectCode ?? null, project?.pmsProjectId).project ? '里程碑取自主市场／主类型最新已发布一级计划；尚无已发布计划时等待计划发布。' : '当前正式项目编码未找到对应项目，请在项目列表重新绑定。'} />}
 
         {/* 表单字段 */}
-        <Form layout="vertical">
+        <Form layout="vertical" className="pms-hr-version-form">
           <Form.Item label="预算类型" required>
             <Select
               value={budgetType}
@@ -400,6 +387,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               options={budgetOptions}
             />
           </Form.Item>
+          <HrVersionMilestoneFields category="tos" {...milestoneForm} />
         </Form>
 
         {/* 合计提示 */}

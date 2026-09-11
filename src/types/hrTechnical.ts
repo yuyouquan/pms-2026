@@ -216,6 +216,7 @@ export interface TechNewProjectForm {
 
 /** 新建版本表单 */
 export interface TechNewVersionForm {
+  milestones?: Partial<TechMilestoneNodes>
   budgetType: BudgetType
   departmentInvestments: TechDepartmentInvestment[]
 }

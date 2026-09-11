@@ -172,6 +172,8 @@ export interface NewProjectForm {
 
 /** 新建版本表单 */
 export interface NewVersionForm {
+  milestones?: Partial<MilestoneNodes>
+  metadata?: { brand: string; productLine: string; marketName: string }
   budgetType: BudgetType
   projectLevel: string
   levelCoefficient: number

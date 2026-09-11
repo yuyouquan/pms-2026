@@ -1,4 +1,4 @@
-import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
+import { canAccessHrProject, getHrRegistryProject, isHrFormalRecord, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalMachineProjects } from '@/mock/hrInvestment'
 import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
@@ -21,6 +21,9 @@ import {
   DEFAULT_HISTORY_VERSION_FILTERS,
 } from '@/constants/hrMachine'
 import { calcEstimatedInvestment, calcDepartmentMonthlySplit, type DepartmentMonthlySplit } from '@/constants/hrConfig'
+import { useProjectStore } from '@/stores/project'
+import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
+import { isHrModelAvailable } from '@/constants/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
 
 /* ── Mock Data ──────────────────────────────────────────────────────── */
@@ -280,7 +283,7 @@ export interface HrMachineActions {
   /** 绑定IPM正式项目编码 */
   bindIpmProject: (projectId: string, ipmCode: string) => void
 
-  addVersion: (projectId: string, budgetType: BudgetType, versionMeta: { projectLevel: string; levelCoefficient: number; hrModelVersion: string }) => void
+  addVersion: (projectId: string, budgetType: BudgetType, versionMeta: { projectLevel: string; levelCoefficient: number; hrModelVersion: string; milestones?: Partial<MilestoneNodes>; metadata?: { brand: string; productLine: string; marketName: string } }) => void
   deleteVersion: (projectId: string, versionId: string) => void
 
   /** 行内编辑版本数据（预估投入、里程碑、项目等级、等级系数、人力模型版本号） */
@@ -366,18 +369,28 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
       bindIpmProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
-      addVersion: (projectId, budgetType, versionMeta) => set((s) => {
+      addVersion: (projectId, budgetType, versionMeta) => {
+        // Validate the complete form before writing canonical metadata. Canonical writes
+        // synchronously refresh HR stores, so acquire the version state only afterwards.
+        if (versionMeta.metadata) {
+          const project = get().projects.find(item => item.id === projectId)
+          const canonical = getHrRegistryProject(project)
+          if (!project || !canonical || !canCreateHrVersion(project, budgetType)) throw new Error('当前项目无新建版本权限')
+          if (!Number.isFinite(versionMeta.levelCoefficient) || versionMeta.levelCoefficient < 0 || !isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], versionMeta.projectLevel, versionMeta.hrModelVersion)) throw new Error('请选择有效的项目等级、人力模型版本号和等级系数')
+          const metadata = Object.fromEntries(Object.entries(versionMeta.metadata).map(([key, value]) => [key, value.trim()])) as typeof versionMeta.metadata
+          if (!isHrFormalRecord(project) && Object.values(metadata).some(value => !value)) throw new Error(canonical.boundFormalProjectId ? '请在正式项目空间补充品牌、产品线和市场名' : '请填写品牌、产品线和市场名')
+          if (!isHrFormalRecord(project) && !canonical.boundFormalProjectId) {
+            const lines = PRODUCT_LINES_BY_BRAND[metadata.brand as keyof typeof PRODUCT_LINES_BY_BRAND]
+            const retained = metadata.brand === project.brand && metadata.productLine === project.productLine
+            if (!retained && (!lines || !(lines as readonly string[]).includes(metadata.productLine))) throw new Error('请选择有效的品牌和对应产品线')
+            const saved = useProjectStore.getState().updateProject(canonical.id, previous => ({ ...previous, ...metadata, fieldValues: { ...previous.fieldValues, ...metadata } }))
+            if (!saved) throw new Error('项目信息保存失败，请检查字段或编辑权限')
+          }
+        }
+        set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const project = s.projects.find(p => p.id === projectId)
         if (!project || !canCreateHrVersion(project, budgetType)) return s
-
-        // IPM 校验：项目概算和项目预算需要绑定 IPM 编码
-        if (
-          (budgetType === 'projectEstimate' || budgetType === 'projectBudget') &&
-          !project.ipmProjectCode
-        ) {
-          return s
-        }
 
         // 从配置中心获取人力模型数据，计算预估投入
         const configRecords = useHrConfigStore.getState().data.hrModel ?? []
@@ -396,9 +409,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           const minorVersion = nextHrMinorVersion(p.versions, budgetType)
 
           // 里程碑：从最新版本复制，若无则空
-          const milestones: MilestoneNodes = latest
-            ? { ...latest.milestones }
-            : emptyMilestones()
+          const milestones: MilestoneNodes = { ...(latest?.milestones ?? emptyMilestones()), ...versionMeta.milestones }
 
           const newVersion: HrMachineVersion = {
             id: `${projectId}-${budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -426,7 +437,8 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           showNewVersionModal: false,
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
-      }),
+        })
+      },
 
       deleteVersion: (projectId, versionId) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s

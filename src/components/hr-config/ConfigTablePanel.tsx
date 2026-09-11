@@ -29,6 +29,8 @@ import type { ConfigModuleMeta, ConfigRecord } from '@/types/hrConfig'
 import { getHrModelVersionGroup, useHrConfigStore } from '@/stores/hrConfig'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import HrModelStatisticsModal from '@/components/hr-config/HrModelStatisticsModal'
+import { useProjectStore } from '@/stores/project'
+import { useHasGlobalPermission } from '@/stores/permission'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 interface ConfigTablePanelProps {
@@ -37,6 +39,9 @@ interface ConfigTablePanelProps {
 }
 
 export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTablePanelProps) {
+  const actor = useProjectStore(state => state.currentLoginUser)
+  const hasGlobalPermission = useHasGlobalPermission(actor)
+  const canEdit = moduleMeta.key !== 'hrModel' || hasGlobalPermission('configCenter:hrModelEdit')
   const { message, modal } = App.useApp()
   const { data, deleteRecord, toggleRecordStatus, importRecords, setShowEditModal, setEditingId } = useHrConfigStore()
   const { isValidPair } = useHrDepartmentOptions()
@@ -155,8 +160,8 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
       },
     ]
 
-    return [...dataColumns, ...actionColumn]
-  }, [moduleMeta, records, deleteRecord, toggleRecordStatus, setEditingId, setShowEditModal, message, modal])
+    return [...dataColumns, ...(canEdit ? actionColumn : [])]
+  }, [canEdit, moduleMeta, records, deleteRecord, toggleRecordStatus, setEditingId, setShowEditModal, message, modal])
 
   // ── 导出 ──────────────────────────────────────────────────
   const handleExport = () => {
@@ -178,6 +183,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
     accept: '.xlsx,.xls,.csv',
     showUploadList: false,
     beforeUpload: (file) => {
+      if (!canEdit) return false
       const reader = new FileReader()
       reader.onload = (e) => {
         try {
@@ -269,6 +275,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
         >
           <Space size={12} wrap>
             <Button
+              disabled={!canEdit}
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
@@ -283,8 +290,8 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
                 模型版本统计
               </Button>
             )}
-            <Upload {...uploadProps}>
-              <Button icon={<UploadOutlined />}>导入</Button>
+            <Upload {...uploadProps} disabled={!canEdit}>
+              <Button disabled={!canEdit} icon={<UploadOutlined />}>导入</Button>
             </Upload>
             <Button icon={<DownloadOutlined />} onClick={handleExport}>
               导出

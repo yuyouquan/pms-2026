@@ -1,5 +1,6 @@
 'use client'
 
+import HrConfigContent from '@/components/hr-config/ConfigContent'
 import { useState, useMemo, useEffect } from 'react'
 import {
   Card, Tabs, Table, Row, Col, Space, Divider, Tag, Menu, Button, Select, Segmented, Empty,
@@ -824,9 +825,12 @@ export default function ConfigContainer() {
             { value: 'plan', label: '计划模板配置' },
             { value: 'transfer', label: '转维材料模板配置' },
             { value: 'enum', label: '枚举值配置' },
+            { value: 'hrPipeline', label: '人力资源管道' },
           ]}
         />
       </header>
+
+      {configTab === 'hrPipeline' && <HrConfigContent moduleKey="hrModel" />}
 
       {/* Transfer config */}
       {configTab === 'transfer' && <TransferConfig {...transferProps} />}

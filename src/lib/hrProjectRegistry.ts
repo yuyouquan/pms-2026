@@ -2,7 +2,7 @@ import { useProjectStore } from '@/stores/project'
 import { hasPermission, isGlobalAdmin, usePermissionStore } from '@/stores/permission'
 import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
-import { matchesHrCategory, hrFormalProjectCode, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
+import { matchesHrCategory, hrFormalDisplayCode, hrFormalProjectCode, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import type { ProjectItem } from '@/types/app'
 
 export interface HrRegistryRecord {
@@ -118,7 +118,7 @@ export function synchronizeHrRegistryRecord<T extends HrRegistryRecord>(record: 
   if (!canonical) return record
   const bound = canonical.boundFormalProjectId ? useProjectStore.getState().projects.find(project => project.id === canonical.boundFormalProjectId && isFormalProject(project)) : undefined
   const source = isFormalProject(canonical) ? canonical : bound
-  const result = { ...record, ...(category === 'technical' ? { tdtName: canonical.name } : { name: canonical.name }), ipmProjectCode: source ? hrFormalProjectCode(source) : null, ipmProjectName: source?.name || null }
+  const result = { ...record, ...(category === 'technical' ? { tdtName: canonical.name } : { name: canonical.name }), ipmProjectCode: source ? hrFormalDisplayCode(source) : null, ipmProjectName: source?.name || null }
   if (category === 'machine') {
     const metadata = source || canonical
     for (const key of ['brand', 'productLine', 'marketName'] as const) {

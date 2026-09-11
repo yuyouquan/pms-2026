@@ -12,7 +12,7 @@ export const CONFIG_MODULES: ConfigModuleMeta[] = [
   /* ── 整机产品 ── */
   {
     key: 'hrModel',
-    label: '人力模型',
+    label: '整机人力模型',
     category: '整机产品',
     description: '配置项目等级对应的人力模型版本及各阶段投入比例',
     columns: [
@@ -127,7 +127,6 @@ export const CONFIG_LEAF_KEY_PREFIX = 'config/'
 
 /** 侧边栏 kebab-case → 模块 camelCase 映射表 */
 const LEAF_TO_MODULE: Record<string, ConfigModuleKey> = {
-  'hr-model': 'hrModel',
   'tos-phase-ratio': 'tosPhaseRatio',
   'tos-brand-allocation': 'tosBrandAllocation',
   'tech-module-dept': 'techModuleDept',
@@ -145,6 +144,7 @@ export function resolveConfigModule(leafKey: string): ConfigModuleKey | null {
 /* ── 配置中心 → 整机产品项目联动函数 ───────────────────────────────── */
 
 /** 配置中心阶段字段 key 列表 */
+export const HR_MODEL_PHASE_FIELDS = ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期'].map((label, index) => ({ label, key: ['conceptPhase', 'planningPhase', 'developmentPhase', 'validationPhase', 'launchPhase', 'lifecycle'][index] }))
 const HR_MODEL_PHASE_KEYS = ['conceptPhase', 'planningPhase', 'developmentPhase', 'validationPhase', 'launchPhase', 'lifecycle'] as const
 
 /**

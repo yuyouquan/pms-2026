@@ -1,5 +1,7 @@
 'use client'
 
+import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
+
 import { canEditHrInScope } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { useEffect, useMemo, useState, useRef } from 'react'
@@ -267,6 +269,8 @@ export default function VersionDetailModal({
           style={{ marginBottom: 12 }}
           title={`预估投入合计：${formatPersonMonth(editTotal)}`}
         />
+
+        <HrVersionMilestoneDetails category="capability" values={version} />
 
         {/* 操作按钮 */}
         {!readOnly && (

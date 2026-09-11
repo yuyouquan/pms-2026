@@ -1,6 +1,6 @@
 'use client'
 
-import { getHrAllowedBudgetTypes, isHrFormalRecord, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
+import { canAccessHrProject, getHrAllowedBudgetTypes, isHrFormalRecord, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
@@ -61,16 +61,11 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
     [projects, localProjectId],
   )
 
-  // 检查 IPM 绑定限制
-  const ipmRequired = budgetType ? CAPABILITY_IPM_REQUIRED_TYPES.includes(budgetType) : false
-  const ipmBound = !!(project?.ipmProjectCode)
-  const canCreateVersion = !ipmRequired || ipmBound
-
-  const followsFormalPlan = isHrFormalRecord(project) && budgetType !== 'annual'
-  const formalSource = ipmBound ? resolveHrFormalSource('capability', project?.ipmProjectCode ?? null, project?.pmsProjectId) : null
-  const snapshot = project?.versions[project.versions.length - 1]
-  const boundStart = formalSource?.project ? formalSource.projectStartTime : snapshot?.projectStartTime
-  const boundEnd = formalSource?.project ? formalSource.projectEndTime : snapshot?.projectEndTime
+  const canCreateVersion = canCreateHrVersion(project, budgetType)
+  const followsFormalPlan = isHrFormalRecord(project)
+  const formalSource = followsFormalPlan ? resolveHrFormalSource('capability', project?.ipmProjectCode ?? null, project?.pmsProjectId) : null
+  const boundStart = formalSource?.projectStartTime
+  const boundEnd = formalSource?.projectEndTime
   const effectiveStart = followsFormalPlan ? (boundStart ? dayjs(boundStart) : null) : startTime
   const effectiveEnd = followsFormalPlan ? (boundEnd ? dayjs(boundEnd) : null) : endTime
 
@@ -211,7 +206,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       return
     }
     if (!canCreateVersion) {
-      message.error(CAPABILITY_IPM_REQUIRED_TIP)
+      message.error('当前项目无新建版本权限')
       return
     }
 
@@ -328,45 +323,33 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
             flexWrap: 'wrap',
           }}
         >
-          <Space><span>项目名称：</span>{scopeId ? <span>{project?.name}</span> : (<Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setStartTime(null); setEndTime(null); setEditData([]) }} />)}</Space>
+          <Space><span>项目名称：</span>{scopeId ? <span>{project?.name}</span> : (<Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setStartTime(null); setEndTime(null); setEditData([]) }} />)}</Space>
           {project?.ipmProjectCode && (
             <span>IPM编码：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.ipmProjectCode}</strong></span>
           )}
         </div>
-
-        {/* IPM 限制提示 */}
-        {ipmRequired && !ipmBound && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            title={CAPABILITY_IPM_REQUIRED_TIP}
-          />
-        )}
 
         {project && budgetType && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
         {followsFormalPlan && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={formalSource?.project ? '项目起止时间取自正式项目最新已发布一级计划的概念启动和 STR5；尚无已发布计划时无需填写，等待计划发布。' : '当前正式项目编码未找到对应项目，保留已有快照，请在项目列表重新绑定。'} />}
 
         {/* 表单区 */}
         <Form form={form} layout="vertical">
-          <Space size={24} wrap>
+          <div className="pms-hr-version-form">
             <Form.Item label="预算类型" required>
               <Select
-                style={{ width: 180 }}
+                style={{ width: '100%' }}
                 placeholder="选择预算类型"
                 value={budgetType}
                 onChange={(v) => setBudgetType(v)}
                 options={CAPABILITY_BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value)).map((t) => ({
                   label: t.label,
                   value: t.value,
-                  disabled:
-                    CAPABILITY_IPM_REQUIRED_TYPES.includes(t.value) && !ipmBound,
                 }))}
               />
             </Form.Item>
             <Form.Item label="项目开始时间" required={!followsFormalPlan}>
               <DatePicker
-                style={{ width: 180 }}
+                style={{ width: '100%' }}
                 placeholder="选择开始时间"
                 value={effectiveStart}
                 disabled={followsFormalPlan}
@@ -375,7 +358,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
             </Form.Item>
             <Form.Item label="项目结束时间" required={!followsFormalPlan}>
               <DatePicker
-                style={{ width: 180 }}
+                style={{ width: '100%' }}
                 placeholder="选择结束时间"
                 value={effectiveEnd}
                 disabled={followsFormalPlan}
@@ -388,7 +371,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
               </span>
               <span style={{ marginLeft: 4, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>人月</span>
             </Form.Item>
-          </Space>
+          </div>
         </Form>
 
         {/* 操作按钮 */}

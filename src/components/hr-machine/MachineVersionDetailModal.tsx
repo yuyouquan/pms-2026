@@ -1,5 +1,7 @@
 'use client'
 
+import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
+
 import { useMemo } from 'react'
 import { Modal, Table, Tag, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -156,6 +158,8 @@ export default function MachineVersionDetailModal({
               },
             ]}
           />
+
+        <HrVersionMilestoneDetails category="machine" values={version.milestones} />
 
           <Table<DeptPhaseRow>
             className="pms-table pms-hr-investment-table"

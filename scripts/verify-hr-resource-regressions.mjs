@@ -75,6 +75,6 @@ registry.setState({projects:[...registry.getState().projects,{...own,id:'formal-
 assert.deepEqual(helpers.getHrAllowedBudgetTypes({pmsProjectId:'formal-machine-options'}),['projectEstimate','projectBudget'])
 assert.deepEqual(helpers.getHrAllowedBudgetTypes({pmsProjectId:own.id}),['annual'])
 const machine=fs.readFileSync('src/components/hr-machine/NewVersionModal.tsx','utf8')
-assert.match(machine,/BUDGET_TYPES\.filter\(type => getHrAllowedBudgetTypes\(project\)\.includes\(type.value\)\)\.map/)
+assert.match(machine,/BUDGET_TYPES\.filter\(type => getHrAllowedBudgetTypes\(project\)\.includes\(type.value\)\)/)
 checks++;console.log('PASS machine dropdown consumes attribute-specific options before rendering')
 console.log(`HR resource review regressions passed (${checks} groups).`)

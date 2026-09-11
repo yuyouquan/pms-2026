@@ -146,7 +146,7 @@ export default function HistoryVersionSpace() {
   const allFlatVersions = useMemo<FlatVersionRow[]>(() => {
     const rows: FlatVersionRow[] = []
     for (const project of projects) {
-      const source = project.ipmProjectCode ? resolveHrFormalSource('technical', project.ipmProjectCode, project.pmsProjectId) : null
+      const source = isHrFormalRecord(project) ? resolveHrFormalSource('technical', project.ipmProjectCode, project.pmsProjectId) : null
       for (const version of project.versions) {
         rows.push({
           ...version,

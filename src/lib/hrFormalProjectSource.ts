@@ -14,6 +14,8 @@ export const matchesHrCategory = (project: ProjectItem, category: HrProjectCateg
   : project.type === ({ tos: PROJECT_TYPE_TOS_VERSION, technical: PROJECT_TYPE_TECH, capability: PROJECT_TYPE_CAPABILITY } as const)[category]
 
 /** Older PMS mock records have no external code; their persisted project ID remains their stable identifier. */
+/** Display the actual project code; source IDs remain internal lookup identities. */
+export const hrFormalDisplayCode = (project: ProjectItem): string | null => typeof project.projectCode === 'string' && project.projectCode.trim() ? project.projectCode.trim() : null
 export const hrFormalProjectCode = (project: ProjectItem) => project.sourceBid || project.projectCode || project.id
 export function getHrFormalProjectOptions(category: HrProjectCategory, projects: readonly ProjectItem[] = useProjectStore.getState().projects) {
   return projects.filter(project => isFormalProject(project) && matchesHrCategory(project, category)).map(project => ({ id: project.id, code: hrFormalProjectCode(project), name: project.name }))

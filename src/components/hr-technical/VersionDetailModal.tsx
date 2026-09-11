@@ -1,5 +1,7 @@
 'use client'
 
+import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
+
 import { canEditHrInScope } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { useEffect, useMemo, useState, useRef } from 'react'
@@ -330,6 +332,8 @@ export default function VersionDetailModal({
             </strong>
           </span>
         </div>
+
+        <HrVersionMilestoneDetails category="technical" values={version.milestones} />
 
         {/* 合计提示 */}
         <Alert

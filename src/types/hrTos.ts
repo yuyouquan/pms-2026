@@ -196,6 +196,7 @@ export interface TosNewProjectForm {
 
 /** 新建版本表单 */
 export interface TosNewVersionForm {
+  milestones?: Partial<TosMilestoneNodes>
   budgetType: BudgetType
   departmentInvestments: TosDepartmentInvestment[]
 }
