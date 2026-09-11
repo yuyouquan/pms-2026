@@ -118,7 +118,7 @@ export function buildProjectRegistryHistoryRows(
     }
     const displayed = new Set<string>()
     return entry.changes.flatMap((change, index) => {
-      if (change.field === 'updatedAt') return []
+      if (change.field === 'updatedAt' || change.field === 'machineBudgetMetadataAuthority') return []
       const changes = change.field === 'fieldValues'
         ? changedNestedFields(change.before, change.after)
         : [change]

@@ -60,6 +60,10 @@ const getProjectTeamMembers = (project: RoleProject, field: string): string[] =>
   return normalizeRoleMembers(project.responsiblePersons ?? project.leader)
 }
 
+export const hasDerivedMachineResponsibilityRoles = (project: RoleProject): boolean => (
+  project.type === PROJECT_CATEGORY_MACHINE && Boolean(project.createdBy) && !ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)
+)
+
 export const getFixedProjectRoles = (project: RoleProject): Role[] => {
   const mapping = project.type === PROJECT_CATEGORY_TECH
     ? TECHNICAL_TEAM_PERMISSION_MAPPING
@@ -236,6 +240,14 @@ function buildPermissionsForRoles(roles: readonly Role[]): Record<string, Record
 
 function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = []): Role[] {
   const fixed = getFixedProjectRoles(project)
+  if (hasDerivedMachineResponsibilityRoles(project)) {
+    const derived = new Set(['SPM', '系统管理员'])
+    const expectedNames = new Set(fixed.map(role => role.name))
+    return [
+      ...fixed.map(role => derived.has(role.name) ? role : existing.find(item => item.name === role.name) || role),
+      ...existing.filter(role => !expectedNames.has(role.name)),
+    ]
+  }
   if ((!project.createdBy || ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)) && project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
   return [...fixed, ...existing.filter(role => !role.isFixed)]
 }

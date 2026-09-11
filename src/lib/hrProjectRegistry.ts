@@ -1,3 +1,4 @@
+import { MACHINE_BUDGET_METADATA_KEYS, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
 import { useProjectStore } from '@/stores/project'
 import { hasPermission, isGlobalAdmin, usePermissionStore } from '@/stores/permission'
 import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
@@ -112,22 +113,39 @@ export function reconcileHrRegistry<T extends HrRegistryRecord & { versions: Reg
   return { projects: active, monthlyInvestments: monthly.filter(row => !removedRecordIds.has(row.projectId)).map(row => ({ ...row, projectId: owners.get(row.versionId) || row.projectId })), registryMigrationComplete: true }
 }
 
-/** Registry identity follows by ID; budget binding only follows the three required machine metadata fields. */
+/** Adopt only exact-ID legacy retained values whose canonical fields were not edited since the old snapshot. */
+function adoptLegacyMachineBudgetMetadata(record: HrRegistryRecord, canonical: ProjectItem): ProjectItem {
+  if (getProjectAttribute(canonical) !== 'budget' || canonical.boundFormalProjectId || canonical.machineBudgetMetadataAuthority === 'registry-v1' || !record.hrCanonicalMetadata) return canonical
+  const explicitFields = new Set(Array.isArray(canonical.machineBudgetMetadataAuthority) ? canonical.machineBudgetMetadataAuthority : [])
+  const values = Object.fromEntries(MACHINE_BUDGET_METADATA_KEYS.map(key => {
+    const current = getProjectInfoValue(canonical as unknown as Parameters<typeof getProjectInfoValue>[0], key)
+    const retained = (record as unknown as Record<string, unknown>)[key]
+    const value = !explicitFields.has(key) && Object.hasOwn(record.hrCanonicalMetadata!, key) && current === record.hrCanonicalMetadata![key] && typeof retained === 'string' ? retained : current
+    return [key, typeof value === 'string' ? value : '']
+  }))
+  const adopted: ProjectItem = { ...canonical, ...values, fieldValues: { ...canonical.fieldValues, ...values }, machineBudgetMetadataAuthority: 'registry-v1' }
+  useProjectStore.setState(state => ({
+    projects: state.projects.map(project => project.id === canonical.id ? adopted : project),
+    selectedProject: state.selectedProject?.id === canonical.id ? adopted : state.selectedProject,
+  }))
+  return adopted
+}
+
+/** Registry identity and effective machine metadata follow canonical IDs, never display names. */
 export function synchronizeHrRegistryRecord<T extends HrRegistryRecord>(record: T, category: HrProjectCategory): T {
-  const canonical = getHrRegistryProject(record)
-  if (!canonical) return record
+  const found = getHrRegistryProject(record)
+  if (!found) return record
+  const canonical = category === 'machine' ? adoptLegacyMachineBudgetMetadata(record, found) : found
   const bound = canonical.boundFormalProjectId ? useProjectStore.getState().projects.find(project => project.id === canonical.boundFormalProjectId && isFormalProject(project)) : undefined
   const source = isFormalProject(canonical) ? canonical : bound
   const result = { ...record, ...(category === 'technical' ? { tdtName: canonical.name } : { name: canonical.name }), ipmProjectCode: source ? hrFormalDisplayCode(source) : null, ipmProjectName: source?.name || null }
   if (category === 'machine') {
-    const metadata = source || canonical
-    for (const key of ['brand', 'productLine', 'marketName'] as const) {
-      const value = getProjectInfoValue(metadata, key)
-      // Unbinding keeps the last followed value until the user explicitly edits the budget metadata.
-      const canonicalValue = getProjectInfoValue(canonical, key)
-      if (source || !record.hrCanonicalMetadata || canonicalValue !== record.hrCanonicalMetadata[key]) Object.assign(result, { [key]: typeof value === 'string' ? value : '' })
+    const metadata = withBoundMachineBudgetMetadata(canonical, useProjectStore.getState().projects)
+    for (const key of MACHINE_BUDGET_METADATA_KEYS) {
+      const value = getProjectInfoValue(metadata as unknown as Parameters<typeof getProjectInfoValue>[0], key)
+      Object.assign(result, { [key]: typeof value === 'string' ? value : '' })
     }
-    result.hrCanonicalMetadata = Object.fromEntries(['brand', 'productLine', 'marketName'].map(key => [key, getProjectInfoValue(canonical, key)]))
+    result.hrCanonicalMetadata = Object.fromEntries(MACHINE_BUDGET_METADATA_KEYS.map(key => [key, getProjectInfoValue(canonical as unknown as Parameters<typeof getProjectInfoValue>[0], key)]))
   }
   return result
 }

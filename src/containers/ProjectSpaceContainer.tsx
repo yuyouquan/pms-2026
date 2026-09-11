@@ -1,5 +1,8 @@
 'use client'
 
+import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachineBudget, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
+import { hasDerivedMachineResponsibilityRoles } from '@/stores/permission'
+
 /**
  * ProjectSpaceContainer
  *
@@ -3149,7 +3152,8 @@ export default function ProjectSpaceContainer() {
           payload.responsiblePersons,
         ),
       )
-      setRoles(previous => replaceProjectSystemAdministrators(previous, payload.responsiblePersons))
+      // Derived machine roles were committed by the responsibility save, even when the saver just lost access.
+      if (!hasDerivedMachineResponsibilityRoles(selectedProject)) setRoles(previous => replaceProjectSystemAdministrators(previous, payload.responsiblePersons))
     }
     setShowProjectInfoEditor(false)
     message.success('项目信息已保存')
@@ -4547,8 +4551,8 @@ export default function ProjectSpaceContainer() {
 
   const renderProjectBasicInfo = () => {
     if (!canViewBasicInfo) return <Empty description="无基础信息查看权限" />
-    const p = selectedProject
-    if (!p) return null
+    if (!selectedProject) return null
+    const p = withBoundMachineBudgetMetadata(selectedProject, projects)
     const isWholeMachine = isMachineProjectType(p.type)
     const isTargetProject = isWholeMachine || p.type === PROJECT_TYPE_TOS_VERSION
     const isSoftware = isSoftwareProjectType(p.type)
@@ -4565,6 +4569,7 @@ export default function ProjectSpaceContainer() {
     const ef = editingProjectFields
     const setEf = (key: string, value: any) => setEditingProjectFields((prev: any) => ({ ...prev, [key]: value }))
     const editableField = (key: string, value: any, options?: { type?: 'input' | 'select' | 'select-multiple' | 'textarea'; choices?: { label: string; value: string; disabled?: boolean }[] }) => {
+      if (isBoundMachineBudget(p) && (MACHINE_BUDGET_METADATA_KEYS as readonly string[]).includes(key)) return <Tooltip title={BOUND_MACHINE_METADATA_HINT}><span>{value || '—'}</span></Tooltip>
       if (!basicInfoEditMode) return <span>{value || '-'}</span>
       if (options?.type === 'select') return <Select size="small" value={ef[key]} onChange={(v: string) => setEf(key, v)} style={{ width: '100%' }} options={options.choices} />
       if (options?.type === 'select-multiple') return <Select size="small" mode="multiple" value={(ef[key] || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf(key, v.join(','))} style={{ width: '100%' }} options={options.choices} />
@@ -4763,6 +4768,7 @@ export default function ProjectSpaceContainer() {
         className={!isTargetProject ? 'pms-project-information-surface pms-project-information-surface--legacy' : undefined}
         style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}
       >
+        {isBoundMachineBudget(p) && <Alert type="info" showIcon title={BOUND_MACHINE_METADATA_HINT} style={{ marginBottom: 12 }} />}
         {/* Anchor navigation */}
         <div style={{ position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150 }}>
           <div className="pms-glass-surface" style={{ padding: '16px 0 12px' }}>

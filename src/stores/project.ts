@@ -1,3 +1,4 @@
+import { MACHINE_BUDGET_METADATA_KEYS, hasBoundMachineBudgetMetadataOverride, isBoundMachineBudget, retainBoundMachineBudgetMetadata, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
 import { validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
 import { getProjectAttribute, isFormalProject, type ProjectRegistryHistoryEntry } from '@/types/projectRegistry'
 import { createRegistryHistoryEntry, validateRegistryCreation, validateRegistryProject } from '@/lib/projectRegistryRules'
@@ -39,6 +40,7 @@ import {
   TECHNICAL_TEAM_PERMISSION_MAPPING,
   TOS_TEAM_PERMISSION_MAPPING,
   hasPermission,
+  hasDerivedMachineResponsibilityRoles,
   isGlobalAdmin,
   usePermissionStore,
 } from '@/stores/permission'
@@ -705,10 +707,21 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       ))) return null
       if (!registryUpdate && (['name', 'projectCode', 'boundFormalProjectId'] as const).some(key => updated[key] !== existing[key])) return null
       if (validateRegistryProject(previousProjects, updated, existing)) return null
+      if (JSON.stringify(updated.machineBudgetMetadataAuthority) !== JSON.stringify(existing.machineBudgetMetadataAuthority)) return null
+      if (!registryUpdate && hasBoundMachineBudgetMetadataOverride(existing, updated, previousProjects)) return null
       const sourceBid = normalizeProjectSourceBid(updated)
       let projectToSave = sourceBid && updated.sourceBid !== sourceBid
         ? { ...updated, sourceBid }
         : updated
+      if (isBoundMachineBudget(existing) && !projectToSave.boundFormalProjectId) {
+        const retained = retainBoundMachineBudgetMetadata(existing, previousProjects)
+        projectToSave = { ...projectToSave, brand: retained.brand, productLine: retained.productLine, marketName: retained.marketName, machineBudgetMetadataAuthority: retained.machineBudgetMetadataAuthority, fieldValues: { ...projectToSave.fieldValues, brand: retained.brand || '', productLine: retained.productLine || '', marketName: retained.marketName || '' } }
+      }
+      if (getProjectAttribute(projectToSave) === 'budget' && isMachineProjectType(projectToSave.type) && projectToSave.machineBudgetMetadataAuthority !== 'registry-v1') {
+        const changedFields = MACHINE_BUDGET_METADATA_KEYS.filter(key => projectToSave[key] !== existing[key] || projectToSave.fieldValues?.[key] !== existing.fieldValues?.[key])
+        if (changedFields.length) projectToSave.machineBudgetMetadataAuthority = [...new Set([...(projectToSave.machineBudgetMetadataAuthority || []), ...changedFields])]
+      }
+      projectToSave = withBoundMachineBudgetMetadata(projectToSave, previousProjects)
       projectToSave = withEosTransitionTime(projectToSave, existing)
       if (hasDuplicateProjectSourceBid(get().projects, projectToSave)) return null
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
@@ -723,7 +736,9 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         if (!isValidMachineProjectMutation(projectToSave, options, existing)) return null
         machineResolution = resolution
       }
-      if (!isFormalProject(projectToSave) && validateManualProjectCompletion(projectToSave, existing, useEnumStore.getState().rowsByType)) return null
+      const completionBaseline = withBoundMachineBudgetMetadata(isBoundMachineBudget(projectToSave)
+        ? { ...existing, boundFormalProjectId: projectToSave.boundFormalProjectId } : existing, previousProjects)
+      if (!isFormalProject(projectToSave) && validateManualProjectCompletion(projectToSave, completionBaseline, useEnumStore.getState().rowsByType)) return null
       if (machineResolution) {
         const resolution = machineResolution
         set(state => {
@@ -744,7 +759,8 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
           selectedProject: state.selectedProject?.id === projectId ? projectToSave : state.selectedProject,
         }))
       }
-      if (projectToSave.type === '技术项目' || projectToSave.type === PROJECT_TYPE_TOS_VERSION) {
+      if (projectToSave.type === '技术项目' || projectToSave.type === PROJECT_TYPE_TOS_VERSION
+        || (hasDerivedMachineResponsibilityRoles(projectToSave) && JSON.stringify(existing.responsiblePersons || []) !== JSON.stringify(projectToSave.responsiblePersons || []))) {
         const savedProject = get().projects.find(project => project.id === projectId)
         if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
       }
@@ -759,7 +775,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       const existing = currentProjects.find(project => project.id === projectId)
       if (!existing) return false
       let projects = currentProjects.filter(project => project.id !== projectId).map(project => (
-        project.boundFormalProjectId === projectId ? { ...project, boundFormalProjectId: null } : project
+        project.boundFormalProjectId === projectId ? retainBoundMachineBudgetMetadata(project, currentProjects) : project
       ))
       let recomputedNewProject: Project | null = null
       if (isFormalProject(existing) && isMachineProjectType(existing.type) && existing.productType === '老品' && existing.firstSaleTosVersion) {

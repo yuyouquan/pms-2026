@@ -78,7 +78,7 @@ check('duplicate display codes never select another formal plan; absent own plan
 check('bound machine metadata follows canonical values; unbinding retains last values',()=>{
  const store=stores[0];registry.setState({projects:registry.getState().projects.map(p=>p.id===formal[0].id?{...p,brand:'示例品牌A',productLine:'示例系列A',marketName:'市场A'}:p.id===budget[0].id?{...p,boundFormalProjectId:formal[0].id}:p)})
  store.getState().refreshFormalProjects();assert.equal(getRecord(store,budget[0].id).brand,'示例品牌A')
- registry.setState({projects:registry.getState().projects.map(p=>p.id===budget[0].id?{...p,boundFormalProjectId:null}:p)})
+ assert.ok(registry.getState().updateProject(budget[0].id,{boundFormalProjectId:null},'演示用户01',{registryOperation:'update'}))
  store.getState().refreshFormalProjects();assert.equal(getRecord(store,budget[0].id).brand,'示例品牌A')
 })
 check('legacy split preserves all IDs, dates, monthly edits/logs; unresolved are admin visible; repeat/deletion replay cannot resurrect',()=>{

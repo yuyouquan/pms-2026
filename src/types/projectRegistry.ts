@@ -2,9 +2,12 @@ import { PROJECT_CATEGORY_MACHINE, PROJECT_TYPES, resolveProjectClassification }
 import type { ProjectItem } from '@/types/app'
 
 export type ProjectAttribute = 'formal' | 'budget' | 'roadmap'
+export type MachineBudgetMetadataField = 'brand' | 'productLine' | 'marketName'
 export interface ProjectRegistryMetadata {
   projectAttribute?: ProjectAttribute
   boundFormalProjectId?: string | null
+  /** Full canonical snapshot, or explicitly edited fields awaiting exact-ID legacy adoption. */
+  machineBudgetMetadataAuthority?: 'registry-v1' | MachineBudgetMetadataField[]
   createdBy?: string
   createdAt?: string
 }

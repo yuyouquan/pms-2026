@@ -178,17 +178,17 @@ export default function ProjectConfiguration() {
     }
     if (field === 'name') {
       return (
-        <Space size={4}>
-          <Button type="link" className="pms-project-config__name" onClick={() => openProject(project)}>{project.name}</Button>
+        <div className="pms-project-config__cell-value">
+          <Tooltip title={project.name}><Button type="link" className="pms-project-config__name" onClick={() => openProject(project)}>{project.name}</Button></Tooltip>
           {!isFormalProject(project) && canManage ? (
-            <Tooltip title="编辑项目名称"><Button type="text" size="small" aria-label={`编辑${project.name}的项目名称`} icon={<EditOutlined />} onClick={() => beginEdit(project, field)} /></Tooltip>
+            <Tooltip title="编辑项目名称"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的项目名称`} icon={<EditOutlined />} onClick={() => beginEdit(project, field)} /></Tooltip>
           ) : null}
-        </Space>
+        </div>
       )
     }
     return (
-      <Space size={4}>
-        {!isFormalProject(project) && canManage ? (
+      <div className="pms-project-config__cell-value">
+        <Tooltip title={value || '—'}>{!isFormalProject(project) && canManage ? (
           <Button
             type="text"
             size="small"
@@ -198,11 +198,11 @@ export default function ProjectConfiguration() {
           >
             {value || '—'}
           </Button>
-        ) : <span>{value || '—'}</span>}
+        ) : <span>{value || '—'}</span>}</Tooltip>
         {!isFormalProject(project) && canManage ? (
-          <Tooltip title="编辑项目编码"><Button type="text" size="small" aria-label={`编辑${project.name}的项目编码`} icon={<EditOutlined />} onClick={() => beginEdit(project, field)} /></Tooltip>
+          <Tooltip title="编辑项目编码"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的项目编码`} icon={<EditOutlined />} onClick={() => beginEdit(project, field)} /></Tooltip>
         ) : null}
-      </Space>
+      </div>
     )
   }
 
@@ -236,8 +236,8 @@ export default function ProjectConfiguration() {
           )
         }
         return (
-          <Space size={4}>
-            {canManage ? (
+          <div className="pms-project-config__cell-value">
+            <Tooltip title={boundName || '—'}>{canManage ? (
               <Button
                 type="text"
                 size="small"
@@ -247,11 +247,11 @@ export default function ProjectConfiguration() {
               >
                 {boundName || '—'}
               </Button>
-            ) : <span>{boundName || '—'}</span>}
+            ) : <span>{boundName || '—'}</span>}</Tooltip>
             {canManage ? (
-              <Tooltip title="编辑绑定正式项目"><Button type="text" size="small" aria-label={`编辑${project.name}的绑定正式项目`} icon={<EditOutlined />} onClick={() => beginEdit(project, 'boundFormalProjectId')} /></Tooltip>
+              <Tooltip title="编辑绑定正式项目"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的绑定正式项目`} icon={<EditOutlined />} onClick={() => beginEdit(project, 'boundFormalProjectId')} /></Tooltip>
             ) : null}
-          </Space>
+          </div>
         )
       },
     },

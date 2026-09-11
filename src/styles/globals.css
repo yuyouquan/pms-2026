@@ -198,6 +198,34 @@
   font-size: 12px;
 }
 
+.pms-project-config__cell-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pms-project-config__cell-value > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-project-config__cell-value .ant-btn > span:not(.ant-btn-icon) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-project-config__cell-value > .pms-project-config__edit-trigger {
+  flex: 0 0 auto;
+}
+
 .pms-project-config__name {
   max-width: 180px;
   height: auto;

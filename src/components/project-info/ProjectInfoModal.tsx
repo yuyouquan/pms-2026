@@ -1,5 +1,7 @@
 'use client'
 
+import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachineBudget, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
+
 import { isFormalProject } from '@/types/projectRegistry'
 import type { ProjectItem } from '@/types/app'
 import { changedManualInfoValues, resolveManualCompletionResponsibility, validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
@@ -191,7 +193,12 @@ export default function ProjectInfoModal({
   onAfterCreate,
 }: ProjectInfoModalProps) {
   const manualCompletion = mode === 'edit' && Boolean(project && !isFormalProject(project as unknown as ProjectItem))
+  const boundMachineMetadataReadonly = Boolean(project && isBoundMachineBudget(project as unknown as ProjectItem))
+  const followedMetadata = project ? withBoundMachineBudgetMetadata(project as unknown as ProjectItem, existingProjects as unknown as ProjectItem[]) : undefined
   const [form] = Form.useForm<ProjectInfoFormState>()
+  useEffect(() => {
+    if (open && boundMachineMetadataReadonly) form.setFieldsValue({ brand: followedMetadata?.brand || '', productLine: followedMetadata?.productLine || '', marketName: followedMetadata?.marketName || '' })
+  }, [open, boundMachineMetadataReadonly, followedMetadata?.brand, followedMetadata?.productLine, followedMetadata?.marketName, form])
   const { message: messageApi, modal: modalApi } = App.useApp()
   const rowsByType = useEnumStore(state => state.rowsByType)
   const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
@@ -449,6 +456,7 @@ export default function ProjectInfoModal({
       infoValues = { ...storedInfoValues, ...aggregateResult.values }
       setAggregateWarnings(aggregateResult.missingSources)
     }
+    const metadataProject = withBoundMachineBudgetMetadata(editingProject as unknown as ProjectItem, hydrationExistingProjects as unknown as ProjectItem[])
     const initialValues: ProjectInfoFormState = {
       ...infoValues,
       ...(manualCompletion ? Object.fromEntries(['brand', 'productLine', 'marketName', 'str5Date', 'launchDate', 'str5Estimated', 'launchEstimated', 'remark'].map(key => [key, editingProject[key]])) : {}),
@@ -466,9 +474,9 @@ export default function ProjectInfoModal({
       status: typeof editingProject.status === 'string' ? editingProject.status : '',
       currentNode: typeof editingProject.currentNode === 'string' ? editingProject.currentNode : '',
       cancelPauseDate: typeof editingProject.cancelPauseDate === 'string' ? editingProject.cancelPauseDate : '',
-      marketName: typeof editingProject.marketName === 'string' ? editingProject.marketName : '',
-      brand: typeof editingProject.brand === 'string' ? editingProject.brand : '',
-      productLine: typeof editingProject.productLine === 'string' ? editingProject.productLine : '',
+      marketName: typeof metadataProject.marketName === 'string' ? metadataProject.marketName : '',
+      brand: typeof metadataProject.brand === 'string' ? metadataProject.brand : '',
+      productLine: typeof metadataProject.productLine === 'string' ? metadataProject.productLine : '',
     }
     manualInitialValuesRef.current = JSON.parse(JSON.stringify(initialValues))
     form.setFieldsValue(initialValues)
@@ -994,6 +1002,7 @@ export default function ProjectInfoModal({
     let infoValues = normalizeProjectInfoModalSubmitValues({ ...rawInfoValues,
       ...(manualCompletion ? Object.fromEntries(['brand', 'productLine', 'marketName', 'androidVersion', 'productType', 'str5Date', 'launchDate', 'str5Estimated', 'launchEstimated', 'remark'].filter(key => values[key] !== undefined).map(key => [key, values[key]])) : {}),
     })
+    if (boundMachineMetadataReadonly) for (const key of MACHINE_BUDGET_METADATA_KEYS) delete infoValues[key]
     if (manualCompletion && project) {
       const error = validateManualProjectCompletion({ ...project, ...infoValues, secondaryCategory: projectSecondaryCategory,
         developMode: infoValues.developmentMode, firstSaleTosVersion: infoValues.firstSaleTosVersion,
@@ -1314,11 +1323,12 @@ export default function ProjectInfoModal({
           </div>
         )}
 
+        {boundMachineMetadataReadonly && <Alert type="info" showIcon title={BOUND_MACHINE_METADATA_HINT} style={{ marginBottom: 12 }} />}
         {manualCompletion && isMachineProjectType(projectType) && (
           <div className="pms-project-info-form-grid">
-            <Form.Item label="品牌" name="brand"><Select allowClear options={['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌'].map(value => ({ label: value, value }))} /></Form.Item>
-            <Form.Item label="产品线" name="productLine"><Input /></Form.Item>
-            <Form.Item label="市场名" name="marketName"><Input /></Form.Item>
+            <Form.Item label="品牌" name="brand">{boundMachineMetadataReadonly ? <Input disabled placeholder="—" /> : <Select allowClear options={['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌'].map(value => ({ label: value, value }))} />}</Form.Item>
+            <Form.Item label="产品线" name="productLine"><Input disabled={boundMachineMetadataReadonly} placeholder="—" /></Form.Item>
+            <Form.Item label="市场名" name="marketName"><Input disabled={boundMachineMetadataReadonly} placeholder="—" /></Form.Item>
             <Form.Item label="STR5时间" name="str5Date"><Input placeholder="YYYY-MM-DD" /></Form.Item>
             <Form.Item label="上市时间" name="launchDate"><Input placeholder="YYYY-MM-DD" /></Form.Item>
             <Form.Item label="STR5为预估时间" name="str5Estimated"><Select options={[{ label: '是', value: true }, { label: '否', value: false }]} /></Form.Item>

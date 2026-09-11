@@ -1,5 +1,7 @@
 'use client'
 
+import { isBoundMachineBudget, MACHINE_BUDGET_METADATA_KEYS } from '@/lib/boundMachineBudgetMetadata'
+import type { ProjectItem } from '@/types/app'
 import type { ReactNode } from 'react'
 import { Button, Tooltip } from 'antd'
 import { CalendarOutlined, EditOutlined, ProjectOutlined, SendOutlined, SettingOutlined } from '@ant-design/icons'
@@ -66,6 +68,7 @@ export default function TargetProjectInformationView({
     currentNode: '#f43f5e',
   }
   const machineCoreValue = (key: string) => {
+    if (isBoundMachineBudget(project as unknown as ProjectItem) && (MACHINE_BUDGET_METADATA_KEYS as readonly string[]).includes(key)) return String(getProjectInfoValue(project, key) || '—')
     if (key === 'healthStatus') return health.label
     if (key === 'firstSaleTosVersion') return formatTosSnapshot(getProjectInfoValue(project, key)) || '-'
     return formatProjectInfoValue(getProjectInfoValue(project, key))

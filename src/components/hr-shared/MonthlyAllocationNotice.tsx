@@ -16,6 +16,6 @@ export default function MonthlyAllocationNotice({ records }: MonthlyAllocationNo
     showIcon
     style={{ marginBottom: 12 }}
     title={`当前列表有 ${remaining} 人月待分配`}
-    description="部分阶段缺少有效里程碑时间。请补充最新预估版本的里程碑；已绑定正式项目的，请完善并发布对应的主市场／主类型一级计划。待分配投入仍计入预估合计。"
+    description="部分阶段缺少有效里程碑或项目开始、结束时间。正式项目请完善并发布本项目的一级计划（整机按主市场、tOS按主类型）；预算项目（含已绑定正式项目）请手工补充最新预估版本的里程碑，能力建设项目请补充开始、结束时间。待分配投入仍计入预估合计。"
   />
 }
