@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Modal, Button, Space, Card, Empty } from 'antd'
+import { Modal, Button, Space } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -10,7 +10,7 @@ import RoadmapView from '@/components/roadmap/RoadmapView'
 import { parseProjectViewShare } from '@/components/roadmap/utils'
 import { MainHeader } from '@/containers/AppShell'
 import WorkbenchContainer from '@/containers/WorkbenchContainer'
-import ProjectListContainer from '@/containers/ProjectListContainer'
+import ProjectManagementContainer from '@/containers/ProjectManagementContainer'
 import ProjectSpaceContainer from '@/containers/ProjectSpaceContainer'
 import ConfigContainer from '@/containers/ConfigContainer'
 import JointProjectSpaceContainer from '@/containers/JointProjectSpaceContainer'
@@ -85,11 +85,8 @@ export default function Home() {
               {/* Workbench (todo center + work tracker) */}
               {activeModule === 'workbench' && <WorkbenchContainer />}
 
-              {/* Project management space — initially empty */}
-              {activeModule === 'projectManagement' && <section aria-label="项目管理" />}
-
-              {/* Dedicated project list */}
-              {activeModule === 'projectList' && <ProjectListContainer />}
+              {/* Project configuration and formal-project views */}
+              {activeModule === 'projectManagement' && <ProjectManagementContainer />}
 
               {/* Cross-project MR aggregation workspace */}
               {activeModule === 'jointProjectSpace' && <JointProjectSpaceContainer />}

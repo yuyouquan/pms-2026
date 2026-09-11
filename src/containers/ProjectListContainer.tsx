@@ -8,7 +8,7 @@ import {
 } from 'antd'
 import {
   AppstoreOutlined, CalendarOutlined, FullscreenExitOutlined, FullscreenOutlined,
-  PlusOutlined, TeamOutlined, UnorderedListOutlined, UserOutlined,
+  TeamOutlined, UnorderedListOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -16,7 +16,6 @@ import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { ProjectCard } from '@/components/workspace/WorkspaceModule'
 import type { ProjectType } from '@/components/workspace/WorkspaceModule'
-import AddProjectModal from '@/components/workspace/AddProjectModal'
 import ProjectSummaryTable from '@/components/project-summary/ProjectSummaryTable'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
@@ -70,6 +69,7 @@ import {
 import ProjectListCalendar from '@/components/project-list/ProjectListCalendar'
 import type { ProjectListViewMode } from '@/stores/project'
 import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '@/data/projectListPlanMocks'
+import { filterFormalRegistryProjects } from '@/lib/projectManagementUi'
 
 const WORKSPACE_FILTER_TOOLBAR_STYLE: CSSProperties = {
   borderRadius: 12,
@@ -91,7 +91,15 @@ const WORKSPACE_FILTER_CHIP_STYLE: CSSProperties = {
 export default function ProjectListContainer() {
   const { message: messageApi } = App.useApp()
   const {
-    enterProjectSpace, setProjectSpaceModule,
+    enterProjectSpace, navigateWithEditGuard, setProjectSpaceModule,
+    projectListSummaryFilters: summaryFilters,
+    setProjectListSummaryFilters: setSummaryFilters,
+    projectListTechnicalFilters: technicalFilters,
+    setProjectListTechnicalFilters: setTechnicalFilters,
+    projectListAboutMineOnly: aboutMineOnly,
+    setProjectListAboutMineOnly: setAboutMineOnly,
+    projectListTablePage,
+    setProjectListTablePage,
   } = useUiStore()
 
   const {
@@ -114,14 +122,9 @@ export default function ProjectListContainer() {
   const activateProject = useActivateProject()
   const technicalSubprojects = useTechnicalProjectStore(state => state.subprojects)
   const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
-  const [summaryFilters, setSummaryFilters] = useState<AnyFilterCondition[]>([])
-  const [technicalFilters, setTechnicalFilters] = useState<AnyFilterCondition[]>(() => (
-    updateLinkedQuickFilterCondition([], 'technicalProjectType', ['tdt'])
-  ))
   const [projectListTableToolbarHost, setProjectListTableToolbarHost] = useState<HTMLDivElement | null>(null)
   const [projectListQuickFilterHost, setProjectListQuickFilterHost] = useState<HTMLDivElement | null>(null)
   const [projectListFilterSummaryHost, setProjectListFilterSummaryHost] = useState<HTMLDivElement | null>(null)
-  const [aboutMineOnly, setAboutMineOnly] = useState(true)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
@@ -138,7 +141,6 @@ export default function ProjectListContainer() {
   } = useEnumHydration(projectTypeFilter !== 'all')
 
   const projectListPageSize = 15
-  const [addProjectOpen, setAddProjectOpen] = useState(false)
   const fullscreenViewTitle = projectListView === 'calendar' ? '项目日历' : '项目列表'
 
   useEffect(() => {
@@ -165,7 +167,7 @@ export default function ProjectListContainer() {
     return adminGroup ? adminGroup.members.includes(currentLoginUser) : false
   }, [globalRoles, currentLoginUser])
 
-  const visibleProjects = projects
+  const visibleProjects = useMemo(() => filterFormalRegistryProjects(projects), [projects])
   const canEnterProject = (projectId: string) => canEnterProjectSpace(
     projectId,
     currentLoginUser,
@@ -387,6 +389,17 @@ export default function ProjectListContainer() {
   const technicalFilteredRows = useMemo(() => (
     applyFilterConditions(technicalStatusRows, technicalFilters)
   ), [technicalFilters, technicalStatusRows])
+  const openProjectFromList = (project: ProjectType | typeof projects[number], targetSubprojectId?: string) => {
+    navigateWithEditGuard(() => {
+      if (targetSubprojectId) {
+        pmsSessionStorage.setItem('pms:technical-project-list-target-child', targetSubprojectId)
+      }
+      activateProject(project as typeof projects[number])
+      setProjectSpaceModule('basic')
+      enterProjectSpace({ module: 'projectManagement', projectManagementTab: 'view' })
+    }, false)
+  }
+
   const enterSummaryRow = (row: { targetProjectId?: unknown; targetSubprojectId?: unknown; projectId: string }) => {
     const targetProjectId = String(row.targetProjectId || row.projectId)
     const project = visibleProjects.find(item => item.id === targetProjectId)
@@ -395,12 +408,7 @@ export default function ProjectListContainer() {
       showProjectAccessDenied()
       return
     }
-    if (row.targetSubprojectId) {
-      pmsSessionStorage.setItem('pms:technical-project-list-target-child', String(row.targetSubprojectId))
-    }
-    activateProject(project)
-    setProjectSpaceModule('basic')
-    enterProjectSpace({ module: 'projectList' })
+    openProjectFromList(project, row.targetSubprojectId ? String(row.targetSubprojectId) : undefined)
   }
 
   const renderProjectCard = (project: typeof projects[number]) => (
@@ -409,11 +417,12 @@ export default function ProjectListContainer() {
       setSelectedProject={(p) => activateProject(p as typeof projects[number])}
       setProjectSpaceModule={setProjectSpaceModule}
       setActiveModule={(module) => {
-        if (module === 'projectSpace') enterProjectSpace({ module: 'projectList' })
+        if (module === 'projectSpace') enterProjectSpace({ module: 'projectManagement', projectManagementTab: 'view' })
       }}
       PROJECT_STATUS_CONFIG={PROJECT_STATUS_CONFIG}
       canOpen={canEnterProject(project.id)}
       onOpenDenied={showProjectAccessDenied}
+      onOpenProject={openProjectFromList}
     />
   )
 
@@ -533,17 +542,6 @@ export default function ProjectListContainer() {
                   ]}
                 />
                 <div className="pms-project-list-table-actions" ref={setProjectListTableToolbarHost} />
-                {isAdminUser && (
-                  <Tooltip title="新增项目">
-                    <Button
-                      className="pms-project-list-icon-action"
-                      aria-label="新增项目"
-                      type="primary"
-                      icon={<PlusOutlined />}
-                      onClick={() => setAddProjectOpen(true)}
-                    />
-                  </Tooltip>
-                )}
               </div>
             </div>
 
@@ -856,6 +854,8 @@ export default function ProjectListContainer() {
                     filterSummaryHost={projectListFilterSummaryHost}
                     toolbarTrailingAction={projectListToolbarTrailingActions}
                     tablePageSize={projectListPageSize}
+                    controlledTablePage={projectListTablePage}
+                    onTablePageChange={setProjectListTablePage}
                   />
                 </div>
               ) : (
@@ -878,6 +878,8 @@ export default function ProjectListContainer() {
                   filterSummaryHost={projectListFilterSummaryHost}
                   toolbarTrailingAction={projectListToolbarTrailingActions}
                   tablePageSize={projectListPageSize}
+                  controlledTablePage={projectListTablePage}
+                  onTablePageChange={setProjectListTablePage}
                   machineHierarchy={standardMatrixVariant === 'machine'}
                   onViewProject={(projectId) => {
                     const project = workspaceFilteredProjects.find(item => item.id === projectId)
@@ -886,9 +888,7 @@ export default function ProjectListContainer() {
                       showProjectAccessDenied()
                       return
                     }
-                    activateProject(project)
-                    setProjectSpaceModule('basic')
-                    enterProjectSpace({ module: 'projectList' })
+                    openProjectFromList(project)
                   }}
                 />
               )
@@ -896,7 +896,6 @@ export default function ProjectListContainer() {
           </div>
         </div>
       </section>
-      <AddProjectModal open={addProjectOpen} onCancel={() => setAddProjectOpen(false)} />
     </div>
   )
 }

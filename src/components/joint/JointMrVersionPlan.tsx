@@ -46,6 +46,7 @@ import type {
   MrTransferType,
   TosMrVersionInstance,
 } from '@/types/mrVersionPlan'
+import { filterFormalRegistryProjects } from '@/lib/projectManagementUi'
 
 export const MR_TRANSFER_OPTIONS: MrTransferType[] = ['N/A', '1', '2', '3', '4', '5', '6', '7', '8']
 
@@ -130,7 +131,7 @@ function resolveCurrentBatchAccess(): { actor: string; permission: MrPermissionR
   const permissionState = usePermissionStore.getState()
   const enumState = useEnumStore.getState()
   const currentSources = buildMrAggregationSources({
-    projects: projectState.projects,
+    projects: filterFormalRegistryProjects(projectState.projects),
     marketConfigsByProjectId: projectState.marketConfigsByProjectId,
     tosTypeConfigsByProjectId: projectState.tosTypeConfigsByProjectId,
     marketVersionsByKey: planState.marketVersionsByKey,
@@ -199,7 +200,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
 
   const today = useShanghaiBusinessDate()
   const sourceInput = useMemo(() => ({
-    projects,
+    projects: filterFormalRegistryProjects(projects),
     marketConfigsByProjectId,
     tosTypeConfigsByProjectId,
     marketVersionsByKey,

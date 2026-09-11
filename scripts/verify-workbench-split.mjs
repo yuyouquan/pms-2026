@@ -12,13 +12,13 @@ import {
 } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
-requireSource(root, 'src/stores/ui.ts', /type\s+MainModule[\s\S]*?['"]workbench['"][\s\S]*?['"]projectList['"]/, 'missing workbench and project-list modules')
+requireSource(root, 'src/stores/ui.ts', /type\s+MainModule[\s\S]*?['"]workbench['"][\s\S]*?['"]projectManagement['"]/, 'missing workbench and project-management modules')
 requireSource(root, 'src/stores/ui.ts', /projectSpaceOrigin\b/, 'missing project-space origin state')
 const uiSource = readSource(root, 'src/stores/ui.ts')
 assert.deepEqual(
   getStringUnionTypeMembers(uiSource, 'MainModule'),
-  ['workbench', 'projectManagement', 'projectList', 'jointProjectSpace', 'roadmap', 'hrPipeline', 'config', 'projectSpace'],
-  'MainModule must include project management in the typed eight-module navigation contract',
+  ['workbench', 'projectManagement', 'jointProjectSpace', 'roadmap', 'hrPipeline', 'config', 'projectSpace'],
+  'MainModule must use the unified seven-module navigation contract',
 )
 requireSource(root, 'src/stores/ui.ts', /activeModule:\s*['"]workbench['"]/, 'workbench must be the default module')
 assert.match(uiSource, /export type WorkbenchTab = ['"]todo['"]/, 'legacy workbench origin supports only the task page')
@@ -26,11 +26,11 @@ requireSource(root, 'src/stores/ui.ts', /workbenchTab:\s*['"]todo['"]/, 'todo mu
 requireSource(root, 'src/stores/ui.ts', /projectSpaceOrigin:\s*null/, 'project-space origin must default to null')
 assert.equal(hasPropertyDefinition(uiSource, 'enterProjectSpace'), true, 'UI store defines enterProjectSpace as an action property')
 assert.equal(hasPropertyDefinition(uiSource, 'returnFromProjectSpace'), true, 'UI store defines returnFromProjectSpace as an action property')
-assert.equal(actionReadsObjectFields(uiSource, 'returnFromProjectSpace', 'projectSpaceOrigin', ['module', 'workbenchTab']), true, 'origin return reads module and workbench tab by access or destructuring')
+assert.equal(actionReadsObjectFields(uiSource, 'returnFromProjectSpace', 'projectSpaceOrigin', ['module', 'workbenchTab', 'projectManagementTab']), true, 'origin return reads module and originating tab by access or destructuring')
 
-requireSource(root, 'src/app/page.tsx', /ProjectListContainer\b/, 'missing ProjectListContainer route')
+requireSource(root, 'src/app/page.tsx', /ProjectManagementContainer\b/, 'missing ProjectManagementContainer route')
 requireSource(root, 'src/app/page.tsx', /['"]workbench['"]/, 'missing workbench route branch')
-requireSource(root, 'src/app/page.tsx', /['"]projectList['"]/, 'missing project-list route branch')
+requireSource(root, 'src/app/page.tsx', /activeModule === ['"]projectManagement['"]\s*&&\s*<ProjectManagementContainer\s*\/>/, 'project management route owns config and view tabs')
 requireSource(root, 'src/app/page.tsx', /import JointProjectSpaceContainer from ['"]@\/containers\/JointProjectSpaceContainer['"]/, 'missing joint project workspace container import')
 requireSource(root, 'src/app/page.tsx', /activeModule === ['"]jointProjectSpace['"]\s*&&\s*<JointProjectSpaceContainer\s*\/>/, 'joint project workspace module must dispatch to its container')
 requireSource(root, 'src/app/page.tsx', /enterProjectSpace\(\{\s*module:\s*['"]roadmap['"]\s*\}\)/, 'roadmap project entry must record its origin')
@@ -45,8 +45,8 @@ assert.match(workbenchSource, /route\.view === ['"]detail['"]/, 'completed trans
 
 const projectListSource = readSource(root, 'src/containers/ProjectListContainer.tsx')
 assert.match(projectListSource, /ProjectSummaryTable/, 'project-list implementation must own the summary table')
-assert.match(projectListSource, /AddProjectModal/, 'project-list implementation must own project creation')
-assert.match(projectListSource, /enterProjectSpace\(\{\s*module:\s*['"]projectList['"]\s*\}\)/, 'project-list entries must record their origin')
+assert.doesNotMatch(projectListSource, /AddProjectModal/, 'project-list implementation no longer owns project creation')
+assert.match(projectListSource, /enterProjectSpace\(\{\s*module:\s*['"]projectManagement['"],\s*projectManagementTab:\s*['"]view['"]\s*\}\)/, 'project-list entries must record their originating tab')
 assert.match(projectListSource, /useActivateProject\(\)/, 'project list must reuse the shared project activation hook')
 assert.doesNotMatch(projectListSource, /const\s+activateProject\s*=\s*\(/, 'project list must not duplicate project activation')
 assert.match(workbenchSource, /useActivateProject\(\)/, 'workbench must reuse the shared project activation hook')
@@ -76,11 +76,11 @@ assert.match(activationSource, /setTransferView\(null\)/, 'shared activation mus
 assert.match(activationSource, /setSelectedProject\(project\)/, 'shared activation must select the project')
 assert.match(activationSource, /setSelectedMarketTab\(selectedMarket\)/, 'shared activation must select the requested or default market')
 assert.match(activationSource, /buildTosTypeRows[\s\S]*?getMainTosType[\s\S]*?setSelectedTosTypeTab/, 'shared activation must select the tOS main type')
-const expectedHeaderOrder = /key:\s*['"]workbench['"],\s*label:\s*['"]工作台['"][\s\S]*?key:\s*['"]projectManagement['"],\s*label:\s*['"]项目管理['"][\s\S]*?key:\s*['"]projectList['"],\s*label:\s*['"]项目列表['"][\s\S]*?key:\s*['"]jointProjectSpace['"],\s*label:\s*['"]联合项目空间['"][\s\S]*?key:\s*['"]roadmap['"],\s*label:\s*['"]tOS路标['"][\s\S]*?key:\s*['"]hrPipeline['"],\s*label:\s*['"]人力资源管道['"][\s\S]*?key:\s*['"]config['"],\s*label:\s*['"]配置中心['"]/
+const expectedHeaderOrder = /key:\s*['"]workbench['"],\s*label:\s*['"]工作台['"][\s\S]*?key:\s*['"]projectManagement['"],\s*label:\s*['"]项目管理['"][\s\S]*?key:\s*['"]jointProjectSpace['"],\s*label:\s*['"]项目组合管理['"][\s\S]*?key:\s*['"]roadmap['"],\s*label:\s*['"]tOS路标['"][\s\S]*?key:\s*['"]hrPipeline['"],\s*label:\s*['"]人力资源管道['"][\s\S]*?key:\s*['"]config['"],\s*label:\s*['"]配置中心['"]/
 assert.match(
   shellSource,
   expectedHeaderOrder,
-  'main header order must place project management between workbench and project list',
+  'main header order must place project management between workbench and project combination management',
 )
 assert.equal(hasNestedCallExpression(shellSource, 'navigateWithEditGuard', 'returnFromProjectSpace'), true, 'ProjectSpaceHeader calls origin return inside the edit-guard callback')
 
@@ -112,9 +112,12 @@ useUiStore.getState().enterProjectSpace({ module: 'workbench', workbenchTab: 'to
 useUiStore.getState().returnFromProjectSpace()
 assert.equal(useUiStore.getState().activeModule, 'workbench')
 assert.equal(useUiStore.getState().workbenchTab, 'todo')
-useUiStore.getState().enterProjectSpace({ module: 'projectList' })
+useUiStore.getState().setProjectManagementTab('view')
+useUiStore.getState().enterProjectSpace({ module: 'projectManagement', projectManagementTab: 'view' })
+useUiStore.getState().setProjectManagementTab('configuration')
 useUiStore.getState().returnFromProjectSpace()
-assert.equal(useUiStore.getState().activeModule, 'projectList')
+assert.equal(useUiStore.getState().activeModule, 'projectManagement')
+assert.equal(useUiStore.getState().projectManagementTab, 'view')
 assert.equal(useUiStore.getState().projectSpaceOrigin, null)
 useUiStore.setState({ activeModule: 'projectSpace', projectSpaceOrigin: null, workbenchTab: 'todo' })
 useUiStore.getState().returnFromProjectSpace()

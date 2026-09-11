@@ -40,6 +40,7 @@
     "verify:mr-version-plan-browser": "node screenshots/verify-mr-version-plan-browser.mjs",
     "verify:project-list-matrix": "node scripts/verify-project-list-matrix.mjs",
     "verify:project-list-refinement": "node scripts/verify-project-list-refinement.mjs",
+    "verify:project-management-navigation": "node scripts/verify-project-management-navigation.mjs",
     "verify:project-role-sync": "node scripts/verify-project-role-sync.mjs",
     "verify:project-field-order": "node scripts/verify-project-field-order-followup.mjs",
     "verify:project-surfaces-visual-refresh": "node scripts/verify-project-surfaces-visual-refresh.mjs",

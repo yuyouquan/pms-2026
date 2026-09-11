@@ -123,7 +123,7 @@ function UserSwitcher() {
   )
 }
 
-// ─── Main mode header (workbench, project management, project list, roadmap, HR, config) ─
+// ─── Main mode header ───────────────────────────────────────────────
 
 export function MainHeader() {
   const {
@@ -164,8 +164,7 @@ export function MainHeader() {
                 items={[
                   { key: 'workbench', label: '工作台' },
                   { key: 'projectManagement', label: '项目管理' },
-                  { key: 'projectList', label: '项目列表' },
-                  { key: 'jointProjectSpace', label: '联合项目空间' },
+                  { key: 'jointProjectSpace', label: '项目组合管理' },
                   { key: 'roadmap', label: 'tOS路标' },
                   { key: 'hrPipeline', label: '人力资源管道' },
                   { key: 'config', label: '配置中心' },
@@ -226,10 +225,10 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
       p.leader.includes(projectSearchText)
   })
 
-  const returnLabel = projectSpaceOrigin?.module === 'projectList'
-    ? '返回项目列表'
+  const returnLabel = projectSpaceOrigin?.module === 'projectManagement'
+    ? '返回项目管理'
     : projectSpaceOrigin?.module === 'jointProjectSpace'
-      ? '返回联合项目空间'
+      ? '返回项目组合管理'
       : projectSpaceOrigin?.module === 'roadmap'
       ? '返回tOS路标'
       : '返回工作台'

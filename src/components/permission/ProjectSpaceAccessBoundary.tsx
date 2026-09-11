@@ -43,9 +43,8 @@ export default function ProjectSpaceAccessBoundary({ children }: { children: Rea
         <Empty description="当前用户未配置该项目空间角色，无法查看项目内容">
           <Button type="primary" onClick={() => {
             useUiStore.getState().returnFromProjectSpace()
-            useUiStore.getState().setActiveModule('projectList')
             useProjectStore.getState().setSelectedProject(null)
-          }}>返回项目列表</Button>
+          }}>返回来源页面</Button>
         </Empty>
       </Card>
     </div>

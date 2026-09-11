@@ -1,10 +1,10 @@
 import { create } from 'zustand'
 import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
+import type { AnyFilterCondition } from '@/lib/filterConditions'
 
 export type MainModule =
   | 'workbench'
   | 'projectManagement'
-  | 'projectList'
   | 'jointProjectSpace'
   | 'roadmap'
   | 'hrPipeline'
@@ -12,6 +12,7 @@ export type MainModule =
   | 'projectSpace'
 
 export type WorkbenchTab = 'todo'
+export type ProjectManagementTab = 'configuration' | 'view'
 
 export interface PlanNavigationIntent {
   source: 'todo'
@@ -35,12 +36,19 @@ export interface MrPlanNavigationIntent {
 export type ProjectSpaceOrigin = {
   module: Exclude<MainModule, 'projectSpace'>
   workbenchTab?: WorkbenchTab
+  projectManagementTab?: ProjectManagementTab
 } | null
 
 export interface UiState {
   // Navigation
   activeModule: MainModule
   workbenchTab: WorkbenchTab
+  projectManagementTab: ProjectManagementTab
+  projectConfigurationPage: number
+  projectListSummaryFilters: AnyFilterCondition[]
+  projectListTechnicalFilters: AnyFilterCondition[]
+  projectListAboutMineOnly: boolean
+  projectListTablePage: number
   projectSpaceOrigin: ProjectSpaceOrigin
   configTab: string
   configSidebarCollapsed: boolean
@@ -68,6 +76,13 @@ export interface UiState {
 export interface UiActions {
   setActiveModule: (v: MainModule) => void
   setWorkbenchTab: (v: WorkbenchTab) => void
+  setProjectManagementTab: (v: ProjectManagementTab) => void
+  openProjectConfiguration: () => void
+  setProjectConfigurationPage: (v: number) => void
+  setProjectListSummaryFilters: (v: AnyFilterCondition[] | ((previous: AnyFilterCondition[]) => AnyFilterCondition[])) => void
+  setProjectListTechnicalFilters: (v: AnyFilterCondition[] | ((previous: AnyFilterCondition[]) => AnyFilterCondition[])) => void
+  setProjectListAboutMineOnly: (v: boolean | ((previous: boolean) => boolean)) => void
+  setProjectListTablePage: (v: number) => void
   enterProjectSpace: (origin: NonNullable<ProjectSpaceOrigin>) => void
   returnFromProjectSpace: () => void
   setConfigTab: (v: string) => void
@@ -102,6 +117,17 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   // Navigation
   activeModule: 'workbench',
   workbenchTab: 'todo',
+  projectManagementTab: 'configuration',
+  projectConfigurationPage: 1,
+  projectListSummaryFilters: [],
+  projectListTechnicalFilters: [{
+    id: 'quick-technicalProjectType',
+    field: 'technicalProjectType',
+    operator: 'contains',
+    value: ['tdt'],
+  }],
+  projectListAboutMineOnly: true,
+  projectListTablePage: 1,
   projectSpaceOrigin: null,
   configTab: 'plan',
   configSidebarCollapsed: false,
@@ -127,7 +153,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
 
   // Setters
   setActiveModule: (v) => {
-    const { activeModule, workbenchTab, projectSpaceOrigin } = get()
+    const { activeModule, workbenchTab, projectManagementTab, projectSpaceOrigin } = get()
     // Compatibility for existing callers that still navigate directly. New
     // project-space entry points should call enterProjectSpace explicitly.
     if (v === 'projectSpace' && activeModule !== 'projectSpace' && !projectSpaceOrigin) {
@@ -136,6 +162,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
         projectSpaceOrigin: {
           module: activeModule,
           ...(activeModule === 'workbench' ? { workbenchTab } : {}),
+          ...(activeModule === 'projectManagement' ? { projectManagementTab } : {}),
         },
       })
       return
@@ -143,21 +170,43 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     set({ activeModule: v, ...(v !== 'projectSpace' ? { mrPlanNavigationIntent: null } : {}) })
   },
   setWorkbenchTab: (v) => set({ workbenchTab: v }),
+  setProjectManagementTab: (v) => set({ projectManagementTab: v }),
+  openProjectConfiguration: () => set({
+    activeModule: 'projectManagement',
+    projectManagementTab: 'configuration',
+    mrPlanNavigationIntent: null,
+  }),
+  setProjectConfigurationPage: (v) => set({ projectConfigurationPage: v }),
+  setProjectListSummaryFilters: (v) => set(state => ({
+    projectListSummaryFilters: typeof v === 'function' ? v(state.projectListSummaryFilters) : v,
+  })),
+  setProjectListTechnicalFilters: (v) => set(state => ({
+    projectListTechnicalFilters: typeof v === 'function' ? v(state.projectListTechnicalFilters) : v,
+  })),
+  setProjectListAboutMineOnly: (v) => set(state => ({
+    projectListAboutMineOnly: typeof v === 'function' ? v(state.projectListAboutMineOnly) : v,
+  })),
+  setProjectListTablePage: (v) => set({ projectListTablePage: v }),
   enterProjectSpace: (origin) => set({
     activeModule: 'projectSpace',
     projectSpaceOrigin: origin.module === 'workbench'
       ? { module: 'workbench', workbenchTab: origin.workbenchTab ?? get().workbenchTab }
-      : { module: origin.module },
+      : origin.module === 'projectManagement'
+        ? { module: 'projectManagement', projectManagementTab: origin.projectManagementTab ?? get().projectManagementTab }
+        : { module: origin.module },
   }),
   returnFromProjectSpace: () => {
     const projectSpaceOrigin = get().projectSpaceOrigin ?? {
       module: 'workbench' as const,
       workbenchTab: 'todo' as const,
     }
-    const { module, workbenchTab } = projectSpaceOrigin
+    const { module, workbenchTab, projectManagementTab } = projectSpaceOrigin
     set({
       activeModule: module,
       workbenchTab: module === 'workbench' ? (workbenchTab ?? 'todo') : get().workbenchTab,
+      projectManagementTab: module === 'projectManagement'
+        ? (projectManagementTab ?? get().projectManagementTab)
+        : get().projectManagementTab,
       projectSpaceOrigin: null,
       mrPlanNavigationIntent: null,
     })

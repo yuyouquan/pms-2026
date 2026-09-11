@@ -86,6 +86,7 @@ export interface ProjectCardProps {
   PROJECT_STATUS_CONFIG: Record<string, { color: string; tagColor: string }>
   canOpen?: boolean
   onOpenDenied?: () => void
+  onOpenProject?: (project: ProjectType) => void
 }
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({
@@ -96,6 +97,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   PROJECT_STATUS_CONFIG,
   canOpen = true,
   onOpenDenied,
+  onOpenProject,
 }) => {
   const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
   const isWholeMachine = isMachineProjectType(project.type)
@@ -110,6 +112,10 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   const openProject = () => {
     if (!canOpen) {
       onOpenDenied?.()
+      return
+    }
+    if (onOpenProject) {
+      onOpenProject(project)
       return
     }
     setSelectedProject(project)

@@ -121,6 +121,8 @@ export interface ProjectSummaryTableProps {
   showColumnSettings?: boolean
   toolbarTrailingAction?: ReactNode
   tablePageSize?: number
+  controlledTablePage?: number
+  onTablePageChange?: (page: number) => void
 }
 
 interface StoredProjectSummaryPreferences {
@@ -204,6 +206,8 @@ export default function ProjectSummaryTable({
   showColumnSettings = true,
   toolbarTrailingAction,
   tablePageSize,
+  controlledTablePage,
+  onTablePageChange,
 }: ProjectSummaryTableProps) {
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
@@ -222,7 +226,13 @@ export default function ProjectSummaryTable({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [collapsedMachineSeries, setCollapsedMachineSeries] = useState<Set<string>>(() => new Set())
   const [selectedRowKey, setSelectedRowKey] = useState('')
-  const [tablePage, setTablePage] = useState(1)
+  const [uncontrolledTablePage, setUncontrolledTablePage] = useState(1)
+  const tablePage = controlledTablePage ?? uncontrolledTablePage
+  const setTablePage = (page: number) => {
+    if (controlledTablePage !== undefined) onTablePageChange?.(page)
+    else setUncontrolledTablePage(page)
+  }
+  const tablePageResetInputs = useRef({ filters, matrixVariant, projectType, tablePageSize })
   const compactControlSize = matrixVariant ? 'small' : 'middle'
 
   useEffect(() => {
@@ -501,7 +511,14 @@ export default function ProjectSummaryTable({
   ])
 
   useEffect(() => {
-    setTablePage(1)
+    const previous = tablePageResetInputs.current
+    tablePageResetInputs.current = { filters, matrixVariant, projectType, tablePageSize }
+    if (
+      previous.filters !== filters
+      || previous.matrixVariant !== matrixVariant
+      || previous.projectType !== projectType
+      || previous.tablePageSize !== tablePageSize
+    ) setTablePage(1)
   }, [filters, matrixVariant, projectType, tablePageSize])
 
   useEffect(() => {
