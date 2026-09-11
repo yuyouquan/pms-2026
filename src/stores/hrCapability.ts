@@ -509,7 +509,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       updateMonthlyInvestment: (monthlyId, monthlyData) => {
         set((state) => ({
           monthlyInvestments: state.monthlyInvestments.map((mi) =>
-            mi.id === monthlyId && canAccessHrProject(state.projects.find(p => p.id === mi.projectId), true)
+            mi.id === monthlyId && !mi.isArchived && canAccessHrProject(state.projects.find(p => p.id === mi.projectId), true)
               ? { ...mi, monthlyData, isEdited: true }
               : mi,
           ),

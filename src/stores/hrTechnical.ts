@@ -703,7 +703,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
+          mi.id === monthlyId && !mi.isArchived && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),

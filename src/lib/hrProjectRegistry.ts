@@ -10,6 +10,11 @@ export interface HrRegistryRecord {
   migrationIssue?: string; legacyHrSnapshot?: unknown
   hrCanonicalMetadata?: Record<string, unknown>
 }
+/** A detail dialog may select a linked source; creation always returns to the owning resource scope. */
+export function resolveHrNewVersionProjectId(projects: readonly Pick<HrRegistryRecord, 'id' | 'pmsProjectId'>[], selectedProjectId?: string | null, scopeId?: string): string {
+  return scopeId ? projects.find(project => project.pmsProjectId === scopeId)?.id ?? '' : selectedProjectId ?? ''
+}
+
 export const getHrRegistryProject = (record?: Pick<HrRegistryRecord, 'pmsProjectId'> | null) => record?.pmsProjectId
   ? useProjectStore.getState().projects.find(project => project.id === record.pmsProjectId) : undefined
 export function canAccessHrProject(record?: Pick<HrRegistryRecord, 'pmsProjectId'> | null, edit = false, actor = useProjectStore.getState().currentLoginUser) {

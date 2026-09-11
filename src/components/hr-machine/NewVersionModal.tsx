@@ -140,7 +140,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
   }
 
-  const budgetOptions = BUDGET_TYPES.map(bt => {
+  const budgetOptions = BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value)).map(bt => {
     const restricted = !hasIpm && IPM_REQUIRED_TYPES.includes(bt.value)
     return {
       value: bt.value,

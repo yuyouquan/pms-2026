@@ -4,6 +4,7 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { createStore, useStore, type StoreApi, type UseBoundStore } from 'zustand'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
+import { selectActiveHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { getLatestHrVersion } from '@/lib/hrVersionRules'
 import { canAccessHrProject, canEditHrInScope, isHrVersionVisible, type HrRegistryRecord } from '@/lib/hrProjectRegistry'
 import { useUiStore } from '@/stores/ui'
@@ -18,7 +19,7 @@ export function HrResourceScope({ projectId, children }: { projectId: string; ch
 const emptyUi = createStore<UiState>(() => ({}))
 interface ViewState {
   projects: Array<HrRegistryRecord & { versions: Array<import('@/lib/hrVersionRules').HrVersionIdentity> }>
-  monthlyInvestments: Array<{ projectId: string; versionId: string }>
+  monthlyInvestments: Array<{ isArchived?: boolean; projectId: string; versionId: string }>
 }
 /** Business records/actions remain in the domain store; only scoped filters and dialog state are local. */
 export function createHrViewHook<T extends ViewState>(original: UseBoundStore<StoreApi<T>>) {
@@ -35,7 +36,7 @@ export function createHrViewHook<T extends ViewState>(original: UseBoundStore<St
       })).filter(project => !scope || project.pmsProjectId === scope.projectId || project.versions.length > 0)
       const visibleIds = new Set(projects.map(project => project.id))
       const visibleVersions = new Set(projects.flatMap(project => ['annual', 'projectEstimate', 'projectBudget'].map(type => getLatestHrVersion(project.versions, type)?.id)))
-      const result = { ...state, projects, monthlyInvestments: state.monthlyInvestments.filter(row => visibleIds.has(row.projectId) && visibleVersions.has(row.versionId)) } as T
+      const result = { ...state, projects, monthlyInvestments: selectActiveHrMonthlyRows(state.monthlyInvestments).filter(row => visibleIds.has(row.projectId) && visibleVersions.has(row.versionId)) } as T
       const view = result as unknown as UiState
       // Resource metadata is managed through the canonical configuration entry.
       view.showNewProjectModal = false

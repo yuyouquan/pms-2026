@@ -169,6 +169,8 @@ export interface TosMonthlyInvestment {
   monthlyData: Record<string, number>
   /** 是否已手动编辑 */
   isEdited: boolean
+  /** Removed source rows remain archived for manual-data restoration, excluded from active totals. */
+  isArchived?: boolean
 }
 
 /** 项目列表筛选器 */

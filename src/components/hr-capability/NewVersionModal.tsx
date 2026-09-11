@@ -1,6 +1,6 @@
 'use client'
 
-import { getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { getHrAllowedBudgetTypes, isHrFormalRecord, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
@@ -50,7 +50,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   const addVersion = useHrCapabilityStore((s) => s.addVersion)
   const setShowNewVersionModal = useHrCapabilityStore((s) => s.setShowNewVersionModal)
 
-  const [localProjectId, setLocalProjectId] = useState(selectedProjectId ?? '')
+  const [localProjectId, setLocalProjectId] = useState(resolveHrNewVersionProjectId(projects, selectedProjectId, scopeId))
   const [editData, setEditData] = useState<CapabilityDepartmentInvestment[]>([])
   const [budgetType, setBudgetType] = useState<BudgetType | null>(null)
   const [startTime, setStartTime] = useState<dayjs.Dayjs | null>(null)
@@ -76,13 +76,13 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
   useEffect(() => {
     if (open) {
-      setLocalProjectId(selectedProjectId ?? '')
+      setLocalProjectId(resolveHrNewVersionProjectId(projects, selectedProjectId, scopeId))
       setBudgetType(getHrAllowedBudgetTypes(projects.find(p => scopeId ? p.pmsProjectId === scopeId : p.id === selectedProjectId))[0] ?? 'annual')
       setStartTime(null)
       setEndTime(null)
       setEditData([])
     }
-  }, [open, selectedProjectId])
+  }, [open, selectedProjectId, scopeId])
 
   useEffect(() => {
     if (!open) return

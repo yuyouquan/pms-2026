@@ -137,6 +137,8 @@ export interface MonthlyInvestment {
   monthlyData: Record<string, number>
   /** 是否被手动编辑过 */
   isEdited: boolean
+  /** Removed source rows remain archived for manual-data restoration, excluded from active totals. */
+  isArchived?: boolean
 }
 
 /** 项目列表筛选器（多选，空数组表示不筛选） */

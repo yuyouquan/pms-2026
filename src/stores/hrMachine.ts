@@ -497,7 +497,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
+          mi.id === monthlyId && !mi.isArchived && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),
