@@ -23,7 +23,7 @@ import {
 } from '@/lib/projectManagementUi'
 import { getProjectAttribute, isFormalProject, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import type { ProjectItem } from '@/types/app'
-import NewProjectModal from './NewProjectModal'
+import NewProjectModal from '@/components/project-management/NewProjectModal'
 
 type EditableField = 'name' | 'projectCode' | 'boundFormalProjectId'
 interface EditingCell {
