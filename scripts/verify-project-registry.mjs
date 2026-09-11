@@ -69,6 +69,19 @@ check('trimmed codes are unique across all attributes; blank allowed; formal sou
   assert.equal(update(machine,{name:'fake'}).ok,false); assert.equal(update(machine,{projectCode:'fake'}).ok,false)
   assert.equal(update(budget,{projectCode:' '}).ok,true); assert.equal(project(budget).projectCode,'')
 })
+check('distinct formal IPM variants may share source codes but manual codes remain globally unique', () => {
+  const manualId = manual('技术项目')
+  assert.equal(update(manualId, { projectCode: 'DEMO014' }).ok, true)
+  assert.equal(registry.createConfiguredProject({projectAttribute:'formal',sourceBid:'EXT-010',responsiblePersons:[owner]},admin).ok, false)
+  assert.equal(update(manualId, { projectCode: '' }).ok, true)
+  const variant1 = create({projectAttribute:'formal',sourceBid:'EXT-010'})
+  const variant2 = create({projectAttribute:'formal',sourceBid:'EXT-011'})
+  assert.equal(project(variant1).projectCode, 'DEMO014')
+  assert.equal(project(variant2).projectCode, 'DEMO014')
+  assert.notEqual(project(variant1).sourceBid, project(variant2).sourceBid)
+  assert.equal(update(manualId, { projectCode: ' DEMO014 ' }).ok, false)
+  assert.equal(registry.createConfiguredProject({projectAttribute:'formal',sourceBid:'EXT-011',responsiblePersons:[owner]},admin).ok, false)
+})
 check('binding validates type and per-attribute uniqueness, supports rebind/unbind and no-op skips audit', () => {
   assert.equal(update(budget,{boundFormalProjectId:tos}).ok,false)
   assert.equal(update(budget,{boundFormalProjectId:machine}).ok,true)
@@ -93,6 +106,38 @@ check('configuration services and direct store entry enforce permissions and ide
   assert.equal(store.getState().updateProject(tech,{projectDescription:'bypass'},admin,{registryOperation:'update'}),null)
   assert.equal(store.getState().addProject({...project(tech),id:'forged',name:'forged',sourceBid:'missing'},admin,{registryOperation:'create'}),false)
   assert.equal(store.getState().addProject({...project(budget),id:'empty-people',responsiblePersons:[]},admin,{registryOperation:'create'}),false)
+})
+check('omitting the creation flag never bypasses required registry identity', () => {
+  const template = project(manual('技术项目'))
+  const before = { projects: store.getState().projects.length, history: store.getState().registryHistory.length }
+  for (const [label, patch] of [
+    ['missing-people', { responsiblePersons: [] }],
+    ['missing-attribute', { projectAttribute: undefined, sourceBid: 'EXT-013', name: 'DEMO-TECH-PRE' }],
+    ['missing-creator', { createdBy: undefined }],
+    ['missing-time', { createdAt: undefined }],
+    ['invalid-type', { type: '产品项目' }],
+    ['invalid-attribute', { projectAttribute: 'other' }],
+    ['forged-source', { projectAttribute: 'formal', sourceBid: 'EXT-013', name: '伪造名称' }],
+  ]) {
+    assert.equal(store.getState().addProject({ ...template, ...patch, id: `omitted-${label}` }, admin), false, label)
+  }
+  assert.equal(store.getState().projects.length, before.projects)
+  assert.equal(store.getState().registryHistory.length, before.history)
+  assert.equal(store.getState().addProject({ ...template, id: 'valid-omitted-flag' }, admin), true)
+  assert.equal(history('valid-omitted-flag')[0].action, 'create')
+})
+check('project owners cannot edit config name or code through ordinary space updates', () => {
+  const id = manual('技术项目')
+  const before = history(id).length
+  for (const actor of [owner, admin]) {
+    assert.equal(store.getState().updateProject(id, { name: '越权名称' }, actor), null)
+    assert.equal(store.getState().updateProject(id, { projectCode: 'FORGED' }, actor), null)
+  }
+  assert.equal(store.getState().updateProject(id, { name: '越权名称' }, owner, { registryOperation: 'update' }), null)
+  assert.equal(history(id).length, before)
+  assert.equal(update(id, { name: '合法配置名称', projectCode: 'AUTHORIZED' }, admin).ok, true)
+  assert.equal(project(id).name, '合法配置名称')
+  assert.ok(store.getState().updateProject(id, { projectDescription: '正常空间补充' }, owner))
 })
 check('space mutations append immutable before/after audit; invalid detailed machine update stays rejected', () => {
   const before = history(tech).length

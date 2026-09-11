@@ -629,13 +629,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       if (!isGlobalAdmin(actingUser)) return false
       if (get().projects.some(project => project.id === newProject.id)) return false
       const previousProjects = get().projects
-      newProject = { ...newProject, projectAttribute: getProjectAttribute(newProject) }
       if (validateRegistryProject(previousProjects, newProject)) return false
-      if (options?.registryOperation === 'create') {
-        const enums = useEnumStore.getState()
-        if (isFormalProject(newProject) && (!enums.hasHydrated || enums.hydrationError)) return false
-        if (validateRegistryCreation(newProject, actingUser, enums.rowsByType)) return false
-      }
+      const enums = useEnumStore.getState()
+      if (isFormalProject(newProject) && (!enums.hasHydrated || enums.hydrationError)) return false
+      if (validateRegistryCreation(newProject, actingUser, enums.rowsByType)) return false
       const sourceBid = normalizeProjectSourceBid(newProject)
       let projectToAdd = sourceBid && newProject.sourceBid !== sourceBid
         ? { ...newProject, sourceBid }
@@ -701,7 +698,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         !['name', 'projectCode', 'boundFormalProjectId'].includes(key)
         && JSON.stringify(existing[key]) !== JSON.stringify(updated[key])
       ))) return null
-      if (!registryUpdate && updated.boundFormalProjectId !== existing.boundFormalProjectId) return null
+      if (!registryUpdate && (['name', 'projectCode', 'boundFormalProjectId'] as const).some(key => updated[key] !== existing[key])) return null
       if (validateRegistryProject(previousProjects, updated, existing)) return null
       const sourceBid = normalizeProjectSourceBid(updated)
       let projectToSave = sourceBid && updated.sourceBid !== sourceBid

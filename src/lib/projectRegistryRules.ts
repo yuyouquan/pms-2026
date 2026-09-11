@@ -9,8 +9,8 @@ import {
 
 /** Rechecked by the store; the minimal-creation option cannot bypass identity rules. */
 export function validateRegistryCreation(candidate: ProjectItem, actor: string, rows: EnumRowsByType): string | null {
-  const attribute = getProjectAttribute(candidate)
-  if (!Object.hasOwn(PROJECT_ATTRIBUTE_LABELS, attribute) || !getRegistryProjectTypes(attribute).includes(candidate.type)) return '项目属性或类型无效'
+  const attribute = candidate.projectAttribute
+  if (!attribute || !Object.hasOwn(PROJECT_ATTRIBUTE_LABELS, attribute) || !getRegistryProjectTypes(attribute).includes(candidate.type)) return '项目属性或类型无效'
   if (!candidate.responsiblePersons?.length || candidate.responsiblePersons.some(person => !person.trim())) return '请至少选择一位责任人'
   if (candidate.createdBy !== actor || !candidate.createdAt) return '创建信息无效'
   if (!isFormalProject(candidate)) return candidate.sourceBid ? '非正式项目不能使用 IPM 来源标识' : null
@@ -36,7 +36,11 @@ export function validateRegistryProject(projects: readonly ProjectItem[], candid
   const sourceBid = candidate.sourceBid?.trim()
   if (sourceBid && projects.some(p => p.id !== candidate.id && p.sourceBid?.trim() === sourceBid)) return '该外部项目已建档，请勿重复创建'
   const code = candidate.projectCode?.trim()
-  if (code && (!previous || code !== previous.projectCode?.trim()) && projects.some(p => p.id !== candidate.id && p.projectCode?.trim() === code)) return '项目编码已存在，请使用唯一编码'
+  if (code && (!previous || code !== previous.projectCode?.trim()) && projects.some(p => (
+    p.id !== candidate.id && p.projectCode?.trim() === code
+    // Distinct authoritative formal variants can share an IPM code. Manual codes cannot.
+    && !(isFormalProject(candidate) && isFormalProject(p) && sourceBid && p.sourceBid?.trim() && sourceBid !== p.sourceBid.trim())
+  ))) return '项目编码已存在，请使用唯一编码'
   const binding = candidate.boundFormalProjectId
   if (!binding) return null
   if (isFormalProject(candidate)) return '正式项目不能绑定正式项目'
