@@ -243,6 +243,17 @@
   text-align: left;
 }
 
+/* Configuration fixed cells must cover horizontally scrolled content.
+   Keep default/even rows solid and composite the shared hover tint onto white. */
+.pms-project-config > .pms-table .ant-table-tbody > tr > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
+  background: var(--pms-surface-solid) !important;
+}
+
+.pms-project-config > .pms-table .ant-table-tbody > tr:hover > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right),
+.pms-project-config > .pms-table .ant-table-tbody > tr > td.ant-table-cell-row-hover:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
+  background: color-mix(in srgb, rgb(99 102 241) 6%, var(--pms-surface-solid)) !important;
+}
+
 /* PMS project space and plan workspace */
 .pms-project-space {
   min-width: 0;
