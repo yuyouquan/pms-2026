@@ -198,7 +198,7 @@ export default function MachineVersionDetailModal({
           />
 
           <div style={{ marginTop: 8, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>
-            数据来源：配置中心-人力模型（项目等级 {version.projectLevel || '-'} / 模型版本 {version.hrModelVersion || '-'}），各阶段值已乘以等级系数 {(version.levelCoefficient ?? 0).toFixed(2)}。
+            数据来源：配置中心 → 人力资源管道 → 整机人力模型（项目等级 {version.projectLevel || '-'} / 模型版本 {version.hrModelVersion || '-'}），各阶段值已乘以等级系数 {(version.levelCoefficient ?? 0).toFixed(2)}。
           </div>
         </>
       ) : (

@@ -473,7 +473,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           <ul style={{ margin: '4px 0 0', paddingLeft: 16, lineHeight: '1.8' }}>
             <li>同一项目、同一预算类型从 V0.1 开始递增</li>
             <li>仅最新版本可编辑，历史版本保留原有日期和投入数据</li>
-            <li>年度预算最新版本采用手动里程碑；其他预算类型绑定后随正式项目最新已发布一级计划更新</li>
+            <li>正式项目最新版本里程碑只读并跟随本项目最新已发布一级计划；预算项目里程碑手工维护，绑定后仍独立</li>
             <li>预估投入合计由各部门各阶段投入自动汇总</li>
           </ul>
         </div>

@@ -158,7 +158,7 @@ export default function HistoryVersionSpace() {
           isLatest: isLatestHrVersion(project, version),
           isBound: isHrFormalRecord(project),
           sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
-            ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待主市场／主类型一级计划发布' : ''
+            ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待本项目一级计划发布' : ''
             : '',
           projectName: project.name,
           projectTarget: project.projectTarget,

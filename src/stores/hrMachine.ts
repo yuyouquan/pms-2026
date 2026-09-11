@@ -378,8 +378,8 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           if (!project || !canonical || !canCreateHrVersion(project, budgetType)) throw new Error('当前项目无新建版本权限')
           if (!Number.isFinite(versionMeta.levelCoefficient) || versionMeta.levelCoefficient < 0 || !isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], versionMeta.projectLevel, versionMeta.hrModelVersion)) throw new Error('请选择有效的项目等级、人力模型版本号和等级系数')
           const metadata = Object.fromEntries(Object.entries(versionMeta.metadata).map(([key, value]) => [key, value.trim()])) as typeof versionMeta.metadata
-          if (!isHrFormalRecord(project) && Object.values(metadata).some(value => !value)) throw new Error(canonical.boundFormalProjectId ? '请在正式项目空间补充品牌、产品线和市场名' : '请填写品牌、产品线和市场名')
           if (!isHrFormalRecord(project) && !canonical.boundFormalProjectId) {
+            if (Object.values(metadata).some(value => !value)) throw new Error('请填写品牌、产品线和市场名')
             const lines = PRODUCT_LINES_BY_BRAND[metadata.brand as keyof typeof PRODUCT_LINES_BY_BRAND]
             const retained = metadata.brand === project.brand && metadata.productLine === project.productLine
             if (!retained && (!lines || !(lines as readonly string[]).includes(metadata.productLine))) throw new Error('请选择有效的品牌和对应产品线')

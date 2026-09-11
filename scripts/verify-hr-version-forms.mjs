@@ -81,6 +81,27 @@ await check('Canonical display uses actual project code while legacy lookup reta
   assert.equal(hrFormalDisplayCode(formal), 'ACTUAL-CODE')
   assert.equal(stores[0].getState().projects.find(p => p.pmsProjectId === formal.id).ipmProjectCode, 'ACTUAL-CODE')
 })
+await check('Bound machine budgets accept partial or empty readonly formal metadata without changing sources or manual milestone dates', () => {
+  const store = stores[0]
+  for (const [caseName, sourceMetadata] of Object.entries({ empty: { brand: '', productLine: '', marketName: '' }, partial: { brand: '示例品牌A', productLine: '', marketName: '' } })) {
+    const source = { ...base, id: `bound-source-${caseName}`, type: types[0], name: `来源-${caseName}`, projectAttribute: 'formal', sourceBid: '', projectCode: '', ...sourceMetadata, fieldValues: {} }
+    const budget = { ...source, id: `bound-budget-${caseName}`, name: `预算-${caseName}`, projectAttribute: 'budget', boundFormalProjectId: source.id, brand: '预算原品牌', productLine: '预算原产品线', marketName: '预算原市场' }
+    registry.setState({ projects: [...registry.getState().projects, source, budget] })
+    store.getState().refreshFormalProjects()
+    const record = () => store.getState().projects.find(p => p.pmsProjectId === budget.id)
+    assert.deepEqual({ brand: record().brand, productLine: record().productLine, marketName: record().marketName }, sourceMetadata)
+    const canonicalBefore = structuredClone(registry.getState().projects)
+    const milestones = { conceptStart: '2032-02-01', str5: '2032-11-01' }
+    assert.doesNotThrow(() => store.getState().addVersion(record().id, 'annual', { ...meta, metadata: sourceMetadata, milestones }))
+    assert.equal(record().versions.length, 1)
+    assert.equal(record().versions[0].milestones.conceptStart, milestones.conceptStart)
+    assert.equal(record().versions[0].milestones.str5, milestones.str5)
+    store.getState().addVersion(record().id, 'annual', { ...meta, metadata: sourceMetadata })
+    assert.equal(record().versions.length, 2)
+    assert.equal(record().versions[1].milestones.str5, milestones.str5)
+    assert.deepEqual(registry.getState().projects, canonicalBefore)
+  }
+})
 await check('Permission migration handles custom roles, explicit denies, malformed grants and legacy absent globals', async () => {
   const migrated = migratePermissionState({ globalRoles: [{ name: '模型组', members: ['tester'] }], globalRolePerms: { 模型组: { 'configCenter:planEdit': true, unknown: true }, 独立: { 'configCenter:planEdit': true, 'configCenter:hrModelEdit': false }, 损坏: { 'configCenter:planEdit': 'true' } } }, 2)
   assert.equal(migrated.globalRolePerms.模型组['configCenter:hrModelEdit'], true)
