@@ -133,6 +133,34 @@ check('actual manual form patch preserves responsibility and roles across all ca
   assert.deepEqual(completion.resolveManualCompletionResponsibility('整机产品项目',{machineSpm:['演示用户03']},[owner],[owner],[owner]),['演示用户03'])
   assert.deepEqual(completion.resolveManualCompletionResponsibility('能力建设项目',{},['演示用户03'],[owner],[owner]),['演示用户03'])
 })
+check('single tOS team-role edits and explicit clearing preserve every untouched role and permission', () => {
+  const completion = get('src/lib/manualProjectCompletion.ts')
+  const { usePermissionStore: permissions } = get('src/stores/permission.ts')
+  const id = create('budget', 'tOS版本项目', 'tOS团队增量补录')
+  const baseline = { versionProjectManager:[owner], se:['演示用户03'], sqa:['演示用户04'] }
+  assert.ok(store.getState().updateProject(id,{fieldValues:{...record(id).fieldValues,tosTeamRoles:baseline}},owner))
+  const permissionSnapshot = JSON.parse(JSON.stringify(permissions.getState().rolePermissionsByProject[id]))
+  const roleMembers = name => permissions.getState().rolesByProject[id].find(role=>role.name===name)?.members
+  const submit = infoValues => {
+    const current = record(id)
+    const patch = completion.buildManualProjectSpaceUpdate(current,{infoValues,responsiblePersons:current.responsiblePersons,healthStatus:'正常',projectStatus:current.status,projectSecondaryCategory:current.secondaryCategory || ''})
+    assert.ok(store.getState().updateProject(id,patch,owner))
+    assert.equal(store.getState().syncTosTeamPermissionMembers(id),true)
+  }
+  for (const changedMembers of [['演示用户05'], []]) {
+    submit({tosSe:changedMembers})
+    assert.deepEqual(record(id).fieldValues.tosTeamRoles,{...baseline,se:changedMembers})
+    assert.deepEqual(roleMembers('版本项目经理'),[owner]); assert.deepEqual(roleMembers('SQA'),['演示用户04'])
+    assert.deepEqual(roleMembers('SE'),changedMembers)
+    assert.deepEqual(record(id).responsiblePersons,[owner]); assert.equal(record(id).leader,owner)
+    assert.equal(hasPermission(owner,id,'basicInfo:编辑'),true)
+    assert.deepEqual(permissions.getState().rolePermissionsByProject[id],permissionSnapshot)
+  }
+  submit({tosVersion:'tOS手动快照'})
+  assert.deepEqual(record(id).fieldValues.tosTeamRoles,{...baseline,se:[]})
+  assert.deepEqual(roleMembers('版本项目经理'),[owner]); assert.deepEqual(roleMembers('SQA'),['演示用户04'])
+  registry.deleteConfiguredProject(id,admin)
+})
 check('binding/unbinding and formal deletion preserve roadmap data and ID while canonical deletion removes projection', () => {
   const result = registry.createConfiguredProject({projectAttribute:'formal',sourceBid:'EXT-001',responsiblePersons:[owner]},admin)
   assert.equal(result.ok,true)

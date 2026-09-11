@@ -65,7 +65,7 @@ export function buildManualProjectSpaceUpdate(project: ProjectItem, input: {
   projectSecondaryCategory: string
 }): ProjectItem {
   const { infoValues } = input
-  const merged = mergeProjectInfoValues(project as unknown as ProjectInfoProject, infoValues) as unknown as ProjectItem
+  const merged = mergeProjectInfoValues(project as unknown as ProjectInfoProject, infoValues, { preserveOmittedTosRoles: true }) as unknown as ProjectItem
   for (const key of ['machineTeamRoles', 'tosTeamRoles'] as const) {
     const prefix = key === 'machineTeamRoles' ? 'machine' : 'tos'
     if (!Object.keys(infoValues).some(field => field.startsWith(prefix))) {
