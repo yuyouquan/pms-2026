@@ -4,7 +4,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 import { PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
 import { initialProjects } from '@/data/projects'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
-import { PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
 
 export const TECHNICAL_TEAM_PERMISSION_MAPPING = {
@@ -66,6 +66,13 @@ export const getFixedProjectRoles = (project: RoleProject): Role[] => {
     : project.type === PROJECT_TYPE_TOS_VERSION
       ? TOS_TEAM_PERMISSION_MAPPING
       : null
+  if (project.createdBy) {
+    const responsible = normalizeRoleMembers(project.responsiblePersons)
+    const team = mapping ? Object.entries(mapping).map(([name, field]) => ({ name, members: getProjectTeamMembers(project, field), isFixed: true }))
+      : buildDefaultRoles().filter(role => role.name !== '系统管理员').map(role => ({ ...role, members: [] as string[] }))
+    if (project.type === PROJECT_CATEGORY_MACHINE) team.push({ name: 'SPM', members: responsible, isFixed: true })
+    return [...team, { name: '系统管理员', members: responsible, isFixed: true }]
+  }
   if (!mapping) return buildDefaultRoles()
   return Object.entries(mapping).map(([name, field]) => ({
     name,
@@ -219,7 +226,7 @@ function buildDefaultRolePermissions(): Record<string, Record<string, boolean>> 
 
 function buildPermissionsForRoles(roles: readonly Role[]): Record<string, Record<string, boolean>> {
   return Object.fromEntries(roles.map(role => {
-    const managerRole = role.name === '技术项目负责人' || role.name === '版本项目经理'
+    const managerRole = role.name === '技术项目负责人' || role.name === '版本项目经理' || role.name === 'SPM'
     const source = managerRole
       ? PROJECT_PERMISSION_PRESETS['项目经理']
       : PROJECT_PERMISSION_PRESETS[role.name] || ['basicInfo:查看']
@@ -229,7 +236,7 @@ function buildPermissionsForRoles(roles: readonly Role[]): Record<string, Record
 
 function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = []): Role[] {
   const fixed = getFixedProjectRoles(project)
-  if (project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
+  if (!project.createdBy && project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
   return [...fixed, ...existing.filter(role => !role.isFixed)]
 }
 

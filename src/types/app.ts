@@ -1,3 +1,4 @@
+import type { ProjectRegistryMetadata } from '@/types/projectRegistry'
 // Common prop types for extracted components
 // Derived from the mock data structures in src/app/page.tsx
 
@@ -27,7 +28,8 @@ export type ProjectInfoValue = string | boolean | null | string[] | JiraProjectC
 export type ProjectInfoValues = Record<string, ProjectInfoValue>
 
 /** Project record - matches initialProjects structure in page.tsx */
-export interface ProjectItem {
+export interface ProjectItem extends ProjectRegistryMetadata {
+  responsiblePersons?: string[];
   id: string;
   sourceBid?: string;
   name: string;

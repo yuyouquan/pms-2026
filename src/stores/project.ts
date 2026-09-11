@@ -1,3 +1,5 @@
+import { getProjectAttribute, isFormalProject, type ProjectRegistryHistoryEntry } from '@/types/projectRegistry'
+import { createRegistryHistoryEntry, validateRegistryCreation, validateRegistryProject } from '@/lib/projectRegistryRules'
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
@@ -35,6 +37,7 @@ import {
   TECHNICAL_TEAM_PERMISSION_MAPPING,
   TOS_TEAM_PERMISSION_MAPPING,
   hasPermission,
+  isGlobalAdmin,
   usePermissionStore,
 } from '@/stores/permission'
 import { mergeResponsiblePersonsIntoVisibleMembers } from '@/lib/projectResponsibility'
@@ -82,9 +85,9 @@ type ProjectPatch = Partial<Omit<ProjectItem, 'type' | 'secondaryCategory'>> & {
 }
 type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 export type ProjectListViewMode = 'list' | 'card' | 'calendar'
-type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode }
+type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode; registryHistory: ProjectRegistryHistoryEntry[] }
 
-export const PROJECT_STORE_VERSION = 9
+export const PROJECT_STORE_VERSION = 10
 
 const withEosTransitionTime = (project: Project, previous?: Project, now = new Date().toISOString()): Project => {
   if (project.status !== 'EOS') return project
@@ -143,6 +146,8 @@ function applyTosRoleMembersToProject(project: Project, role: string, members: s
 }
 
 export interface ProjectMutationOptions {
+  /** Narrow configuration path: actor and allowed changed fields are checked in the store. */
+  registryOperation?: 'create' | 'update'
   allowedFirstSaleTosValues?: readonly string[]
 }
 
@@ -188,6 +193,7 @@ function migrateMachineTosHistory(project: Project): Project {
 }
 
 function migrateProjectSourceIdentity(project: Project): Project {
+  if (!isFormalProject(project)) return project
   const existingBid = typeof project.sourceBid === 'string' ? project.sourceBid.trim() : ''
   if (existingBid) return existingBid === project.sourceBid ? project : { ...project, sourceBid: existingBid }
   const projectName = project.name.trim()
@@ -200,6 +206,7 @@ function migrateProjectSourceIdentity(project: Project): Project {
 const migrateProjectHistory = (project: Project): Project => (
   migrateProjectSourceIdentity(migrateMachineTosHistory({
     ...project,
+    projectAttribute: getProjectAttribute(project),
     status: normalizeLegacyProjectStatus(project.type, project.status),
   }))
 )
@@ -224,6 +231,7 @@ const initialTosTypeConfigsByProjectId = initialProjects.reduce((acc, project) =
 }, {} as Record<string, TosTypeConfigRow[]>)
 
 export interface ProjectState {
+  registryHistory: ProjectRegistryHistoryEntry[]
   projects: Project[]
   selectedProject: Project | null
   currentLoginUser: string
@@ -269,7 +277,7 @@ export interface ProjectActions {
   updateProject: (projectId: string, update: ProjectUpdate, actor?: string, options?: ProjectMutationOptions) => Project | null
   deleteProject: (projectId: string, actor?: string) => boolean
   syncTechnicalTeamPermissionMembers: (projectId: string) => boolean
-  syncTosTeamPermissionMembers: (projectId: string, role?: string, members?: string[]) => boolean
+  syncTosTeamPermissionMembers: (projectId: string, role?: string, members?: string[], actor?: string) => boolean
   syncTosTeamPermissionMembersGuarded: (projectId: string, actor: string, role: string, members: string[]) => boolean
 }
 
@@ -420,7 +428,7 @@ const fillMissingSeedProjectFields = (persisted: Project, seed: Project): Projec
 
 export function migrateProjectState(persistedState: unknown, version: number): PersistedProjectState {
   if (!isRecord(persistedState) || !Array.isArray(persistedState.projects)) {
-    return { projects: initialProjectState.map(cloneProjectSeed), projectListView: 'list' }
+    return { projects: initialProjectState.map(cloneProjectSeed), projectListView: 'list', registryHistory: [] }
   }
 
   const projectListView: ProjectListViewMode = persistedState.projectListView === 'card'
@@ -429,6 +437,9 @@ export function migrateProjectState(persistedState: unknown, version: number): P
     ? persistedState.projectListView
     : 'list'
 
+  const registryHistory = Array.isArray(persistedState.registryHistory)
+    ? persistedState.registryHistory.filter((entry): entry is ProjectRegistryHistoryEntry => isRecord(entry) && typeof entry.projectId === 'string' && typeof entry.timestamp === 'string')
+    : []
   const seenIds = new Set<string>()
   const projects = persistedState.projects.flatMap(value => {
     if (!isRecord(value)) return []
@@ -452,10 +463,10 @@ export function migrateProjectState(persistedState: unknown, version: number): P
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
-    return { projects: initialProjectState.map(cloneProjectSeed), projectListView }
+    return { projects: initialProjectState.map(cloneProjectSeed), projectListView, registryHistory }
   }
   const migrationNow = new Date().toISOString()
-  const migratedProjects = (version < PROJECT_STORE_VERSION
+  const migratedProjects = (version < 9
     ? (() => {
         const seedById = new Map(initialProjectState.map(seed => [seed.id, seed]))
         const merged = projects.map(project => {
@@ -468,11 +479,11 @@ export function migrateProjectState(persistedState: unknown, version: number): P
         ]
       })()
     : projects).map(project => withEosTransitionTime(project, undefined, migrationNow))
-  return { projects: migratedProjects, projectListView }
+  return { projects: migratedProjects, projectListView, registryHistory }
 }
 
 export function partializeProjectState(state: ProjectState & ProjectActions): PersistedProjectState {
-  return { projects: state.projects, projectListView: state.projectListView }
+  return { projects: state.projects, projectListView: state.projectListView, registryHistory: state.registryHistory }
 }
 
 const safeProjectStorage: StateStorage = {
@@ -553,9 +564,20 @@ function recordNormalProjectAudit(
   })
 }
 
+function appendRegistryAudits(history: ProjectRegistryHistoryEntry[], before: readonly Project[], after: readonly Project[], actor: string): ProjectRegistryHistoryEntry[] {
+  const previousById = new Map(before.map(project => [project.id, project]))
+  const nextById = new Map(after.map(project => [project.id, project]))
+  const entries = [...new Set([...previousById.keys(), ...nextById.keys()])].flatMap(id => {
+    const entry = createRegistryHistoryEntry(previousById.get(id) || null, nextById.get(id) || null, actor)
+    return entry ? [entry] : []
+  })
+  return entries.length ? [...entries, ...history] : history
+}
+
 export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
   (set, get) => ({
     projects: initialProjectState,
+    registryHistory: [],
     selectedProject: null,
     currentLoginUser: DEFAULT_LOGIN_USER,
     projectSearchText2: '',
@@ -603,6 +625,17 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       projectMemberMap: { ...state.projectMemberMap, [projectId]: members },
     })),
     addProject: (newProject, actor, options) => {
+      const actingUser = actor?.trim() || get().currentLoginUser.trim()
+      if (!isGlobalAdmin(actingUser)) return false
+      if (get().projects.some(project => project.id === newProject.id)) return false
+      const previousProjects = get().projects
+      newProject = { ...newProject, projectAttribute: getProjectAttribute(newProject) }
+      if (validateRegistryProject(previousProjects, newProject)) return false
+      if (options?.registryOperation === 'create') {
+        const enums = useEnumStore.getState()
+        if (isFormalProject(newProject) && (!enums.hasHydrated || enums.hydrationError)) return false
+        if (validateRegistryCreation(newProject, actingUser, enums.rowsByType)) return false
+      }
       const sourceBid = normalizeProjectSourceBid(newProject)
       let projectToAdd = sourceBid && newProject.sourceBid !== sourceBid
         ? { ...newProject, sourceBid }
@@ -610,7 +643,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       projectToAdd = withEosTransitionTime(projectToAdd)
       if (hasDuplicateProjectSourceBid(get().projects, projectToAdd)) return false
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
-      if (isMachineProjectType(projectToAdd.type)) {
+      if (isMachineProjectType(projectToAdd.type) && options?.registryOperation !== 'create') {
         const resolution = resolveMachineTosUpdate(get().projects, projectToAdd)
         if (!resolution.ok) return false
         projectToAdd = synchronizeMachineTosValues(
@@ -638,19 +671,38 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       } else {
         set(state => ({ projects: [...state.projects, projectToAdd] }))
       }
+      if (projectToAdd.createdBy) {
+        usePermissionStore.getState().ensureProjectPermissions([projectToAdd])
+        set(state => ({ projectMemberMap: { ...state.projectMemberMap, [projectToAdd.id]: [...(projectToAdd.responsiblePersons || [])] } }))
+      }
       if (projectToAdd.type === '技术项目' || projectToAdd.type === PROJECT_TYPE_TOS_VERSION) {
         const savedProject = get().projects.find(project => project.id === projectToAdd.id)
         if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
       }
-      recordNormalProjectAudit('create', null, projectToAdd, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      recordNormalProjectAudit('create', null, projectToAdd, actingUser)
+      set(state => ({ registryHistory: appendRegistryAudits(state.registryHistory, previousProjects, state.projects, actingUser) }))
       return true
     },
     updateProject: (projectId, update, actor, options) => {
       const existing = get().projects.find(project => project.id === projectId)
       if (!existing) return null
+      const actingUser = actor?.trim() || get().currentLoginUser.trim()
+      const registryUpdate = options?.registryOperation === 'update'
+      if (registryUpdate ? !isGlobalAdmin(actingUser) : !hasPermission(actingUser, projectId, 'basicInfo:编辑')) return null
+      const previousProjects = get().projects
       const updated = typeof update === 'function'
-        ? update(existing)
+        ? update(cloneProjectSeed(existing))
         : { ...existing, ...update } as Project
+      if (!isFormalProject(existing)) {
+        updated.name = updated.name.trim()
+        if (updated.projectCode !== undefined) updated.projectCode = updated.projectCode.trim()
+      }
+      if (registryUpdate && Object.keys({ ...existing, ...updated }).some(key => (
+        !['name', 'projectCode', 'boundFormalProjectId'].includes(key)
+        && JSON.stringify(existing[key]) !== JSON.stringify(updated[key])
+      ))) return null
+      if (!registryUpdate && updated.boundFormalProjectId !== existing.boundFormalProjectId) return null
+      if (validateRegistryProject(previousProjects, updated, existing)) return null
       const sourceBid = normalizeProjectSourceBid(updated)
       let projectToSave = sourceBid && updated.sourceBid !== sourceBid
         ? { ...updated, sourceBid }
@@ -658,7 +710,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       projectToSave = withEosTransitionTime(projectToSave, existing)
       if (hasDuplicateProjectSourceBid(get().projects, projectToSave)) return null
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
-      if (isMachineProjectType(projectToSave.type)) {
+      if (isMachineProjectType(projectToSave.type) && !registryUpdate) {
         const resolution = resolveMachineTosUpdate(get().projects, projectToSave)
         if (!resolution.ok) return null
         projectToSave = synchronizeMachineTosValues(
@@ -693,16 +745,21 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         const savedProject = get().projects.find(project => project.id === projectId)
         if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
       }
-      recordNormalProjectAudit('update', existing, projectToSave, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      recordNormalProjectAudit('update', existing, projectToSave, actingUser)
+      set(state => ({ registryHistory: appendRegistryAudits(state.registryHistory, previousProjects, state.projects, actingUser) }))
       return projectToSave
     },
     deleteProject: (projectId, actor) => {
+      const actingUser = actor?.trim() || get().currentLoginUser.trim()
+      if (!isGlobalAdmin(actingUser)) return false
       const currentProjects = get().projects
       const existing = currentProjects.find(project => project.id === projectId)
       if (!existing) return false
-      let projects = currentProjects.filter(project => project.id !== projectId)
+      let projects = currentProjects.filter(project => project.id !== projectId).map(project => (
+        project.boundFormalProjectId === projectId ? { ...project, boundFormalProjectId: null } : project
+      ))
       let recomputedNewProject: Project | null = null
-      if (isMachineProjectType(existing.type) && existing.productType === '老品') {
+      if (isFormalProject(existing) && isMachineProjectType(existing.type) && existing.productType === '老品' && existing.firstSaleTosVersion) {
         const familyName = normalizeMachineFamilyName(existing.name)
         const matchingNewProjects = projects.filter(project => (
           isMachineProjectType(project.type)
@@ -727,11 +784,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         projects,
         selectedProject: state.selectedProject?.id === projectId
           ? null
-          : recomputedNewProject && state.selectedProject?.id === recomputedNewProject.id
-            ? recomputedNewProject
-            : state.selectedProject,
+          : projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject,
       }))
-      recordNormalProjectAudit('delete', existing, null, actor?.trim() || get().currentLoginUser.trim() || '系统')
+      recordNormalProjectAudit('delete', existing, null, actingUser)
+      set(state => ({ registryHistory: appendRegistryAudits(state.registryHistory, currentProjects, state.projects, actingUser) }))
       return true
     },
     syncTechnicalTeamPermissionMembers: (projectId) => {
@@ -740,7 +796,9 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       usePermissionStore.getState().syncProjectTeamPermissionMembers(project)
       return true
     },
-    syncTosTeamPermissionMembers: (projectId, role, members) => {
+    syncTosTeamPermissionMembers: (projectId, role, members, actor) => {
+      const actingUser = actor?.trim() || get().currentLoginUser.trim()
+      if (role && !hasPermission(actingUser, projectId, 'projectPermission:manageRoles')) return false
       const project = get().projects.find(item => item.id === projectId)
       if (!project || project.type !== PROJECT_TYPE_TOS_VERSION) return false
       let synchronizedProject = project
@@ -748,6 +806,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         const nextProject = applyTosRoleMembersToProject(project, role, members || [])
         if (!nextProject) return false
         synchronizedProject = nextProject
+        const previousProjects = get().projects
         set(state => ({
           projects: state.projects.map(item => item.id === projectId ? synchronizedProject : item),
           selectedProject: state.selectedProject?.id === projectId ? synchronizedProject : state.selectedProject,
@@ -760,6 +819,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
                 ),
               }
             : state.projectMemberMap,
+          registryHistory: appendRegistryAudits(state.registryHistory, previousProjects, state.projects.map(item => item.id === projectId ? synchronizedProject : item), actingUser),
         }))
       }
       usePermissionStore.getState().syncProjectTeamPermissionMembers(synchronizedProject)
@@ -767,7 +827,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     },
     syncTosTeamPermissionMembersGuarded: (projectId, actor, role, members) => {
       if (!hasPermission(actor, projectId, 'projectPermission:manageRoles')) return false
-      return get().syncTosTeamPermissionMembers(projectId, role, members)
+      return get().syncTosTeamPermissionMembers(projectId, role, members, actor)
     },
   }),
   {
