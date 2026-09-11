@@ -105,6 +105,17 @@ export type RegistryMutationResult = { ok: true; projectId: string } | { ok: fal
 - [ ] Config center adds 人力资源管道 -> 整机人力模型 using existing model data and edit permissions. Remove old model leaf; keep other original config leaves.
 - [ ] Verify all four forms, optional/incomplete formal plan dates, model changes, version detail information, readonly behavior, and config data reuse. Run focused checks, typecheck, commit and report.
 
+## Task 6: Refresh feature-aware Mock data
+
+**User steering:** Refresh Mock data for the new feature, exercise actual interactions, and only commit/push after tests pass.
+**Files:** Current project, roadmap and four HR seed-data modules, mock dataset storage/migration helpers, relevant dataset verifier and feature acceptance scenarios.
+
+- [ ] Provide coherent visible formal, budget and roadmap examples across all four supported project types; machine-only roadmaps. Include bound and unbound budgets, annual-source association, history, incomplete roadmap, and empty resource examples.
+- [ ] Formal sample milestone dates come from the sample formal level-one plan; budget sample dates are visibly different and stay independent after binding. Annual references share source version IDs without duplicate counts.
+- [ ] Use deterministic IDs and existing sanitized demo identities; avoid presenting legacy unknown-code/collision examples as normal new-feature data. Preserve supported old stored-data migration and user-entered versions; no fuzzy identity joins.
+- [ ] Update relevant Mock verifier contracts and verify clean fresh-origin data plus reload/migration behavior.
+- [ ] Commit task files only after relevant feature and data checks. Final browser acceptance and full build still required before feature push.
+
 ## Final acceptance
 
 - [ ] Review integrated branch against full spec and user milestone correction. Fix meaningful findings before delivery.
