@@ -102,7 +102,7 @@ export type RegistryMutationResult = { ok: true; projectId: string } | { ok: fal
 - [ ] Formal new-version milestones readonly from own level-one plan. Budget new-version milestones editable and persisted with latest-version table edits; bound budget never inherits formal milestone values. Historical rows retain existing immutable scope.
 - [ ] For machine budget records unbound: require brand, product line, market name at version creation; bound: display formal values readonly. Machine phase preview table uses selected configured model/level/coefficient and is readonly; tOS phase table remains manual. Technical/capability retain their correct phase/date structures.
 - [ ] All detail modals display milestone/date information. Linked annual details respect readonly source scope.
-- [ ] Config center adds 人力资源管道 -> 整机人力模型 using existing model data and edit permissions. Remove old model leaf; keep other original config leaves.
+- [ ] Config center adds 人力资源管道 -> 整机人力模型 using existing model data. Add configurable configCenter:hrModelEdit seeded/migrated from each role's existing configCenter:planEdit, including custom roles; guard UI and store writes. Remove old model leaf; keep other original config leaves.
 - [ ] Verify all four forms, optional/incomplete formal plan dates, model changes, version detail information, readonly behavior, and config data reuse. Run focused checks, typecheck, commit and report.
 
 ## Task 6: Refresh feature-aware Mock data
