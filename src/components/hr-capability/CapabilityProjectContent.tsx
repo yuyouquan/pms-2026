@@ -1,8 +1,9 @@
 'use client'
 
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { useMemo } from 'react'
 import { Segmented } from 'antd'
-import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import ProjectListTab from './ProjectListTab'
 import HistoryVersionSpace from './HistoryVersionSpace'
 import MonthlyInvestmentTab from './MonthlyInvestmentTab'
@@ -13,6 +14,8 @@ import MonthlyEditModal from './MonthlyEditModal'
 import VersionHistoryModal from './VersionHistoryModal'
 
 export default function CapabilityProjectContent() {
+  const scopeId = useHrResourceScope()
+  const resourceState = useHrCapabilityStore()
   const activeTab = useHrCapabilityStore((s) => s.activeTab)
   const setActiveTab = useHrCapabilityStore((s) => s.setActiveTab)
   const setShowNewProjectModal = useHrCapabilityStore((s) => s.setShowNewProjectModal)
@@ -46,10 +49,10 @@ export default function CapabilityProjectContent() {
   )
 
   const handleSelectProject = (projectId: string) => {
-    useHrCapabilityStore.getState().setSelectedProjectId(projectId)
+    resourceState.setSelectedProjectId(projectId)
     const project = projects.find((p) => p.id === projectId)
     if (project) {
-      setHistoryVersionFilters({ projectName: [project.name] })
+      setHistoryVersionFilters({ projectName: [project.id] })
     }
     setActiveTab('historyVersion')
   }
@@ -65,11 +68,11 @@ export default function CapabilityProjectContent() {
           flexShrink: 0,
         }}
       >
-        <Segmented
+        {!scopeId && <Segmented
           options={tabs}
           value={activeTab}
           onChange={(v) => setActiveTab(v as string)}
-        />
+        />}
       </div>
 
       {/* 内容区 */}
@@ -87,17 +90,17 @@ export default function CapabilityProjectContent() {
         versionId={editingVersionId}
         projectId={selectedProjectId ?? ''}
         readOnly={versionDetailReadOnly}
-        onCancel={() => useHrCapabilityStore.getState().setShowVersionDetailModal(false)}
+        onCancel={() => resourceState.setShowVersionDetailModal(false)}
       />
       <MonthlyEditModal
         open={showMonthlyEditModal}
         monthlyId={editingMonthlyId}
-        onCancel={() => useHrCapabilityStore.getState().setShowMonthlyEditModal(false)}
+        onCancel={() => resourceState.setShowMonthlyEditModal(false)}
       />
       <VersionHistoryModal
         open={showVersionHistoryModal}
         versionId={historyVersionId}
-        onCancel={() => useHrCapabilityStore.getState().setShowVersionHistoryModal(false)}
+        onCancel={() => resourceState.setShowVersionHistoryModal(false)}
       />
     </div>
   )

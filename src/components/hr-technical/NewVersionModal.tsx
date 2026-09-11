@@ -1,5 +1,7 @@
 'use client'
 
+import { getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
@@ -27,7 +29,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import * as XLSX from 'xlsx'
-import { useHrTechnicalStore } from '@/stores/hrTechnical'
+import { useHrTechnicalStore } from '@/hooks/useHrResourceStores'
 import {
   TECH_BUDGET_TYPES,
   TECH_BUDGET_TYPE_LABELS,
@@ -47,6 +49,7 @@ interface NewVersionModalProps {
 
 export default function NewVersionModal({ open, projectId, onCancel }: NewVersionModalProps) {
   const { message } = App.useApp()
+  const scopeId = useHrResourceScope()
   const { primaryOptions, getSecondaryOptions, isValidPair } = useHrDepartmentOptions()
   const { projects, addVersion } = useHrTechnicalStore()
   const [localProjectId, setLocalProjectId] = useState(projectId)
@@ -66,8 +69,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
   useEffect(() => {
     if (open) {
-      setLocalProjectId(projectId || '')
-      setBudgetType('annual')
+      setLocalProjectId(scopeId ? projects.find(p => p.pmsProjectId === scopeId)?.id ?? '' : projectId || '')
+      setBudgetType(getHrAllowedBudgetTypes(projects.find(p => scopeId ? p.pmsProjectId === scopeId : p.id === projectId))[0] ?? 'annual')
       setEditData([])
     }
   }, [open, projectId])
@@ -312,7 +315,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
   }
 
-  const budgetOptions = TECH_BUDGET_TYPES.map(bt => {
+  const budgetOptions = TECH_BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value)).map(bt => {
     const restricted = !hasIpm && TECH_IPM_REQUIRED_TYPES.includes(bt.value)
     return {
       value: bt.value,
@@ -353,7 +356,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ color: 'var(--pms-text-tertiary)' }}>TDT项目：</span>
-            <Select
+            {scopeId ? <span>{project?.tdtName}</span> : (<Select
               showSearch
               aria-label="选择项目"
               placeholder="请选择项目"
@@ -361,8 +364,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.tdtName }))}
               optionFilterProp="label"
               style={{ minWidth: 280 }}
-              onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setEditData([]) }}
-            />
+              onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setEditData([]) }}
+            />)}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
             <span style={{ color: 'var(--pms-text-tertiary)' }}>IPM：</span>
@@ -382,7 +385,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         </div>
 
         {project && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-        {hasIpm && budgetType !== 'annual' && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={resolveHrFormalSource('technical', project?.ipmProjectCode ?? null).project ? '里程碑取自主市场／主类型最新已发布一级计划；尚无已发布计划时等待计划发布。' : '当前正式项目编码未找到对应项目，请在项目列表重新绑定。'} />}
+        {isHrFormalRecord(project) && budgetType !== 'annual' && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={resolveHrFormalSource('technical', project?.ipmProjectCode ?? null, project?.pmsProjectId).project ? '里程碑取自主市场／主类型最新已发布一级计划；尚无已发布计划时等待计划发布。' : '当前正式项目编码未找到对应项目，请在项目列表重新绑定。'} />}
 
         {/* 表单字段 */}
         <Form layout="vertical">

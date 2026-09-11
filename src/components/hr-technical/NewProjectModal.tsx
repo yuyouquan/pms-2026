@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { App, Modal, Form, Input, Select } from 'antd'
-import { useHrTechnicalStore } from '@/stores/hrTechnical'
+import { useHrTechnicalStore } from '@/hooks/useHrResourceStores'
 import { TECH_PLANNING_YEAR_OPTIONS } from '@/constants/hrTechnical'
 
 interface NewProjectModalProps {

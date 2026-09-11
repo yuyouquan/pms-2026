@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Modal, Timeline, Tag, Spin, Empty } from 'antd'
-import { useHrTosStore } from '@/stores/hrTos'
+import { useHrTosStore } from '@/hooks/useHrResourceStores'
 import { TOS_BUDGET_TYPE_LABELS } from '@/constants/hrTos'
 import type { TosVersionOperationLog, TosVersionOperationType } from '@/types/hrTos'
 

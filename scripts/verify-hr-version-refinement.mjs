@@ -15,10 +15,13 @@ eq(rules.getHrVersionSeed(versions, 'projectEstimate')?.id, 'b1', 'missing budge
 eq(rules.getHrVersionSeed([], 'annual'), undefined, 'new project has no seed')
 eq(rules.nextHrMinorVersion(versions, 'projectEstimate'), 1, 'cross-budget seed still creates V0.1')
 eq(rules.nextHrMinorVersion(versions, 'annual'), 3, 'same-budget seed creates next number')
-const project = { ipmProjectCode: 'FORMAL', versions }
+const { useProjectStore: registry } = loadTypeScriptModule(root, 'src/stores/project.ts')
+const base = registry.getState().projects[0]
+registry.setState({ currentLoginUser: '演示用户01', projects: [{...base,id:'budget',projectAttribute:'budget'}, {...base,id:'formal',projectAttribute:'formal'}] })
+const project = { pmsProjectId: 'budget', ipmProjectCode: 'FORMAL', versions }
 const changes = { milestones: { conceptStart: '2031-01-01' }, projectStartTime: '2031-01-01', projectLevel: 'A', levelCoefficient: 1.25 }
 eq(rules.allowedHrVersionUpdates(project, versions[0], changes), changes, 'bound annual latest allows manual dates and level')
-eq(rules.allowedHrVersionUpdates(project, versions[1], changes), { levelCoefficient: 1.25 }, 'bound nonannual remains linked')
+eq(rules.allowedHrVersionUpdates({ ...project, pmsProjectId:'formal' }, versions[1], changes), { levelCoefficient: 1.25 }, 'bound nonannual remains linked')
 eq(rules.allowedHrVersionUpdates(project, versions[2], changes), {}, 'historical annual remains read only')
 eq(rules.allowedHrVersionUpdates({ ...project, ipmProjectCode: null }, versions[1], changes), changes, 'unbound latest remains editable')
 const config = loadTypeScriptModule(root, 'src/constants/hrConfig.ts')

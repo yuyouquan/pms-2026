@@ -81,6 +81,9 @@ export interface HrCapabilityVersion {
 
 /** 能力建设项目 */
 export interface HrCapabilityProject {
+  pmsProjectId?: string
+  migrationIssue?: string
+  legacyHrSnapshot?: unknown
   id: string
   /** 项目名称 */
   name: string

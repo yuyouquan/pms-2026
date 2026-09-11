@@ -1,3 +1,4 @@
+import { canAccessHrProject, getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
 /** Shared HR version rules. Legacy lock fields remain readable only for data migration. */
 export const HR_BUDGET_TYPES = ['annual', 'projectEstimate', 'projectBudget'] as const
 export const HR_BATCH_OPTIONS = Array.from({ length: 20 }, (_, index) => ({ value: index + 1, label: `第${index + 1}批` }))
@@ -63,24 +64,25 @@ export function getMachineProjectYear(project: { versions: readonly { createdAt:
 
 /** Creation and copying share the same project-state and budget prerequisites. */
 export function canCreateHrVersion(
-  project: { status: string; ipmProjectCode: string | null } | null | undefined,
+  project: { status: string; ipmProjectCode: string | null; pmsProjectId?: string } | null | undefined,
   budgetType: string | null,
 ): boolean {
   return project?.status === 'active' && !!budgetType
-    && (budgetType === 'annual' || !!project.ipmProjectCode)
+    && canAccessHrProject(project, true) && getHrAllowedBudgetTypes(project).some(type => type === budgetType)
 }
 
 /** Enforce edit scope in the store as well as in every UI entry point. */
 export function allowedHrVersionUpdates<T extends object>(
-  project: { ipmProjectCode: string | null; versions: readonly HrVersionIdentity[] },
+  project: { ipmProjectCode: string | null; pmsProjectId?: string; versions: readonly HrVersionIdentity[] },
   version: HrVersionIdentity,
   updates: T,
 ): Partial<T> {
+  if (!canAccessHrProject(project, true)) return {}
   const allowed = { ...updates } as Record<string, unknown>
   for (const key of Object.keys(allowed)) {
     if (key === 'batch') {
       if (allowed.batch !== null && !isHrBatch(allowed.batch)) delete allowed.batch
-    } else if (!isLatestHrVersion(project, version) || (project.ipmProjectCode && version.budgetType !== 'annual' && ['milestones', 'projectStartTime', 'projectEndTime', 'projectLevel'].includes(key))) {
+    } else if (!isLatestHrVersion(project, version) || (isHrFormalRecord(project) && version.budgetType !== 'annual' && ['milestones', 'projectStartTime', 'projectEndTime', 'projectLevel'].includes(key))) {
       delete allowed[key]
     }
   }

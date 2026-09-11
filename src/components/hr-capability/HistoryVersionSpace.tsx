@@ -1,5 +1,8 @@
 'use client'
 
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
+import HrSourceLink from '@/components/project-resources/HrSourceLink'
+import { canEditHrInScope, isHrFormalRecord } from '@/lib/hrProjectRegistry'
 import { useMemo, useState } from 'react'
 import {
   Card,
@@ -26,7 +29,7 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { canCreateHrVersion, isLatestHrVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
-import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import {
   CAPABILITY_IPM_REQUIRED_TIP,
   CAPABILITY_BUDGET_TYPES,
@@ -46,6 +49,7 @@ import { exportMultiSheet, exportTimestamp, type ExportColumn } from '@/utils/ex
 /** 扁平化版本行：版本数据 + 所属项目信息 */
 interface FlatVersionRow extends HrCapabilityVersion {
   projectName: string
+  canEdit: boolean
   isLatest: boolean
   isBound: boolean
   sourceHint: string
@@ -117,6 +121,7 @@ function EditableDateCell({
 }
 
 export default function HistoryVersionSpace() {
+  const scopeId = useHrResourceScope()
   const { message } = App.useApp()
   // ── Store ──────────────────────────────────────────────────────────
   const projects = useHrCapabilityStore((s) => s.projects)
@@ -137,7 +142,7 @@ export default function HistoryVersionSpace() {
 
   // ── 筛选器选项 ────────────────────────────────────────────────────
   const projectNameOptions = useMemo(
-    () => projects.map((p) => ({ label: p.name, value: p.name })),
+    () => projects.map((p) => ({ label: p.name, value: p.id })),
     [projects],
   )
 
@@ -145,12 +150,13 @@ export default function HistoryVersionSpace() {
   const allFlatVersions = useMemo<FlatVersionRow[]>(() => {
     const rows: FlatVersionRow[] = []
     for (const project of projects) {
-      const source = project.ipmProjectCode ? resolveHrFormalSource('capability', project.ipmProjectCode) : null
+      const source = project.ipmProjectCode ? resolveHrFormalSource('capability', project.ipmProjectCode, project.pmsProjectId) : null
       for (const version of project.versions) {
         rows.push({
           ...version,
+          canEdit: canEditHrInScope(project, scopeId),
           isLatest: isLatestHrVersion(project, version),
-          isBound: !!project.ipmProjectCode,
+          isBound: isHrFormalRecord(project),
           sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
             ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待主市场／主类型一级计划发布' : ''
             : '',
@@ -161,7 +167,7 @@ export default function HistoryVersionSpace() {
       }
     }
     return rows
-  }, [projects])
+  }, [projects, scopeId])
 
   // ── 应用筛选器 ────────────────────────────────────────────────────
   const filteredVersions = useMemo<FlatVersionRow[]>(() => {
@@ -171,7 +177,7 @@ export default function HistoryVersionSpace() {
     return allFlatVersions
       .filter((row) => {
         if (f.budgetType.length > 0 && !f.budgetType.includes(row.budgetType)) return false
-        if (f.projectName.length > 0 && !f.projectName.includes(row.projectName)) return false
+        if (f.projectName.length > 0 && !f.projectName.includes(row.projectId) && !f.projectName.includes(row.projectName)) return false
         if (f.projectYear.length > 0) {
           const year = row.projectStartTime ? row.projectStartTime.slice(0, 4) : ''
           if (!f.projectYear.includes(year)) return false
@@ -200,6 +206,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <div>
             <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600 }}>{record.projectName}</span>
+            <HrSourceLink project={projects.find(project => project.id === record.projectId)} />
             {record.sourceHint && <div style={{ color: 'var(--pms-text-secondary)', fontSize: 12 }}>{record.sourceHint}</div>}
           </div>
         ),
@@ -254,7 +261,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableDateCell
             value={record.projectStartTime}
-            editable={record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
+            editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
             onSave={(v) =>
               updateVersion(record.projectId, record.id, {
                 projectStartTime: v ?? '',
@@ -271,7 +278,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableDateCell
             value={record.projectEndTime}
-            editable={record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
+            editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
             onSave={(v) =>
               updateVersion(record.projectId, record.id, {
                 projectEndTime: v ?? '',
@@ -324,7 +331,7 @@ export default function HistoryVersionSpace() {
                   }}
                 />
               </Tooltip>
-              {record.isLatest && project?.status === 'active' ? (
+              {record.canEdit && record.isLatest && project?.status === 'active' ? (
                 <Tooltip title="编辑版本信息及各部门预估投入">
                   <Button
                     type="text" aria-label="编辑"
@@ -340,7 +347,7 @@ export default function HistoryVersionSpace() {
                   />
                 </Tooltip>
               ) : null}
-              {project?.status === 'active' ? (
+              {record.canEdit && project?.status === 'active' ? (
                 <Tooltip title={canCreateHrVersion(project, record.budgetType) ? '复制此版本创建新版本' : CAPABILITY_IPM_REQUIRED_TIP}>
                   <Button
                     type="text" aria-label="复制"
@@ -368,22 +375,16 @@ export default function HistoryVersionSpace() {
                   }}
                 />
               </Tooltip>
-              <Popconfirm
+              {record.canEdit && <Popconfirm
                 title="删除版本数据"
-                description="删除后不可恢复；若所有版本均被删除，该项目将一并删除。"
+                description="删除后不可恢复；项目档案将保留，可继续新增版本。"
                 okText="确认删除"
                 okButtonProps={{ danger: true }}
                 cancelText="取消"
                 onConfirm={() => {
                   if (!project) return
-                  const remaining = project.versions.filter((v) => v.id !== record.id)
                   deleteVersion(record.projectId, record.id)
-                  if (remaining.length === 0) {
-                    deleteProject(record.projectId)
-                    message.success('所有版本已删除，项目已一并删除')
-                  } else {
-                    message.success('版本已删除')
-                  }
+                  message.success('版本已删除，项目档案保留')
                 }}
               >
                 <Button type="text" aria-label="删除" title="删除"
@@ -392,7 +393,7 @@ export default function HistoryVersionSpace() {
                   icon={<DeleteOutlined />}
                   onClick={(e) => e.stopPropagation()}
                 />
-              </Popconfirm>
+              </Popconfirm>}
             </Space>
           )
         },
@@ -483,7 +484,7 @@ export default function HistoryVersionSpace() {
               />
             </Space>
 
-            <Space size={12} className="pms-hr-filter-field">
+            {!scopeId && <Space size={12} className="pms-hr-filter-field">
               <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
                 项目名称
               </span>
@@ -498,7 +499,7 @@ export default function HistoryVersionSpace() {
                 options={projectNameOptions}
                 optionFilterProp="label"
               />
-            </Space>
+            </Space>}
 
             <Space size={12} className="pms-hr-filter-field">
               <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, whiteSpace: 'nowrap' }}>
@@ -522,6 +523,7 @@ export default function HistoryVersionSpace() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
+              disabled={!projects.some(project => canEditHrInScope(project, scopeId))}
               onClick={() => setShowNewVersionModal(true)}
             >
               新增版本

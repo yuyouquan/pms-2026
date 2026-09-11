@@ -1,5 +1,6 @@
 'use client'
 
+import { useHrFormalProjectSync } from '@/hooks/useHrFormalProjectSync'
 import { useEffect } from 'react'
 import { useRoadmapRegistryMigration } from '@/hooks/useRoadmapRegistryMigration'
 import { isFormalProject } from '@/types/projectRegistry'
@@ -29,6 +30,7 @@ const globalStyles = `
 `
 
 export default function Home() {
+  useHrFormalProjectSync()
   const roadmapMigrationConflicts = useRoadmapRegistryMigration()
   // ═══════ Routing-level store hooks ═══════
   const {

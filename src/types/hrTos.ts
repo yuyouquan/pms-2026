@@ -118,6 +118,9 @@ export interface HrTosVersion {
 
 /** tOS 项目 */
 export interface HrTosProject {
+  pmsProjectId?: string
+  migrationIssue?: string
+  legacyHrSnapshot?: unknown
   id: string
   /** 项目名称 */
   name: string

@@ -1,12 +1,10 @@
 /* ── HR Machine Project Types ──────────────────────────────────────── */
 
 /** 品牌 */
-export type MachineBrand = 'TECNO' | 'Infinix' | 'itel'
+export type MachineBrand = string
 
 /** 产品线 */
-export type MachineProductLine =
-  | 'CAMON' | 'NOTE' | 'GT' | 'POVE'
-  | 'SPARK' | 'HOT' | 'S' | 'P' | 'A' | 'CITY'
+export type MachineProductLine = string
 
 /** 预算类型 */
 export type BudgetType = 'annual' | 'projectEstimate' | 'projectBudget'
@@ -77,10 +75,14 @@ export interface HrMachineVersion {
 
 /** 整机产品项目 */
 export interface HrMachineProject {
+  pmsProjectId?: string
+  migrationIssue?: string
+  legacyHrSnapshot?: unknown
   id: string
   /** 项目名称 */
   name: string
   /** 品牌 */
+  marketName?: string
   brand: MachineBrand
   /** 产品线 */
   productLine: MachineProductLine
@@ -139,6 +141,7 @@ export interface MonthlyInvestment {
 
 /** 项目列表筛选器（多选，空数组表示不筛选） */
 export interface ProjectListFilters {
+  marketName?: string
   brand: MachineBrand[]
   productLine: MachineProductLine[]
   projectName: string[]
@@ -150,6 +153,7 @@ export interface ProjectListFilters {
 export interface HistoryVersionFilters {
   budgetType: BudgetType[]
   projectName: string[]
+  marketName?: string
   brand: MachineBrand[]
   productLine: MachineProductLine[]
   lockState: VersionLockState[]
@@ -158,6 +162,7 @@ export interface HistoryVersionFilters {
 /** 新建项目表单 */
 export interface NewProjectForm {
   name: string
+  marketName?: string
   brand: MachineBrand
   productLine: MachineProductLine
   projectYear?: string

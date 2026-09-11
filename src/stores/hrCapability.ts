@@ -1,5 +1,7 @@
 'use client'
 
+import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
+
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalCapabilityProjects } from '@/mock/hrInvestment'
 import { canCreateHrVersion, allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
@@ -232,6 +234,7 @@ function generateDepartmentMonthlyRecords(
 /* ── Store 定义 ───────────────────────────────────────────────────── */
 
 interface HrCapabilityState {
+  registryMigrationComplete: boolean
   projects: HrCapabilityProject[]
   monthlyInvestments: CapabilityMonthlyInvestment[]
 
@@ -323,6 +326,7 @@ function syncMonthlyInvestments(projects: HrCapabilityProject[], existingMonthly
 export const useHrCapabilityStore = create<HrCapabilityState>()(
   persist(
     (set, get) => ({
+      registryMigrationComplete: false,
       projects: synchronizeProjects(INITIAL_PROJECTS),
       monthlyInvestments: [],
 
@@ -343,57 +347,32 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       editingMonthlyId: null,
       historyVersionId: null,
 
-      addProject: (form) => {
-        const now = nowISO()
-        const newProject: HrCapabilityProject = {
-          id: uid('cap-proj'),
-          name: form.name,
-          projectTarget: form.projectTarget,
-          ipmProjectCode: null,
-          ipmProjectName: null,
-          status: 'active',
-          annualBudget: 0,
-          projectEstimate: 0,
-          projectBudget: 0,
-          projectAccounting: 0,
-          versions: [],
-          createdAt: now,
-        }
-        set((state) => ({ projects: [...state.projects, newProject] }))
-      },
+      addProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
-      deleteProject: (projectId) => {
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== projectId),
-          monthlyInvestments: state.monthlyInvestments.filter((mi) => mi.projectId !== projectId),
-        }))
-      },
+      deleteProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
       cancelProject: (projectId) => {
+        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         set((state) => ({
           projects: state.projects.map((p) =>
-            p.id === projectId ? { ...p, status: 'cancelled' as const } : p,
+            p.id === projectId && canAccessHrProject(p, true) ? { ...p, status: 'cancelled' as const } : p,
           ),
         }))
       },
 
       restoreProject: (projectId) => {
+        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         set((state) => ({
           projects: state.projects.map((p) =>
-            p.id === projectId ? { ...p, status: 'active' as const } : p,
+            p.id === projectId && canAccessHrProject(p, true) ? { ...p, status: 'active' as const } : p,
           ),
         }))
       },
 
-      bindIpmProject: (projectId, code) => {
-        const option = getHrFormalProjectOptions('capability').find(project => project.code === code)
-        if (!option) return
-        const projects = synchronizeProjects(get().projects.map(project => project.id === projectId
-          ? { ...project, ipmProjectCode: option.code, ipmProjectName: option.name } : project))
-        set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
-      },
+      bindIpmProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
       addVersion: (projectId, form) => {
+        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const project = get().projects.find((p) => p.id === projectId)
         if (!project || !canCreateHrVersion(project, form.budgetType)) return
 
@@ -434,6 +413,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       },
 
       copyVersion: (projectId, versionId) => {
+        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const project = get().projects.find((p) => p.id === projectId)
         if (!project) return
         const source = project.versions.find((v) => v.id === versionId)
@@ -474,6 +454,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       },
 
       deleteVersion: (projectId, versionId) => {
+        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const updatedProjects = get().projects.map((p) => {
           if (p.id !== projectId) return p
           const updated = {
@@ -493,6 +474,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
 
 
       updateVersion: (projectId, versionId, updates) => {
+        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => {
@@ -506,6 +488,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       },
 
       updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments) => {
+        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => version.id === versionId && isLatestHrVersion(project, version)
@@ -517,15 +500,16 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
 
       refreshFormalProjects: () => {
         const current = get()
-        const projects = synchronizeProjects(current.projects)
-        const monthlyInvestments = syncMonthlyInvestments(projects, current.monthlyInvestments)
-        if (JSON.stringify(projects) !== JSON.stringify(current.projects) || JSON.stringify(monthlyInvestments) !== JSON.stringify(current.monthlyInvestments)) set({ projects, monthlyInvestments })
+        const reconciled = reconcileHrRegistry(current.projects, current.monthlyInvestments, 'capability', current.registryMigrationComplete)
+        const projects = synchronizeProjects(reconciled.projects)
+        const monthlyInvestments = syncMonthlyInvestments(projects, reconciled.monthlyInvestments)
+        if (!current.registryMigrationComplete || JSON.stringify(projects) !== JSON.stringify(current.projects) || JSON.stringify(monthlyInvestments) !== JSON.stringify(current.monthlyInvestments)) set({ projects, monthlyInvestments, registryMigrationComplete: true })
       },
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => {
         set((state) => ({
           monthlyInvestments: state.monthlyInvestments.map((mi) =>
-            mi.id === monthlyId
+            mi.id === monthlyId && canAccessHrProject(state.projects.find(p => p.id === mi.projectId), true)
               ? { ...mi, monthlyData, isEdited: true }
               : mi,
           ),
@@ -542,6 +526,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       },
 
       calculateMonthlySplit: (projectId, versionId) => {
+        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const project = get().projects.find((p) => p.id === projectId)
         if (!project) return
         const version = project.versions.find((v) => v.id === versionId)

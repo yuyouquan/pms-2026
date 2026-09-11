@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Modal, Tag, Timeline, Empty } from 'antd'
-import { useHrTechnicalStore } from '@/stores/hrTechnical'
+import { useHrTechnicalStore } from '@/hooks/useHrResourceStores'
 import {
   TECH_BUDGET_TYPE_LABELS,
   TECH_BUDGET_TYPE_COLORS,

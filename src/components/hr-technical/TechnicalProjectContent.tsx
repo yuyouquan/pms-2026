@@ -1,7 +1,8 @@
 'use client'
 
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { Segmented } from 'antd'
-import { useHrTechnicalStore } from '@/stores/hrTechnical'
+import { useHrTechnicalStore } from '@/hooks/useHrResourceStores'
 import ProjectListTab from './ProjectListTab'
 import HistoryVersionSpace from './HistoryVersionSpace'
 import MonthlyInvestmentTab from './MonthlyInvestmentTab'
@@ -12,6 +13,7 @@ import VersionDetailModal from './VersionDetailModal'
 import VersionHistoryModal from './VersionHistoryModal'
 
 export default function TechnicalProjectContent() {
+  const scopeId = useHrResourceScope()
   const {
     activeTab,
     setActiveTab,
@@ -44,14 +46,14 @@ export default function TechnicalProjectContent() {
     const project = projects.find(p => p.id === id)
     if (!project) return
     setSelectedProjectId(id)
-    setHistoryVersionFilters({ projectName: [project.tdtName] })
+    setHistoryVersionFilters({ projectName: [project.id] })
     setActiveTab('historyVersion')
   }
 
   return (
     <div className="pms-hr-tech-content">
       <div className="pms-hr-tech-tab-bar">
-        <Segmented
+        {!scopeId && <Segmented
           value={activeTab}
           onChange={(v) => setActiveTab(v as 'projectList' | 'monthlyInvestment' | 'historyVersion')}
           options={[
@@ -59,7 +61,7 @@ export default function TechnicalProjectContent() {
             { value: 'historyVersion', label: '项目预估投入空间' },
             { value: 'monthlyInvestment', label: '项目月度预估投入' },
           ]}
-        />
+        />}
       </div>
 
       <div className="pms-hr-tech-tab-content">

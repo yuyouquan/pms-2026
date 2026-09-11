@@ -1,3 +1,4 @@
+import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalTosProjects } from '@/mock/hrInvestment'
 import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
@@ -351,6 +352,7 @@ function syncMonthlyInvestments(projects: HrTosProject[], existingMonthly: TosMo
 export type TosTab = 'projectList' | 'monthlyInvestment' | 'historyVersion'
 
 export interface HrTosState {
+  registryMigrationComplete: boolean
   projects: HrTosProject[]
   monthlyInvestments: TosMonthlyInvestment[]
   selectedProjectId: string | null
@@ -434,6 +436,7 @@ const ALL_BUDGET_TYPES: BudgetType[] = ['annual', 'projectEstimate', 'projectBud
 export const useHrTosStore = create<HrTosState & HrTosActions>()(
   persist(
     (set, get) => ({
+      registryMigrationComplete: false,
       projects: synchronizeProjects(INITIAL_PROJECTS),
       monthlyInvestments: syncMonthlyInvestments(INITIAL_PROJECTS, []),
       selectedProjectId: null,
@@ -468,59 +471,26 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       setEditingMonthlyId: (id) => set({ editingMonthlyId: id }),
       setEditingVersionId: (id) => set({ editingVersionId: id }),
 
-      addProject: (form) => set((s) => {
-        const newProject: HrTosProject = {
-          id: `tp-${Date.now()}`,
-          name: form.name,
-          projectTarget: form.projectTarget,
-          ipmProjectCode: null,
-          ipmProjectName: null,
-          status: 'active',
-          annualBudget: 0,
-          projectEstimate: 0,
-          projectBudget: 0,
-          projectAccounting: 0,
-          versions: [],
-          createdAt: new Date().toISOString(),
-        }
-        const newProjects = [...s.projects, newProject]
-        return {
-          projects: synchronizeProjects(newProjects),
-          showNewProjectModal: false,
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
-        }
-      }),
+      addProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
-      deleteProject: (projectId) => set((s) => {
-        const newProjects = s.projects.filter(p => p.id !== projectId)
-        return {
-          projects: synchronizeProjects(newProjects),
-          selectedProjectId: null,
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
-        }
-      }),
+      deleteProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
       cancelProject: (projectId) => set((s) => ({
         projects: s.projects.map(p =>
-          p.id === projectId ? { ...p, status: 'cancelled' as const } : p,
+          p.id === projectId && canAccessHrProject(p, true) ? { ...p, status: 'cancelled' as const } : p,
         ),
       })),
 
       restoreProject: (projectId) => set((s) => ({
         projects: s.projects.map(p =>
-          p.id === projectId ? { ...p, status: 'active' as const } : p,
+          p.id === projectId && canAccessHrProject(p, true) ? { ...p, status: 'active' as const } : p,
         ),
       })),
 
-      bindIpmProject: (projectId, ipmCode) => set((s) => {
-        const ipmProject = getHrFormalProjectOptions('tos').find(p => p.code === ipmCode)
-        if (!ipmProject) return s
-        const newProjects = synchronizeProjects(s.projects.map(p => p.id === projectId
-          ? { ...p, ipmProjectCode: ipmProject.code, ipmProjectName: ipmProject.name } : p))
-        return { projects: newProjects, monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments) }
-      }),
+      bindIpmProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
       addVersion: (projectId, form) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const project = s.projects.find(p => p.id === projectId)
         if (!project || !canCreateHrVersion(project, form.budgetType)) return s
 
@@ -572,6 +542,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
       deleteVersion: (projectId, versionId) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.filter(v => v.id !== versionId)
@@ -579,12 +550,13 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         })
         return {
           projects: synchronizeProjects(newProjects),
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
+          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments.filter(row => row.versionId !== versionId)),
         }
       }),
 
 
       copyVersion: (projectId, versionId) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const project = s.projects.find(p => p.id === projectId)
         if (!project) return s
         const sourceVersion = project.versions.find(v => v.id === versionId)
@@ -636,6 +608,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
       updateVersion: (projectId, versionId, updates) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
@@ -672,6 +645,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
       updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         // 计算所有部门预估投入合计
         const newEstimatedTotal = departmentInvestments.reduce(
           (sum, d) => sum + (Number(d.estimatedInvestment) || 0), 0,
@@ -702,15 +676,16 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
       refreshFormalProjects: () => set((s) => {
-        const projects = synchronizeProjects(s.projects)
-        const monthlyInvestments = syncMonthlyInvestments(projects, s.monthlyInvestments)
-        if (JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return s
-        return { projects, monthlyInvestments }
+        const reconciled = reconcileHrRegistry(s.projects, s.monthlyInvestments, 'tos', s.registryMigrationComplete)
+        const projects = synchronizeProjects(reconciled.projects)
+        const monthlyInvestments = syncMonthlyInvestments(projects, reconciled.monthlyInvestments)
+        if (s.registryMigrationComplete && JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return s
+        return { projects, monthlyInvestments, registryMigrationComplete: true }
       }),
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId
+          mi.id === monthlyId && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),

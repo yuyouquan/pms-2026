@@ -1,3 +1,4 @@
+import { isHrFormalRecord, synchronizeHrRegistryRecord } from '@/lib/hrProjectRegistry'
 import { resolveHrFormalSource, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import { HR_BUDGET_TYPES, getLatestHrVersion, getMachineProjectYear, isLatestHrVersion, normalizeHrVersionSequence, type HrVersionIdentity } from '@/lib/hrVersionRules'
 
@@ -11,6 +12,9 @@ interface SyncVersion extends HrVersionIdentity {
   estimatedInvestment: number
 }
 interface SyncProject {
+  id: string
+  name?: string
+  pmsProjectId?: string
   versions: SyncVersion[]
   ipmProjectCode: string | null
   annualBudget: number
@@ -24,9 +28,10 @@ export function synchronizeHrProjects<T extends SyncProject>(
   projects: readonly T[], category: HrProjectCategory,
   calculateMachineInvestment?: (level: string, model: string, coefficient: number) => number,
 ): T[] {
-  return projects.map(project => {
+  return projects.map(input => {
+    const project = synchronizeHrRegistryRecord(input, category)
     const normalized = { ...project, versions: normalizeHrVersionSequence(project.versions) }
-    const source = project.ipmProjectCode ? resolveHrFormalSource(category, project.ipmProjectCode) : null
+    const source = isHrFormalRecord(project) ? resolveHrFormalSource(category, project.ipmProjectCode, project.pmsProjectId) : null
     const versions = normalized.versions.map(version => {
       if (!isLatestHrVersion(normalized, version)) return version
       const next = { ...version }

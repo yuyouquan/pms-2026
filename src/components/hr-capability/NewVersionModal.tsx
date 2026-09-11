@@ -1,5 +1,7 @@
 'use client'
 
+import { getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
@@ -22,7 +24,7 @@ import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
-import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import {
   CAPABILITY_BUDGET_TYPES,
   CAPABILITY_BUDGET_TYPE_LABELS,
@@ -40,6 +42,7 @@ interface NewVersionModalProps {
 
 export default function NewVersionModal({ open, onCancel }: NewVersionModalProps) {
   const { message } = App.useApp()
+  const scopeId = useHrResourceScope()
   const { primaryOptions, getSecondaryOptions, isValidPair } = useHrDepartmentOptions()
   const [form] = Form.useForm()
   const projects = useHrCapabilityStore((s) => s.projects)
@@ -63,8 +66,8 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   const ipmBound = !!(project?.ipmProjectCode)
   const canCreateVersion = !ipmRequired || ipmBound
 
-  const followsFormalPlan = ipmBound && budgetType !== 'annual'
-  const formalSource = ipmBound ? resolveHrFormalSource('capability', project?.ipmProjectCode ?? null) : null
+  const followsFormalPlan = isHrFormalRecord(project) && budgetType !== 'annual'
+  const formalSource = ipmBound ? resolveHrFormalSource('capability', project?.ipmProjectCode ?? null, project?.pmsProjectId) : null
   const snapshot = project?.versions[project.versions.length - 1]
   const boundStart = formalSource?.project ? formalSource.projectStartTime : snapshot?.projectStartTime
   const boundEnd = formalSource?.project ? formalSource.projectEndTime : snapshot?.projectEndTime
@@ -74,7 +77,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   useEffect(() => {
     if (open) {
       setLocalProjectId(selectedProjectId ?? '')
-      setBudgetType('annual')
+      setBudgetType(getHrAllowedBudgetTypes(projects.find(p => scopeId ? p.pmsProjectId === scopeId : p.id === selectedProjectId))[0] ?? 'annual')
       setStartTime(null)
       setEndTime(null)
       setEditData([])
@@ -325,7 +328,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
             flexWrap: 'wrap',
           }}
         >
-          <Space><span>项目名称：</span><Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setStartTime(null); setEndTime(null); setEditData([]) }} /></Space>
+          <Space><span>项目名称：</span>{scopeId ? <span>{project?.name}</span> : (<Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setStartTime(null); setEndTime(null); setEditData([]) }} />)}</Space>
           {project?.ipmProjectCode && (
             <span>IPM编码：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.ipmProjectCode}</strong></span>
           )}
@@ -353,7 +356,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
                 placeholder="选择预算类型"
                 value={budgetType}
                 onChange={(v) => setBudgetType(v)}
-                options={CAPABILITY_BUDGET_TYPES.map((t) => ({
+                options={CAPABILITY_BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value)).map((t) => ({
                   label: t.label,
                   value: t.value,
                   disabled:

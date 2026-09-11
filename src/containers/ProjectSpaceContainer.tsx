@@ -13,6 +13,7 @@
  * This is the LARGEST container, reading from ALL 5 stores.
  */
 
+import ProjectResources from '@/components/project-resources/ProjectResources'
 import { buildManualProjectSpaceUpdate } from '@/lib/manualProjectCompletion'
 import { isFormalProject } from '@/types/projectRegistry'
 import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
@@ -5669,6 +5670,7 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}
           {transfer.transferView === 'review' && <TransferReview {...transferProps} />}
           {transfer.transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
+          {transfer.transferView === null && projectSpaceModule === 'resources' && selectedProject && <ProjectResources project={selectedProject} />}
           {transfer.transferView === null && projectSpaceModule === 'basic' && (
             !canViewBasicInfo ? <Empty description="无基础信息查看权限" /> : isTechnicalProject && selectedProject
               ? <TechnicalProjectInformationView
@@ -5710,7 +5712,7 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === null && projectSpaceModule === 'permission' && (canManageRoles ? (
             <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} projectType={selectedProject?.type} onRoleMembersChange={handleProjectRoleMembersChange} syncTosTeamPermissionMembers={handleProjectRoleMembersChange} canManageRoles={canManageRoles} />
           ) : <Empty description="无项目权限配置权限" />)}
-          {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission'].includes(projectSpaceModule) && (
+          {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission', 'resources'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
               <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
             </Card>

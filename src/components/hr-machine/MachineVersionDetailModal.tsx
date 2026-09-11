@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { Modal, Table, Tag, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { calcMachineDepartmentInvestments } from '@/constants/hrConfig'
 import {

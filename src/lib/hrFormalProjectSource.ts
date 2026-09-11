@@ -1,3 +1,4 @@
+import { isFormalProject } from '@/types/projectRegistry'
 import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION, PROJECT_TYPE_TECH, PROJECT_TYPE_CAPABILITY } from '@/constants/projectTypes'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
 import { projectLevel1Plan, type Level1PlanTask } from '@/lib/level1PlanRules'
@@ -8,17 +9,18 @@ import { selectLatestPublishedTechnicalPlanVersion, useTechnicalPlanStore } from
 import type { ProjectItem } from '@/types/app'
 
 export type HrProjectCategory = 'machine' | 'tos' | 'technical' | 'capability'
-const matchesCategory = (project: ProjectItem, category: HrProjectCategory) => category === 'machine'
+export const matchesHrCategory = (project: ProjectItem, category: HrProjectCategory) => category === 'machine'
   ? isMachineProjectType(project.type)
   : project.type === ({ tos: PROJECT_TYPE_TOS_VERSION, technical: PROJECT_TYPE_TECH, capability: PROJECT_TYPE_CAPABILITY } as const)[category]
 
 /** Older PMS mock records have no external code; their persisted project ID remains their stable identifier. */
 export const hrFormalProjectCode = (project: ProjectItem) => project.sourceBid || project.projectCode || project.id
 export function getHrFormalProjectOptions(category: HrProjectCategory, projects: readonly ProjectItem[] = useProjectStore.getState().projects) {
-  return projects.filter(project => matchesCategory(project, category)).map(project => ({ id: project.id, code: hrFormalProjectCode(project), name: project.name }))
+  return projects.filter(project => isFormalProject(project) && matchesHrCategory(project, category)).map(project => ({ id: project.id, code: hrFormalProjectCode(project), name: project.name }))
 }
 export function findHrFormalProject(category: HrProjectCategory, code: string | null) {
-  return useProjectStore.getState().projects.find(project => matchesCategory(project, category) && hrFormalProjectCode(project) === code)
+  const matches = useProjectStore.getState().projects.filter(project => isFormalProject(project) && matchesHrCategory(project, category) && hrFormalProjectCode(project) === code)
+  return matches.length === 1 ? matches[0] : undefined
 }
 
 type PlanTask = Level1PlanTask
@@ -29,8 +31,10 @@ function dateOf(tasks: readonly PlanTask[], names: string[], field: 'planEndDate
   return date && /^\d{4}-\d{2}-\d{2}/.test(date) ? date.slice(0, 10) : null
 }
 
-export function resolveHrFormalSource(category: HrProjectCategory, code: string | null) {
-  const project = findHrFormalProject(category, code)
+export function resolveHrFormalSource(category: HrProjectCategory, code: string | null, pmsProjectId?: string) {
+  const project = pmsProjectId
+    ? useProjectStore.getState().projects.find(item => item.id === pmsProjectId && isFormalProject(item) && matchesHrCategory(item, category))
+    : findHrFormalProject(category, code)
   const projectState = useProjectStore.getState()
   let tasks: PlanTask[] = []
   let planVersion: string | null = null

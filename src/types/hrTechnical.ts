@@ -113,6 +113,9 @@ export interface HrTechnicalVersion {
 
 /** 技术项目 */
 export interface HrTechnicalProject {
+  pmsProjectId?: string
+  migrationIssue?: string
+  legacyHrSnapshot?: unknown
   id: string
   /** TDT项目名称 */
   tdtName: string

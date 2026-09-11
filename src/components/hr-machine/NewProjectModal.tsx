@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Modal, Form, Input, Select, App } from 'antd'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import {
   MACHINE_BRANDS,
   MACHINE_PRODUCT_LINES,

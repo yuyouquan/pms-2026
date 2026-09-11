@@ -1,11 +1,13 @@
 'use client'
 
+import { getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 
 import { useState, useEffect, useMemo } from 'react'
 import { Modal, Select, InputNumber, Form, App, Tooltip, Tag } from 'antd'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { BUDGET_TYPES } from '@/constants/hrMachine'
 import { getConfigProjectLevels, getConfigModelVersions, calcEstimatedInvestment, getAvailableHrModelSelection, isHrModelAvailable } from '@/constants/hrConfig'
@@ -25,6 +27,7 @@ const IPM_REQUIRED_TIP = '需要先绑定正式项目编码才能创建此类型
 
 export default function NewVersionModal({ open, projectId, onCancel }: NewVersionModalProps) {
   const { message } = App.useApp()
+  const scopeId = useHrResourceScope()
   const { projects, addVersion } = useHrMachineStore()
   const configData = useHrConfigStore(s => s.data)
   const [localProjectId, setLocalProjectId] = useState<string>(projectId)
@@ -44,8 +47,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     [project],
   )
 
-  const formalSource = hasIpm ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null) : null
-  const followsFormalPlan = hasIpm && budgetType !== 'annual'
+  const formalSource = hasIpm ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null, project?.pmsProjectId) : null
+  const followsFormalPlan = isHrFormalRecord(project) && budgetType !== 'annual'
   const effectiveProjectLevel = followsFormalPlan
     ? formalSource?.project ? formalSource.projectLevel : project?.versions[project.versions.length - 1]?.projectLevel || project?.projectLevel || ''
     : projectLevel
@@ -80,11 +83,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   useEffect(() => {
     if (open) {
       // 重置本地项目选择为传入的 projectId
-      setLocalProjectId(projectId || '')
+      setLocalProjectId(scopeId ? projects.find(p => p.pmsProjectId === scopeId)?.id ?? '' : projectId || '')
       // 默认值：年度预算 + 配置中心第一个等级 + 系数1 + 第一个版本号
       const firstLevel = getConfigProjectLevels(useHrConfigStore.getState().data.hrModel ?? [])[0] ?? ''
       const firstVersion = getConfigModelVersions(useHrConfigStore.getState().data.hrModel ?? [])[0] ?? ''
-      setBudgetType('annual')
+      setBudgetType(getHrAllowedBudgetTypes(projects.find(p => scopeId ? p.pmsProjectId === scopeId : p.id === projectId))[0] ?? 'annual')
       setProjectLevel(firstLevel)
       setLevelCoefficient(1)
       setHrModelVersion(firstVersion)
@@ -97,7 +100,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     const seed = selected ? getHrVersionSeed(selected.versions, budgetType) : undefined
     const records = useHrConfigStore.getState().data.hrModel ?? []
     const linkedSource = selected?.ipmProjectCode && budgetType !== 'annual'
-      ? resolveHrFormalSource('machine', selected.ipmProjectCode)
+      ? resolveHrFormalSource('machine', selected.ipmProjectCode, selected.pmsProjectId)
       : null
     const preferredLevel = linkedSource
       ? linkedSource.project ? linkedSource.projectLevel : selected?.versions[selected.versions.length - 1]?.projectLevel || selected?.projectLevel || ''
@@ -178,15 +181,15 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <span style={{ color: 'var(--pms-text-tertiary)', whiteSpace: 'nowrap' }}>项目：</span>
-            <Select
+            {scopeId ? <span>{project?.name}</span> : (<Select
               showSearch
               value={localProjectId || undefined}
-              onChange={(v) => { setLocalProjectId(v); setBudgetType('annual') }}
+              onChange={(v) => { setLocalProjectId(v); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === v))[0] ?? 'annual') }}
               style={{ width: '100%' }}
               options={projectOptions}
               placeholder="请选择项目"
               optionFilterProp="label"
-            />
+            />)}
           </div>
           {project && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

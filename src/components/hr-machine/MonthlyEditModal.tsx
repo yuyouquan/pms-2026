@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { App, Modal, InputNumber, Alert } from 'antd'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import { formatPersonMonth, BUDGET_TYPE_LABELS } from '@/constants/hrMachine'
 
 interface MonthlyEditModalProps {

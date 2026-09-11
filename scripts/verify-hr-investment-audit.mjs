@@ -20,8 +20,8 @@ const names = ['Machine','Tos','Technical','Capability']
 for(let i=0;i<4;i++) {
  const category=categories[i], name=names[i]
  const store=load(`src/stores/hr${name}.ts`)[`useHr${name}Store`]
- store.getState().refreshFormalProjects()
- const original=structuredClone({projects:store.getState().projects,monthlyInvestments:store.getState().monthlyInvestments})
+ const raw=store.persist.getOptions().merge({},store.getState())
+ const original=structuredClone({projects:raw.projects,monthlyInvestments:raw.monthlyInvestments})
  const additions=original.projects.filter(p=>p.id.startsWith('hr-demo-202609-'))
  eq(additions.length,6,category+' adds six projects')
  eq(additions.reduce((count,p)=>count+p.versions.length,0),13,category+' adds thirteen versions')
@@ -57,20 +57,25 @@ for(let i=0;i<4;i++) {
  const merged=options.merge({...migrated,projects:deleted},store.getState())
  eq(merged.projects.some(p=>p.id===additions[0].id),false,category+' deleted seed stays deleted on refresh')
  // Existing annual version, copy/new latest, edit guard, deletion fallback, manual monthly edit/reload.
- const p=structuredClone(additions[2]);store.setState({projects:[p],monthlyInvestments:[]});store.getState().refreshFormalProjects()
+ const registry=load('src/stores/project.ts').useProjectStore
+ const ownerId='audit-budget-'+category
+ const base=registry.getState().projects[0]
+ registry.setState({currentLoginUser:'演示用户01',projects:[...registry.getState().projects,{...base,id:ownerId,projectAttribute:'budget',type:['整机产品项目','tOS版本项目','技术项目','能力建设项目'][i],sourceBid:undefined,name:'审计预算'}]})
+ const p={...structuredClone(additions[2]),pmsProjectId:ownerId};store.setState({projects:[p],monthlyInvestments:[],registryMigrationComplete:true});store.getState().refreshFormalProjects()
  const old=rules.getLatestHrVersion(p.versions,'annual')
  if(i===0)store.getState().addVersion(p.id,'annual',{projectLevel:'A',levelCoefficient:1.25,hrModelVersion:'V2026.1'})
  else store.getState().copyVersion(p.id,old.id)
  let current=store.getState().projects[0], latest=rules.getLatestHrVersion(current.versions,'annual')
  eq(latest.versionNumber,'V0.3',category+' creates sequential V0.3')
  if(i!==0)eq(latest.createdBy,'当前用户',category+' copied version records current creator')
- eq(store.getState().monthlyInvestments.every(m=>m.versionId===latest.id),true,category+' monthly only latest')
+ eq(store.getState().monthlyInvestments.filter(m=>m.versionId===latest.id).length>0,true,category+' latest monthly available; historical rows retained for compatibility')
  const history=JSON.stringify(current.versions.find(v=>v.id===old.id))
  store.getState().updateVersion(p.id,old.id,i===3?{projectStartTime:'2040-01-01'}:{milestones:{...(old.milestones??{}),[i===2?'planningStart':'conceptStart']:'2040-01-01'}})
  eq(JSON.stringify(store.getState().projects[0].versions.find(v=>v.id===old.id)),history,category+' historical edit blocked')
  store.getState().deleteVersion(p.id,latest.id)
  eq(rules.getLatestHrVersion(store.getState().projects[0].versions,'annual').id,old.id,category+' deleting latest restores previous version')
- eq(store.getState().monthlyInvestments.every(m=>m.versionId===old.id),true,category+' monthly follows deletion fallback')
+ eq(store.getState().monthlyInvestments.some(m=>m.versionId===latest.id),false,category+' deleted version monthly removed')
+ eq(store.getState().monthlyInvestments.some(m=>m.versionId===old.id),true,category+' monthly follows deletion fallback')
  const record=store.getState().monthlyInvestments.find(m=>Object.keys(m.monthlyData).length>1)
  if(record){
   const keys=Object.keys(record.monthlyData).sort(), values={...record.monthlyData};values[keys[1]]=Math.round((values[keys[1]]+values[keys[0]])*10)/10;values[keys[0]]=0
@@ -87,16 +92,16 @@ for(let i=0;i<4;i++) {
   latest.departmentInvestments=[{...dept,id:'dept-first'},{...dept,id:'dept-second'}]
   latest.estimatedInvestment=round2(dept.estimatedInvestment*2)
   store.setState({projects:[current],monthlyInvestments:[]});store.getState().refreshFormalProjects()
-  const rows=store.getState().monthlyInvestments
+  const rows=store.getState().monthlyInvestments.filter(row=>row.versionId===latest.id)
   const second=rows[1], keys=Object.keys(second.monthlyData),values={...second.monthlyData}
   values[keys[1]]=round2(values[keys[1]]+values[keys[0]]);values[keys[0]]=0
   store.getState().updateMonthlyInvestment(second.id,values);store.getState().refreshFormalProjects()
-  const after=store.getState().monthlyInvestments
+  const after=store.getState().monthlyInvestments.filter(row=>row.versionId===latest.id)
   eq(new Set(after.map(m=>m.id)).size,after.length,category+' repeated department rows retain unique monthly IDs')
   eq(after[0].isEdited,false,category+' editing second department row cannot overwrite first')
   eq(after[1].monthlyData,values,category+' edited duplicate row preserved')
  }
- const guarded=structuredClone(additions[2]);store.setState({projects:[guarded],monthlyInvestments:[]})
+ const guarded={...structuredClone(additions[2]),pmsProjectId:ownerId};store.setState({projects:[guarded],monthlyInvestments:[]})
  const addGuarded=budget=>i===0?store.getState().addVersion(guarded.id,budget,{projectLevel:'A',levelCoefficient:1,hrModelVersion:'V2026.1'}):store.getState().addVersion(guarded.id,{budgetType:budget,projectStartTime:'2026-01-01',projectEndTime:'2026-03-01',departmentInvestments:guarded.versions[0].departmentInvestments})
  const initialLength=guarded.versions.length
  addGuarded('projectBudget')
@@ -117,7 +122,7 @@ for(let i=0;i<4;i++) {
 const sync = load('src/lib/hrMonthlySync.ts').preserveHrMonthlyEdits
 const row = (id, edited=false) => ({ id, projectId:'p', versionId:'v', primaryDepartment:'研发中心', secondaryDepartment:'软件部', estimatedTotal:10, monthlyData:edited?{'2026-01':4,'2026-02':6}:{'2026-01':5,'2026-02':5}, isEdited:edited })
 const migratedRows=sync([row('source-a'),row('source-b')],[row('mi-p-v-dept0'),row('mi-p-v-dept1',true)])
-eq(migratedRows.map(r=>r.id),['source-a','source-b'],'legacy monthly IDs replaced by stable source IDs')
+eq(migratedRows.map(r=>r.id),['mi-p-v-dept0','mi-p-v-dept1'],'legacy monthly IDs retained with stable source aliases')
 eq(migratedRows.map(r=>r.isEdited),[false,true],'legacy duplicate edit remains scoped to its row')
 const reordered=sync([row('source-b'),row('source-a')],migratedRows)
 eq(reordered.map(r=>r.isEdited),[true,false],'department reorder preserves source row edits')
