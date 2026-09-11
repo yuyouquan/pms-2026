@@ -76,7 +76,7 @@ export type RegistryMutationResult = { ok: true; projectId: string } | { ok: fal
 - [ ] Migrate legacy planned projects to registry roadmap projects once, preserving IDs, data and change logs. Ensure rehydration doesn't reinsert deleted seeds or repeat migration.
 - [ ] Planned roadmap rows come from registry roadmap projects; ordinary roadmap rows exclude budgets. Existing plan/config metadata stays in roadmap store. Changes in project space reflect in roadmap immediately.
 - [ ] Remove independent roadmap creation entry/modal behavior and route users to config. Incomplete records remain in table; no invented dates or positioning on timeline before dates exist.
-- [ ] Ensure manually created budget/roadmap projects can enter and edit corresponding project-space basic information; preserve editable nonformal name/code and formal source fields. Keep formal-only consumers from picking budget/roadmap records as formal projects.
+- [ ] Ensure manually created budget/roadmap projects can enter and edit corresponding project-space basic information; keep name/code/binding managed in configuration and readonly in ordinary space completion forms, preserving formal source fields. Keep formal-only consumers from picking budget/roadmap records as formal projects.
 - [ ] Verify migration, minimal roadmap creation -> table -> space completion -> table update, deletion/unbinding and existing formal roadmap flows. Run focused checks/typecheck, commit, report.
 
 ## Task 4: Shared HR ownership and project-scoped resource workspace
