@@ -1,7 +1,7 @@
 import { EXTERNAL_PROJECT_POOL, fetchByBid } from '@/data/externalProjectPool'
 import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { findProjectCategoryMapping } from '@/lib/enumConsumers'
-import { mapIpmProjectStatus } from '@/lib/projectStatus'
+import { mapIpmProjectStatus, normalizeLegacyProjectStatus } from '@/lib/projectStatus'
 import { validateRegistryProject } from '@/lib/projectRegistryRules'
 import { useEnumStore } from '@/stores/enums'
 import { isGlobalAdmin } from '@/stores/permission'
@@ -34,7 +34,7 @@ export function createConfiguredProject(input: ConfiguredProjectInput, actor: st
     id: `registry-${globalThis.crypto.randomUUID()}`, name, type: type as ProjectItem['type'],
     projectAttribute: input.projectAttribute, sourceBid: source?.bid,
     boundFormalProjectId: null, createdBy: actor, createdAt: new Date().toISOString(),
-    status: mapIpmProjectStatus(source?.ipmStatus || '筹备中', type), progress: 0,
+    status: source ? mapIpmProjectStatus(source.ipmStatus || '筹备中', type) : normalizeLegacyProjectStatus(type, '筹备中'), progress: 0,
     leader: responsiblePersons[0], responsiblePersons, markets: [], androidVersion: '', chipPlatform: '',
     spm: type === PROJECT_CATEGORY_MACHINE ? responsiblePersons.join('、') : '',
     updatedAt: new Date().toISOString(), productLine: '', tosVersion: '', planStartDate: '', planEndDate: '',

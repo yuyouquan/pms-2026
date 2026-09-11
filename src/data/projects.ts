@@ -1,3 +1,4 @@
+import { RESOURCE_REGISTRY_PROJECTS } from '@/mock/projectRegistry'
 import { LEVEL1_TASKS, FIXED_LEVEL2_PLANS } from '@/components/plan/PlanModule'
 import {
   PROJECT_TYPE_CAPABILITY,
@@ -119,7 +120,7 @@ export const ADDITIONAL_MACHINE_PROJECTS = PAGINATION_MACHINE_SERIES.flatMap((se
   })
 ))
 
-export const initialProjects: ProjectSeed[] = [
+const formalProjectSeeds: ProjectSeed[] = [
   {
     id: '1', name: 'DEMO017-DEMOCHIP001_DEMOBOARD016', type: PROJECT_CATEGORY_MACHINE, secondaryCategory: PROJECT_TYPE_MACHINE_PHONE,
     status: '在研', progress: 65, leader: '演示用户01',
@@ -573,6 +574,19 @@ export const initialProjects: ProjectSeed[] = [
   },
   ...ADDITIONAL_MACHINE_PROJECTS,
 ]
+
+export const ESTABLISHED_FORMAL_PROJECT_IDS = new Set(formalProjectSeeds.map(project => project.id))
+
+// Keep established formal identities and list fixtures; new scenarios are discoverable on the first configuration pages.
+export const initialProjects: ProjectSeed[] = [
+  ...formalProjectSeeds.slice(0, 1), ...RESOURCE_REGISTRY_PROJECTS,
+  ...formalProjectSeeds.slice(1),
+].map((project, index) => ({
+  ...project, projectAttribute: project.projectAttribute || 'formal',
+  createdBy: project.createdBy || '演示用户01',
+  createdAt: project.createdAt || `2026-08-${String(index % 28 + 1).padStart(2, '0')}T08:00:00.000Z`,
+  responsiblePersons: project.responsiblePersons?.length ? project.responsiblePersons : [project.leader],
+}))
 
 // 构建市场计划数据
 export function buildMarketPlanData(markets: string[]) {

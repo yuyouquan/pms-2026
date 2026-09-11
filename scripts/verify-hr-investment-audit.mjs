@@ -20,15 +20,15 @@ const names = ['Machine','Tos','Technical','Capability']
 for(let i=0;i<4;i++) {
  const category=categories[i], name=names[i]
  const store=load(`src/stores/hr${name}.ts`)[`useHr${name}Store`]
+ store.getState().refreshFormalProjects()
  const raw=store.persist.getOptions().merge({},store.getState())
  const original=structuredClone({projects:raw.projects,monthlyInvestments:raw.monthlyInvestments})
- const additions=original.projects.filter(p=>p.id.startsWith('hr-demo-202609-'))
- eq(additions.length,6,category+' adds six projects')
- eq(additions.reduce((count,p)=>count+p.versions.length,0),13,category+' adds thirteen versions')
- eq(additions.some(p=>p.status==='cancelled'),true,category+' covers cancelled')
- eq(additions.some(p=>p.versions.length===0),true,category+' covers no versions')
+ const additions=original.projects.filter(p=>p.id.startsWith('hr-resource-'))
+ eq(additions.length,i===0?5:3,category+' has canonical resource fixtures')
+ eq(additions.reduce((count,p)=>count+p.versions.length,0),7,category+' has three own formal and four source annual versions')
+  eq(original.projects.some(p=>p.versions.length===0),true,category+' covers no versions')
  for(const p of additions){
-  if(p.ipmProjectCode)eq(!!formal.findHrFormalProject(category,p.ipmProjectCode),true,category+' binding resolves '+p.id)
+  eq(!!load('src/stores/project.ts').useProjectStore.getState().projects.find(item=>item.id===p.pmsProjectId),true,category+' canonical identity resolves '+p.id)
   eq(new Set(p.versions.map(v=>v.id)).size,p.versions.length,category+' unique version IDs')
   for(const budget of rules.HR_BUDGET_TYPES){
    const latest=rules.getLatestHrVersion(p.versions,budget)
@@ -38,7 +38,7 @@ for(let i=0;i<4;i++) {
    eq(tenth(sum(monthly.map(m=>m.estimatedTotal))),tenth(latest.estimatedInvestment),category+' department total matches version '+latest.id)
    eq(monthly.every(m=>Object.values(m.monthlyData).every(v=>Number.isFinite(v)&&v>=0)),true,category+' monthly values valid')
    eq(monthly.every(m=>tenth(sum(Object.values(m.monthlyData)))<=tenth(m.estimatedTotal)),true,category+' unallocated never becomes extra monthly investment')
-   if(p.id.endsWith('-3')){
+   if(p.pmsProjectId.endsWith('-unbound')){
     eq(monthly.some(m=>Object.keys(m.monthlyData).some(k=>k.startsWith('2026'))&&Object.keys(m.monthlyData).some(k=>k.startsWith('2027'))),true,category+' cross year monthly allocation')
     for(const m of monthly)eq(tenth(sum(Object.values(m.monthlyData))),tenth(m.estimatedTotal),category+' complete months conserve each department')
    }
@@ -52,10 +52,11 @@ for(let i=0;i<4;i++) {
  eq(migrated.projects.find(p=>p.id===prior.id),prior,category+' migration preserves edits')
  eq(migrated.projects.find(p=>p.id===custom.id),custom,category+' migration preserves user additions')
  eq(migrated.projects.length,8,category+' migration appends only new seeds')
- eq(seed.appendHrMockProjects(migrated.projects,additions).length,8,category+' seed append is idempotent')
- const deleted=migrated.projects.filter(p=>p.id!==additions[0].id)
+ const legacyAdditions=seed[`createAdditional${name}Projects`](formal.getHrFormalProjectOptions(category))
+ eq(seed.appendHrMockProjects(migrated.projects,legacyAdditions).length,8,category+' seed append is idempotent')
+ const deleted=migrated.projects.filter(p=>p.id!==legacyAdditions[0].id)
  const merged=options.merge({...migrated,projects:deleted},store.getState())
- eq(merged.projects.some(p=>p.id===additions[0].id),false,category+' deleted seed stays deleted on refresh')
+ eq(merged.projects.some(p=>p.id===legacyAdditions[0].id),false,category+' deleted seed stays deleted on refresh')
  // Existing annual version, copy/new latest, edit guard, deletion fallback, manual monthly edit/reload.
  const registry=load('src/stores/project.ts').useProjectStore
  const ownerId='audit-budget-'+category

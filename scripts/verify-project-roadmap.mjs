@@ -150,7 +150,7 @@ function getInitialProjectClassificationInitializers(filePath) {
   const projectTypes = new Map()
 
   function visit(node) {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'initialProjects' && ts.isArrayLiteralExpression(node.initializer)) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'formalProjectSeeds' && ts.isArrayLiteralExpression(node.initializer)) {
       for (const element of node.initializer.elements) {
         if (!ts.isObjectLiteralExpression(element)) continue
         const idProperty = element.properties.find(property => ts.isPropertyAssignment(property) && property.name.getText(sourceFile) === 'id')
@@ -1839,7 +1839,7 @@ registerAssertion('every machine mock owns explicit normal-roadmap fields', () =
   let matchedMachineMocks = 0
 
   function visit(node) {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'initialProjects' && ts.isArrayLiteralExpression(node.initializer)) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'formalProjectSeeds' && ts.isArrayLiteralExpression(node.initializer)) {
       for (const element of node.initializer.elements) {
         if (!ts.isObjectLiteralExpression(element)) continue
         const properties = new Map(element.properties.flatMap(property => {
@@ -1924,7 +1924,7 @@ registerAssertion('global roadmap permissions combine all global roles and prese
   if (!permissionSource.includes('export function useHasGlobalPermission')) throw new Error('missing useHasGlobalPermission')
   const moduleCache = new Map([[
     path.join(root, 'src/data/projects.ts'),
-    { exports: { initialProjects: [] } },
+    { exports: { initialProjects: [], ESTABLISHED_FORMAL_PROJECT_IDS: new Set() } },
   ]])
   const loader = createTypeScriptModuleLoader(moduleCache)
   const permissionModule = loader(path.join(root, 'src/stores/permission.ts'))
@@ -1981,7 +1981,7 @@ registerAssertion('shared project actions audit only legal normal machine snapsh
   }
   const moduleCache = new Map([[
     path.join(root, 'src/data/projects.ts'),
-    { exports: { initialProjects: [] } },
+    { exports: { initialProjects: [], ESTABLISHED_FORMAL_PROJECT_IDS: new Set() } },
   ]])
   const loader = createTypeScriptModuleLoader(moduleCache)
   const projectModule = loader(path.join(root, 'src/stores/project.ts'))
@@ -2099,7 +2099,7 @@ registerAssertion('whole-machine project mutations require current hydrated firs
   try {
   const moduleCache = new Map([[
     path.join(root, 'src/data/projects.ts'),
-    { exports: { initialProjects: [] } },
+    { exports: { initialProjects: [], ESTABLISHED_FORMAL_PROJECT_IDS: new Set() } },
   ]])
   const loader = createTypeScriptModuleLoader(moduleCache)
   const projectModule = loader(path.join(root, 'src/stores/project.ts'))
@@ -2166,7 +2166,7 @@ registerAssertion('whole-machine project mutations require current hydrated firs
 registerAssertion('machine addProject rejects invalid data before canonical state mutation', () => {
   const moduleCache = new Map([[
     path.join(root, 'src/data/projects.ts'),
-    { exports: { initialProjects: [] } },
+    { exports: { initialProjects: [], ESTABLISHED_FORMAL_PROJECT_IDS: new Set() } },
   ]])
   const loader = createTypeScriptModuleLoader(moduleCache)
   const projectModule = loader(path.join(root, 'src/stores/project.ts'))
@@ -2203,7 +2203,7 @@ registerAssertion('normal projects and their audit logs survive the same reload 
   const loadStores = () => {
     const moduleCache = new Map([[
       path.join(root, 'src/data/projects.ts'),
-      { exports: { initialProjects: [] } },
+      { exports: { initialProjects: [], ESTABLISHED_FORMAL_PROJECT_IDS: new Set() } },
     ]])
     const loader = createTypeScriptModuleLoader(moduleCache)
     const projectModule = loader(path.join(root, 'src/stores/project.ts'))

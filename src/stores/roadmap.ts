@@ -211,8 +211,8 @@ export function createInitialPlannedProjects(
     id: 'planned-mock-demo017-android16-new',
     status: '待规划',
     machineProjectType: '整机-手机',
-    projectCode: 'DEMO017',
-    displayName: 'DEMO017',
+    projectCode: 'DEMOR001',
+    displayName: 'DEMOR001',
     androidVersion: 'Android 16',
     firstSaleTosVersionId: firstSaleVersion.id,
     brand: '示例品牌B',
@@ -228,7 +228,7 @@ export function createInitialPlannedProjects(
     launchDate: '2026-11-20',
     launchEstimated: true,
     developMode: 'ODC',
-    remark: '待规划样例：用于确认与已存在普通项目的重复冲突处理。',
+    remark: '路标完整样例：已补齐首销版本与日期，可在演进图定位。',
     createdAt: '2026-07-21T02:15:00.000Z',
     createdBy: '演示用户02',
     updatedAt: '2026-07-22T09:30:00.000Z',
@@ -280,7 +280,7 @@ export function createInitialRoadmapChangeLogs(
     brand: '待定',
     productLine: '待定',
     productSeries: '待定',
-    marketName: 'DEMO017',
+    marketName: planned.projectCode,
   }
 
   return [

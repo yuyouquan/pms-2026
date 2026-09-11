@@ -4,6 +4,7 @@ import { createRegistryHistoryEntry, validateRegistryCreation, validateRegistryP
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
+import { RESOURCE_REGISTRY_PROJECTS } from '@/mock/projectRegistry'
 import { initialProjects } from '@/data/projects'
 import { EXTERNAL_PROJECT_POOL } from '@/data/externalProjectPool'
 import {
@@ -478,7 +479,7 @@ export function migrateProjectState(persistedState: unknown, version: number): P
         })
         return [
           ...merged,
-          ...initialProjectState.filter(seed => !seenIds.has(seed.id)).map(cloneProjectSeed),
+          ...initialProjectState.filter(seed => !seenIds.has(seed.id) && !RESOURCE_REGISTRY_PROJECTS.some(feature => feature.id === seed.id)).map(cloneProjectSeed),
         ]
       })()
     : projects).map(project => withEosTransitionTime(project, undefined, migrationNow))

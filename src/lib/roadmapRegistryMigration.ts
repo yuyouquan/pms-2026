@@ -9,7 +9,7 @@ export function migrateLegacyRoadmapProject(legacy: PlannedRoadmapProject): Proj
     ...legacy, legacyRoadmapSnapshot: JSON.parse(JSON.stringify(legacy)),
     id: legacy.id, name: legacy.displayName || legacy.projectCode, type: '整机产品项目',
     projectAttribute: 'roadmap', secondaryCategory: legacy.machineProjectType,
-    status: '筹备中', boundFormalProjectId: null,
+    status: '待立项', boundFormalProjectId: null,
     responsiblePersons: legacy.createdBy ? [legacy.createdBy] : [], leader: legacy.createdBy,
     spm: legacy.createdBy, progress: 0, markets: [], chipPlatform: '', tosVersion: '',
     planStartDate: '', planEndDate: '', developCycle: 0, healthStatus: 'normal',

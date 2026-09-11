@@ -50,7 +50,8 @@
     "verify:redesign-browser": "node screenshots/verify-workbench-technical-project-redesign.mjs",
     "verify:liquid-glass": "node scripts/verify-liquid-glass-theme.mjs",
     "verify:liquid-glass:self-test": "node scripts/verify-liquid-glass-theme-self-test.mjs",
-    "verify:mock-data": "node scripts/verify-mock-data-hygiene.mjs && node scripts/verify-mock-dataset-storage.mjs"
+    "verify:project-resource-fixtures": "node scripts/verify-project-resource-fixtures.mjs",
+    "verify:mock-data": "node scripts/verify-mock-data-hygiene.mjs && node scripts/verify-mock-dataset-storage.mjs && node scripts/verify-project-resource-fixtures.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

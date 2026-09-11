@@ -1,3 +1,6 @@
+import { RESOURCE_FORMAL_IDS, RESOURCE_BUDGET_IDS } from '@/mock/projectRegistry'
+import { useProjectStore } from '@/stores/project'
+import { resolveHrFormalSource, getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import type { HrMachineProject, HrMachineVersion, BudgetType, MilestoneNodes } from '@/types/hrMachine'
 import type { HrTosProject, HrTosVersion, TosMilestoneNodes } from '@/types/hrTos'
 import type { HrTechnicalProject, HrTechnicalVersion, TechMilestoneNodes } from '@/types/hrTechnical'
@@ -126,5 +129,63 @@ export function createAdditionalCapabilityProjects(options: FormalOption[]): HrC
       return { ...version, projectStartTime: d[0] ?? '', projectEndTime: d[5] ?? '', departmentInvestments, estimatedInvestment: round(departmentInvestments.reduce((sum, item) => sum + item.estimatedInvestment, 0)), operationLogs: operationLogs(version) }
     })
     return { ...base, versions }
+  })
+}
+
+// Canonical fresh-origin fixtures. Legacy generators above are retained only for old version migrations.
+
+type ResourceProject = HrMachineProject | HrTosProject | HrTechnicalProject | HrCapabilityProject
+function resourceProjects<T extends ResourceProject>(category: Category, templates: T[]): T[] {
+  const registry = useProjectStore.getState().projects
+  const ids = [RESOURCE_FORMAL_IDS[category], RESOURCE_BUDGET_IDS[category], `mock-budget-${category}-unbound`,
+    ...(category === 'machine' ? ['mock-budget-machine-incomplete-bound', 'mock-budget-machine-incomplete-unbound'] : [])]
+  return ids.flatMap((id, index) => {
+    const canonical = registry.find(project => project.id === id)
+    if (!canonical) return [] // A persisted registry may have deleted a fixture; never resurrect it.
+    const formal = index === 0
+    const template = templates[formal ? 0 : index === 2 ? 2 : 1]
+    const recordId = `hr-resource-${category}-${id}`
+    const source = formal ? resolveHrFormalSource(category, null, id) : null
+    const versions = index >= 3 ? [] : template.versions.filter(version => formal ? version.budgetType !== 'annual' : version.budgetType === 'annual').map((version, versionIndex) => {
+      const versionId = `${recordId}-${version.budgetType}-${version.minorVersion}`
+      const createdBy = canonical.responsiblePersons![0]
+      const createdAt = `2026-09-${String(versionIndex + 1).padStart(2, '0')}T09:00:00.000Z`
+      // Budget dates deliberately differ from formal published plans and span two calendar years.
+      const d = ['2027-01-10', '2027-02-01', '2027-04-01', '2027-06-01', '2027-09-01', '2027-11-01', '2028-03-01']
+      if (index === 2) { d[0] = '2026-11-01'; d[1] = '2026-12-01' }
+      if (version.minorVersion === 1) { d[4] = '2027-08-01'; d[5] = '2027-10-01' }
+      const dates = category === 'capability'
+        ? { projectStartTime: source?.projectStartTime ?? d[0], projectEndTime: source?.projectEndTime ?? d[5] }
+        : { milestones: source?.milestones ?? (category === 'machine' ? machineDates(d) : category === 'tos' ? tosDates(d) : techDates(d)) }
+      return { ...version, id: versionId, projectId: recordId, createdBy, createdAt, ...dates,
+        ...('departmentInvestments' in version ? {
+          departmentInvestments: version.departmentInvestments.map((department, i) => ({ ...department, id: `${versionId}-department-${i + 1}` })),
+          operationLogs: [{ id: `${versionId}-created`, operation: 'created', operator: createdBy, timestamp: createdAt, description: `创建${version.versionNumber}预估投入版本` }],
+        } : {}),
+      }
+    })
+    return [{ ...template, id: recordId, pmsProjectId: id, name: canonical.name, tdtName: canonical.name,
+      projectTarget: canonical.projectDescription || '', ipmProjectCode: null, ipmProjectName: null,
+      createdBy: canonical.createdBy, createdAt: canonical.createdAt!, status: 'active', versions,
+      brand: canonical.brand || '', productLine: canonical.productLine || '', marketName: canonical.marketName || '',
+    } as T]
+  })
+}
+export const createResourceMachineProjects = () => resourceProjects('machine', createAdditionalMachineProjects(getHrFormalProjectOptions('machine')))
+export const createResourceTosProjects = () => resourceProjects('tos', createAdditionalTosProjects(getHrFormalProjectOptions('tos')))
+export const createResourceTechnicalProjects = () => resourceProjects('technical', createAdditionalTechnicalProjects(getHrFormalProjectOptions('technical')))
+export const createResourceCapabilityProjects = () => resourceProjects('capability', createAdditionalCapabilityProjects(getHrFormalProjectOptions('capability')))
+
+/** One visible manual allocation per bound source, preserving its total and stable monthly row ID. */
+export function seedResourceMonthlyEdits<T extends { projectId: string; versionId: string; monthlyData: Record<string, number>; isEdited: boolean }>(rows: T[]): T[] {
+  const editedSources = new Set<string>()
+  return rows.map(row => {
+    if (!row.projectId.startsWith('hr-resource-') || !row.projectId.endsWith('-bound') || editedSources.has(row.projectId)) return row
+    const months = Object.keys(row.monthlyData).sort()
+    if (months.length < 2) return row
+    editedSources.add(row.projectId)
+    return { ...row, isEdited: true, monthlyData: { ...row.monthlyData,
+      [months[0]]: 0, [months[1]]: round(row.monthlyData[months[0]] + row.monthlyData[months[1]]),
+    } }
   })
 }

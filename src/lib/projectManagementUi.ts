@@ -58,6 +58,7 @@ const FIELD_LABELS = new Map<string, string>([
     ...TECHNICAL_PROJECT_INFO_FIELDS,
     ...TECHNICAL_PROJECT_SPACE_CORE_FIELDS,
   ].map(field => [field.key, field.label] as [string, string]),
+  ['projectDescription', '项目描述'],
 ])
 
 function readableValue(value: unknown, projects: readonly Pick<ProjectItem, 'id' | 'name'>[], field: string): string {

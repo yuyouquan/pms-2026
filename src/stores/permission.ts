@@ -2,7 +2,7 @@ import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { GLOBAL_PERM_OPTIONS, PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
-import { initialProjects } from '@/data/projects'
+import { ESTABLISHED_FORMAL_PROJECT_IDS, initialProjects } from '@/data/projects'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
 import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
@@ -66,7 +66,7 @@ export const getFixedProjectRoles = (project: RoleProject): Role[] => {
     : project.type === PROJECT_TYPE_TOS_VERSION
       ? TOS_TEAM_PERMISSION_MAPPING
       : null
-  if (project.createdBy) {
+  if (project.createdBy && !ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)) {
     const responsible = normalizeRoleMembers(project.responsiblePersons)
     const team = mapping ? Object.entries(mapping).map(([name, field]) => ({ name, members: getProjectTeamMembers(project, field), isFixed: true }))
       : buildDefaultRoles().filter(role => role.name !== '系统管理员').map(role => ({ ...role, members: [] as string[] }))
@@ -236,7 +236,7 @@ function buildPermissionsForRoles(roles: readonly Role[]): Record<string, Record
 
 function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = []): Role[] {
   const fixed = getFixedProjectRoles(project)
-  if (!project.createdBy && project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
+  if ((!project.createdBy || ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)) && project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
   return [...fixed, ...existing.filter(role => !role.isFixed)]
 }
 
@@ -362,7 +362,7 @@ function buildInitialPerProject(): {
   const rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>> = {}
   initialProjects.forEach(p => {
     const responsiblePersons = getProjectResponsiblePersons(p)
-    const specialRoles = p.type === PROJECT_CATEGORY_TECH || p.type === PROJECT_TYPE_TOS_VERSION
+    const specialRoles = !ESTABLISHED_FORMAL_PROJECT_IDS.has(p.id) || p.type === PROJECT_CATEGORY_TECH || p.type === PROJECT_TYPE_TOS_VERSION
     const baseRoles = specialRoles
       ? mergeProjectRoles(p as unknown as RoleProject)
       : buildDefaultRoles().map(role => (

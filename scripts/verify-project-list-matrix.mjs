@@ -297,6 +297,8 @@ assert.deepEqual(segments.map(segment => segment.key), ['phase::segment-0', 'pla
 
 const seedRoot = projectRoot(import.meta.url)
 const seedData = loadTypeScriptModule(seedRoot, 'src/data/projects.ts')
+// The project-view matrix accepts the formal registry scope, like its production container.
+const formalSeedProjects = seedData.initialProjects.filter(project => project.projectAttribute === 'formal')
 const allowedStatuses = {
   '整机产品项目': new Set(['待立项', '在研', '上市', 'EOS', '转维', '已取消', '已暂停']),
   'tOS版本项目': new Set(['在研', '已完成']),
@@ -312,10 +314,10 @@ assert.doesNotMatch(projectListSource, /statusOptions\s*=\s*useMemo\([\s\S]{0,50
 const seedChildren = loadTypeScriptModule(seedRoot, 'src/stores/technicalProject.ts').INITIAL_TECHNICAL_SUBPROJECTS
 const seedPlans = loadTypeScriptModule(seedRoot, 'src/stores/technicalPlan.ts').INITIAL_TECHNICAL_PLANS
 const seedRows = matrix.buildTechnicalProjectListRows({
-  projects: seedData.initialProjects,
+  projects: formalSeedProjects,
   subprojects: seedChildren,
   plansByKey: seedPlans,
-  machineProjects: seedData.initialProjects.filter(project => project.type === '整机产品项目'),
+  machineProjects: formalSeedProjects.filter(project => project.type === '整机产品项目'),
   today: '2026-06-01',
 })
 assert.equal(seedRows.tdt.length, 8, 'matrix projection exposes eight TDT roots')
@@ -329,7 +331,7 @@ assert.ok(seedRows.tdt.every(row => rootRequiredProjectionFields.every(field => 
 assert.ok(seedRows.children.every(row => childRequiredProjectionFields.every(field => isProjected(row[field])) && Object.entries(row).filter(([key]) => key.startsWith('milestone::')).every(([, value]) => isProjected(value))), 'every required child technical field and milestone projects a non-placeholder value')
 const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
 const rootDateSets = []
-for (const project of seedData.initialProjects.filter(project => project.type === '技术项目')) {
+for (const project of formalSeedProjects.filter(project => project.type === '技术项目')) {
   const plan = seedPlans[`${project.id}:tdt`]
   const published = plan.versions.find(version => version.status === '已发布')
   const phases = published.tasks.filter(task => !task.parentId)
@@ -342,7 +344,7 @@ for (const project of seedData.initialProjects.filter(project => project.type ==
 assert.ok(new Set(rootDateSets).size > 2, 'root plan seeds use multiple distinct deterministic phase date sets')
 assert.ok(new Set(seedRows.tdt.map(row => row.projectStage)).size > 2, 'root plan seeds expose diverse current stages')
 for (const child of seedChildren.filter(child => child.active)) {
-  const parent = seedData.initialProjects.find(project => project.id === child.parentProjectId)
+  const parent = formalSeedProjects.find(project => project.id === child.parentProjectId)
   const published = seedPlans[`${child.parentProjectId}:subproject:${child.id}`].versions.find(version => version.status === '已发布')
   published.tasks.forEach(task => {
     assert.ok(validDate(task.planStartDate) && validDate(task.planEndDate) && task.planStartDate <= task.planEndDate, `${child.id} child tasks keep valid ordered ISO plan dates`)

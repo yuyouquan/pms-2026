@@ -1,6 +1,6 @@
 import { canAccessHrProject, getHrRegistryProject, isHrFormalRecord, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
-import { appendHrMockProjects, createAdditionalMachineProjects } from '@/mock/hrInvestment'
+import { appendHrMockProjects, createAdditionalMachineProjects, createResourceMachineProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
@@ -40,105 +40,7 @@ function emptyMilestones(): MilestoneNodes {
   }
 }
 
-/**
- * 为指定项目创建 mock 版本数据。
- * 版本号统一 V0.X，锁定不改版本号。
- */
-function createMockVersions(
-  projectId: string,
-  investments: { annual: number; projectEstimate: number; projectBudget: number },
-  versionMeta: { projectLevel: string; levelCoefficient: number; hrModelVersion: string },
-  dateOffsets?: { conceptStart: string; productLaunch: string },
-  lockConfig?: { annual?: boolean; projectEstimate?: boolean; projectBudget?: boolean },
-  extraVersions?: { budgetType: BudgetType; count: number }[],
-): HrMachineVersion[] {
-  const milestones: MilestoneNodes = {
-    conceptStart: dateOffsets?.conceptStart ?? '2026-01-02',
-    str1: '2026-03-15',
-    str3: '2026-05-20',
-    str4: '2026-07-10',
-    str5: '2026-09-15',
-    productLaunch: dateOffsets?.productLaunch ?? '2026-11-09',
-  }
-  const baseDate = milestones.conceptStart!
-  const versions: HrMachineVersion[] = []
-
-  // 年度预算
-  const annualExtra = extraVersions?.find(v => v.budgetType === 'annual')?.count ?? 0
-  for (let i = 1; i <= 1 + annualExtra; i++) {
-    const isLocked = i === 1 + annualExtra ? (lockConfig?.annual ?? false) : true
-    versions.push({
-      id: `${projectId}-annual-v0${i}`,
-      projectId,
-      budgetType: 'annual',
-      versionNumber: `V0.${i}`,
-      lockState: isLocked ? 'locked' : 'unlocked',
-      majorVersion: 0,
-      minorVersion: i,
-      createdBy: '当前用户',
-      projectLevel: versionMeta.projectLevel,
-      levelCoefficient: versionMeta.levelCoefficient,
-      hrModelVersion: versionMeta.hrModelVersion,
-      milestones: { ...milestones },
-      estimatedInvestment: investments.annual,
-      createdAt: baseDate,
-      lockedAt: isLocked ? '2026-01-10' : null,
-    })
-  }
-
-  // 项目概算
-  const estimateExtra = extraVersions?.find(v => v.budgetType === 'projectEstimate')?.count ?? 0
-  for (let i = 1; i <= 1 + estimateExtra; i++) {
-    const isLocked = i === 1 + estimateExtra ? (lockConfig?.projectEstimate ?? false) : true
-    versions.push({
-      id: `${projectId}-estimate-v0${i}`,
-      projectId,
-      budgetType: 'projectEstimate',
-      versionNumber: `V0.${i}`,
-      lockState: isLocked ? 'locked' : 'unlocked',
-      majorVersion: 0,
-      minorVersion: i,
-      createdBy: '当前用户',
-      projectLevel: versionMeta.projectLevel,
-      levelCoefficient: versionMeta.levelCoefficient,
-      hrModelVersion: versionMeta.hrModelVersion,
-      milestones: { ...milestones },
-      estimatedInvestment: investments.projectEstimate,
-      createdAt: baseDate,
-      lockedAt: isLocked ? '2026-01-12' : null,
-    })
-  }
-
-  // 项目预算
-  const budgetExtra = extraVersions?.find(v => v.budgetType === 'projectBudget')?.count ?? 0
-  for (let i = 1; i <= 1 + budgetExtra; i++) {
-    const isLocked = i === 1 + budgetExtra ? (lockConfig?.projectBudget ?? false) : true
-    versions.push({
-      id: `${projectId}-budget-v0${i}`,
-      projectId,
-      budgetType: 'projectBudget',
-      versionNumber: `V0.${i}`,
-      lockState: isLocked ? 'locked' : 'unlocked',
-      majorVersion: 0,
-      minorVersion: i,
-      createdBy: '当前用户',
-      projectLevel: versionMeta.projectLevel,
-      levelCoefficient: versionMeta.levelCoefficient,
-      hrModelVersion: versionMeta.hrModelVersion,
-      milestones: { ...milestones },
-      estimatedInvestment: investments.projectBudget,
-      createdAt: baseDate,
-      lockedAt: isLocked ? '2026-01-15' : null,
-    })
-  }
-
-  return versions
-}
-
-/**
- * 使用配置中心数据，按部门拆分版本月度预估投入。
- * 每个匹配的部门生成一条独立的月度记录。
- */
+/** Generate monthly rows using the selected model and version milestones. */
 function generateDepartmentMonthlyRecords(
   projectId: string,
   version: HrMachineVersion,
@@ -168,42 +70,8 @@ function generateDepartmentMonthlyRecords(
   }))
 }
 
-const MOCK_PROJECTS: HrMachineProject[] = [
-  {
-    id: 'mp-kp5',
-    name: 'KP5',
-    brand: 'TECNO',
-    productLine: 'SPARK',
-    projectLevel: 'S',
-    levelCoefficient: 1,
-    hrModelVersion: 'V2026.1',
-    projectYear: '26年立项26年结项',
-    ipmProjectCode: 'IPM-2026-KP5',
-    ipmProjectName: 'KP5 整机项目',
-    status: 'active',
-    annualBudget: 100,
-    projectEstimate: 100,
-    projectBudget: 100,
-    projectAccounting: 0,
-    versions: createMockVersions(
-      'mp-kp5',
-      { annual: 100, projectEstimate: 100, projectBudget: 100 },
-      { projectLevel: 'S', levelCoefficient: 1, hrModelVersion: 'V2026.1' },
-      { conceptStart: '2026-01-15', productLaunch: '2026-11-30' },
-      { annual: false, projectEstimate: false, projectBudget: false },
-    ),
-    createdAt: '2026-01-15',
-  },
-]
-
-/**
- * 为所有项目生成月度预估投入数据。
- * 规则：每个预算类型下取最新版本，按配置中心部门拆分。
- */
-
-
 const ADDITIONAL_PROJECTS = createAdditionalMachineProjects(getHrFormalProjectOptions('machine'))
-const INITIAL_PROJECTS = [...MOCK_PROJECTS, ...ADDITIONAL_PROJECTS]
+const INITIAL_PROJECTS = createResourceMachineProjects()
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -321,7 +189,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
     (set, get) => ({
       registryMigrationComplete: false,
       projects: synchronizeProjects(INITIAL_PROJECTS),
-      monthlyInvestments: syncMonthlyInvestments(INITIAL_PROJECTS, []),
+      monthlyInvestments: seedResourceMonthlyEdits(syncMonthlyInvestments(INITIAL_PROJECTS, [])),
       selectedProjectId: null,
       activeTab: 'projectList',
       filters: { ...DEFAULT_PROJECT_FILTERS },

@@ -3,7 +3,7 @@
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
-import { appendHrMockProjects, createAdditionalCapabilityProjects } from '@/mock/hrInvestment'
+import { appendHrMockProjects, createAdditionalCapabilityProjects, createResourceCapabilityProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { canCreateHrVersion, allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
@@ -68,138 +68,8 @@ function synchronizeProjects(projects: HrCapabilityProject[]): HrCapabilityProje
 
 /* ── Mock 数据生成 ────────────────────────────────────────────────── */
 
-function createMockDepartmentInvestments(): CapabilityDepartmentInvestment[] {
-  const departments: [string, string, number][] = [
-    ['研发中心', '软件工程部', 30],
-    ['研发中心', '测试与质量部', 15],
-    ['产品中心', '产品管理部', 10],
-    ['运营中心', '流程管理部', 8],
-    ['人力资源', '培训发展部', 12],
-  ]
-  return departments.map(([primary, secondary, est], i) => ({
-    id: `cap-di-mock-${i}`,
-    primaryDepartment: primary,
-    secondaryDepartment: secondary,
-    estimatedInvestment: est,
-  }))
-}
-
-function createMockVersion(
-  projectId: string,
-  budgetType: BudgetType,
-  majorVersion: number,
-  minorVersion: number,
-  lockState: 'locked' | 'unlocked',
-  startOffsetDays: number,
-  durationDays: number,
-  createdBy: string,
-): HrCapabilityVersion {
-  const departmentInvestments = createMockDepartmentInvestments()
-  const estimatedInvestment = sumDepartmentInvestments(departmentInvestments)
-
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() + startOffsetDays)
-  const projectStartTime = startDate.toISOString().slice(0, 10)
-
-  const endDate = new Date(startDate)
-  endDate.setDate(endDate.getDate() + durationDays)
-  const projectEndTime = endDate.toISOString().slice(0, 10)
-
-  const createdAt = new Date(startDate)
-  createdAt.setDate(createdAt.getDate() - 7)
-
-  const logs: CapabilityVersionOperationLog[] = [
-    makeLog('created', createdBy, `创建版本，预算类型：${budgetType === 'annual' ? '年度预算' : budgetType === 'projectEstimate' ? '项目概算' : '项目预算'}`),
-  ]
-  if (lockState === 'locked') {
-    const lockDate = new Date(createdAt)
-    lockDate.setDate(lockDate.getDate() + 3)
-    logs.push(makeLog('locked', createdBy, '版本锁定'))
-  }
-
-  return {
-    id: uid('cap-ver'),
-    projectId,
-    budgetType,
-    versionNumber: `V${majorVersion}.${minorVersion}`,
-    lockState,
-    majorVersion,
-    minorVersion,
-    createdBy,
-    estimatedInvestment,
-    projectStartTime,
-    projectEndTime,
-    departmentInvestments,
-    createdAt: createdAt.toISOString().replace('T', ' ').slice(0, 19),
-    lockedAt: lockState === 'locked' ? logs[1].timestamp : null,
-    operationLogs: logs,
-  }
-}
-
-function createMockProjects(): HrCapabilityProject[] {
-  const now = new Date().toISOString()
-
-  const project1: HrCapabilityProject = {
-    id: 'cap-proj-001',
-    name: '研发流程标准化建设',
-    projectTarget: '建立统一的研发流程标准，覆盖需求、设计、开发、测试、发布全生命周期，提升研发效率20%',
-    ipmProjectCode: 'IPM-CAP-001',
-    ipmProjectName: '流程优化平台',
-    status: 'active',
-    annualBudget: 0,
-    projectEstimate: 0,
-    projectBudget: 0,
-    projectAccounting: 60,
-    versions: [
-      createMockVersion('cap-proj-001', 'annual', 1, 0, 'locked', -180, 365, '张明'),
-      createMockVersion('cap-proj-001', 'projectEstimate', 1, 0, 'locked', -90, 180, '李芳'),
-      createMockVersion('cap-proj-001', 'projectBudget', 0, 1, 'unlocked', -60, 120, '王强'),
-    ],
-    createdAt: now,
-  }
-
-  const project2: HrCapabilityProject = {
-    id: 'cap-proj-002',
-    name: '自动化测试平台建设',
-    projectTarget: '搭建自动化测试平台，实现接口、UI、性能自动化测试一体化，降低回归测试成本50%',
-    ipmProjectCode: 'IPM-CAP-002',
-    ipmProjectName: '工具链建设',
-    status: 'active',
-    annualBudget: 0,
-    projectEstimate: 0,
-    projectBudget: 0,
-    projectAccounting: 45,
-    versions: [
-      createMockVersion('cap-proj-002', 'annual', 1, 0, 'locked', -150, 300, '陈静'),
-      createMockVersion('cap-proj-002', 'projectEstimate', 0, 1, 'unlocked', -30, 150, '陈静'),
-    ],
-    createdAt: now,
-  }
-
-  const project3: HrCapabilityProject = {
-    id: 'cap-proj-003',
-    name: '技术人才培养体系',
-    projectTarget: '构建技术人才梯队培养体系，覆盖初级到高级工程师的能力模型、课程体系和认证标准',
-    ipmProjectCode: null,
-    ipmProjectName: null,
-    status: 'active',
-    annualBudget: 0,
-    projectEstimate: 0,
-    projectBudget: 0,
-    projectAccounting: 0,
-    versions: [
-      createMockVersion('cap-proj-003', 'annual', 0, 1, 'unlocked', 0, 365, '刘洋'),
-    ],
-    createdAt: now,
-  }
-
-  const projects = [project1, project2, project3]
-
-  return projects
-}
-
 const ADDITIONAL_PROJECTS = createAdditionalCapabilityProjects(getHrFormalProjectOptions('capability'))
-const INITIAL_PROJECTS = [...createMockProjects(), ...ADDITIONAL_PROJECTS]
+const INITIAL_PROJECTS = createResourceCapabilityProjects()
 
 /** 从每个预算类型的最新版本生成部门月度投入记录。 */
 function generateDepartmentMonthlyRecords(
@@ -328,7 +198,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
     (set, get) => ({
       registryMigrationComplete: false,
       projects: synchronizeProjects(INITIAL_PROJECTS),
-      monthlyInvestments: [],
+      monthlyInvestments: seedResourceMonthlyEdits(syncMonthlyInvestments(INITIAL_PROJECTS, [])),
 
       selectedProjectId: null,
       activeTab: 'projectList',

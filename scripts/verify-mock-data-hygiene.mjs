@@ -72,6 +72,7 @@ function safeSampleUrl(value) {
   } catch { return false }
 }
 const samples = {
+  hrResources: ['Machine', 'Tos', 'Technical', 'Capability'].map(name => load(`src/stores/hr${name}.ts`)[`useHr${name}Store`].getState()),
   projects,
   externalProjects: external.EXTERNAL_PROJECT_POOL.map(item => ({ ...item, details: external.fetchByBid(item.bid) })),
   roadmap, mr, technical, technicalPlans,

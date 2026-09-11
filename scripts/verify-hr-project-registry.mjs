@@ -82,7 +82,8 @@ check('bound machine metadata follows canonical values; unbinding retains last v
  store.getState().refreshFormalProjects();assert.equal(getRecord(store,budget[0].id).brand,'示例品牌A')
 })
 check('legacy split preserves all IDs, dates, monthly edits/logs; unresolved are admin visible; repeat/deletion replay cannot resurrect',()=>{
- const source=saved[3].projects[0],v=source.versions[0]
+ // This is an explicit pre-registry fixture, independent of canonical fresh defaults.
+ const source={...saved[3].projects[0],pmsProjectId:undefined},v=source.versions[0]
  const legacy=[{...source,id:'unique',ipmProjectCode:formal[3].sourceBid,versions:[{...v,id:'legacy-a',projectId:'unique',budgetType:'annual'},{...v,id:'legacy-b',projectId:'unique',budgetType:'projectBudget'}]},
  {...source,id:'unknown',ipmProjectCode:'UNKNOWN',versions:[{...v,id:'unknown-v',projectId:'unknown',budgetType:'projectBudget'}]}]
  const monthly=[{id:'manual-old',projectId:'unique',versionId:'legacy-a',monthlyData:{'2026-01':9.9},isEdited:true}]
@@ -96,6 +97,23 @@ check('legacy split preserves all IDs, dates, monthly edits/logs; unresolved are
  registry.setState({projects:registry.getState().projects.filter(p=>p.id!==id),registryHistory:[{projectId:id,action:'delete'}]})
  helpers.reconcileHrRegistry(legacy,monthly,'capability',false)
  assert.equal(registry.getState().projects.some(p=>p.id===id),false)
+})
+check('explicit duplicate legacy ownership claims retain both originals without guessing a formal binding',()=>{
+ const source={...saved[3].projects[0],pmsProjectId:undefined},version=source.versions[0]
+ const legacy=['a','b'].map(suffix=>({...source,id:`duplicate-claim-${suffix}`,ipmProjectCode:formal[3].sourceBid,
+   versions:['annual','projectBudget'].map(type=>({...version,id:`duplicate-${suffix}-${type}`,projectId:`duplicate-claim-${suffix}`,budgetType:type}))}))
+ const monthly=legacy.map((row,index)=>({id:`duplicate-month-${index}`,projectId:row.id,versionId:row.versions[0].id,monthlyData:{'2026-01':index+1.5},isEdited:true}))
+ const migrated=helpers.reconcileHrRegistry(legacy,monthly,'capability',false)
+ for(const old of legacy){
+  const unresolved=migrated.projects.find(row=>row.id===old.id)
+  assert.equal(unresolved.pmsProjectId,undefined);assert.match(unresolved.migrationIssue,/不唯一/)
+  assert.deepEqual(unresolved.legacyHrSnapshot,JSON.parse(JSON.stringify(old)))
+  const canonical=registry.getState().projects.find(row=>row.id===helpers.legacyHrBudgetId('capability',old.id))
+  assert.equal(canonical.boundFormalProjectId,null)
+  for(const version of old.versions){const retained=migrated.projects.flatMap(row=>row.versions).find(row=>row.id===version.id);assert.deepEqual({...retained,projectId:version.projectId},version)}
+ }
+ assert.deepEqual(migrated.monthlyInvestments.map(row=>row.monthlyData),monthly.map(row=>row.monthlyData))
+ assert.deepEqual(helpers.reconcileHrRegistry(migrated.projects,migrated.monthlyInvestments,'capability',true),migrated)
 })
 check('formal-only access never grants source visibility; roadmap rejects all budget types',()=>{
  const owner='正式项目专属成员'

@@ -9,6 +9,7 @@ import {
   PROJECT_TEMPLATE_TYPES,
   getProjectTypeFamilyKey,
 } from '@/constants/projectTypes'
+import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '@/data/projectListPlanMocks'
 import { initialProjects } from '@/data/projects'
 import { createMrAcceptancePlanScopeSeed } from '@/data/mrVersionPlanMocks'
 import type { GanttScaleMode } from '@/lib/ganttScale'
@@ -1044,6 +1045,13 @@ export interface PlanActions {
 }
 
 const initialMrAcceptancePlanScope = createMrAcceptancePlanScopeSeed()
+// Fresh sample formal plans are real project-scoped published snapshots, never a runtime date fallback.
+const initialResourcePublishedSnapshots = Object.fromEntries(VERSION_DATA.filter(version => version.status === '已发布').flatMap(version => [
+  [`project::2::tos-type::Full::level1::${version.id}::snapshot`,
+    buildProjectListMockPlanTasks('2', getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_TOS_VERSION, true), { projectType: PROJECT_CATEGORY_TOS_VERSION, projectName: 'tOS16.1' })],
+  [getProjectLevel1MockSnapshotKey('5', version.id),
+    buildProjectListMockPlanTasks('5', getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_CAPABILITY, true), { projectType: PROJECT_CATEGORY_CAPABILITY, projectName: 'DEMO015_DEMOBOARD015' })],
+]))
 
 export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get) => ({
   // Config-center plan
@@ -1092,6 +1100,7 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   publishedSnapshots: {
     ...createInitialTemplatePublishedSnapshots(),
     ...initialMrAcceptancePlanScope.publishedSnapshots,
+    ...initialResourcePublishedSnapshots,
   },
   configTemplateTasksByType: createInitialConfigTemplateTasks(),
   configTemplateVersionScopes: createInitialConfigTemplateVersionScopes(),

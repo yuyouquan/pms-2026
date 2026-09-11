@@ -4572,7 +4572,11 @@ export default function ProjectSpaceContainer() {
       return <Input size="small" value={ef[key]} onChange={e => setEf(key, e.target.value)} />
     }
     const nodeChoices = [{ label: '概念启动', value: '概念启动' }, { label: 'STR1', value: 'STR1' }, { label: 'STR2', value: 'STR2' }, { label: 'STR3', value: 'STR3' }, { label: 'STR4', value: 'STR4' }, { label: 'STR5', value: 'STR5' }, { label: 'STR6', value: 'STR6' }]
-    const healthChoices = machineProjectSpaceOptions.healthStatus
+    const healthAliases: Record<string, string> = { normal: '正常', warning: '关注', risk: '风险' }
+    const healthChoices = isCapability && enumReady
+      ? buildEnumOptions(enumRowsByType, 'machine-health-status', [healthAliases[p.healthStatus] || p.healthStatus].filter(Boolean))
+        .map(option => ({ ...option, value: Object.keys(healthAliases).find(key => healthAliases[key] === option.value) || option.value }))
+      : machineProjectSpaceOptions.healthStatus
     const developModeChoices = machineProjectSpaceOptions.developmentMode
     const roadmapDevelopModeChoices = machineProjectSpaceOptions.developmentMode
     const startRamChoices = ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'].map(value => ({ label: value, value }))
