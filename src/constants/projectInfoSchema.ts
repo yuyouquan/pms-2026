@@ -251,7 +251,7 @@ const TECHNICAL_PROJECT_TEAM_INFO_FIELDS = defineFields(TECHNICAL_TEAM_FIELDS.ma
   key: field.key,
   label: field.label,
   group: 'team' as const,
-  inputType: 'person' as const,
+  inputType: field.key === 'technicalLead' ? 'people' as const : 'person' as const,
   required: field.required,
   requiredOnCreate: field.required,
   defaultVisible: true,

@@ -220,6 +220,7 @@ import {
   canEditLevel1HorizontalDateCell,
   filterLevel1TreeRows,
   getLevel1MaintainerUsers,
+  getTechnicalLevel1MaintainerUsers,
   selectLevel1HorizontalVersions,
   selectLatestPublishedLevel1Summary,
   resolveLevel1HorizontalActualProjectionAccess,
@@ -971,12 +972,7 @@ export default function ProjectSpaceContainer() {
   const canExportTechnicalPlan = canDo('plan:导出')
   const level1GlobalAdmins = perm.globalRoles.find(role => role.name === '管理组')?.members || []
   const level1SpmUsers = getLevel1MaintainerUsers(selectedProject?.spm, roles)
-  const level1TechnicalLead = String(
-    (selectedProject as any)?.technicalLead
-    || (selectedProject as any)?.fieldValues?.technicalLead
-    || roles.find(role => role.name === '技术项目负责人')?.members?.[0]
-    || '',
-  ).trim()
+  const level1TechnicalLead = getTechnicalLevel1MaintainerUsers(selectedProject, roles)
   const canGovernLevel1Plan = selectedProject ? canMaintainLevel1Plan({
     projectType: selectedProject.type,
     currentUser: currentLoginUser,

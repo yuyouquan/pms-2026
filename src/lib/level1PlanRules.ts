@@ -815,11 +815,14 @@ export const canMaintainLevel1Plan = (input: {
   projectType: string
   currentUser: string
   spmUsers: string[]
-  technicalLead: string
+  technicalLead: string | readonly string[]
   globalAdmins: string[]
 }): boolean => {
   if (input.globalAdmins.includes(input.currentUser)) return true
-  if (input.projectType === '技术项目') return input.technicalLead === input.currentUser
+  if (input.projectType === '技术项目') {
+    const leads = typeof input.technicalLead === 'string' ? input.technicalLead.split(/[、,]/) : input.technicalLead
+    return leads.some(name => name.trim() === input.currentUser)
+  }
   return input.spmUsers.includes(input.currentUser)
 }
 

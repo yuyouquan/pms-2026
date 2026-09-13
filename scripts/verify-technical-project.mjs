@@ -58,12 +58,12 @@ const technicalValues = {
 const createdRecord = rules.synchronizeTechnicalProjectRecord({ id: 'tech-1', name: 'AI项目', type: '技术项目' }, technicalValues, { ipmProjectType: '部门级-技术研发' })
 assert.deepEqual(createdRecord.responsiblePersons, ['演示用户02'], 'create derives responsiblePersons from technical lead')
 assert.equal(createdRecord.leader, '演示用户02', 'create derives root leader from technical lead')
-for (const key of Object.keys(technicalValues)) assert.deepEqual(createdRecord[key], createdRecord.fieldValues[key], `create keeps root and fieldValues consistent for ${key}`)
+for (const key of Object.keys(technicalValues)) assert.deepEqual(createdRecord[key], key === 'technicalLead' ? createdRecord.fieldValues[key].join('、') : createdRecord.fieldValues[key], `create keeps root and fieldValues consistent for ${key}`)
 const editedValues = { ...technicalValues, technicalLead: '演示用户01', technicalProjectManager: '', projectYear: '2027', projectValue: '', projectKpi: null, conceptDesign: { kind: 'file', name: 'design.pdf', size: 30, mimeType: 'application/pdf' } }
 const editedRecord = rules.synchronizeTechnicalProjectRecord(createdRecord, editedValues, { ipmProjectType: '部门级-技术研发' })
 assert.deepEqual(editedRecord.responsiblePersons, ['演示用户01'], 'edit resynchronizes owner from the changed lead')
 assert.equal(editedRecord.leader, '演示用户01', 'edit resynchronizes leader from the changed lead')
-for (const key of Object.keys(editedValues)) assert.deepEqual(editedRecord[key], editedRecord.fieldValues[key], `edit keeps root and fieldValues consistent for ${key}`)
+for (const key of Object.keys(editedValues)) assert.deepEqual(editedRecord[key], key === 'technicalLead' ? editedRecord.fieldValues[key].join('、') : editedRecord.fieldValues[key], `edit keeps root and fieldValues consistent for ${key}`)
 assert.equal(editedRecord.projectKpi, null, 'edit can clear a previously selected deliverable')
 assert.deepEqual(rules.getPreProjectCandidates([{ id: '1', type: '整机产品项目' }, { id: '2', type: 'tOS版本项目' }, { id: '3', type: '技术项目' }], '2').map(item => item.id), ['1', '3'], 'pre-project candidates include every project type except current')
 const existing = [{ id: 'a', parentProjectId: 'tech', name: 'A', active: true, ipmOrder: 1, configuration: { coreValue: '追赶', developmentMode: '自研', firstTosVersion: '', firstMachineProjectId: '' } }, { id: 'b', parentProjectId: 'tech', name: 'B', active: true, ipmOrder: 2, configuration: { coreValue: '人有我有', developmentMode: 'SoC合作', firstTosVersion: '', firstMachineProjectId: '' } }]
@@ -583,7 +583,7 @@ assert.notEqual(technicalPlanStore.selectTechnicalProjectStage(technicalPlanStor
 
 const projectData = loadTypeScriptModule(root, 'src/data/projects.ts')
 assert.match(readSource(root, 'src/data/projects.ts'), /export const initialProjects: ProjectSeed\[\]/, 'project seed collection keeps the project domain type instead of widening to an anonymous union')
-const technicalSeeds = projectData.initialProjects.filter(project => project.type === '技术项目')
+const technicalSeeds = projectData.initialProjects.filter(project => project.type === '技术项目' && (project.projectAttribute ?? 'formal') === 'formal')
 assert.equal(technicalSeeds.length, 8, 'technical mock roots contain the required eight TDT projects')
 assert.equal(new Set(technicalSeeds.map(project => project.id)).size, 8, 'technical root IDs are unique')
 const expectedTechnicalFields = {

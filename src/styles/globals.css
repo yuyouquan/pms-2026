@@ -3918,6 +3918,15 @@ body {
    PMS Custom — Modal (.pms-modal)
    ================================================================ */
 
+/* Ant Design 6 uses container instead of content; keep header/body/footer on one 24px inset. */
+.pms-modal.ant-modal .ant-modal-container {
+  padding: 0;
+}
+
+.pms-modal.ant-modal .ant-modal-body {
+  padding: var(--pms-content-padding);
+}
+
 .pms-modal .ant-modal-content {
   border-radius: var(--radius-xl) !important;
   overflow: hidden !important;

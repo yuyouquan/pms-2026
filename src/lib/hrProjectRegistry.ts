@@ -8,7 +8,10 @@ import type { ProjectItem } from '@/types/app'
 
 export interface HrRegistryRecord {
   id: string; pmsProjectId?: string; name?: string; tdtName?: string; ipmProjectCode: string | null
+  status?: 'active' | 'cancelled' | 'paused'
   migrationIssue?: string; legacyHrSnapshot?: unknown
+  /** Last diagnostic owned by annual-binding reconciliation; unrelated warnings remain untouched. */
+  annualBindingMigrationIssue?: string
   hrCanonicalMetadata?: Record<string, unknown>
 }
 /** A detail dialog may select a linked source; creation always returns to the owning resource scope. */
@@ -49,6 +52,44 @@ interface Monthly { projectId: string; versionId: string }
 const categoryType = { machine: '整机产品项目', tos: 'tOS版本项目', technical: '技术项目', capability: '能力建设项目' }
 export const legacyHrBudgetId = (category: HrProjectCategory, id: string) => `hr-budget:${category}:${id}`
 
+function legacySnapshot(record: HrRegistryRecord): HrRegistryRecord | undefined {
+  const value = record.legacyHrSnapshot
+  if (!value || typeof value !== 'object' || !('id' in value) || typeof value.id !== 'string') return undefined
+  return value as HrRegistryRecord
+}
+
+/** Diagnose retained annual snapshots by exact import ID, without undoing deliberate binding decisions. */
+function diagnoseAnnualBinding<T extends HrRegistryRecord>(record: T, registry: ProjectItem[], category: HrProjectCategory, claims: Map<string, Set<string>>): T {
+  const snapshot = legacySnapshot(record)
+  if (!snapshot || record.pmsProjectId !== legacyHrBudgetId(category, snapshot.id)) return record
+  const canonical = registry.find(project => project.id === record.pmsProjectId && project.projectAttribute === 'budget')
+  if (!canonical) return record
+  const code = snapshot.ipmProjectCode
+  const candidates = code ? registry.filter(project => isFormalProject(project) && matchesHrCategory(project, category) && hrFormalProjectCode(project) === code) : []
+  const history = useProjectStore.getState().registryHistory
+  const handled = history.some(row => row.projectId === canonical.id && row.action !== 'create' && row.changes.some(change => change.field === 'boundFormalProjectId'))
+    || (candidates.length === 0 && history.some(row => row.action === 'delete' && row.before && isFormalProject(row.before) && matchesHrCategory(row.before, category) && hrFormalProjectCode(row.before) === code))
+  let issue: string | undefined
+  if (code && !canonical.boundFormalProjectId && !handled) {
+    const reason = candidates.length === 0 ? '无法匹配'
+      : candidates.length > 1 || (claims.get(code)?.size || 0) > 1 ? '不唯一'
+      : registry.some(project => project.id !== canonical.id && project.projectAttribute === 'budget' && project.boundFormalProjectId === candidates[0].id) ? '已被其他预算项目占用'
+      : '尚未确认关联'
+    issue = `旧年度预算 ${snapshot.id}：正式绑定 ${code} ${reason}，原记录保留待核对`
+  }
+  if (record.migrationIssue && record.migrationIssue !== record.annualBindingMigrationIssue) return record
+  if (issue === record.annualBindingMigrationIssue && issue === record.migrationIssue) return record
+  const result = { ...record }
+  if (issue) {
+    result.migrationIssue = issue
+    result.annualBindingMigrationIssue = issue
+  } else {
+    delete result.migrationIssue
+    delete result.annualBindingMigrationIssue
+  }
+  return result
+}
+
 /** One migration per persisted HR store. Unknown and duplicate bindings are retained, never guessed. */
 export function reconcileHrRegistry<T extends HrRegistryRecord & { versions: RegistryVersion[]; createdAt: string }, M extends Monthly>(
   records: T[], monthly: M[], category: HrProjectCategory, migrated: boolean,
@@ -57,12 +98,19 @@ export function reconcileHrRegistry<T extends HrRegistryRecord & { versions: Reg
   const imported: ProjectItem[] = []
   const deleted = new Set(useProjectStore.getState().registryHistory.filter(row => row.action === 'delete').map(row => row.projectId))
   const next: T[] = []
-  const claims = new Map<string, number>()
-  records.filter(row => !row.pmsProjectId && row.ipmProjectCode).forEach(row => claims.set(row.ipmProjectCode!, (claims.get(row.ipmProjectCode!) || 0) + 1))
+  const claims = new Map<string, Set<string>>()
+  records.forEach(row => {
+    // Annual/nonannual fragments retain the same snapshot and count as one original claim.
+    const original = legacySnapshot(row) || (!row.pmsProjectId ? row : undefined)
+    if (!original?.ipmProjectCode) return
+    const ids = claims.get(original.ipmProjectCode) || new Set<string>()
+    ids.add(original.id)
+    claims.set(original.ipmProjectCode, ids)
+  })
   for (const record of records) {
     if (record.pmsProjectId || migrated) { next.push(record); continue }
     const candidates = registry.filter(project => isFormalProject(project) && matchesHrCategory(project, category) && hrFormalProjectCode(project) === record.ipmProjectCode)
-    const formal = candidates.length === 1 && claims.get(record.ipmProjectCode || '') === 1 ? candidates[0] : undefined
+    const formal = candidates.length === 1 && claims.get(record.ipmProjectCode || '')?.size === 1 ? candidates[0] : undefined
     const annual = record.versions.filter(version => version.budgetType === 'annual')
     const nonannual = record.versions.filter(version => version.budgetType !== 'annual')
     const snapshot = JSON.parse(JSON.stringify(record))
@@ -100,6 +148,7 @@ export function reconcileHrRegistry<T extends HrRegistryRecord & { versions: Reg
   }
   // A missing hydrated registry row is not proof of deletion. Only confirmed config deletion may remove resource data.
   const active = next.filter(record => !record.pmsProjectId || !deleted.has(record.pmsProjectId))
+    .map(record => diagnoseAnnualBinding(record, registry, category, claims))
   for (const project of registry.filter(project => matchesHrCategory(project, category) && getProjectAttribute(project) !== 'roadmap')) {
     if (active.some(record => record.pmsProjectId === project.id)) continue
     active.push({ id: `hr:${category}:${project.id}`, pmsProjectId: project.id, name: project.name,

@@ -51,6 +51,7 @@
     "verify:liquid-glass": "node scripts/verify-liquid-glass-theme.mjs",
     "verify:liquid-glass:self-test": "node scripts/verify-liquid-glass-theme-self-test.mjs",
     "verify:project-resource-fixtures": "node scripts/verify-project-resource-fixtures.mjs",
+    "verify:project-management-reaudit": "node scripts/verify-project-management-reaudit.mjs",
     "verify:mock-data": "node scripts/verify-mock-data-hygiene.mjs && node scripts/verify-mock-dataset-storage.mjs && node scripts/verify-project-resource-fixtures.mjs"
   },
   "dependencies": {

@@ -1,4 +1,5 @@
 import { isFormalProject } from '@/types/projectRegistry'
+import { normalizeProjectResponsibleMembers } from '@/lib/projectResponsibility'
 import type { ProjectItem } from '@/types/app'
 import { isExternalMachineDevelopment } from '@/constants/projectInfoSchema'
 import { isMachineProjectType } from '@/constants/projectTypes'
@@ -136,6 +137,7 @@ export const getProjectInfoValue = (project: ProjectInfoProject, key: string): P
   const stored = project.fieldValues?.[key]
   if (stored !== undefined) {
     if (key === 'versionType' && typeof stored === 'string' && stored.toUpperCase() === 'GO') return 'GO'
+    if (key === 'machineSpm' || key === 'technicalLead') return normalizeProjectResponsibleMembers(stored)
     return MACHINE_TEAM_KEYS[key] || TOS_TEAM_KEYS[key]
       ? normalizeTeamMembers(stored)
       : stored
@@ -156,6 +158,9 @@ export const getProjectInfoValue = (project: ProjectInfoProject, key: string): P
     if (isTeamRoleMap(roles) && (roles as ProjectTeamRoleMap)[roleKey] !== undefined) {
       return normalizeTeamMembers((roles as ProjectTeamRoleMap)[roleKey])
     }
+  }
+  if (key === 'machineSpm' && project.fieldValues?.spm !== undefined) {
+    return normalizeProjectResponsibleMembers(project.fieldValues.spm)
   }
   if (TOS_TEAM_KEYS[key]) {
     const roles = project.fieldValues?.tosTeamRoles
@@ -181,6 +186,7 @@ export const getProjectInfoValue = (project: ProjectInfoProject, key: string): P
   }
   const rootKey = LEGACY_ROOT_KEYS[key] || key
   const rootValue = project[rootKey]
+  if ((key === 'machineSpm' || key === 'technicalLead') && rootValue !== undefined) return normalizeProjectResponsibleMembers(rootValue)
   if (key === 'versionType' && typeof rootValue === 'string' && rootValue.toUpperCase() === 'GO') return 'GO'
   if (
     typeof rootValue === 'string'

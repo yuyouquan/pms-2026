@@ -14,7 +14,7 @@ function project(id: string, name: string, type: ProjectItem['type'], attribute:
     status: type === types.machine ? '待立项' : type === types.technical ? '进行中' : '在研',
     progress: 0, healthStatus: 'normal', markets: [], androidVersion: '', chipPlatform: '', tosVersion: '', planStartDate: '', planEndDate: '', developCycle: 0,
     brand: '', productLine: '', marketName: '',
-    fieldValues: type === types.machine ? { spm: [owner] } : type === types.tos ? { tosVersionProjectManager: [owner] }
+    fieldValues: type === types.machine ? { machineSpm: [owner] } : type === types.tos ? { tosVersionProjectManager: [owner] }
       : type === types.technical ? { technicalLead: [owner] } : {},
   }
 }
@@ -29,9 +29,14 @@ export const RESOURCE_REGISTRY_PROJECTS: ProjectItem[] = [
   ...(['tos', 'technical', 'capability'] as const).map(category => ({
     ...project(`mock-budget-${category}-unbound`, `示例${labels[category]}-独立跨年预算`, types[category], 'budget'),
     projectCode: `DEMOB-${category.toUpperCase()}-FREE`, projectDescription: '未绑定正式项目；两版跨年年度预算与手工里程碑。',
+    ...(category === 'technical' ? { responsiblePersons: ['演示用户01', '演示用户02'], technicalLead: '演示用户01、演示用户02', fieldValues: { technicalLead: ['演示用户01', '演示用户02'] },
+      projectDescription: '多责任人共同管理的独立技术预算；两版跨年年度预算与手工里程碑。' } : {}),
+    ...(category === 'tos' ? { projectDescription: '独立跨年预算；最新版本的维护结束时间待补充，历史版本保留完整里程碑。' } : {}),
   })),
   { ...project('mock-budget-machine-unbound', '示例整机-独立跨年预算', types.machine, 'budget'), projectCode: 'DEMOB-MACHINE-FREE',
     brand: '示例品牌A', productLine: '示例系列A', marketName: '示例独立市场', projectDescription: '未绑定正式项目；可维护品牌、产品线、市场名与跨年里程碑。' },
+  { ...project('mock-budget-machine-cancelled', '示例整机-已取消预算', types.machine, 'budget'), projectCode: 'DEMOB-MACHINE-CANCELLED',
+    brand: '示例品牌B', productLine: '示例系列B', marketName: '示例保留市场', projectDescription: '人力项目已取消，历史年度预算保留可查看，不能新建版本。' },
   { ...project('mock-budget-machine-incomplete-bound', '示例整机-来源资料待完善预算', types.machine, 'budget'), projectCode: 'DEMOB-MACHINE-PENDING',
     boundFormalProjectId: 'mock-formal-machine-incomplete', projectDescription: '绑定来源缺少品牌、产品线、市场名；显示只读空值及提示，仍可新建年度预算。' },
   { ...project('mock-budget-machine-incomplete-unbound', '示例整机-待填写资料预算', types.machine, 'budget'), projectCode: 'DEMOB-MACHINE-EMPTY',

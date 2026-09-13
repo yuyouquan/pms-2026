@@ -1,5 +1,6 @@
 'use client'
 
+import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
@@ -249,7 +250,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         const estimatedInvestment = sumDepartmentInvestments(form.departmentInvestments)
         const majorVersion = 0
         const minorVersion = nextHrMinorVersion(project.versions, form.budgetType)
-        const operator = '当前用户'
+        const operator = useProjectStore.getState().currentLoginUser
 
         const newVersion: HrCapabilityVersion = {
           id: uid('cap-ver'),
@@ -290,11 +291,11 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         if (!source || !canCreateHrVersion(project, source.budgetType)) return
 
         const minorVersion = nextHrMinorVersion(project.versions, source.budgetType)
-        const operator = '当前用户'
+        const operator = useProjectStore.getState().currentLoginUser
 
         const newVersion: HrCapabilityVersion = {
           ...source,
-          createdBy: '当前用户',
+          createdBy: useProjectStore.getState().currentLoginUser,
           id: uid('cap-ver'),
           versionNumber: `V0.${minorVersion}`,
           batch: null,
@@ -351,7 +352,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
             if (version.id !== versionId) return version
             const permitted = allowedHrVersionUpdates(project, version, updates)
             if (Object.keys(permitted).length === 0) return version
-            return { ...version, ...permitted, operationLogs: [...version.operationLogs, makeLog('edited', '当前用户', permitted.batch !== undefined ? '更新批次' : '编辑版本信息')] }
+            return { ...version, ...permitted, operationLogs: [...version.operationLogs, makeLog('edited', useProjectStore.getState().currentLoginUser, permitted.batch !== undefined ? '更新批次' : '编辑版本信息')] }
           }) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
@@ -362,7 +363,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => version.id === versionId && isLatestHrVersion(project, version)
-            ? { ...version, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', '当前用户', '更新部门预估投入')] }
+            ? { ...version, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }
             : version) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })

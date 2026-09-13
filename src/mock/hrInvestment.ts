@@ -138,22 +138,24 @@ type ResourceProject = HrMachineProject | HrTosProject | HrTechnicalProject | Hr
 function resourceProjects<T extends ResourceProject>(category: Category, templates: T[]): T[] {
   const registry = useProjectStore.getState().projects
   const ids = [RESOURCE_FORMAL_IDS[category], RESOURCE_BUDGET_IDS[category], `mock-budget-${category}-unbound`,
-    ...(category === 'machine' ? ['mock-budget-machine-incomplete-bound', 'mock-budget-machine-incomplete-unbound'] : [])]
+    ...(category === 'machine' ? ['mock-budget-machine-incomplete-bound', 'mock-budget-machine-incomplete-unbound', 'mock-budget-machine-cancelled'] : [])]
   return ids.flatMap((id, index) => {
     const canonical = registry.find(project => project.id === id)
     if (!canonical) return [] // A persisted registry may have deleted a fixture; never resurrect it.
     const formal = index === 0
-    const template = templates[formal ? 0 : index === 2 ? 2 : 1]
+    const cancelled = id === 'mock-budget-machine-cancelled'
+    const template = templates[cancelled ? 4 : formal ? 0 : index === 2 ? 2 : 1]
     const recordId = `hr-resource-${category}-${id}`
     const source = formal ? resolveHrFormalSource(category, null, id) : null
-    const versions = index >= 3 ? [] : template.versions.filter(version => formal ? version.budgetType !== 'annual' : version.budgetType === 'annual').map((version, versionIndex) => {
+    const versions = id.includes('-incomplete-') ? [] : template.versions.filter(version => formal ? version.budgetType !== 'annual' : version.budgetType === 'annual').map((version, versionIndex) => {
       const versionId = `${recordId}-${version.budgetType}-${version.minorVersion}`
       const createdBy = canonical.responsiblePersons![0]
       const createdAt = `2026-09-${String(versionIndex + 1).padStart(2, '0')}T09:00:00.000Z`
       // Budget dates deliberately differ from formal published plans and span two calendar years.
-      const d = ['2027-01-10', '2027-02-01', '2027-04-01', '2027-06-01', '2027-09-01', '2027-11-01', '2028-03-01']
+      const d: (string | null)[] = ['2027-01-10', '2027-02-01', '2027-04-01', '2027-06-01', '2027-09-01', '2027-11-01', '2028-03-01']
       if (index === 2) { d[0] = '2026-11-01'; d[1] = '2026-12-01' }
       if (version.minorVersion === 1) { d[4] = '2027-08-01'; d[5] = '2027-10-01' }
+      if (category === 'tos' && index === 2 && version.minorVersion > 1) d[6] = null
       const dates = category === 'capability'
         ? { projectStartTime: source?.projectStartTime ?? d[0], projectEndTime: source?.projectEndTime ?? d[5] }
         : { milestones: source?.milestones ?? (category === 'machine' ? machineDates(d) : category === 'tos' ? tosDates(d) : techDates(d)) }
@@ -166,7 +168,7 @@ function resourceProjects<T extends ResourceProject>(category: Category, templat
     })
     return [{ ...template, id: recordId, pmsProjectId: id, name: canonical.name, tdtName: canonical.name,
       projectTarget: canonical.projectDescription || '', ipmProjectCode: null, ipmProjectName: null,
-      createdBy: canonical.createdBy, createdAt: canonical.createdAt!, status: 'active', versions,
+      createdBy: canonical.createdBy, createdAt: canonical.createdAt!, status: cancelled ? 'cancelled' : 'active', versions,
       brand: canonical.brand || '', productLine: canonical.productLine || '', marketName: canonical.marketName || '',
     } as T]
   })

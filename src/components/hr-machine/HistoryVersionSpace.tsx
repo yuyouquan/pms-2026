@@ -706,7 +706,7 @@ export default function HistoryVersionSpace() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              disabled={!projects.some(project => canEditHrInScope(project, scopeId))}
+              disabled={!projects.some(project => project.status === 'active' && canEditHrInScope(project, scopeId))}
               onClick={() => setShowNewVersionModal(true)}
             >
               新增版本

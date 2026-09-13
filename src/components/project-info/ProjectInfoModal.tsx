@@ -1286,7 +1286,7 @@ export default function ProjectInfoModal({
               <Form.Item label="项目名" name="projectName"><Input disabled /></Form.Item>
             )}
             {projectType && (<>
-              {isTechnicalProject ? (
+              {isTechnicalProject && !manualCompletion ? (
                 <Form.Item label="项目分类" name="secondaryCategory"><Input disabled /></Form.Item>
               ) : (
                 <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>

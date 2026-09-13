@@ -5,6 +5,9 @@ import {
 } from '@/lib/planVersioning'
 import { applyPlanTaskDatePatchResult } from '@/lib/planGanttRules'
 import type { Level1PlanTask } from '@/lib/level1PlanRules'
+import { getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
+import { normalizeProjectResponsibleMembers } from '@/lib/projectResponsibility'
+import type { ProjectItem } from '@/types/app'
 
 export interface GovernedLevel1ActualTask extends Level1PlanTask {
   actualTimeDetachedFromMain?: boolean
@@ -470,6 +473,16 @@ export const getLevel1MaintainerUsers = (
   ...String(spm || '').split(/[,，、]/).map(user => user.trim()).filter(Boolean),
   ...(roles.find(role => role.name === '项目经理')?.members || []),
 ]))
+
+/** Both the rendered entry and confirmation recheck use canonical owners, including an explicit clear. */
+export const getTechnicalLevel1MaintainerUsers = (
+  project: ProjectItem | null | undefined,
+  roles: readonly { name?: string; members?: readonly string[] }[],
+) => normalizeProjectResponsibleMembers(
+  (project ? getProjectInfoValue(project as unknown as ProjectInfoProject, 'technicalLead') : undefined)
+  ?? roles.find(role => role.name === '技术项目负责人')?.members
+  ?? [],
+)
 
 const SCOPED_PLAN_PERSISTENCE_KEYS = [
   'marketPlanData',

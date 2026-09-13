@@ -1,3 +1,4 @@
+import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalTosProjects, createResourceTosProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
@@ -83,7 +84,7 @@ const INITIAL_PROJECTS = createResourceTosProjects()
 function makeLog(
   operation: TosVersionOperationType,
   description: string,
-  operator: string = '张明',
+  operator: string = useProjectStore.getState().currentLoginUser,
 ): TosVersionOperationLog {
   return {
     id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -289,7 +290,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             lockState: 'unlocked',
             majorVersion: 0,
             minorVersion,
-            createdBy: '当前用户',
+            createdBy: useProjectStore.getState().currentLoginUser,
             estimatedInvestment: sumDepartmentInvestments(form.departmentInvestments),
             milestones,
             departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
@@ -334,7 +335,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
         const newVersion: HrTosVersion = {
           ...sourceVersion,
-          createdBy: '当前用户',
+          createdBy: useProjectStore.getState().currentLoginUser,
           id: `${projectId}-${sourceVersion.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           versionNumber: `V0.${minorVersion}`,
             batch: null,

@@ -288,7 +288,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
             lockState: 'unlocked',
             majorVersion: 0,
             minorVersion,
-            createdBy: '当前用户',
+            createdBy: useProjectStore.getState().currentLoginUser,
             projectLevel: versionMeta.projectLevel,
             levelCoefficient: versionMeta.levelCoefficient,
             hrModelVersion: versionMeta.hrModelVersion,

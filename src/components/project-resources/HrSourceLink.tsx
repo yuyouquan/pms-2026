@@ -7,11 +7,12 @@ import { useUiStore } from '@/stores/ui'
 import { useTransferStore } from '@/stores/transfer'
 export default function HrSourceLink({ project }: { project?: HrRegistryRecord }) {
   const scopeId = useHrResourceScope()
-  if (project?.migrationIssue) return <div><Tag color="warning">归属待核对</Tag><span>{project.migrationIssue}</span></div>
-  if (!scopeId || !project || project.pmsProjectId === scopeId || !canAccessHrProject(project)) return null
+  const status = project?.status === 'cancelled' ? <Tag>已取消 · 不可新增版本</Tag> : null
+  if (project?.migrationIssue) return <div>{status}<Tag color="warning">归属待核对</Tag><span>{project.migrationIssue}</span></div>
+  if (!scopeId || !project || project.pmsProjectId === scopeId || !canAccessHrProject(project)) return status
   const source = getHrRegistryProject(project)
   if (!source) return null
-  return <div><Tag>关联年度预算 · 只读</Tag><Button size="small" type="link" onClick={() => {
+  return <div>{status}<Tag>关联年度预算 · 只读</Tag><Button size="small" type="link" onClick={() => {
     if (!canAccessHrProject(project)) return
     useUiStore.getState().navigateWithEditGuard(() => {
       useProjectStore.getState().setSelectedProject(source)

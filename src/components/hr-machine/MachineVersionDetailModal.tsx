@@ -122,6 +122,7 @@ export default function MachineVersionDetailModal({
 
   return (
     <Modal
+      className="pms-modal"
       open={open}
       title="版本预估投入详情"
       width={1280}

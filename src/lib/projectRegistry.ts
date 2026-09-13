@@ -42,7 +42,7 @@ export function createConfiguredProject(input: ConfiguredProjectInput, actor: st
     projectCode: fields.projectCode?.trim() || '',
     secondaryCategory: mapping?.pmsSecondaryCategory || (type === PROJECT_CATEGORY_TECH ? source?.ipmProjectCategoryName : undefined),
     ...(type === PROJECT_CATEGORY_TECH ? { technicalLead: responsiblePersons.join('、'), technicalTrack: source?.technicalTrack } : {}),
-    fieldValues: type === PROJECT_CATEGORY_MACHINE ? { spm: responsiblePersons }
+    fieldValues: type === PROJECT_CATEGORY_MACHINE ? { machineSpm: responsiblePersons }
       : type === PROJECT_CATEGORY_TECH ? { technicalLead: responsiblePersons }
       : type === PROJECT_TYPE_TOS_VERSION ? { tosVersionProjectManager: responsiblePersons } : {},
   }

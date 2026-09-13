@@ -1,4 +1,5 @@
 'use client'
+import { getTechnicalLevel1MaintainerUsers } from '@/lib/projectSpaceLevel1Rules'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
@@ -480,15 +481,8 @@ export default function TechnicalPlanModule({
     const latestVersion = latestInstance?.versions.find(version => version.id === latestInstance.currentVersionId)
     const latestUser = useProjectStore.getState().currentLoginUser
     if (!latestTab || !latestVersion) return null
-    const latestTechnicalRole = latestPermissionState.rolesByProject[latestProject.id]
-      ?.find(role => role.name === '技术项目负责人')
     const latestGlobalAdmins = latestPermissionState.globalRoles.find(role => role.name === '管理组')?.members || []
-    const latestTechnicalLead = String(
-      (latestProject as { technicalLead?: string; fieldValues?: { technicalLead?: string } }).technicalLead
-      || (latestProject as { fieldValues?: { technicalLead?: string } }).fieldValues?.technicalLead
-      || latestTechnicalRole?.members?.[0]
-      || '',
-    ).trim()
+    const latestTechnicalLead = getTechnicalLevel1MaintainerUsers(latestProject, latestPermissionState.rolesByProject[latestProject.id] || [])
     const latestReadOnlyReason = latestTab.subproject && !latestTab.subproject.active
       ? '已停用子项目仅可查看历史计划'
       : latestTab.subproject && (!latestTab.subproject.configuration.coreValue || !latestTab.subproject.configuration.developmentMode)

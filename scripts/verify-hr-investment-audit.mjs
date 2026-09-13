@@ -24,8 +24,8 @@ for(let i=0;i<4;i++) {
  const raw=store.persist.getOptions().merge({},store.getState())
  const original=structuredClone({projects:raw.projects,monthlyInvestments:raw.monthlyInvestments})
  const additions=original.projects.filter(p=>p.id.startsWith('hr-resource-'))
- eq(additions.length,i===0?5:3,category+' has canonical resource fixtures')
- eq(additions.reduce((count,p)=>count+p.versions.length,0),7,category+' has three own formal and four source annual versions')
+ eq(additions.length,i===0?6:3,category+' has canonical resource fixtures')
+ eq(additions.reduce((count,p)=>count+p.versions.length,0),i===0?8:7,category+' has own formal and source annual versions including retained cancelled history')
   eq(original.projects.some(p=>p.versions.length===0),true,category+' covers no versions')
  for(const p of additions){
   eq(!!load('src/stores/project.ts').useProjectStore.getState().projects.find(item=>item.id===p.pmsProjectId),true,category+' canonical identity resolves '+p.id)
@@ -40,7 +40,11 @@ for(let i=0;i<4;i++) {
    eq(monthly.every(m=>tenth(sum(Object.values(m.monthlyData)))<=tenth(m.estimatedTotal)),true,category+' unallocated never becomes extra monthly investment')
    if(p.pmsProjectId.endsWith('-unbound')){
     eq(monthly.some(m=>Object.keys(m.monthlyData).some(k=>k.startsWith('2026'))&&Object.keys(m.monthlyData).some(k=>k.startsWith('2027'))),true,category+' cross year monthly allocation')
-    for(const m of monthly)eq(tenth(sum(Object.values(m.monthlyData))),tenth(m.estimatedTotal),category+' complete months conserve each department')
+    for(const m of monthly){
+     const pendingMaintenance=i===1&&!latest.milestones.maintenanceEnd
+       ? latest.departmentInvestments.find(d=>d.primaryDepartment===m.primaryDepartment&&d.secondaryDepartment===m.secondaryDepartment).maintenancePhase : 0
+     eq(tenth(sum(Object.values(m.monthlyData)))+tenth(pendingMaintenance),tenth(m.estimatedTotal),category+' allocated plus pending milestone investment conserves each department')
+    }
    }
   }
  }
@@ -68,7 +72,7 @@ for(let i=0;i<4;i++) {
  else store.getState().copyVersion(p.id,old.id)
  let current=store.getState().projects[0], latest=rules.getLatestHrVersion(current.versions,'annual')
  eq(latest.versionNumber,'V0.3',category+' creates sequential V0.3')
- if(i!==0)eq(latest.createdBy,'当前用户',category+' copied version records current creator')
+ eq(latest.createdBy,'演示用户01',category+' new or copied version records actual creator')
  eq(store.getState().monthlyInvestments.filter(m=>m.versionId===latest.id).length>0,true,category+' latest monthly available; historical rows retained for compatibility')
  const history=JSON.stringify(current.versions.find(v=>v.id===old.id))
  store.getState().updateVersion(p.id,old.id,i===3?{projectStartTime:'2040-01-01'}:{milestones:{...(old.milestones??{}),[i===2?'planningStart':'conceptStart']:'2040-01-01'}})

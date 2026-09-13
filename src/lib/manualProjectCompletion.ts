@@ -1,5 +1,6 @@
 import { mergeProjectInfoValues, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import { TECHNICAL_STRING_FIELD_KEYS } from '@/constants/technicalProject'
+import { normalizeProjectResponsibleMembers } from '@/lib/projectResponsibility'
 import { isMachineProjectType, MACHINE_PROJECT_TYPES } from '@/constants/projectTypes'
 import { normalizeTosSnapshot } from '@/lib/enumConsumers'
 import { isExactIsoDate } from '@/lib/roadmapValidation'
@@ -85,7 +86,7 @@ export function buildManualProjectSpaceUpdate(project: ProjectItem, input: {
   const aliases: Record<string, string> = { startingRam: 'startRam', developmentMode: 'developMode', firstSaleTosVersion: 'firstSaleTosVersionId', currentTosVersion: 'currentTosVersionId' }
   for (const [key, value] of Object.entries(infoValues)) {
     if (['brand', 'productLine', 'marketName', 'androidVersion', 'productType', 'str5Date', 'launchDate', 'str5Estimated', 'launchEstimated', 'remark', 'technicalLead', 'tosVersion', 'projectDescription'].includes(key) || (project.type === '技术项目' && (TECHNICAL_STRING_FIELD_KEYS as readonly string[]).includes(key)) || aliases[key]) {
-      ;(merged as unknown as Record<string, unknown>)[aliases[key] || key] = value
+      ;(merged as unknown as Record<string, unknown>)[aliases[key] || key] = key === 'technicalLead' ? normalizeProjectResponsibleMembers(value).join('、') : value
     }
   }
   if (!sameManualInfoValue(input.responsiblePersons, project.responsiblePersons)) {
