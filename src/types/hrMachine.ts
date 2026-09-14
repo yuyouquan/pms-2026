@@ -1,12 +1,10 @@
 /* ── HR Machine Project Types ──────────────────────────────────────── */
 
 /** 品牌 */
-export type MachineBrand = 'TECNO' | 'Infinix' | 'itel'
+export type MachineBrand = string
 
 /** 产品线 */
-export type MachineProductLine =
-  | 'CAMON' | 'NOTE' | 'GT' | 'POVE'
-  | 'SPARK' | 'HOT' | 'S' | 'P' | 'A' | 'CITY'
+export type MachineProductLine = string
 
 /** 预算类型 */
 export type BudgetType = 'annual' | 'projectEstimate' | 'projectBudget'
@@ -31,14 +29,20 @@ export interface MilestoneNodes {
   conceptStart: string | null
   /** STR1 */
   str1: string | null
+  /** STR2; absent in legacy snapshots */
+  str2?: string | null
   /** STR3 */
   str3: string | null
   /** STR4 */
   str4: string | null
+  /** STR4A; absent in legacy snapshots */
+  str4a?: string | null
   /** STR5 */
   str5: string | null
-  /** 产品上市 */
+  /** 上市结束（保留原字段名以兼容历史数据） */
   productLaunch: string | null
+  /** 生命周期结束；旧版本可能没有此字段 */
+  lifecycleEnd?: string | null
 }
 
 /** 单项目版本 */
@@ -69,6 +73,8 @@ export interface HrMachineVersion {
   milestones: MilestoneNodes
   /** 预估投入（人月）= 配置中心模型综合 * 等级系数 */
   estimatedInvestment: number
+  /** 保存的模型输入；历史版本不再读取可变的配置中心数据。 */
+  modelSnapshot?: import('@/types/hrConfig').ConfigRecord[]
   /** 创建时间 */
   createdAt: string
   /** 锁定时间 */
@@ -77,10 +83,14 @@ export interface HrMachineVersion {
 
 /** 整机产品项目 */
 export interface HrMachineProject {
+  pmsProjectId?: string
+  migrationIssue?: string
+  legacyHrSnapshot?: unknown
   id: string
   /** 项目名称 */
   name: string
   /** 品牌 */
+  marketName?: string
   brand: MachineBrand
   /** 产品线 */
   productLine: MachineProductLine
@@ -135,10 +145,13 @@ export interface MonthlyInvestment {
   monthlyData: Record<string, number>
   /** 是否被手动编辑过 */
   isEdited: boolean
+  /** Removed source rows remain archived for manual-data restoration, excluded from active totals. */
+  isArchived?: boolean
 }
 
 /** 项目列表筛选器（多选，空数组表示不筛选） */
 export interface ProjectListFilters {
+  marketName?: string
   brand: MachineBrand[]
   productLine: MachineProductLine[]
   projectName: string[]
@@ -150,6 +163,7 @@ export interface ProjectListFilters {
 export interface HistoryVersionFilters {
   budgetType: BudgetType[]
   projectName: string[]
+  marketName?: string
   brand: MachineBrand[]
   productLine: MachineProductLine[]
   lockState: VersionLockState[]
@@ -158,6 +172,7 @@ export interface HistoryVersionFilters {
 /** 新建项目表单 */
 export interface NewProjectForm {
   name: string
+  marketName?: string
   brand: MachineBrand
   productLine: MachineProductLine
   projectYear?: string
@@ -165,6 +180,8 @@ export interface NewProjectForm {
 
 /** 新建版本表单 */
 export interface NewVersionForm {
+  milestones?: Partial<MilestoneNodes>
+  metadata?: { brand: string; productLine: string; marketName: string }
   budgetType: BudgetType
   projectLevel: string
   levelCoefficient: number

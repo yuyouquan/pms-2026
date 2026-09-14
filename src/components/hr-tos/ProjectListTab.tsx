@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { Card, Table, Select, Button, Space, Tooltip, Popover } from 'antd'
 import { PlusOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { useHrTosStore } from '@/stores/hrTos'
+import { useHrTosStore } from '@/hooks/useHrResourceStores'
 import {
   formatPersonMonth,
   formatPercent,
@@ -16,65 +16,8 @@ import { useProjectStore } from '@/stores/project'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 
 /* ── 正式项目编码单元格（独立组件，内部管理 Popover 状态） ─────────── */
-function IpmCodeCell({
-  record,
-  bindIpmProject,
-}: {
-  record: HrTosProject
-  bindIpmProject: (projectId: string, ipmCode: string) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const formalProjects = useProjectStore(s => s.projects)
-  const options = useMemo(
-    () => getHrFormalProjectOptions('tos', formalProjects).map(p => ({ value: p.code, label: `${p.code} - ${p.name}` })),
-    [formalProjects],
-  )
-
-  return (
-    <Popover
-      trigger="click"
-      placement="bottomLeft"
-      open={open}
-      onOpenChange={setOpen}
-      content={
-        <div onClick={e => e.stopPropagation()} style={{ width: 300 }}>
-          <Select
-            showSearch
-            style={{ width: '100%' }}
-            placeholder="选择 IPM 正式项目"
-            value={record.ipmProjectCode ?? undefined}
-            options={options}
-            optionFilterProp="label"
-            onChange={(code: string) => {
-              bindIpmProject(record.id, code)
-              setOpen(false)
-            }}
-          />
-        </div>
-      }
-    >
-      <div
-        className="pms-ipm-code-cell"
-        onClick={e => e.stopPropagation()}
-        style={{ minHeight: 32, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}
-      >
-        {record.ipmProjectCode ? (
-          <>
-            <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600, fontSize: 12 }}>
-              {record.ipmProjectCode}
-            </span>
-            {record.ipmProjectName && (
-              <span style={{ color: 'var(--pms-text-secondary)', fontSize: 12, marginTop: 2 }}>
-                {record.ipmProjectName}
-              </span>
-            )}
-          </>
-        ) : (
-          <span style={{ color: 'var(--pms-text-tertiary)', fontSize: 12 }}>未绑定</span>
-        )}
-      </div>
-    </Popover>
-  )
+function IpmCodeCell({ record }: { record: HrTosProject; bindIpmProject: (...args: string[]) => void }) {
+  return <div><span>{record.ipmProjectCode || '—'}</span>{record.migrationIssue && <div>{record.migrationIssue}</div>}</div>
 }
 
 /* ── 主组件 ────────────────────────────────────────────────────────── */
@@ -94,7 +37,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
   // 1. 按项目名称（多选）/ 是否取消暂停 过滤
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
-      if (filters.projectName.length > 0 && !filters.projectName.includes(p.name)) return false
+      if (filters.projectName.length > 0 && !filters.projectName.includes(p.id) && !filters.projectName.includes(p.name)) return false
       return true
     })
   }, [projects, filters.projectName])
@@ -237,7 +180,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
 
   // 5. 筛选器选项
   const projectNameOptions = useMemo(
-    () => projects.map(p => ({ value: p.name, label: p.name })),
+    () => projects.map(p => ({ value: p.id, label: p.name })),
     [projects],
   )
 

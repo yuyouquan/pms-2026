@@ -1,5 +1,9 @@
 'use client'
 
+import { JiraProjectTags, FanTrialTags } from '@/components/project-info/ProjectInfoTags'
+import type { ProjectInfoValue } from '@/types/app'
+import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
+import { getProjectListExportValue } from '@/lib/projectListExport'
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -7,6 +11,7 @@ import { createPortal } from 'react-dom'
 import {
   Button,
   Empty,
+  Dropdown,
   Input,
   Pagination,
   Select,
@@ -19,6 +24,7 @@ import {
   DeleteOutlined,
   DownOutlined,
   FilterOutlined,
+  ExportOutlined,
   RightOutlined,
   SettingOutlined,
 } from '@ant-design/icons'
@@ -108,6 +114,7 @@ export interface ProjectSummaryTableProps {
   matrixVariant?: ProjectListVariant
   matrixTemplateTasks?: ProjectSummaryTemplateTask[]
   providedRows?: ProjectSummaryRow[]
+  providedExportRows?: ProjectSummaryRow[]
   onViewRow?: (row: ProjectSummaryRow) => void
   controlledFilters?: AnyFilterCondition[]
   onFiltersChange?: (filters: AnyFilterCondition[]) => void
@@ -121,6 +128,8 @@ export interface ProjectSummaryTableProps {
   showColumnSettings?: boolean
   toolbarTrailingAction?: ReactNode
   tablePageSize?: number
+  controlledTablePage?: number
+  onTablePageChange?: (page: number) => void
 }
 
 interface StoredProjectSummaryPreferences {
@@ -191,6 +200,7 @@ export default function ProjectSummaryTable({
   matrixVariant,
   matrixTemplateTasks,
   providedRows,
+  providedExportRows,
   onViewRow,
   controlledFilters,
   onFiltersChange,
@@ -204,6 +214,8 @@ export default function ProjectSummaryTable({
   showColumnSettings = true,
   toolbarTrailingAction,
   tablePageSize,
+  controlledTablePage,
+  onTablePageChange,
 }: ProjectSummaryTableProps) {
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
@@ -222,7 +234,13 @@ export default function ProjectSummaryTable({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [collapsedMachineSeries, setCollapsedMachineSeries] = useState<Set<string>>(() => new Set())
   const [selectedRowKey, setSelectedRowKey] = useState('')
-  const [tablePage, setTablePage] = useState(1)
+  const [uncontrolledTablePage, setUncontrolledTablePage] = useState(1)
+  const tablePage = controlledTablePage ?? uncontrolledTablePage
+  const setTablePage = (page: number) => {
+    if (controlledTablePage !== undefined) onTablePageChange?.(page)
+    else setUncontrolledTablePage(page)
+  }
+  const tablePageResetInputs = useRef({ filters, matrixVariant, projectType, tablePageSize })
   const compactControlSize = matrixVariant ? 'small' : 'middle'
 
   useEffect(() => {
@@ -501,7 +519,14 @@ export default function ProjectSummaryTable({
   ])
 
   useEffect(() => {
-    setTablePage(1)
+    const previous = tablePageResetInputs.current
+    tablePageResetInputs.current = { filters, matrixVariant, projectType, tablePageSize }
+    if (
+      previous.filters !== filters
+      || previous.matrixVariant !== matrixVariant
+      || previous.projectType !== projectType
+      || previous.tablePageSize !== tablePageSize
+    ) setTablePage(1)
   }, [filters, matrixVariant, projectType, tablePageSize])
 
   useEffect(() => {
@@ -605,6 +630,8 @@ export default function ProjectSummaryTable({
                 </Tooltip>
               )
             }
+          : key === 'jiraProjects' ? (_value: unknown, row: ProjectSummaryRow) => <JiraProjectTags value={row.__jiraProjects} compact />
+          : key === 'fanTrialEnabled' ? (value: unknown, row: ProjectSummaryRow) => row.__fanTrialEnabled === '是' ? <FanTrialTags value={row.__fanTrialCountries as ProjectInfoValue} compact /> : String(value ?? '否')
           : undefined,
         onHeaderCell: () => {
           const headerCell = baseHeaderCell?.() ?? {}
@@ -859,6 +886,16 @@ export default function ProjectSummaryTable({
     setFilterOpen(true)
   }
 
+  const exportRows = (scope: 'all' | 'current') => {
+    const rows = scope === 'current' ? filteredRows : providedExportRows ?? optionProjects.map(project => buildProjectSummaryRow(project, fieldDefinitions, planTasksByProjectId[project.id]))
+    const exportColumns = visibleDefinitions.filter(field => field.key !== 'projectCount').map(field => ({
+      key: field.key,
+      title: typeof field.title === 'string' ? field.title : field.key,
+      formatter: (_value: unknown, row: ProjectSummaryRow) => getProjectListExportValue(field.key, row),
+    }))
+    exportSheet(rows, exportColumns, `${projectType}_项目视图_${scope === 'all' ? '全部' : '当前'}_${exportTimestamp()}.xlsx`, '项目视图')
+  }
+
   const toolbarActions = (
     <Space size={8} className="pms-project-summary-actions">
       <FloatingFilterPanel
@@ -964,6 +1001,12 @@ export default function ProjectSummaryTable({
           onApply={applyColumnSettings}
         />
       )}
+      <Dropdown trigger={['click']} menu={{ items: [
+        { key: 'all', label: '导出全部', title: '当前项目分类及查看范围内全部项目，使用当前显示字段' },
+        { key: 'current', label: '导出当前', title: '当前筛选结果，包含所有分页，使用当前显示字段', disabled: !filteredRows.length },
+      ], onClick: ({ key }) => exportRows(key as 'all' | 'current') }}>
+        <Button icon={<ExportOutlined />}>导出</Button>
+      </Dropdown>
       {toolbarTrailingAction}
     </Space>
   )

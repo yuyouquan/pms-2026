@@ -385,6 +385,8 @@ const MR_ACCEPTANCE_FIXED_MILESTONE_DATES: Readonly<Record<string, string>> = {
   'machine-ms-str4': '2026-04-01',
   'machine-ms-str4a': '2026-05-01',
   'machine-ms-str5': '2026-05-15',
+  'tos-ms-planning-ko': '2025-11-27',
+  'tos-ms-cdcp': '2025-12-25',
   'tos-ms-concept-kickoff': '2026-01-15',
   'tos-ms-str1': '2026-02-15',
   'tos-ms-str2': '2026-03-01',

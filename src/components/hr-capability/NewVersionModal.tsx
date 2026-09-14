@@ -1,7 +1,9 @@
 'use client'
 
-import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
+import { canAccessHrProject, getHrAllowedBudgetTypes, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
+import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
+import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -22,7 +24,7 @@ import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
-import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import {
   CAPABILITY_BUDGET_TYPES,
   CAPABILITY_BUDGET_TYPE_LABELS,
@@ -40,6 +42,7 @@ interface NewVersionModalProps {
 
 export default function NewVersionModal({ open, onCancel }: NewVersionModalProps) {
   const { message } = App.useApp()
+  const scopeId = useHrResourceScope()
   const { primaryOptions, getSecondaryOptions, isValidPair } = useHrDepartmentOptions()
   const [form] = Form.useForm()
   const projects = useHrCapabilityStore((s) => s.projects)
@@ -47,7 +50,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   const addVersion = useHrCapabilityStore((s) => s.addVersion)
   const setShowNewVersionModal = useHrCapabilityStore((s) => s.setShowNewVersionModal)
 
-  const [localProjectId, setLocalProjectId] = useState(selectedProjectId ?? '')
+  const [localProjectId, setLocalProjectId] = useState(resolveHrNewVersionProjectId(projects, selectedProjectId, scopeId))
   const [editData, setEditData] = useState<CapabilityDepartmentInvestment[]>([])
   const [budgetType, setBudgetType] = useState<BudgetType | null>(null)
   const [startTime, setStartTime] = useState<dayjs.Dayjs | null>(null)
@@ -58,28 +61,17 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
     [projects, localProjectId],
   )
 
-  // 检查 IPM 绑定限制
-  const ipmRequired = budgetType ? CAPABILITY_IPM_REQUIRED_TYPES.includes(budgetType) : false
-  const ipmBound = !!(project?.ipmProjectCode)
-  const canCreateVersion = !ipmRequired || ipmBound
-
-  const followsFormalPlan = ipmBound && budgetType !== 'annual'
-  const formalSource = ipmBound ? resolveHrFormalSource('capability', project?.ipmProjectCode ?? null) : null
-  const snapshot = project?.versions[project.versions.length - 1]
-  const boundStart = formalSource?.project ? formalSource.projectStartTime : snapshot?.projectStartTime
-  const boundEnd = formalSource?.project ? formalSource.projectEndTime : snapshot?.projectEndTime
-  const effectiveStart = followsFormalPlan ? (boundStart ? dayjs(boundStart) : null) : startTime
-  const effectiveEnd = followsFormalPlan ? (boundEnd ? dayjs(boundEnd) : null) : endTime
+  const canCreateVersion = canCreateHrVersion(project, budgetType)
 
   useEffect(() => {
     if (open) {
-      setLocalProjectId(selectedProjectId ?? '')
-      setBudgetType('annual')
+      setLocalProjectId(resolveHrNewVersionProjectId(projects, selectedProjectId, scopeId))
+      setBudgetType(getHrAllowedBudgetTypes(projects.find(p => scopeId ? p.pmsProjectId === scopeId : p.id === selectedProjectId))[0] ?? 'annual')
       setStartTime(null)
       setEndTime(null)
       setEditData([])
     }
-  }, [open, selectedProjectId])
+  }, [open, selectedProjectId, scopeId])
 
   useEffect(() => {
     if (!open) return
@@ -191,11 +183,11 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       message.error('请选择预算类型')
       return
     }
-    if (!followsFormalPlan && (!effectiveStart || !effectiveEnd)) {
+    if (!startTime || !endTime) {
       message.error('请选择项目起止时间')
       return
     }
-    if (effectiveEnd && effectiveStart && effectiveEnd.isBefore(effectiveStart)) {
+    if (endTime && startTime && endTime.isBefore(startTime)) {
       message.error('项目结束时间不能早于开始时间')
       return
     }
@@ -208,14 +200,14 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       return
     }
     if (!canCreateVersion) {
-      message.error(CAPABILITY_IPM_REQUIRED_TIP)
+      message.error('当前项目无新建版本权限')
       return
     }
 
     addVersion(project.id, {
       budgetType,
-      projectStartTime: effectiveStart?.format('YYYY-MM-DD') ?? '',
-      projectEndTime: effectiveEnd?.format('YYYY-MM-DD') ?? '',
+      projectStartTime: startTime?.format('YYYY-MM-DD') ?? '',
+      projectEndTime: endTime?.format('YYYY-MM-DD') ?? '',
       departmentInvestments: editData,
     })
     message.success('版本创建成功')
@@ -255,14 +247,13 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       width: 160,
       fixed: 'left' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
-        <Select
+        !record.primaryDepartment ? <HrReadonlyField label="二级部门" placeholder="请先选择一级部门" reason="选择一级部门后可编辑" /> : <Select
           showSearch
           aria-label="二级部门"
           value={record.secondaryDepartment || undefined}
           placeholder="请选择二级部门"
           style={{ width: '100%' }}
           options={getSecondaryOptions(record.primaryDepartment)}
-          disabled={!record.primaryDepartment}
           onChange={value => updateRow(record.id, 'secondaryDepartment', value)}
         />
       ),
@@ -303,7 +294,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
   return (
     <Modal
-      className="pms-modal"
+      className="pms-modal pms-hr-version-modal"
       title="新建版本"
       open={open}
       onOk={handleOk}
@@ -313,80 +304,54 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       width={900}
       okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
     >
-      <div style={{ marginTop: 16 }}>
-        {/* 项目信息 */}
-        <div
-          style={{
-            marginBottom: 12,
-            display: 'flex',
-            gap: 24,
-            fontSize: 12,
-            color: 'var(--pms-text-secondary)',
-            flexWrap: 'wrap',
-          }}
-        >
-          <Space><span>项目名称：</span><Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setStartTime(null); setEndTime(null); setEditData([]) }} /></Space>
-          {project?.ipmProjectCode && (
-            <span>IPM编码：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.ipmProjectCode}</strong></span>
-          )}
-        </div>
-
-        {/* IPM 限制提示 */}
-        {ipmRequired && !ipmBound && (
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 12 }}
-            title={CAPABILITY_IPM_REQUIRED_TIP}
-          />
-        )}
-
-        {project && budgetType && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-        {followsFormalPlan && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={formalSource?.project ? '项目起止时间取自正式项目最新已发布一级计划的概念启动和 STR5；尚无已发布计划时无需填写，等待计划发布。' : '当前正式项目编码未找到对应项目，保留已有快照，请在项目列表重新绑定。'} />}
-
+      <div>
         {/* 表单区 */}
         <Form form={form} layout="vertical">
-          <Space size={24} wrap>
+          <div className="pms-hr-version-form">
+          {!scopeId && <Form.Item label="项目" required>
+            <Select
+                showSearch
+                aria-label="选择项目"
+                placeholder="请选择项目"
+                value={localProjectId || undefined}
+                options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))}
+                optionFilterProp="label"
+                onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setStartTime(null); setEndTime(null); setEditData([]) }}
+              />
+          </Form.Item>}
             <Form.Item label="预算类型" required>
               <Select
-                style={{ width: 180 }}
+                style={{ width: '100%' }}
                 placeholder="选择预算类型"
                 value={budgetType}
                 onChange={(v) => setBudgetType(v)}
-                options={CAPABILITY_BUDGET_TYPES.map((t) => ({
+                options={CAPABILITY_BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value)).map((t) => ({
                   label: t.label,
                   value: t.value,
-                  disabled:
-                    CAPABILITY_IPM_REQUIRED_TYPES.includes(t.value) && !ipmBound,
                 }))}
               />
             </Form.Item>
-            <Form.Item label="项目开始时间" required={!followsFormalPlan}>
+            <Form.Item label="项目开始时间" required>
               <DatePicker
-                style={{ width: 180 }}
+                style={{ width: '100%' }}
                 placeholder="选择开始时间"
-                value={effectiveStart}
-                disabled={followsFormalPlan}
+                value={startTime}
                 onChange={setStartTime}
               />
             </Form.Item>
-            <Form.Item label="项目结束时间" required={!followsFormalPlan}>
+            <Form.Item label="项目结束时间" required>
               <DatePicker
-                style={{ width: 180 }}
+                style={{ width: '100%' }}
                 placeholder="选择结束时间"
-                value={effectiveEnd}
-                disabled={followsFormalPlan}
+                value={endTime}
                 onChange={setEndTime}
               />
             </Form.Item>
-            <Form.Item label="预估投入合计">
-              <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--pms-brand-strong)' }}>
-                {formatPersonMonth(editTotal)}
-              </span>
-              <span style={{ marginLeft: 4, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>人月</span>
-            </Form.Item>
-          </Space>
+
+          </div>
         </Form>
+
+        <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`} />
 
         {/* 操作按钮 */}
         <div style={{ marginBottom: 8 }}>
@@ -418,28 +383,6 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
           locale={{ emptyText: '暂无部门预估投入数据，请点击「添加部门」或「导入」' }}
         />
 
-        {/* 合计汇总条 */}
-        <div
-          style={{
-            marginTop: 12,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-            <span style={{ color: 'var(--pms-text-secondary)' }}>
-              编辑各部门预估投入，合计将自动更新
-            </span>
-            <span>
-              <span style={{ color: 'var(--pms-text-tertiary)' }}>合计：</span>
-              <strong style={{ color: 'var(--pms-brand-strong)', fontSize: 14 }}>
-                {formatPersonMonth(editTotal)}
-              </strong>
-              <span style={{ marginLeft: 4, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>人月</span>
-            </span>
-          </div>
-        </div>
       </div>
     </Modal>
   )

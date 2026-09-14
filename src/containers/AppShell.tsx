@@ -12,6 +12,7 @@ import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore, resolvePermissionProjectId } from '@/stores/permission'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
+import { getProjectAttribute, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import { useTransferStore } from '@/stores/transfer'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import { useActivateProject } from '@/hooks/useActivateProject'
@@ -123,7 +124,7 @@ function UserSwitcher() {
   )
 }
 
-// ─── Main mode header (workbench, project list, roadmap, HR, config) ─
+// ─── Main mode header ───────────────────────────────────────────────
 
 export function MainHeader() {
   const {
@@ -163,8 +164,8 @@ export function MainHeader() {
                 style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
                 items={[
                   { key: 'workbench', label: '工作台' },
-                  { key: 'projectList', label: '项目列表' },
-                  { key: 'jointProjectSpace', label: '联合项目空间' },
+                  { key: 'projectManagement', label: '项目管理' },
+                  { key: 'jointProjectSpace', label: '项目组合管理' },
                   { key: 'roadmap', label: 'tOS路标' },
                   { key: 'hrPipeline', label: '人力资源管道' },
                   { key: 'config', label: '配置中心' },
@@ -225,10 +226,10 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
       p.leader.includes(projectSearchText)
   })
 
-  const returnLabel = projectSpaceOrigin?.module === 'projectList'
-    ? '返回项目列表'
+  const returnLabel = projectSpaceOrigin?.module === 'projectManagement'
+    ? '返回项目管理'
     : projectSpaceOrigin?.module === 'jointProjectSpace'
-      ? '返回联合项目空间'
+      ? '返回项目组合管理'
       : projectSpaceOrigin?.module === 'roadmap'
       ? '返回tOS路标'
       : '返回工作台'
@@ -279,7 +280,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
                 position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
                 marginTop: 4, width: 360, background: '#fff', borderRadius: 8,
                 boxShadow: '0 6px 16px rgba(0,0,0,0.12)', border: '1px solid #e5e7eb',
-                zIndex: 1000, overflow: 'hidden',
+                zIndex: 1000, overflow: 'hidden', textAlign: 'left',
               }}>
                 <div style={{ padding: '8px 12px', borderBottom: '1px solid #f3f4f6' }}>
                   <Input
@@ -317,7 +318,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
                       >
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 500, color: '#111827' }}>{p.name}</div>
-                          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{p.type} | {p.leader}</div>
+                          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{p.type}｜{PROJECT_ATTRIBUTE_LABELS[getProjectAttribute(p)]}</div>
                         </div>
                         <Tag color={p.status === '进行中' ? 'blue' : p.status === '已完成' ? 'green' : 'orange'} style={{ fontSize: 11 }}>{p.status}</Tag>
                       </div>

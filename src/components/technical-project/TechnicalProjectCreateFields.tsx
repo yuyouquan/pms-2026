@@ -192,7 +192,7 @@ export default function TechnicalProjectCreateFields({
     }
     const teamField = technicalTeamFieldsByKey.get(field.key as typeof TECHNICAL_TEAM_FIELDS[number]['key'])
     if (teamField) {
-      return <Select allowClear showSearch optionFilterProp="label" placeholder={`请选择${teamField.label}`} options={personOptions} />
+      return <Select mode={field.inputType === 'people' ? 'multiple' : undefined} allowClear showSearch optionFilterProp="label" placeholder={`请选择${teamField.label}`} options={personOptions} />
     }
     const deliverableField = technicalDeliverableFieldsByKey.get(field.key as typeof TECHNICAL_DELIVERABLE_FIELDS[number]['key'])
     if (deliverableField) return <DeliverableControl label={deliverableField.label} />

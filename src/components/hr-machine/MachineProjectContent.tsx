@@ -1,7 +1,8 @@
 'use client'
 
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { Segmented } from 'antd'
-import { useHrMachineStore } from '@/stores/hrMachine'
+import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import ProjectListTab from './ProjectListTab'
 import HistoryVersionSpace from './HistoryVersionSpace'
 import MonthlyInvestmentTab from './MonthlyInvestmentTab'
@@ -11,6 +12,7 @@ import MonthlyEditModal from './MonthlyEditModal'
 import MachineVersionDetailModal from './MachineVersionDetailModal'
 
 export default function MachineProjectContent() {
+  const scopeId = useHrResourceScope()
   const {
     activeTab,
     setActiveTab,
@@ -37,7 +39,7 @@ export default function MachineProjectContent() {
     const project = projects.find(p => p.id === id)
     if (!project) return
     setSelectedProjectId(id)
-    setHistoryVersionFilters({ projectName: [project.name] })
+    setHistoryVersionFilters({ projectName: [project.id] })
     setActiveTab('historyVersion')
   }
 
@@ -45,7 +47,7 @@ export default function MachineProjectContent() {
     <div className="pms-hr-machine-content">
       {/* Top-level TAB switcher */}
       <div className="pms-hr-machine-tab-bar">
-        <Segmented
+        {!scopeId && <Segmented
           value={activeTab}
           onChange={(v) => setActiveTab(v as 'projectList' | 'monthlyInvestment' | 'historyVersion')}
           options={[
@@ -53,7 +55,7 @@ export default function MachineProjectContent() {
             { value: 'historyVersion', label: '项目预估投入空间' },
             { value: 'monthlyInvestment', label: '项目月度预估投入' },
           ]}
-        />
+        />}
       </div>
 
       {/* Tab content */}

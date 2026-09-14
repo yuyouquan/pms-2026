@@ -60,11 +60,12 @@ assert.equal(
 assert.equal(seededProjectRoles['1'].find(role => role.name === '项目经理')?.members.includes('演示用户09'), true, '演示用户09 is a target-project manager')
 assert.equal(
   Object.entries(seededProjectRoles)
-    .filter(([projectId]) => projectId !== '1')
+    .filter(([projectId]) => !['1', 'mock-budget-machine-bound'].includes(projectId))
     .some(([, roles]) => roles.some(role => role.members.includes('演示用户09'))),
   false,
-  '演示用户09 is absent from every non-target project role',
+  '演示用户09 is absent outside its formal target and explicitly owned budget source',
 )
+assert.equal(seededProjectRoles['mock-budget-machine-bound'].find(role => role.name === '系统管理员')?.members.includes('演示用户09'), true, 'new budget source assigns its explicit owner the system administrator role')
 assert.deepEqual(seededProjectRoles['3'].find(role => role.name === '项目经理')?.members, ['演示用户01', '演示用户04'], 'the shared project-manager defaults are unchanged')
 assert.equal(permissionStore.getState().globalRoles.some(role => role.members.includes('演示用户09')), false, '演示用户09 has no global role')
 assert.equal(typeof permissionStore.getState().setRolesForProjectGuarded, 'function', 'role mutations expose a guarded store action')

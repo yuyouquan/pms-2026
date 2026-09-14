@@ -8,6 +8,12 @@ export interface ProjectRoleWithMembers {
   members: string[]
 }
 
+/** Older owner snapshots used a joined display string; editor values and grants use individual names. */
+export const normalizeProjectResponsibleMembers = (value: unknown): string[] => {
+  const members = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[、,]/) : []
+  return [...new Set(members.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean))]
+}
+
 const normalizeNames = (names: unknown): string[] => {
   if (!Array.isArray(names)) return []
   return Array.from(new Set(names.filter((name): name is string => typeof name === 'string' && name.length > 0)))

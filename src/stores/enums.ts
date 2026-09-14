@@ -38,7 +38,7 @@ export type EnumStore = EnumState & EnumActions
 export type PersistedEnumState = Pick<EnumState, 'rowsByType'>
 
 export const ENUM_STORAGE_KEY = 'pms-enum-values'
-const ENUM_STORE_VERSION = 4
+export const ENUM_STORE_VERSION = 5
 
 interface SynchronousStateStorage {
   getItem: (name: string) => string | null
@@ -197,6 +197,14 @@ export function migrateEnumState(persistedState: unknown, fromVersion: number): 
   if (fromVersion >= ENUM_STORE_VERSION) return migrated
 
   const seeds = createInitialEnumRows()
+  // One-time mock refresh: fill empty categories without altering any existing rows.
+  // At version 5, later deliberate deletion of all rows remains durable.
+  for (const type of ENUM_TYPE_KEYS) {
+    if (migrated.rowsByType[type].length === 0) {
+      Object.assign(migrated.rowsByType, { [type]: seeds[type] })
+    }
+  }
+  if (fromVersion >= 4) return migrated
   return {
     rowsByType: {
       ...migrated.rowsByType,

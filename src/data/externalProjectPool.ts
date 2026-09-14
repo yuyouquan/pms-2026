@@ -17,6 +17,7 @@ export interface ExternalProjectEntry {
 }
 
 export const EXTERNAL_PROJECT_POOL: ExternalProjectEntry[] = [
+  { bid: 'EXT-014', name: '示例整机-资料待完善', spm: '演示用户02', ipmProjectCategoryName: '整机产品-基线IPD', ipmStatus: '筹备中' },
   { bid: 'EXT-001', name: 'DEMO021-DEMOCHIP003_DEMOBOARD003', spm: '演示用户07', ipmProjectCategoryName: '整机产品-基线IPD' },
   { bid: 'EXT-002', name: 'DEMO022-DEMOCHIP004_DEMOBOARD004', spm: '演示用户01', ipmProjectCategoryName: '整机产品-模块化IPD' },
   { bid: 'EXT-003', name: 'tOS19.0', spm: '演示用户02', ipmProjectCategoryName: '软件产品项目', ipmStatus: '进行中' },
@@ -74,6 +75,7 @@ export interface FetchByBidResult {
 // Mocked "external system" fetch. Returns supplementary fields, keyed by bid.
 export function fetchByBid(bid: string): FetchByBidResult {
   const map: Record<string, FetchByBidResult> = {
+    'EXT-014': { remark: '已建档来源，品牌、产品线、市场名和项目编码待补充。' },
     'EXT-001': { productLine: '示例系列A', productSeries: '示例系列A 60', marketName: '示例系列A 60 Pro', brand: '示例品牌A', androidVersion: 'Android 17', chipPlatform: '示例平台A', chipCode: 'DEMOCHIP003', chipModel: 'DEMOSOC007', memorySize: '8GB+256GB', mainboardName: 'DEMOBOARD003', researchMode: '自研', androidMajorUpgrade: '否', confidentialityLevel: '内部公开', targetMarkets: 'OP,TR,RU', planStartDate: '2026-06-01', planEndDate: '2026-12-31', projectCode: 'DEMO021', platform: 'DEMOCHIP003', productType: '新品', startRam: '8GB', versionType: 'Full', str5Date: '2026-12-15', launchDate: '2027-01-15', developMode: '自研', remark: '外部项目池同步的整机项目。' },
     'EXT-002': { productLine: '示例系列A', productSeries: '示例系列A 60', marketName: '示例系列A 60', brand: '示例品牌A', androidVersion: 'Android 17', chipPlatform: '示例平台A', chipCode: 'DEMOCHIP004', chipModel: 'DEMOSOC005', memorySize: '8GB+128GB', mainboardName: 'DEMOBOARD004', researchMode: '外研', androidMajorUpgrade: '否', confidentialityLevel: '机密', targetMarkets: 'OP,IN', planStartDate: '2026-07-01', planEndDate: '2027-01-31', projectCode: 'DEMO022', platform: 'DEMOCHIP004', productType: '新品', startRam: '8GB', versionType: 'Slim', str5Date: '2027-01-15', launchDate: '2027-02-15', developMode: 'ODC', remark: '外部项目池同步的整机项目。' },
     'EXT-003': { productLine: 'tOS', tosVersion: 'tOS16.1', androidVersion: 'Android 17', chipPlatform: '示例平台A', planStartDate: '2026-06-01', planEndDate: '2026-11-30' },

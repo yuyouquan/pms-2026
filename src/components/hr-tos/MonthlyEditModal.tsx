@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { App, Modal, InputNumber, Alert } from 'antd'
-import { useHrTosStore } from '@/stores/hrTos'
+import { useHrTosStore } from '@/hooks/useHrResourceStores'
 import { formatPersonMonth, TOS_BUDGET_TYPE_LABELS } from '@/constants/hrTos'
 
 interface MonthlyEditModalProps {

@@ -68,7 +68,9 @@ interface PlannedProjectModalProps {
   tosVersions: readonly TosVersionConfig[]
   currentUser: string
   canEdit: boolean
-  onDeletePlannedProject: (projectId: string) => void
+  onDeletePlannedProject?: (projectId: string) => void
+  projectSpace?: boolean
+  onSaveProject?: (input: PlannedRoadmapProjectInput) => Promise<boolean>
   onChanged?: () => void
 }
 
@@ -88,6 +90,8 @@ export default function PlannedProjectModal({
   canEdit,
   onDeletePlannedProject,
   onChanged,
+  projectSpace = false,
+  onSaveProject,
 }: PlannedProjectModalProps) {
   const [form] = Form.useForm<PlannedProjectFormValues>()
   const [submitting, setSubmitting] = useState(false)
@@ -141,13 +145,13 @@ export default function PlannedProjectModal({
     [allRows, editingProject?.id, projectCode],
   )
   const duplicateExists = useMemo(() => {
-    if (!projectCode.trim() || !androidVersion || !productType) return false
+    if (projectSpace || !projectCode.trim() || !androidVersion || !productType) return false
     const candidateKey = buildRoadmapDuplicateKey(projectCode, androidVersion, productType)
     return allRows.some(row => (
       !(row.source === 'planned' && row.id === editingProject?.id)
       && buildRoadmapDuplicateKey(row.projectCode, row.androidVersion, row.productType) === candidateKey
     ))
-  }, [allRows, androidVersion, editingProject?.id, projectCode, productType])
+  }, [allRows, androidVersion, editingProject?.id, projectCode, productType, projectSpace])
 
   useEffect(() => {
     if (!open) {
@@ -160,9 +164,9 @@ export default function PlannedProjectModal({
     const nextValues: Partial<PlannedProjectFormValues> = editingProject
       ? {
         ...editingProject,
-        str5Date: dayjs(editingProject.str5Date),
+        str5Date: editingProject.str5Date && dayjs(editingProject.str5Date).isValid() ? dayjs(editingProject.str5Date) : undefined,
         str5Estimated: editingProject.str5Estimated === true,
-        launchDate: dayjs(editingProject.launchDate),
+        launchDate: editingProject.launchDate && dayjs(editingProject.launchDate).isValid() ? dayjs(editingProject.launchDate) : undefined,
         launchEstimated: editingProject.launchEstimated === true,
       }
       : {
@@ -256,6 +260,10 @@ export default function PlannedProjectModal({
         launchDate: values.launchDate.format('YYYY-MM-DD'),
         actor: currentUser,
       }
+      if (onSaveProject) {
+        if (await onSaveProject(input)) clearDraftAndClose()
+        return
+      }
       const comparison = { allRows }
       const result = editingProject
         ? updatePlannedProject(editingProject.id, input, comparison)
@@ -322,17 +330,17 @@ export default function PlannedProjectModal({
 
   const handleDelete = () => {
     if (!canEdit || !editingProject) return
-    onDeletePlannedProject(editingProject.id)
+    onDeletePlannedProject?.(editingProject.id)
   }
 
   return (
     <Modal
-      className="pms-modal"
+      className={`pms-modal${projectSpace ? ' pms-roadmap-space-editor' : ''}`}
       classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
-      title={editingProject ? '编辑待规划项目' : '创建待规划项目'}
+      title={projectSpace ? '编辑路标项目' : editingProject ? '编辑待规划项目' : '创建待规划项目'}
       open={open}
       onCancel={requestClose}
-      width={960}
+      width={projectSpace ? 1440 : 960}
       forceRender
       destroyOnHidden
       mask={{ closable: false }}
@@ -340,7 +348,7 @@ export default function PlannedProjectModal({
       footer={(
         <Flex justify="space-between" align="center" gap={16} wrap>
           <div>
-            {editingProject && canEdit ? (
+            {!projectSpace && editingProject && canEdit && onDeletePlannedProject ? (
               <Button danger onClick={handleDelete} disabled={submitting}>
                 删除待规划项目
               </Button>
@@ -383,7 +391,7 @@ export default function PlannedProjectModal({
               action={<Button size="small" onClick={() => void retryHydration()}>重试</Button>}
             />
           ) : null}
-          {enumReady && !hasActiveChipCodes ? (
+          {!projectSpace && enumReady && !hasActiveChipCodes ? (
             <Alert
               type="warning"
               showIcon
@@ -395,41 +403,41 @@ export default function PlannedProjectModal({
           ) : null}
           <Card size="small" title="项目分类与识别" style={sectionStyle}>
             <Row gutter={[16, 0]}>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="项目分类">
                   <Input value={PROJECT_CATEGORY_MACHINE} disabled />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="项目二级分类" name="machineProjectType" rules={[{ required: true, message: '请选择项目二级分类' }]}>
                   <Select
                     options={PROJECT_SECONDARY_CATEGORIES[PROJECT_CATEGORY_MACHINE].map(value => ({ label: value, value }))}
                   />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="项目名" name="projectCode" rules={[{ required: true, whitespace: true, message: '请输入项目名' }]}>
-                  <Input placeholder="例如 DEMO017" maxLength={80} autoComplete="off" />
+                  <Input disabled={projectSpace} placeholder="例如 DEMO017" maxLength={80} autoComplete="off" />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="安卓版本" name="androidVersion" rules={[{ required: true, message: '请选择安卓版本' }]}>
                   <Select options={ANDROID_VERSIONS.map(value => ({ label: value, value }))} />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="产品类型" name="productType" rules={[{ required: true, message: '请选择产品类型' }]}>
                   <Select options={PRODUCT_TYPES.map(value => ({ label: value, value }))} />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="tOS 版本" name="firstSaleTosVersionId" rules={[{ required: true, message: '请选择 tOS 版本' }]}>
                   <Select
                     placeholder="请选择版本"
                     options={tosVersionOptions}
                   />
                 </Form.Item>
-                {hasInactiveTosVersion ? (
+                {!projectSpace && hasInactiveTosVersion ? (
                   <Alert
                     type="warning"
                     showIcon
@@ -439,7 +447,7 @@ export default function PlannedProjectModal({
                 ) : null}
               </Col>
             </Row>
-            {projectCode.trim() ? (
+            {!projectSpace && projectCode.trim() ? (
               <div aria-live="polite">
                 <Flex justify="space-between" align="center" gap={8} style={{ marginBottom: 8 }}>
                   <strong>历史同名项目</strong>
@@ -470,7 +478,7 @@ export default function PlannedProjectModal({
 
           <Card size="small" title="产品与版本" style={sectionStyle}>
             <Row gutter={[16, 0]}>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="品牌" name="brand" rules={[{ required: true, message: '请选择品牌' }]}>
                   <Select
                     placeholder="请选择品牌"
@@ -479,7 +487,7 @@ export default function PlannedProjectModal({
                   />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="产品线" name="productLine" rules={[{ required: true, message: '请选择产品线' }]}>
                   <Select
                     placeholder={brand ? '请选择产品线' : '请先选择品牌'}
@@ -487,17 +495,17 @@ export default function PlannedProjectModal({
                   />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="产品系列" name="productSeries" rules={[{ required: true, whitespace: true, message: '请输入产品系列' }]}>
                   <Select showSearch optionFilterProp="label" placeholder="请选择产品系列" options={productSeriesOptions} />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="市场名" name="marketName" rules={[{ required: true, whitespace: true, message: '请输入市场名' }]}>
                   <Input placeholder="请输入市场名" maxLength={80} />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item
                   label="芯片编码"
                   name="chipCode"
@@ -512,7 +520,7 @@ export default function PlannedProjectModal({
                     placeholder={hasActiveChipCodes ? '请选择芯片编码' : '请先在配置中心维护芯片编码'}
                   />
                 </Form.Item>
-                {hasInactiveChipCode ? (
+                {!projectSpace && hasInactiveChipCode ? (
                   <Alert
                     type="warning"
                     showIcon
@@ -521,17 +529,17 @@ export default function PlannedProjectModal({
                   />
                 ) : null}
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="起步 RAM" name="startRam" rules={[{ required: true, message: '请选择起步 RAM' }]}>
                   <Select options={ramOptions} />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="版本类型" name="versionType" rules={[{ required: true, message: '请选择版本类型' }]}>
                   <Select options={versionTypeOptions} />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="开发模式" name="developMode" rules={[{ required: true, message: '请选择开发模式' }]}>
                   <Select options={developModeOptions} />
                 </Form.Item>
@@ -541,7 +549,7 @@ export default function PlannedProjectModal({
 
           <Card size="small" title="时间与备注" style={sectionStyle}>
             <Row gutter={[16, 0]}>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="STR5 时间" required>
                   <Flex align="center" gap={8} wrap={false}>
                     <Form.Item name="str5Date" noStyle rules={[{ required: true, message: '请选择 STR5 时间' }]}>
@@ -553,10 +561,17 @@ export default function PlannedProjectModal({
                   </Flex>
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="上市时间" required>
                   <Flex align="center" gap={8} wrap={false}>
-                    <Form.Item name="launchDate" noStyle rules={[{ required: true, message: '请选择上市时间' }]}>
+                    <Form.Item name="launchDate" noStyle dependencies={['str5Date']} rules={[
+                      { required: true, message: '请选择上市时间' },
+                      ({ getFieldValue }) => ({ validator: (_, value: Dayjs | undefined) => {
+                        const str5 = getFieldValue('str5Date') as Dayjs | undefined
+                        return value && str5 && value.isBefore(str5, 'day')
+                          ? Promise.reject(new Error('上市时间不能早于 STR5 时间')) : Promise.resolve()
+                      } }),
+                    ]}>
                       <DatePicker format="YYYY-MM-DD" style={{ flex: 1, minWidth: 0 }} placeholder="请选择具体日期" />
                     </Form.Item>
                     <Form.Item name="launchEstimated" valuePropName="checked" noStyle>

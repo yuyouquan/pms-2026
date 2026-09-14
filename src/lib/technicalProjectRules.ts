@@ -1,4 +1,5 @@
 import { TECHNICAL_DELIVERABLE_FIELDS, TECHNICAL_STRING_FIELD_KEYS } from '@/constants/technicalProject'
+import { normalizeProjectResponsibleMembers } from '@/lib/projectResponsibility'
 import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
 import { comparePlanVersions } from '@/lib/planVersioning'
 import type {
@@ -296,7 +297,8 @@ const assertDeliverables = (deliverables: unknown) => {
 export const normalizeTechnicalProjectValues = (rawValues: Record<string, unknown>) => {
   const values: Record<string, unknown> = {}
   TECHNICAL_STRING_FIELD_KEYS.forEach(key => {
-    values[key] = typeof rawValues[key] === 'string' ? rawValues[key] : ''
+    values[key] = key === 'technicalLead' ? normalizeProjectResponsibleMembers(rawValues[key])
+      : typeof rawValues[key] === 'string' ? rawValues[key] : ''
   })
   TECHNICAL_DELIVERABLE_FIELDS.forEach(({ key }) => {
     values[key] = normalizeDeliverableValue(rawValues[key])
@@ -310,23 +312,25 @@ export const synchronizeTechnicalProjectRecord = <T extends Record<string, unkno
   metadata: { ipmProjectType?: string } = {},
 ) => {
   const values = normalizeTechnicalProjectValues(rawValues)
-  const technicalLead = String(values.technicalLead || '').trim()
+  const responsiblePersons = normalizeProjectResponsibleMembers(values.technicalLead)
+  const technicalLead = responsiblePersons.join('、')
   const ipmProjectType = String(metadata.ipmProjectType ?? project.ipmProjectType ?? '')
   const synchronizedValues = { ...values, ipmProjectType }
   return {
     ...project,
     ...synchronizedValues,
+    technicalLead,
     fieldValues: {
       ...((project.fieldValues && typeof project.fieldValues === 'object') ? project.fieldValues as Record<string, unknown> : {}),
       ...synchronizedValues,
     },
-    leader: technicalLead,
-    responsiblePersons: technicalLead ? [technicalLead] : [],
+    leader: responsiblePersons[0] || '',
+    responsiblePersons,
   }
 }
 
 export const validateTechnicalProject = (value: Record<string, unknown>) => {
-  if (!String(value.technicalLead || '').trim()) throw new Error('technicalLead')
+  if (!normalizeProjectResponsibleMembers(value.technicalLead).length) throw new Error('technicalLead')
   if (value.type !== 'tdt' && value.type !== '技术项目前置工作') return true
   const tmg = String(value.tmg || '').trim()
   if (!tmg) throw new Error('tmg')

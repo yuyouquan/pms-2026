@@ -39,11 +39,15 @@ export const TOS_IPM_REQUIRED_TIP = '请先绑定正式项目编码后再创建�
 /** 里程碑字段定义（与整机产品项目不同） */
 export const TOS_MILESTONE_FIELDS: { key: keyof TosMilestoneNodes; label: string }[] = [
   { key: 'planningKO', label: '规划KO' },
+  { key: 'cdcp', label: 'CDCP' },
   { key: 'conceptStart', label: '概念启动' },
   { key: 'str1', label: 'STR1' },
+  { key: 'str2', label: 'STR2' },
   { key: 'str3', label: 'STR3' },
+  { key: 'str4', label: 'STR4' },
+  { key: 'str4a', label: 'STR4A' },
   { key: 'str5', label: 'STR5' },
-  { key: 'marketIteration', label: '上市迭代' },
+  { key: 'marketIteration', label: '上市迭代结束' },
   { key: 'maintenanceEnd', label: '维护结束' },
 ]
 

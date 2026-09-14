@@ -58,7 +58,7 @@ export function formatRoadmapCardValue(
 
 export function formatEvolutionCardTitle(row: RoadmapProjectRow): string {
   const marketName = row.marketName?.trim() || '—'
-  const projectName = buildRoadmapDisplayName(row.projectCode, row.androidVersion, row.productType)
+  const projectName = row.source === 'planned' ? row.displayName : buildRoadmapDisplayName(row.projectCode, row.androidVersion, row.productType)
   return `${marketName}（${projectName || '—'}）`
 }
 

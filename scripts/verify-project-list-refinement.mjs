@@ -39,7 +39,7 @@ assert.match(activeFilterSource, /\+\{hiddenCount\}/, 'collapsed conditions expo
 assert.match(activeFilterSource, /onRemove\(condition\.id\)/, 'active conditions can be removed immediately')
 assert.match(projectList, /ProjectListCalendar/, 'project list renders the shared filtered calendar')
 assert.doesNotMatch(projectList, /projectMemberMap/, 'unchecked about-mine is not constrained by the legacy member map')
-assert.match(projectList, /const visibleProjects = projects/, 'unchecked about-mine can display every project')
+assert.match(projectList, /const visibleProjects = useMemo\(\(\) => filterFormalRegistryProjects\(projects\)/, 'unchecked about-mine can display every formal project')
 assert.doesNotMatch(projectList, /<Checkbox/, 'about-mine is an icon toggle instead of a checkbox')
 assert.match(projectList, /projectListToolbarTrailingActions[\s\S]*aboutMineAction[\s\S]*projectListFullscreenAction/, 'mine/all toggle sits immediately before fullscreen')
 assert.match(projectList, /hasActiveFilterConditions && \([\s\S]*pms-project-list-filter-summary-row/, 'empty active-filter rows are not rendered')

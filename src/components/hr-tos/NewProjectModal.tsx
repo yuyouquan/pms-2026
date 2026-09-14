@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { App, Modal, Form, Input } from 'antd'
-import { useHrTosStore } from '@/stores/hrTos'
+import { useHrTosStore } from '@/hooks/useHrResourceStores'
 
 interface NewProjectModalProps {
   open: boolean

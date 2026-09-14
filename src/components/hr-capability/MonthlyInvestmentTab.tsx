@@ -1,12 +1,13 @@
 'use client'
 
 import MonthlyAllocationNotice from '@/components/hr-shared/MonthlyAllocationNotice'
+import { canAccessHrProject } from '@/lib/hrProjectRegistry'
 import { useMemo, useState } from 'react'
 import { Card, Table, Button, Tooltip, Tag, Checkbox, Space, Input, Select, DatePicker } from 'antd'
 import { EditOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs, { type Dayjs } from 'dayjs'
-import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import {
   CAPABILITY_BUDGET_TYPES,
   CAPABILITY_BUDGET_TYPE_LABELS,
@@ -226,6 +227,7 @@ export default function MonthlyInvestmentTab() {
             <Button
               type="text"
               size="small"
+              disabled={!canAccessHrProject(projects.find(project => project.id === record.projectId), true)}
               icon={<EditOutlined />}
               onClick={(e) => {
                 e.stopPropagation()
@@ -238,7 +240,7 @@ export default function MonthlyInvestmentTab() {
     ]
 
     return [...baseColumns, ...monthColumns, ...actionColumn]
-  }, [sortedMonths])
+  }, [sortedMonths, projects])
 
   // ── 导出：遵循当前筛选结果 ─────────────────────────────────
   const handleExport = () => {

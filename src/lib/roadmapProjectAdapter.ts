@@ -1,3 +1,4 @@
+import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
 import {
   isMachineProjectType,
   MACHINE_PROJECT_TYPES,
@@ -6,6 +7,7 @@ import {
   type MachineProjectType,
 } from '@/constants/projectTypes'
 import {
+  isExactIsoDate,
   buildRoadmapDisplayName,
   buildRoadmapDuplicateKey,
   normalizeLegacyRoadmapProductType,
@@ -141,7 +143,7 @@ export function adaptNormalProject(
   project: ProjectItem,
   versions: TosVersionConfig[],
 ): RoadmapProjectRow | null {
-  if (!isMachineProjectType(project.type)) return null
+  if (!isFormalProject(project) || !isMachineProjectType(project.type)) return null
 
   const projectCode = firstNonBlank(project.projectCode, project.model)
   const androidVersion = normalizeAndroidVersion(project.androidVersion, project.operatingSystem)
@@ -212,6 +214,33 @@ export function adaptPlannedProject(project: PlannedRoadmapProject): RoadmapProj
   }
 }
 
+
+/** Partial canonical records remain visible; blank fields are genuine missing data. */
+export function projectRegistryToPlanned(project: ProjectItem): PlannedRoadmapProject {
+  return {
+    id: project.id, status: '待规划', displayName: project.name,
+    machineProjectType: (project.secondaryCategory || '') as PlannedRoadmapProject['machineProjectType'],
+    projectCode: project.projectCode || '', androidVersion: (project.androidVersion || '') as PlannedRoadmapProject['androidVersion'],
+    firstSaleTosVersionId: normalizeRoadmapTosReference(project.firstSaleTosVersionId || project.firstSaleTosVersion || ''),
+    brand: (project.brand || '') as PlannedRoadmapProject['brand'], productLine: project.productLine || '',
+    productSeries: project.productSeries || '', marketName: project.marketName || '',
+    productType: (project.productType || '') as PlannedRoadmapProject['productType'],
+    chipCode: formatPrimaryChipCode(project.fieldValues?.chipCode), startRam: project.startRam || '',
+    versionType: project.versionType || '', str5Date: project.str5Date || '', launchDate: project.launchDate || '',
+    str5Estimated: project.str5Estimated ?? false, launchEstimated: project.launchEstimated ?? false,
+    developMode: project.developMode || '', remark: project.remark || '',
+    createdAt: project.createdAt || '', createdBy: project.createdBy || '', updatedAt: project.updatedAt || '',
+    updatedBy: project.createdBy || '',
+  }
+}
+
+export function adaptRegistryRoadmapProject(project: ProjectItem): RoadmapProjectRow | null {
+  if (getProjectAttribute(project) !== 'roadmap') return null
+  return { ...projectRegistryToPlanned(project), source: 'planned', readOnly: true }
+}
+
+export const canPositionRoadmapRow = (row: RoadmapProjectRow): boolean => row.source === 'normal' || isExactIsoDate(row.str5Date) || isExactIsoDate(row.launchDate)
+
 export function mergeRoadmapProjects(
   projects: ProjectItem[],
   plannedProjects: PlannedRoadmapProject[],
@@ -222,7 +251,7 @@ export function mergeRoadmapProjects(
       const row = adaptNormalProject(project, versions)
       return row ? [row] : []
     }),
-    ...plannedProjects.map(adaptPlannedProject),
+    ...projects.flatMap(project => { const row = adaptRegistryRoadmapProject(project); return row ? [row] : [] }),
   ]
 }
 
@@ -251,6 +280,7 @@ export function deriveRoadmapPlanningConflicts(
     normalByKey.set(key, [...(normalByKey.get(key) ?? []), row])
   }
   for (const row of uniqueRowsBySourceAndId(plannedRows, 'planned')) {
+    if (!row.projectCode || !row.androidVersion || !row.productType) continue
     const key = buildRoadmapDuplicateKey(row.projectCode, row.androidVersion, row.productType)
     plannedByKey.set(key, [...(plannedByKey.get(key) ?? []), row])
   }

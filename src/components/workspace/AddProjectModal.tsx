@@ -38,7 +38,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
     addProject,
     setProjectMember,
   } = useProjectStore()
-  const { enterProjectSpace, setProjectSpaceModule } = useUiStore()
+  const openProjectConfiguration = useUiStore(state => state.openProjectConfiguration)
   const activateProject = useActivateProject()
   const initProjectPermissions = usePermissionStore(state => state.initProjectPermissions)
   const rowsByType = useEnumStore(state => state.rowsByType)
@@ -203,8 +203,7 @@ export default function AddProjectModal({ open, onCancel }: AddProjectModalProps
   }
 
   const handleAfterCreate = () => {
-    setProjectSpaceModule('basic')
-    enterProjectSpace({ module: 'projectList' })
+    openProjectConfiguration()
     message.success('项目创建成功')
   }
 

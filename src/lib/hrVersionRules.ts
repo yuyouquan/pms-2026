@@ -1,3 +1,6 @@
+import { canAccessHrProject, getHrAllowedBudgetTypes, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { PROJECT_CATEGORY_CAPABILITY } from '@/constants/projectTypes'
+import { getManualHrMilestoneKeysForType } from '@/lib/hrMilestoneOwnership'
 /** Shared HR version rules. Legacy lock fields remain readable only for data migration. */
 export const HR_BUDGET_TYPES = ['annual', 'projectEstimate', 'projectBudget'] as const
 export const HR_BATCH_OPTIONS = Array.from({ length: 20 }, (_, index) => ({ value: index + 1, label: `第${index + 1}批` }))
@@ -63,25 +66,36 @@ export function getMachineProjectYear(project: { versions: readonly { createdAt:
 
 /** Creation and copying share the same project-state and budget prerequisites. */
 export function canCreateHrVersion(
-  project: { status: string; ipmProjectCode: string | null } | null | undefined,
+  project: { status: string; ipmProjectCode: string | null; pmsProjectId?: string } | null | undefined,
   budgetType: string | null,
 ): boolean {
   return project?.status === 'active' && !!budgetType
-    && (budgetType === 'annual' || !!project.ipmProjectCode)
+    && canAccessHrProject(project, true) && getHrAllowedBudgetTypes(project).some(type => type === budgetType)
 }
 
 /** Enforce edit scope in the store as well as in every UI entry point. */
 export function allowedHrVersionUpdates<T extends object>(
-  project: { ipmProjectCode: string | null; versions: readonly HrVersionIdentity[] },
+  project: { ipmProjectCode: string | null; pmsProjectId?: string; versions: readonly HrVersionIdentity[] },
   version: HrVersionIdentity,
   updates: T,
 ): Partial<T> {
+  if (!canAccessHrProject(project, true)) return {}
   const allowed = { ...updates } as Record<string, unknown>
+  const manualCapabilityDates = getHrRegistryProject(project)?.type === PROJECT_CATEGORY_CAPABILITY
+  const manualMilestoneKeys = getManualHrMilestoneKeysForType(getHrRegistryProject(project)?.type)
   for (const key of Object.keys(allowed)) {
     if (key === 'batch') {
       if (allowed.batch !== null && !isHrBatch(allowed.batch)) delete allowed.batch
-    } else if (!isLatestHrVersion(project, version) || (project.ipmProjectCode && version.budgetType !== 'annual' && ['milestones', 'projectStartTime', 'projectEndTime', 'projectLevel'].includes(key))) {
+    } else if (!isLatestHrVersion(project, version)) {
       delete allowed[key]
+    } else if (isHrFormalRecord(project) && version.budgetType !== 'annual') {
+      if (key === 'milestones') {
+        const dates = allowed.milestones
+        const permitted = dates && typeof dates === 'object' && !Array.isArray(dates)
+          ? Object.fromEntries(Object.entries(dates).filter(([field]) => manualMilestoneKeys.includes(field))) : {}
+        if (Object.keys(permitted).length) allowed.milestones = permitted
+        else delete allowed.milestones
+      } else if (['projectLevel', ...(manualCapabilityDates ? [] : ['projectStartTime', 'projectEndTime'])].includes(key)) delete allowed[key]
     }
   }
   return allowed as Partial<T>

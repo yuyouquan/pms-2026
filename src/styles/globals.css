@@ -173,6 +173,109 @@
   --pms-project-transition: 200ms ease;
 }
 
+/* Project management registry */
+.pms-project-management__card {
+  min-height: calc(100vh - 104px);
+}
+
+.pms-project-config__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pms-project-config__filter {
+  display: flex;
+  flex: 1 1 170px;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.pms-project-config__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.pms-project-config__filter > label {
+  flex-shrink: 0;
+  white-space: nowrap;
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-font-size-body);
+  line-height: var(--pms-line-height-body);
+}
+
+.pms-project-config__filter > .ant-select,
+.pms-project-config__filter > .ant-input-affix-wrapper {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+}
+
+.pms-project-config__cell-value {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.pms-project-config__cell-value > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-project-config__cell-value .ant-btn > span:not(.ant-btn-icon) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-project-config__cell-value > .pms-project-config__edit-trigger {
+  flex: 0 0 auto;
+}
+
+.pms-project-config__name {
+  max-width: 180px;
+  height: auto;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-project-config__editable-value.ant-btn {
+  height: auto;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+}
+
+.pms-project-config__name.ant-btn,
+.pms-project-config__editable-value.ant-btn {
+  justify-content: flex-start;
+}
+
+/* Configuration fixed cells must cover horizontally scrolled content.
+   Keep default/even rows solid and composite the shared hover tint onto white. */
+.pms-project-config > .pms-table .ant-table-tbody > tr > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
+  background: var(--pms-surface-solid) !important;
+}
+
+.pms-project-config > .pms-table .ant-table-tbody > tr:hover > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right),
+.pms-project-config > .pms-table .ant-table-tbody > tr > td.ant-table-cell-row-hover:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
+  background: color-mix(in srgb, rgb(99 102 241) 6%, var(--pms-surface-solid)) !important;
+}
+
 /* PMS project space and plan workspace */
 .pms-project-space {
   min-width: 0;
@@ -1917,6 +2020,10 @@
   scrollbar-gutter: stable;
 }
 
+.pms-config-center > .pms-config-workspace > .pms-config-workspace__content {
+  padding: 0;
+}
+
 .pms-config-workspace__content > .ant-card,
 .pms-config-workspace__content > .pms-config-workspace-card {
   display: flex;
@@ -2311,6 +2418,32 @@
   color: #4338ca !important;
   background: rgba(99, 102, 241, 0.1) !important;
   box-shadow: inset 3px 0 0 #6366f1;
+}
+
+.pms-config-navigation-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.pms-config-navigation-menu .ant-menu-submenu-title {
+  margin: 4px 0 !important;
+  width: 100% !important;
+  border-radius: 9px;
+  font-weight: 500;
+}
+
+.pms-config-navigation-menu:not(.ant-menu-inline-collapsed) .ant-menu-item {
+  height: auto;
+  line-height: 20px;
+  padding-block: 10px;
+}
+
+.pms-config-navigation-menu:not(.ant-menu-inline-collapsed) .ant-menu-title-content {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .pms-enum-type-list {
@@ -3837,6 +3970,15 @@ body {
    PMS Custom — Modal (.pms-modal)
    ================================================================ */
 
+/* Ant Design 6 uses container instead of content; keep header/body/footer on one 24px inset. */
+.pms-modal.ant-modal .ant-modal-container {
+  padding: 0;
+}
+
+.pms-modal.ant-modal .ant-modal-body {
+  padding: var(--pms-content-padding);
+}
+
 .pms-modal .ant-modal-content {
   border-radius: var(--radius-xl) !important;
   overflow: hidden !important;
@@ -4782,7 +4924,7 @@ body {
   }
 
   .pms-project-info-form-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
 }
@@ -5123,21 +5265,28 @@ body {
   text-align: left;
 }
 
+.pms-project-info-display-item--horizontal,
 .pms-project-info-jira-horizontal {
-  flex-direction: row;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: start;
+  padding-inline: 0;
 }
 
+.pms-project-info-display-item--horizontal .pms-project-info-display-label,
 .pms-project-info-jira-horizontal .pms-project-info-display-label {
-  flex: 0 0 120px;
-  min-width: 120px;
-  text-align: left;
+  grid-column: 1;
+  min-width: 0;
+  padding-inline: 14px;
+  text-align: center;
 }
 
+.pms-project-info-display-item--horizontal .pms-project-info-display-value,
 .pms-project-info-jira-horizontal .pms-project-info-display-value {
-  flex: 1;
+  grid-column: 2 / -1;
   min-width: 0;
   margin-top: 0;
+  padding-inline: 14px;
   text-align: left;
 }
 
@@ -5464,6 +5613,12 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .pms-project-info-display-item--horizontal .pms-project-info-display-value,
+  .pms-project-info-jira-horizontal .pms-project-info-display-value {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+  }
+
   .pms-project-info-core-card .ant-card-head-wrapper {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -5494,16 +5649,7 @@ body {
 }
 
 @media (max-width: 480px) {
-  .pms-project-info-jira-horizontal {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .pms-project-info-jira-horizontal .pms-project-info-display-label {
-    flex: 0 0 auto;
-    min-width: 0;
-  }
-
+  .pms-project-info-display-item--horizontal .pms-project-info-display-value,
   .pms-project-info-jira-horizontal .pms-project-info-display-value {
     width: 100%;
   }
@@ -6191,11 +6337,15 @@ body {
     min-width: 0;
     flex: 1;
     gap: 6px;
+    overflow-x: auto;
   }
 
   .pms-todo-directory__item {
     width: auto;
     min-width: 118px;
+    flex: 0 0 auto;
+    grid-template-columns: 18px max-content auto;
+    white-space: nowrap;
   }
 
   .pms-todo-workspace {
@@ -6958,6 +7108,16 @@ input.ant-input,
   min-width: 116px;
 }
 
+.pms-config-center-switch.ant-segmented {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.pms-config-center-switch .ant-segmented-group {
+  width: max-content;
+  min-width: 100%;
+}
+
 .pms-project-list-table-actions {
   min-width: auto;
   gap: 8px;
@@ -7149,7 +7309,8 @@ input.ant-input,
   white-space: nowrap;
 }
 
-.pms-roadmap-view-mode-row {
+.pms-roadmap-view-mode-row,
+.pms-project-management__view-mode {
   display: flex;
   align-items: center;
   min-height: 40px;
@@ -7168,14 +7329,17 @@ input.ant-input,
   border: 0 !important;
 }
 
-.pms-roadmap-view-mode-row .ant-segmented {
+.pms-roadmap-view-mode-row .ant-segmented,
+.pms-project-management__view-mode .ant-segmented {
   padding: 2px;
   border-radius: 7px;
   background: #f3f3f5;
 }
 
 .pms-roadmap-view-mode-row .ant-segmented-item,
-.pms-roadmap-view-mode-row .ant-segmented-item-label {
+.pms-roadmap-view-mode-row .ant-segmented-item-label,
+.pms-project-management__view-mode .ant-segmented-item,
+.pms-project-management__view-mode .ant-segmented-item-label {
   min-height: 28px;
   line-height: 28px;
   border-radius: 6px;
@@ -8167,6 +8331,11 @@ input.ant-input,
   border-color: color-mix(in srgb, var(--pms-project-surface-border) 76%, #fff);
 }
 
+.pms-project-information-surface .pms-project-info-display-item--horizontal,
+.pms-project-information-surface .pms-project-info-jira-horizontal {
+  padding-inline: 0;
+}
+
 .pms-project-information-surface :where(button, [tabindex='0'], .ant-collapse-header):focus-visible {
   outline: var(--pms-project-focus-ring);
   outline-offset: 2px;
@@ -8730,4 +8899,106 @@ input.ant-input,
 
 .pms-hr-config-panel .pms-hr-config-table-card .ant-table-tbody > tr:hover > td {
   background: color-mix(in srgb, var(--pms-brand) 6%, var(--pms-surface-solid)) !important;
+}
+
+/* Shared HR creation fields; department tables stay outside this grid. */
+.pms-hr-version-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 20px; }
+.pms-hr-version-form--technical { grid-template-columns: repeat(5, minmax(0, 1fr)); column-gap: 12px; }
+.pms-hr-version-form--tos { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 12px; }
+@media (max-width: 700px) { .pms-hr-version-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .pms-hr-version-form { grid-template-columns: minmax(0, 1fr); } }
+
+/* Shared country allocation editor and project-space summary. */
+.pms-fan-trial {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.pms-fan-trial > .ant-select { width: 100%; }
+.pms-fan-trial-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: left;
+  font-size: var(--pms-table-font-size-body);
+  line-height: var(--pms-line-height-body);
+}
+.pms-fan-trial-table th, .pms-fan-trial-table td {
+  padding: var(--pms-table-cell-padding);
+  border-bottom: 1px solid var(--pms-project-surface-border);
+  overflow-wrap: anywhere;
+}
+.pms-fan-trial-table th {
+  height: var(--pms-table-head-height);
+  padding: var(--pms-table-head-padding);
+  color: var(--pms-text-primary);
+  background: var(--pms-brand-surface);
+  font-size: var(--pms-table-font-size-header);
+  font-weight: 600;
+}
+.pms-fan-trial-table td { height: var(--pms-table-row-height); font-weight: 400; }
+.pms-fan-trial-table .ant-input-number { width: 100%; }
+.pms-fan-trial-table .ant-input-number-input { font-size: var(--pms-table-font-size-body) !important; }
+.pms-fan-trial-table .pms-fan-trial-action { width: 64px; text-align: center; }
+.pms-fan-trial-retired { color: #64748b; }
+.pms-fan-trial-total {
+  color: #64748b;
+  font-size: var(--pms-table-font-size-body);
+  text-align: right;
+  font-weight: 400;
+}
+
+/* Project-space follow-ups: shared tags and the compact roadmap information surface. */
+.pms-project-info-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; max-width: 100%; vertical-align: middle; }
+.pms-project-info-tags > .ant-tag { margin-inline-end: 0; }
+.pms-project-info-tags--compact { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pms-project-info-tags--compact > .ant-tag { margin-inline-end: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.pms-fan-trial-table-scroll { max-width: 100%; overflow-x: auto; }
+.pms-fan-trial-table { table-layout: auto; }
+.pms-fan-trial-table th:first-child { width: 92px; min-width: 92px; white-space: nowrap; }
+.pms-fan-trial-table td { min-width: 170px; }
+.pms-fan-trial-country-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
+.pms-roadmap-project-info { display: grid; gap: 24px; max-width: 1400px; margin: 0 auto; }
+.pms-roadmap-project-info__title { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.pms-roadmap-project-info__dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pms-roadmap-project-info__date { padding: 16px; background: var(--pms-brand-surface); border-radius: var(--radius-lg); }
+.pms-roadmap-project-info__date > span, .pms-roadmap-project-info__fields dt { color: var(--pms-text-secondary); font-size: 12px; }
+.pms-roadmap-project-info__date > div { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.pms-roadmap-project-info__date strong { font-size: 20px; font-weight: 600; }
+.pms-roadmap-project-info__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 24px; margin: 0; }
+.pms-roadmap-project-info__fields dd { margin: 6px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.pms-roadmap-project-info__remark { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+@media (max-width: 900px) { .pms-roadmap-project-info__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .pms-roadmap-project-info__fields, .pms-roadmap-project-info__dates { grid-template-columns: minmax(0, 1fr); } }
+
+/* Compact resource version forms, with explicit machine metadata/model/milestone rows. */
+.pms-modal.pms-hr-version-modal { top: 24px; }
+.pms-modal.pms-hr-version-modal .ant-modal-header { margin-bottom: 0; }
+.pms-modal.pms-hr-version-modal .ant-modal-body { padding-top: 12px; max-height: calc(100vh - 180px); overflow-y: auto; }
+.pms-hr-version-modal .ant-form-item { margin-bottom: 12px; min-width: 0; }
+.pms-hr-version-modal .ant-form-item-label { padding-bottom: 4px; }
+.pms-hr-readonly-field, .pms-hr-readonly-field input { cursor: not-allowed; }
+.pms-hr-readonly-field__icon { opacity: 0; color: var(--pms-text-secondary); }
+.pms-hr-readonly-field:hover .pms-hr-readonly-field__icon,
+.pms-hr-readonly-field:focus-within .pms-hr-readonly-field__icon { opacity: 1; }
+.pms-hr-version-row { display: grid; gap: 0 12px; }
+.pms-hr-version-row--metadata { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.pms-hr-version-row--model { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pms-hr-version-row--milestones { grid-template-columns: repeat(10, minmax(0, 1fr)); column-gap: 8px; }
+.pms-hr-version-row--milestones .ant-form-item-label > label { font-size: 12px; white-space: nowrap; }
+.pms-hr-version-row--milestones .ant-form-item-label > label::after { display: none; }
+.pms-hr-version-row--milestones .ant-input-affix-wrapper,
+.pms-hr-version-row--milestones .ant-picker { padding-inline: 6px; }
+.pms-hr-version-row--milestones input { font-size: 12px; }
+.pms-hr-version-row .ant-picker-input > input { min-width: 0; }
+.pms-project-space-editor .pms-project-info-form-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0 14px; }
+.pms-roadmap-space-editor .ant-form-item { margin-bottom: 12px; }
+.pms-roadmap-space-editor .ant-picker-input > input { min-width: 0; }
+@media (max-width: 1000px) {
+  .pms-project-space-editor .pms-project-info-form-grid, .pms-hr-version-row--metadata { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pms-hr-version-row--milestones { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .pms-project-space-editor .pms-project-info-form-grid, .pms-hr-version-row--metadata, .pms-hr-version-row--model, .pms-hr-version-row--milestones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

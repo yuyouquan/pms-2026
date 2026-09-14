@@ -81,6 +81,9 @@ export interface HrCapabilityVersion {
 
 /** 能力建设项目 */
 export interface HrCapabilityProject {
+  pmsProjectId?: string
+  migrationIssue?: string
+  legacyHrSnapshot?: unknown
   id: string
   /** 项目名称 */
   name: string
@@ -129,6 +132,8 @@ export interface CapabilityMonthlyInvestment {
   monthlyData: Record<string, number>
   /** 是否已手动编辑 */
   isEdited: boolean
+  /** Removed source rows remain archived for manual-data restoration, excluded from active totals. */
+  isArchived?: boolean
 }
 
 /** 项目列表筛选器 */

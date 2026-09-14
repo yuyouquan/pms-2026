@@ -1,4 +1,6 @@
+import { isHrFormalRecord, synchronizeHrRegistryRecord } from '@/lib/hrProjectRegistry'
 import { resolveHrFormalSource, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
+import { mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
 import { HR_BUDGET_TYPES, getLatestHrVersion, getMachineProjectYear, isLatestHrVersion, normalizeHrVersionSequence, type HrVersionIdentity } from '@/lib/hrVersionRules'
 
 interface SyncVersion extends HrVersionIdentity {
@@ -11,6 +13,9 @@ interface SyncVersion extends HrVersionIdentity {
   estimatedInvestment: number
 }
 interface SyncProject {
+  id: string
+  name?: string
+  pmsProjectId?: string
   versions: SyncVersion[]
   ipmProjectCode: string | null
   annualBudget: number
@@ -19,24 +24,20 @@ interface SyncProject {
   projectYear?: string
 }
 
-/** Nonannual latest versions follow the formal plan; annual planning and historical snapshots keep manual values. */
+/** Latest formal plan milestones follow published plans, except version-owned end dates; budgets, capability dates and historical snapshots stay independent. */
 export function synchronizeHrProjects<T extends SyncProject>(
   projects: readonly T[], category: HrProjectCategory,
   calculateMachineInvestment?: (level: string, model: string, coefficient: number) => number,
 ): T[] {
-  return projects.map(project => {
+  return projects.map(input => {
+    const project = synchronizeHrRegistryRecord(input, category)
     const normalized = { ...project, versions: normalizeHrVersionSequence(project.versions) }
-    const source = project.ipmProjectCode ? resolveHrFormalSource(category, project.ipmProjectCode) : null
+    const source = isHrFormalRecord(project) ? resolveHrFormalSource(category, project.ipmProjectCode, project.pmsProjectId) : null
     const versions = normalized.versions.map(version => {
       if (!isLatestHrVersion(normalized, version)) return version
       const next = { ...version }
-      if (source?.project && version.budgetType !== 'annual') {
-        if (category === 'capability') {
-          next.projectStartTime = source.projectStartTime
-          next.projectEndTime = source.projectEndTime
-        } else {
-          next.milestones = source.milestones
-        }
+      if (source?.project && category !== 'capability' && version.budgetType !== 'annual') {
+        next.milestones = mergeHrFormalMilestones(category, source.milestones, version.milestones)
         if (category === 'machine') next.projectLevel = source.projectLevel
       }
       if (category === 'machine' && calculateMachineInvestment) {

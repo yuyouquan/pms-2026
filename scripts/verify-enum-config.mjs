@@ -21,6 +21,7 @@ const expectedEnumDefinitions = [
   ['kernel-version', 'Kernel版本', '整机产品项目', 'single'],
   ['chip-mapping', '芯片编码/芯片型号/芯片平台', '整机产品项目', 'chip-map'],
   ['memory-size', '内存大小', '整机产品项目', 'single'],
+  ['fan-trial-country', '粉丝试用国家', '整机产品项目', 'single'],
   ['project-category-mapping', '项目分类', '整机产品项目 / tOS版本项目 / 技术项目 / 能力建设项目', 'project-category-map'],
   ['build-option', '编译选项', '整机产品项目', 'single'],
   ['build-market', '编译市场', '整机产品项目', 'single'],
@@ -53,7 +54,7 @@ const expectedColumnsByKind = {
   ],
 }
 
-console.log('[registry-contract] verifying 24-type flat enum registry')
+console.log('[registry-contract] verifying 25-type flat enum registry')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 assert.deepEqual(values.ENUM_TYPE_KEYS, expectedEnumTypeKeys, 'enum type keys are exported in the exact approved order')
 assert.deepEqual(Object.keys(values.ENUM_DEFINITIONS), expectedEnumTypeKeys, 'registry preserves the exact approved key order')
@@ -67,8 +68,8 @@ assert.deepEqual(
     counts[definition.kind] = (counts[definition.kind] ?? 0) + 1
     return counts
   }, {}),
-  { single: 20, 'chip-map': 1, 'project-category-map': 1, 'tmg-map': 1, 'package-map': 1 },
-  'registry has exactly 20 single types and one of each mapping kind',
+  { single: 21, 'chip-map': 1, 'project-category-map': 1, 'tmg-map': 1, 'package-map': 1 },
+  'registry has exactly 21 single types and one of each mapping kind',
 )
 for (const definition of Object.values(values.ENUM_DEFINITIONS)) {
   assert.deepEqual(definition.columns, expectedColumnsByKind[definition.kind](definition), `${definition.key} exposes the exact columns for ${definition.kind}`)
@@ -196,20 +197,18 @@ const expectedSingleSeeds = {
   'machine-health-status': ['正常', '关注', '风险'],
   'version-type': ['Full', 'Slim', 'PAD', 'GO'],
   'software-project-level': ['S', 'A', 'B', 'C', 'D'],
-  'product-series': [],
-  'research-mode': [],
+  'product-series': ['示例系列A 60', '示例系列B 40', '示例系列D 50', '路标演示系列'],
+  'research-mode': ['自研', '外研', '联合研发'],
   'machine-development-mode': ['自研', '联合开发', 'ODC', '外研', 'ITD-ODC', 'ODM', '纯外研', 'JDM'],
   'technical-development-mode': ['自研', '谷歌合作', 'SoC合作', '高校合作'],
   'upgrade-strategy': ['不维护', 'EWP维护', '维1', '维2', 'EWP维护+tOS升级', '维1+tOS升级', '维2+tOS升级', '升1维2', '升2维3', '升3维5'],
   'system-type': ['32bit', '64bit', '64only'],
   'kernel-version': ['5.10', '5.15', '6.1', '6.6'],
-  'chip-mapping': [],
   'memory-size': ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'],
   'build-option': ['demo_build_01', 'demo_build_02', 'demo_build_03', 'demo_build_04', 'demo_build_05', 'demo_build_06', 'demo_build_07'],
   'build-market': ['op', 'tr'],
   'core-value': ['追赶', '人无我有', '人有我有'],
-  'android-version': [],
-  'package-mode-mapping': [],
+  'android-version': ['Android 15', 'Android 16', 'Android 17', 'Android 18'],
 }
 const expectedTmgSeeds = [
   ['示例架构组', '无'], ['示例性能组', '无'], ['示例质量组', '无'], ['示例体验组', '无'],
@@ -244,7 +243,7 @@ const expectedProjectCategorySeeds = [
   ...capabilityProjectCategorySeeds.map(ipmProjectCategory => ({ ipmProjectCategory, pmsProjectCategory: '能力建设项目', pmsSecondaryCategory: '' })),
 ]
 const initialRows = values.createInitialEnumRows()
-assert.deepEqual(Object.keys(initialRows), expectedEnumTypeKeys, 'initial rows contain arrays for all 22 keys in registry order')
+assert.deepEqual(Object.keys(initialRows), expectedEnumTypeKeys, 'initial rows contain arrays for all 25 keys in registry order')
 for (const type of expectedEnumTypeKeys) {
   assert.ok(Array.isArray(initialRows[type]), `${type} seed is an array`)
   initialRows[type].forEach((row, index) => assert.equal(row.id, `seed-${type}-${index + 1}`, `${type} seed IDs are deterministic`))
@@ -306,20 +305,20 @@ const explicitlyEmptyLegacy = enumStore.migrateEnumState({ valuesByType: {
   'tos-2-part': [],
   'tos-3-part': [],
 } }, 1)
-assert.deepEqual(rowValues(explicitlyEmptyLegacy.rowsByType, 'roadmap-tos'), [], 'an explicitly empty legacy two-part array remains empty')
-assert.deepEqual(rowValues(explicitlyEmptyLegacy.rowsByType, 'first-sale-tos'), [], 'two explicitly empty legacy arrays keep first-sale empty')
+assert.deepEqual(rowValues(explicitlyEmptyLegacy.rowsByType, 'roadmap-tos'), expectedSingleSeeds['roadmap-tos'], 'old empty category receives mock values once')
+assert.deepEqual(rowValues(explicitlyEmptyLegacy.rowsByType, 'first-sale-tos'), expectedSingleSeeds['first-sale-tos'], 'old empty category receives mock values once')
 const malformedTwoPartEmptyThreePart = enumStore.migrateEnumState({ valuesByType: {
   'tos-2-part': [null, '   '],
   'tos-3-part': [],
 } }, 1)
 assert.deepEqual(rowValues(malformedTwoPartEmptyThreePart.rowsByType, 'roadmap-tos'), expectedSingleSeeds['roadmap-tos'], 'a malformed legacy two-part array still falls back for roadmap')
-assert.deepEqual(rowValues(malformedTwoPartEmptyThreePart.rowsByType, 'first-sale-tos'), [], 'an explicitly empty three-part array keeps first-sale empty when two-part is malformed')
+assert.deepEqual(rowValues(malformedTwoPartEmptyThreePart.rowsByType, 'first-sale-tos'), expectedSingleSeeds['first-sale-tos'], 'old empty category receives mock values once')
 const emptyTwoPartMalformedThreePart = enumStore.migrateEnumState({ valuesByType: {
   'tos-2-part': [],
   'tos-3-part': { unsafe: true },
 } }, 1)
-assert.deepEqual(rowValues(emptyTwoPartMalformedThreePart.rowsByType, 'roadmap-tos'), [], 'an explicitly empty two-part array remains empty when three-part is malformed')
-assert.deepEqual(rowValues(emptyTwoPartMalformedThreePart.rowsByType, 'first-sale-tos'), [], 'an explicitly empty two-part array keeps first-sale empty when three-part is malformed')
+assert.deepEqual(rowValues(emptyTwoPartMalformedThreePart.rowsByType, 'roadmap-tos'), expectedSingleSeeds['roadmap-tos'], 'old empty category receives mock values once')
+assert.deepEqual(rowValues(emptyTwoPartMalformedThreePart.rowsByType, 'first-sale-tos'), expectedSingleSeeds['first-sale-tos'], 'old empty category receives mock values once')
 assert.deepEqual(enumStore.migrateEnumState({ valuesByType: {
   'tos-2-part': ['18.0'], 'tos-3-part': ['18.0.1'],
 } }, 0), enumStore.migrateEnumState({ valuesByType: {
@@ -340,11 +339,11 @@ assert.deepEqual(migratedV2.rowsByType['core-value'], [
   { id: 'keep-me', value: '自定义' },
   { id: 'migrated-core-value-2', value: '另一个' },
 ], 'v2 sanitation preserves valid IDs, fills missing IDs deterministically, and drops malformed or duplicate rows')
-assert.deepEqual(migratedV2.rowsByType['product-series'], [], 'an explicitly empty valid v2 array stays empty')
+assert.deepEqual(migratedV2.rowsByType['product-series'], initialRows['product-series'], 'old empty or missing category receives mock rows')
 assert.deepEqual(migratedV2.rowsByType['tmg-subdomain-mapping'], initialRows['tmg-subdomain-mapping'], 'a wholly unusable v2 type falls back to that type seed')
 assert.deepEqual(migratedV2.rowsByType['roadmap-tos'], initialRows['roadmap-tos'], 'missing v2 types fall back to their seeds')
-assert.deepEqual(migratedV2.rowsByType['android-version'], [], 'v2 migration adds an empty Android-version array')
-assert.deepEqual(migratedV2.rowsByType['package-mode-mapping'], [], 'v2 migration adds an empty package-mapping array')
+assert.deepEqual(migratedV2.rowsByType['android-version'], initialRows['android-version'], 'old empty or missing category receives mock rows')
+assert.deepEqual(migratedV2.rowsByType['package-mode-mapping'], initialRows['package-mode-mapping'], 'old empty or missing category receives mock rows')
 assert.deepEqual(migratedV2.rowsByType['core-value'], [
   { id: 'keep-me', value: '自定义' },
   { id: 'migrated-core-value-2', value: '另一个' },
@@ -392,7 +391,7 @@ assert.deepEqual(fixture.deleteEnumRow('product-series', 'missing'), { ok: false
 assert.deepEqual(fixture.deleteEnumRow('product-series', 'user-1'), { ok: true }, 'row delete succeeds by exact ID')
 assert.deepEqual(fixture.getRows('product-series'), [{ id: 'user-2', value: '系列A' }], 'row deletion removes only the requested ID')
 fixture.resetLocalConfig()
-assert.deepEqual(fixture.getRows('product-series'), [], 'reset restores exact seeds')
+assert.deepEqual(fixture.getRows('product-series'), initialRows['product-series'], 'reset restores exact seeds')
 
 const compatibilityFixture = enumStore.createEnumStore({ rowsByType: values.createInitialEnumRows() }, () => 'flat-user-id')
 assert.equal(compatibilityFixture.getState().selectedType, 'first-sale-tos', 'flat first-sale tOS is the default selected type')
@@ -404,7 +403,7 @@ assert.deepEqual(Object.keys(partialized), ['rowsByType'], 'only rowsByType is p
 assert.notEqual(partialized.rowsByType, compatibilityFixture.getState().rowsByType, 'persisted rows are deep-cloned')
 partialized.rowsByType['roadmap-tos'][0].value = 'mutated-copy'
 assert.equal(compatibilityFixture.getRows('roadmap-tos')[0].value, '16.0', 'mutating a persistence snapshot cannot mutate store memory')
-assert.equal(enumStore.useEnumStore.persist.getOptions().version, 4, 'persist middleware exposes the active-status cleanup version through its runtime options')
+assert.equal(enumStore.useEnumStore.persist.getOptions().version, 5, 'persist middleware exposes the mock refresh version through its runtime options')
 const previousWindow = globalThis.window
 const officialPersistStorage = enumStore.useEnumStore.persist.getOptions().storage
 try {
@@ -547,7 +546,7 @@ try {
     freshPersistedRows['product-series'],
     'seed memory is observably stale until delayed persisted rows arrive',
   )
-  releaseFreshSessionHydration({ state: { rowsByType: freshPersistedRows }, version: 2 })
+  releaseFreshSessionHydration({ state: { rowsByType: freshPersistedRows }, version: enumStore.ENUM_STORE_VERSION })
   assert.deepEqual(
     await Promise.all([firstFreshSessionHydration, duplicateFreshSessionHydration]),
     [true, true],
@@ -571,7 +570,7 @@ try {
 }
 console.log('[store-contract] passed')
 
-console.log('[flat-consumers] verifying UI source contracts')
+console.log('[enum-consumers] verifying UI source contracts')
 const enumUi = readSource(root, 'src/components/config/EnumConfig.tsx')
 const enumConsumers = loadTypeScriptModule(root, 'src/lib/enumConsumers.ts')
 assert.equal(enumConsumers.resolvePackageMode([
@@ -581,6 +580,8 @@ assert.equal(enumConsumers.resolvePackageMode([
   { id: 'mapping-1', androidVersion: 'Android 16', chipModel: 'DEMOSOC003', packageMode: '整包' },
 ], 'Android 16', 'demosoc003'), '', 'package mode lookup remains case-sensitive and does not fuzzy match')
 assert.equal(enumConsumers.resolvePackageMode([], 'Android 16', 'DEMOSOC003'), '', 'package mode lookup returns an empty string when no mapping exists')
+const navigationUi = readSource(root, 'src/components/config/ConfigNavigation.tsx')
+assert.match(navigationUi, /selectedKeys=\{\[selectedKey\]\}/, 'shared navigation highlights selected configuration')
 const configUi = readSource(root, 'src/containers/ConfigContainer.tsx')
 const appShell = readSource(root, 'src/containers/AppShell.tsx')
 const globalStyles = readSource(root, 'src/styles/globals.css')
@@ -589,32 +590,16 @@ const addProjectSource = readSource(root, 'src/components/workspace/AddProjectMo
 const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContainer.tsx')
 const projectStoreSource = readSource(root, 'src/stores/project.ts')
 const roadmapModuleSource = readSource(root, 'src/components/roadmap/ProjectRoadmapModule.tsx')
-assert.match(configUi, /value:\s*['"]enum['"][\s\S]*label:\s*['"]枚举值配置['"]/, 'configuration center exposes the enum-value capsule option')
 assert.match(configUi, /configTab\s*===\s*['"]enum['"][\s\S]*<EnumConfig/, 'enum tab renders EnumConfig')
 assert.match(configUi, /<EnumConfig[\s\S]*currentLoginUser=\{currentLoginUser\}/, 'configuration center passes the current login user into EnumConfig')
-assert.match(enumUi, /ENUM_TYPE_KEYS/, 'flat registry order drives the enum type list')
 assert.match(enumUi, /ENUM_DEFINITIONS/, 'registry definitions drive labels, scopes, kinds, and dynamic columns')
 assert.match(enumUi, /rowsByType/, 'the UI reads the v2 row registry')
 assert.match(enumUi, /addEnumRow/, 'the UI adds complete dynamic rows')
 assert.match(enumUi, /updateEnumRow/, 'the UI updates rows by stable ID')
 assert.match(enumUi, /deleteEnumRow/, 'the UI deletes rows by stable ID')
-assert.match(enumUi, /配置项（24）/, 'flat left panel exposes the exact approved title')
-assert.match(enumUi, /ENUM_TYPE_KEYS\.filter[\s\S]*definition\.label[\s\S]*(?:includes|indexOf)/, 'search matches Chinese registry labels while filtering the ordered key list')
-assert.match(enumUi, /rowsByType\[type\]\.length/, 'each flat type item displays its current row count')
-assert.match(enumUi, /pms-enum-type-item--active/, 'the selected flat type item exposes the active class')
-assert.doesNotMatch(enumUi, /\bTree\b|<Tree\b/, 'the obsolete Ant Design Tree is removed')
-assert.doesNotMatch(enumUi, /ENUM_CONFIG_CATEGORIES|EnumConfigCategoryKey|通用|人力资源管道|pms-enum-category|pms-enum-tree/, 'category constants, copy, and tree/category classes are removed')
-assert.doesNotMatch(globalStyles, /pms-enum-(?:category|tree)/, 'obsolete enum category and tree styles are removed')
-assert.match(globalStyles, /\.pms-enum-type-item--active[\s\S]*box-shadow:\s*inset\s+3px\s+0\s+0/, 'flat active item keeps the purple left accent')
-assert.match(globalStyles, /@media\s*\(max-width:\s*900px\)[\s\S]*\.pms-enum-workspace-shell\s*>\s*\.pms-config-workspace[\s\S]*grid-template-columns:\s*1fr/, 'enum list stacks above the table at the approved narrow breakpoint')
-assert.match(globalStyles, /@media\s*\(max-width:\s*900px\)[\s\S]*\.pms-enum-sidebar[\s\S]*max-height:\s*280px[\s\S]*overflow-y:\s*auto/, 'stacked enum list keeps a bounded internal scroll region')
-assert.doesNotMatch(globalStyles, /\.pms-enum-workspace-shell\s*,[\s\S]{0,160}height:\s*100%/, 'enum wrapper no longer adds a full parent height below the configuration header')
 assert.match(globalStyles, /\.pms-admin-workspace\.pms-config-center\s*\{[^}]*display:\s*flex[^}]*flex-direction:\s*column[^}]*height:\s*calc\(100dvh\s*-\s*96px\)[^}]*min-height:\s*0[^}]*overflow:\s*hidden/, 'the configuration parent provides the bounded viewport for all inner workspaces')
-assert.match(globalStyles, /\.pms-enum-workspace-shell\s*\{[^}]*min-height:\s*0[^}]*flex:\s*1\s+1\s+auto[^}]*height:\s*100%[^}]*max-height:\s*100%[^}]*overflow:\s*hidden/, 'the enum wrapper shrinks into the shared configuration remainder without a second viewport offset')
 assert.match(globalStyles, /\.pms-config-workspace\s*\{[^}]*flex:\s*1\s+1\s+auto[^}]*height:\s*100%[^}]*min-height:\s*0[^}]*max-height:\s*100%[^}]*overflow:\s*hidden/, 'ConfigWorkspaceShell shares the bounded flex remainder with the enum wrapper')
-assert.match(globalStyles, /@media\s*\(max-width:\s*900px\)[\s\S]*grid-template-rows:\s*minmax\([^;]+\)\s+minmax\(0,\s*1fr\)[\s\S]*height:\s*100%[\s\S]*overflow:\s*hidden/, '761-900 stacked layout remains bounded with a scrollable right-hand remainder')
 assert.match(enumUi, /useEnumStore\(state\s*=>\s*state\.selectedType\)/, 'enum type focus is shared for cross-module navigation')
-assert.match(enumUi, /useEnumStore\(state\s*=>\s*state\.setSelectedType\)/, 'enum type focus exposes one non-persisted action')
 assert.match(enumUi, /title:\s*['"]序号['"][\s\S]*render:\s*\([^)]*,\s*[^)]*,\s*index\)\s*=>\s*index\s*\+\s*1/, 'the first table column renders a one-based sequence number')
 assert.match(enumUi, /selectedDefinition\.columns\.map/, 'business columns are generated from the selected registry definition')
 assert.match(enumUi, /formatEnumCellValue/, 'table cells use the central formatter so tOS has one display prefix')
@@ -657,7 +642,7 @@ assert.match(enumUi, /CSS\.escape[\s\S]{0,300}catch/, 'selector fallback escapes
 assert.match(enumUi, /保存枚举值失败/, 'storage write errors use save-specific copy')
 assert.match(enumUi, /hydrationError\s*&&\s*!storageWriteContext/, 'load recovery is not shown for a known save rollback error')
 assert.match(enumUi, /data-testid="enum-add-button"/, 'add action exposes its stable test ID')
-assert.match(enumUi, /data-testid=\{`enum-type-\$\{type\}`\}/, 'type items expose stable registry-key test IDs')
+assert.match(navigationUi, /enum-type-/, 'shared navigation retains registry-key test IDs')
 assert.match(enumUi, /['"]data-testid['"]:\s*`enum-row-\$\{row\.id\}`/, 'table rows expose stable row-ID test IDs')
 assert.match(enumUi, /data-testid=\{`enum-edit-\$\{row\.id\}`\}/, 'edit actions expose stable row-ID test IDs')
 assert.match(enumUi, /data-testid=\{`enum-delete-\$\{row\.id\}`\}/, 'delete actions expose stable row-ID test IDs')

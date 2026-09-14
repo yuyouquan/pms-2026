@@ -1,3 +1,4 @@
+import { validateFanTrial } from '@/lib/fanTrial'
 import {
   getEffectiveProjectInfoFields,
   getProjectInfoFields,
@@ -151,7 +152,7 @@ export const getProjectInfoModalSubmitValues = (
   (isMachineProjectType(type)
     ? [...MACHINE_PROJECT_MODAL_CREATE_ONLY_STORAGE_FIELDS, ...getProjectInfoFields(type)]
     : getProjectInfoModalFields(type))
-    .filter(field => !field.visibleWhen || field.visibleWhen(values))
+    .filter(field => field.key === 'fanTrialCountries' || !field.visibleWhen || field.visibleWhen(values))
     .reduce<ProjectInfoValues>((result, field) => {
       const value = values[field.key]
       if (value !== undefined) result[field.key] = value
@@ -208,6 +209,8 @@ export const deriveMachineProjectInfoValues = (source: ExternalProjectInfoSource
     developmentMode: '',
     firstSaleTosVersion: source.tosVersion || '',
     isFirstLaunchProject: '否',
+    fanTrialEnabled: '否',
+    fanTrialCountries: [],
     softwareProjectLevel: '',
     versionType: 'Full',
     dimensionUpgradeStrategy: '',
@@ -348,6 +351,12 @@ export const validateProjectInfoValues = (
       groupKey: 'extended' as const,
       message: `第 ${error.rowIndex + 1} 行：${error.message}`,
     })))
+  }
+  if (isMachineProjectType(type) && (!validationFieldKeys || validationFieldKeys.has('fanTrialEnabled') || validationFieldKeys.has('fanTrialCountries'))) {
+    const fanTrialError = validateFanTrial(values)
+    if (fanTrialError && !errors.some(error => error.fieldKey === fanTrialError.fieldKey)) {
+      errors.push({ ...fanTrialError, groupKey: 'extended' })
+    }
   }
   return errors
 }

@@ -9,6 +9,7 @@ import {
   PROJECT_TEMPLATE_TYPES,
   getProjectTypeFamilyKey,
 } from '@/constants/projectTypes'
+import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '@/data/projectListPlanMocks'
 import { initialProjects } from '@/data/projects'
 import { createMrAcceptancePlanScopeSeed } from '@/data/mrVersionPlanMocks'
 import type { GanttScaleMode } from '@/lib/ganttScale'
@@ -48,7 +49,7 @@ import type {
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 14
+export const PLAN_STORE_VERSION = 15
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -356,6 +357,10 @@ const LEGACY_SHARED_V4_V7_LEVEL1_STABLE_SIGNATURE: StableLevel1SeedSignature = n
 const STABLE_LEVEL1_SEED_SIGNATURES: readonly StableLevel1SeedSignature[] = [
   buildStableLevel1SeedSignature(MACHINE_LEVEL1_TEMPLATE_TASKS),
   buildStableLevel1SeedSignature(TOS_LEVEL1_TEMPLATE_TASKS),
+  // V9–V14 shipped the five-phase tOS seed without its planning phase.
+  buildStableLevel1SeedSignature(TOS_LEVEL1_TEMPLATE_TASKS
+    .filter(task => !['tos-stage-planning', 'tos-ms-planning-ko', 'tos-ms-cdcp'].includes(task.stableId!))
+    .map(task => ({ ...task, order: task.parentId ? task.order : task.order - 1 }))),
   buildStableLevel1SeedSignature(CAPABILITY_LEVEL1_TEMPLATE_TASKS),
   MACHINE_V8_LEVEL1_STABLE_SIGNATURE,
   TOS_V8_LEVEL1_STABLE_SIGNATURE,
@@ -435,7 +440,7 @@ const isRecognizedLevel1Seed = (tasks: any[]) => {
 
 const LEVEL1_DATE_FIELDS = ['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'] as const
 
-const renumberMigratedLevel1DisplayIds = (tasks: any[]) => {
+const renumberMigratedLevel1DisplayIds = (tasks: any[], sourceIdById: Map<string, string>) => {
   const indexed = tasks.map((task, index) => ({ task: { ...task }, index }))
   const sortSiblings = (items: typeof indexed) => [...items].sort((left, right) => (
     Number(left.task.order) - Number(right.task.order) || left.index - right.index
@@ -450,20 +455,31 @@ const renumberMigratedLevel1DisplayIds = (tasks: any[]) => {
     ])
   })
   const numbered: any[] = []
+  const nextIdBySourceId = new Map<string, string>()
+  const rememberId = (id: string, nextId: string) => {
+    const sourceId = sourceIdById.get(id)
+    if (sourceId) nextIdBySourceId.set(sourceId, nextId)
+  }
   const included = new Set<number>()
   roots.forEach((root, rootIndex) => {
     const rootId = String(rootIndex + 1)
     included.add(root.index)
     numbered.push({ ...root.task, id: rootId })
+    rememberId(root.task.id, rootId)
     sortSiblings(childrenByParent.get(root.task.id) || []).forEach((child, childIndex) => {
       included.add(child.index)
       numbered.push({ ...child.task, id: `${rootId}.${childIndex + 1}`, parentId: rootId })
+      rememberId(child.task.id, `${rootId}.${childIndex + 1}`)
     })
   })
   indexed.filter(item => !included.has(item.index)).forEach(item => {
-    numbered.push({ ...item.task, id: String(numbered.filter(task => !task.parentId).length + 1), parentId: null })
+    const id = String(numbered.filter(task => !task.parentId).length + 1)
+    numbered.push({ ...item.task, id, parentId: null })
+    rememberId(item.task.id, id)
   })
-  return numbered
+  return numbered.map(task => task.predecessor && nextIdBySourceId.has(task.predecessor)
+    ? { ...task, predecessor: nextIdBySourceId.get(task.predecessor) }
+    : task)
 }
 
 /** Conservatively replaces only confirmed shared/default seeds and preserves user-owned arrays. */
@@ -478,14 +494,34 @@ export const migrateLevel1TasksForProjectType = (
   if (!isRecognizedLevel1Seed(input)) return input
 
   const fixedTasks = input.filter(task => task?.source !== 'custom')
+  const compatibilityPlanning = projectType === PROJECT_CATEGORY_TOS_VERSION
+    ? input.find(task => task.source === 'custom' && task.stableId === 'tos-stage-planning'
+      && !task.parentId && task.taskName === '规划阶段')
+    : undefined
   const usedSources = new Set<any>()
+  const sourceIdById = new Map<string, string>()
   const migratedDefaults = defaults.map(defaultTask => {
     const semantic = getStableLevel1Semantic(defaultTask)
     const sourceTask = fixedTasks.find(task => !usedSources.has(task) && task?.stableId === defaultTask.stableId)
       || fixedTasks.find(task => !usedSources.has(task) && getStableLevel1Semantic(task) === semantic)
       || fixedTasks.find(task => !usedSources.has(task) && getNamedLevel1Semantic(task) === semantic)
-    if (!sourceTask) return { ...defaultTask }
+      || (defaultTask.stableId === 'tos-stage-planning' ? compatibilityPlanning : undefined)
+    if (!sourceTask) {
+      const daysBeforeConcept = defaultTask.stableId === 'tos-ms-planning-ko' ? 49
+        : defaultTask.stableId === 'tos-ms-cdcp' ? 21 : 0
+      if (!withMockDates || !daysBeforeConcept) return { ...defaultTask }
+      const concept = fixedTasks.find(task => getLevel1Semantic(task) === 'ms-concept-kickoff')
+      const beforeConcept = (value: unknown) => {
+        if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return ''
+        const date = new Date(`${value}T00:00:00Z`)
+        if (!Number.isFinite(date.getTime())) return ''
+        date.setUTCDate(date.getUTCDate() - daysBeforeConcept)
+        return date.toISOString().slice(0, 10)
+      }
+      return { ...defaultTask, planEndDate: beforeConcept(concept?.planEndDate), actualEndDate: beforeConcept(concept?.actualEndDate) }
+    }
     usedSources.add(sourceTask)
+    sourceIdById.set(defaultTask.id, sourceTask.id)
     const merged = {
       ...defaultTask,
       ...sourceTask,
@@ -506,7 +542,7 @@ export const migrateLevel1TasksForProjectType = (
 
   const targetBySemantic = new Map(migratedDefaults.map(task => [getStableLevel1Semantic(task), task]))
   const sourceById = new Map(input.map(task => [task?.id, task]))
-  const customSourceTasks = input.filter(task => task?.source === 'custom')
+  const customSourceTasks = input.filter(task => task?.source === 'custom' && task !== compatibilityPlanning)
   const customTemporaryIdBySourceId = new Map(customSourceTasks.map((task, index) => [
     task.id,
     `custom-${index}-${task.id}`,
@@ -535,7 +571,7 @@ export const migrateLevel1TasksForProjectType = (
   })
   const customTasks = customSourceTasks.map(task => {
     const parent = sourceById.get(task.parentId)
-    const migratedParent = parent && parent.source !== 'custom' ? getMigratedParent(parent) : undefined
+    const migratedParent = parent && (parent.source !== 'custom' || parent === compatibilityPlanning) ? getMigratedParent(parent) : undefined
     const compatibilityParent = parent ? compatibilityParentsById.get(parent.id) : undefined
     const customParentId = parent?.source === 'custom'
       ? customTemporaryIdBySourceId.get(parent.id)
@@ -547,17 +583,33 @@ export const migrateLevel1TasksForProjectType = (
       ...(migratedParentId ? { parentId: migratedParentId } : {}),
     }
   })
+  customTemporaryIdBySourceId.forEach((temporaryId, sourceId) => sourceIdById.set(temporaryId, sourceId))
+  compatibilityParentsById.forEach((parent, sourceId) => sourceIdById.set(parent.id, sourceId))
   return renumberMigratedLevel1DisplayIds([
     ...migratedDefaults,
     ...compatibilityParentsById.values(),
     ...customTasks,
-  ])
+  ], sourceIdById)
 }
 
 const INITIAL_LEVEL1_PROJECT_TYPES_BY_ID = Object.fromEntries(initialProjects.map(project => [
   String(project.id),
   getProjectTypeFamilyKey(project.type),
 ])) as Record<string, string>
+
+const addTosPlanningPhase = (tasks: unknown, withMockDates: boolean) => {
+  const planningIds = ['tos-stage-planning', 'tos-ms-planning-ko', 'tos-ms-cdcp']
+  if (Array.isArray(tasks) && planningIds.every(id => tasks.some(task => task.stableId === id && task.source === 'template'))) return tasks
+  return migrateLevel1TasksForProjectType(tasks, PROJECT_CATEGORY_TOS_VERSION, withMockDates)
+}
+
+const isTosLevel1Snapshot = (key: string) => {
+  if (/^template::tOS版本项目::level1::[^:]+$/.test(key)) return true
+  const projectType = INITIAL_LEVEL1_PROJECT_TYPES_BY_ID[key.split('::')[1]]
+  if (projectType && projectType !== PROJECT_CATEGORY_TOS_VERSION) return false
+  return /^project::[^:]+::tos-type::[^:]+::level1::[^:]+::snapshot$/.test(key)
+    || (projectType === PROJECT_CATEGORY_TOS_VERSION && /^project::[^:]+::level1::[^:]+$/.test(key))
+}
 
 const RESERVED_NON_MARKET_LEVEL1_SCOPES = new Set(['technical', 'tdt', 'subproject', 'tos-type'])
 
@@ -620,16 +672,21 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     'current' + 'Level3Scope',
   ].forEach(key => delete migrated[key])
   const shouldMigrateFiveStageLevel1 = persistedVersion < 9
+  const shouldAddTosPlanningPhase = persistedVersion < 15
   const shouldMigrateCapabilityLevel1 = persistedVersion < 8
   const shouldBackfillDemoMarkets = persistedVersion < 7
   const standardTemplateTypes = PROJECT_TEMPLATE_TYPES.filter(projectType => projectType !== PROJECT_CATEGORY_TECH)
   const migratedConfigTemplates = { ...(migrated.configTemplateTasksByType || {}) }
   standardTemplateTypes.forEach(projectType => {
-    const shouldMigrateProjectType = projectType === PROJECT_CATEGORY_CAPABILITY
+    const shouldMigrateProjectType = projectType === PROJECT_CATEGORY_TOS_VERSION
+      ? shouldAddTosPlanningPhase
+      : projectType === PROJECT_CATEGORY_CAPABILITY
       ? shouldMigrateCapabilityLevel1
       : shouldMigrateFiveStageLevel1
     if (shouldMigrateProjectType) {
-      migratedConfigTemplates[projectType] = migrateLevel1TasksForProjectType(
+      migratedConfigTemplates[projectType] = projectType === PROJECT_CATEGORY_TOS_VERSION && !shouldMigrateFiveStageLevel1
+        ? addTosPlanningPhase(migratedConfigTemplates[projectType], false)
+        : migrateLevel1TasksForProjectType(
         migratedConfigTemplates[projectType],
         projectType,
         false,
@@ -644,7 +701,8 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
       key,
       shouldMigrateFiveStageLevel1
         ? migratePublishedLevel1Snapshot(key, value, shouldMigrateCapabilityLevel1)
-        : value,
+        : shouldAddTosPlanningPhase && isTosLevel1Snapshot(key)
+          ? addTosPlanningPhase(value, !key.startsWith('template::')) : value,
     ])) as Record<string, any[]>
   const initialPublishedSnapshots = createInitialTemplatePublishedSnapshots()
   Object.entries(initialPublishedSnapshots).forEach(([key, value]) => {
@@ -675,8 +733,8 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
         planData && typeof planData === 'object'
           ? {
               ...planData,
-              level1Tasks: shouldMigrateFiveStageLevel1
-                ? migrateLevel1TasksForProjectType(planData.level1Tasks, PROJECT_CATEGORY_TOS_VERSION, true)
+              level1Tasks: shouldAddTosPlanningPhase
+                ? addTosPlanningPhase(planData.level1Tasks, true)
                 : planData.level1Tasks,
             }
           : planData,
@@ -1044,6 +1102,27 @@ export interface PlanActions {
 }
 
 const initialMrAcceptancePlanScope = createMrAcceptancePlanScopeSeed()
+// Fresh sample formal plans are real project-scoped published snapshots, never a runtime date fallback.
+const initialResourcePublishedSnapshots = Object.fromEntries(VERSION_DATA.filter(version => version.status === '已发布').flatMap(version => [
+  [`project::2::tos-type::Full::level1::${version.id}::snapshot`,
+    buildProjectListMockPlanTasks('2', getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_TOS_VERSION, true), { projectType: PROJECT_CATEGORY_TOS_VERSION, projectName: 'tOS16.1' })],
+  [getProjectLevel1MockSnapshotKey('5', version.id),
+    buildProjectListMockPlanTasks('5', getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_CAPABILITY, true), { projectType: PROJECT_CATEGORY_CAPABILITY, projectName: 'DEMO015_DEMOBOARD015' })],
+]))
+
+const shareHydratedPlanValues = <T,>(previous: T, incoming: T): T => {
+  if (JSON.stringify(previous) === JSON.stringify(incoming)) return previous
+  if (!previous || !incoming || typeof previous !== 'object' || typeof incoming !== 'object') return incoming
+  if (Array.isArray(incoming)) return Array.isArray(previous)
+    ? incoming.map((value, index) => shareHydratedPlanValues(previous[index], value)) as T
+    : incoming
+  if (Array.isArray(previous)) return incoming
+  return Object.fromEntries(Object.entries(incoming).map(([key, value]) => [
+    key, shareHydratedPlanValues((previous as Record<string, unknown>)[key], value),
+  ])) as T
+}
+
+let planStoreHasHydrated = false
 
 export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get) => ({
   // Config-center plan
@@ -1092,6 +1171,7 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   publishedSnapshots: {
     ...createInitialTemplatePublishedSnapshots(),
     ...initialMrAcceptancePlanScope.publishedSnapshots,
+    ...initialResourcePublishedSnapshots,
   },
   configTemplateTasksByType: createInitialConfigTemplateTasks(),
   configTemplateVersionScopes: createInitialConfigTemplateVersionScopes(),
@@ -1238,6 +1318,33 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   version: PLAN_STORE_VERSION,
   storage: createJSONStorage(() => pmsLocalStorage),
   migrate: migratePlanStoreState,
+  merge: (persisted, current) => {
+    const merged = { ...current, ...(persisted as Partial<PlanState>) }
+    if (!planStoreHasHydrated) return merged
+    const hasVersion = (versions: readonly { id: string }[], id: string) => versions.some(version => version.id === id)
+    const preserveScopedSelections = (local: Record<string, string>, incoming: Record<string, string>, scopedVersions: Record<string, readonly { id: string }[]>) => ({
+      ...incoming,
+      ...Object.fromEntries(Object.entries(local).filter(([scope, id]) => hasVersion(scopedVersions[scope] ?? merged.versions, id))),
+    })
+    // A different tab may publish plan data, but its version picker is not navigation here.
+    if (hasVersion(merged.versions, current.currentVersion)) merged.currentVersion = current.currentVersion
+    merged.marketCurrentVersionByKey = preserveScopedSelections(current.marketCurrentVersionByKey, merged.marketCurrentVersionByKey, merged.marketVersionsByKey)
+    merged.tosTypeCurrentVersionByKey = preserveScopedSelections(current.tosTypeCurrentVersionByKey, merged.tosTypeCurrentVersionByKey, merged.tosTypeVersionsByKey)
+    merged.configTemplateVersionScopes = Object.fromEntries(Object.entries(merged.configTemplateVersionScopes).map(([scope, incoming]) => {
+      const selected = current.configTemplateVersionScopes[scope]?.currentVersion
+      return [scope, selected && hasVersion(incoming.versions, selected) ? { ...incoming, currentVersion: selected } : incoming]
+    }))
+    merged.configTemplateCompareScopes = Object.fromEntries(Object.entries(merged.configTemplateCompareScopes).map(([scope, incoming]) => {
+      const local = current.configTemplateCompareScopes[scope]
+      const versions = merged.configTemplateVersionScopes[scope]?.versions ?? merged.versions
+      return [scope, !local ? incoming : {
+        versionA: hasVersion(versions, local.versionA) ? local.versionA : incoming.versionA,
+        versionB: hasVersion(versions, local.versionB) ? local.versionB : incoming.versionB,
+      }]
+    }))
+    return shareHydratedPlanValues(current, merged)
+  },
+  onRehydrateStorage: () => state => { if (state) planStoreHasHydrated = true },
   partialize: state => ({
     versions: state.versions,
     currentVersion: state.currentVersion,

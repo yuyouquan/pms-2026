@@ -6,7 +6,7 @@ export const HR_MODEL_STATISTIC_PHASES = [
   { key: 'developmentPhase', label: '开发阶段' },
   { key: 'validationPhase', label: '验证阶段' },
   { key: 'launchPhase', label: '上市阶段' },
-  { key: 'lifecycle', label: '生命周期' },
+  { key: 'lifecycle', label: '生命周期阶段' },
 ] as const
 
 type HrModelPhase = typeof HR_MODEL_STATISTIC_PHASES[number]['key']

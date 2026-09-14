@@ -1,12 +1,16 @@
 'use client'
 
+import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
+
+import { canEditHrInScope } from '@/lib/hrProjectRegistry'
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { isLatestHrVersion } from '@/lib/hrVersionRules'
 import { Modal, Table, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import * as XLSX from 'xlsx'
-import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import { CAPABILITY_BUDGET_TYPE_LABELS, formatPersonMonth } from '@/constants/hrCapability'
 import type { CapabilityDepartmentInvestment } from '@/types/hrCapability'
 import { exportSheet } from '@/utils/exportExcel'
@@ -38,7 +42,8 @@ export default function VersionDetailModal({
     if (!v) return { project: null, version: null }
     return { project: p, version: v }
   }, [projects, projectId, versionId])
-  const readOnly = requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
+  const scopeId = useHrResourceScope()
+  const readOnly = !canEditHrInScope(project, scopeId) || requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
   const versionRef = useRef(version)
   versionRef.current = version
 
@@ -137,6 +142,7 @@ export default function VersionDetailModal({
   const handleOk = () => {
     if (!project || !version || readOnly) return
     updateVersionDepartmentInvestments(project.id, version.id, editData)
+    onCancel()
     message.success('部门预估投入已更新')
   }
 
@@ -263,6 +269,8 @@ export default function VersionDetailModal({
           style={{ marginBottom: 12 }}
           title={`预估投入合计：${formatPersonMonth(editTotal)}`}
         />
+
+        <HrVersionMilestoneDetails category="capability" values={version} />
 
         {/* 操作按钮 */}
         {!readOnly && (

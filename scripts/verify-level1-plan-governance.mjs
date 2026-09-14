@@ -471,6 +471,9 @@ const tosTemplateTasks = rules.buildLevel1TasksForProjectType('tOS版本项目',
 assert.deepEqual(
   describeTemplate(tosTemplateTasks),
   [
+    ['tos-stage-planning', null, '规划阶段', 'stage'],
+    ['tos-ms-planning-ko', 'tos-stage-planning', '规划KO', 'fixed-milestone'],
+    ['tos-ms-cdcp', 'tos-stage-planning', 'CDCP', 'fixed-milestone'],
     ['tos-stage-concept', null, '概念阶段', 'stage'],
     ['tos-ms-concept-kickoff', 'tos-stage-concept', '概念启动', 'fixed-milestone'],
     ['tos-ms-str1', 'tos-stage-concept', 'STR1', 'fixed-milestone'],
@@ -486,7 +489,7 @@ assert.deepEqual(
   ],
   'tOS templates keep explicit stable IDs, parent links, names, and node kinds',
 )
-assert.equal(tosTemplateTasks.some(task => ['规划阶段', '规划KO', 'CDCP'].includes(task.taskName)), false, 'tOS V9 templates remove every legacy planning node')
+assert.equal(tosTemplateTasks.filter(task => ['规划阶段', '规划KO', 'CDCP'].includes(task.taskName)).length, 3, 'tOS templates include the planning phase and its two fixed milestones')
 assert.equal(
   tosTemplateTasks.some(task => ['上市迭代阶段', '维护阶段'].includes(task.taskName)
     && tosTemplateTasks.some(child => child.parentId === task.id)),
@@ -1566,7 +1569,7 @@ const secondDefaultTosTasks = plan.getDefaultLevel1TasksForProjectType('tOS版�
 assert.notStrictEqual(firstDefaultTosTasks, secondDefaultTosTasks, 'default level-one tasks clone the array on every call')
 assert.notStrictEqual(firstDefaultTosTasks[0], secondDefaultTosTasks[0], 'default level-one tasks clone every task on every call')
 firstDefaultTosTasks[0].taskName = '仅修改副本'
-assert.equal(secondDefaultTosTasks[0].taskName, '概念阶段', 'mutating a returned default never contaminates later callers')
+assert.equal(secondDefaultTosTasks[0].taskName, '规划阶段', 'mutating a returned default never contaminates later callers')
 
 const rootNames = tasks => tasks.filter(task => !task.parentId).map(task => task.taskName)
 assert.deepEqual(
@@ -1576,7 +1579,7 @@ assert.deepEqual(
 )
 assert.deepEqual(
   rootNames(plan.getDefaultLevel1TasksForProjectType('tOS版本项目', false)),
-  ['概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
+  ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
   'tOS defaults use the approved stages',
 )
 assert.deepEqual(
@@ -1692,8 +1695,8 @@ assert.deepEqual(persistedV8FiveStageInput, persistedV8FiveStageInputCopy, 'V8 t
 assert.deepEqual(rootNames(migratedV9.tasks), ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'], 'root tasks migrate from machine V8 to V9')
 assert.deepEqual(
   rootNames(migratedV9.configTemplateTasksByType['tOS版本项目'].filter(task => task.source === 'template')),
-  ['概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
-  'tOS configuration template migrates to five governed stages while compatibility roots remain user-owned',
+  ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
+  'tOS configuration templates include the planning phase while preserving custom children',
 )
 assert.equal(migratedV9.marketPlanData.OP.marker, 'market-v8', 'market V8 sibling metadata survives V9 migration')
 assert.equal(migratedV9.tosTypePlanDataByProjectId['2'].Full.marker, 'tos-type-v8', 'tOS type V8 sibling metadata survives V9 migration')
@@ -1712,8 +1715,8 @@ const migratedTosCustom = migratedTosConfig.find(task => task.stableId === 'cust
 const migratedTosCompatParent = migratedTosConfig.find(task => task.id === migratedTosCustom.parentId)
 assert.deepEqual(
   [migratedTosCustom.ownerMemo, migratedTosCustom.planStartDate, migratedTosCompatParent.taskName, migratedTosCompatParent.source],
-  ['必须保留', '2032-01-01', '规划阶段', 'custom'],
-  'custom children under a removed tOS stage keep data and a compatible custom parent',
+  ['必须保留', '2032-01-01', '规划阶段', 'template'],
+  'custom children keep data under the restored tOS planning phase',
 )
 const migratedTosConfigAgain = plan.migrateLevel1TasksForProjectType(migratedTosConfig, 'tOS版本项目', true)
 assert.deepEqual(migratedTosConfigAgain, migratedTosConfig, 'direct tOS task migration remains idempotent after creating a compatibility parent')

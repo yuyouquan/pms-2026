@@ -248,8 +248,7 @@ assert.match(handleSubmitBlock, /finally \{[\s\S]*setSubmitting\(false\)/)
 assert.doesNotMatch(addProjectSubmitBlock, /onCancel\(\)/)
 assert.doesNotMatch(addProjectSubmitBlock, /setActiveModule|setProjectSpaceModule|项目创建成功/)
 assertOrdered(addProjectAfterCreateBlock, [
-  "setProjectSpaceModule('basic')",
-  "enterProjectSpace({ module: 'projectList' })",
+  'openProjectConfiguration()',
   "message.success('项目创建成功')",
 ], 'post-create callback must own navigation and success feedback')
 assert.match(addProjectModalSource, /onAfterCreate={handleAfterCreate}/)

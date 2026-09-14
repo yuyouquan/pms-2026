@@ -13,15 +13,20 @@ export type ProjectStatus = 'active' | 'cancelled' | 'paused'
 export interface TosMilestoneNodes {
   /** 规划KO */
   planningKO: string | null
+  /** CDCP（旧版本可能未填写） */
+  cdcp?: string | null
   /** 概念启动 */
   conceptStart: string | null
   /** STR1 */
   str1: string | null
+  str2?: string | null
   /** STR3 */
   str3: string | null
+  str4?: string | null
+  str4a?: string | null
   /** STR5 */
   str5: string | null
-  /** 上市迭代 */
+  /** 上市迭代结束 */
   marketIteration: string | null
   /** 维护结束 */
   maintenanceEnd: string | null
@@ -118,6 +123,9 @@ export interface HrTosVersion {
 
 /** tOS 项目 */
 export interface HrTosProject {
+  pmsProjectId?: string
+  migrationIssue?: string
+  legacyHrSnapshot?: unknown
   id: string
   /** 项目名称 */
   name: string
@@ -166,6 +174,8 @@ export interface TosMonthlyInvestment {
   monthlyData: Record<string, number>
   /** 是否已手动编辑 */
   isEdited: boolean
+  /** Removed source rows remain archived for manual-data restoration, excluded from active totals. */
+  isArchived?: boolean
 }
 
 /** 项目列表筛选器 */
@@ -191,6 +201,7 @@ export interface TosNewProjectForm {
 
 /** 新建版本表单 */
 export interface TosNewVersionForm {
+  milestones?: Partial<TosMilestoneNodes>
   budgetType: BudgetType
   departmentInvestments: TosDepartmentInvestment[]
 }

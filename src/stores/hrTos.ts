@@ -1,5 +1,7 @@
+import { useProjectStore } from '@/stores/project'
+import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
-import { appendHrMockProjects, createAdditionalTosProjects } from '@/mock/hrInvestment'
+import { appendHrMockProjects, createAdditionalTosProjects, createResourceTosProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
@@ -34,177 +36,24 @@ import {
 function emptyTosMilestones(): TosMilestoneNodes {
   return {
     planningKO: null,
+    cdcp: null,
     conceptStart: null,
     str1: null,
+    str2: null,
     str3: null,
+    str4: null,
+    str4a: null,
     str5: null,
     marketIteration: null,
     maintenanceEnd: null,
   }
 }
 
-/** 阶段分配比例（归一化） */
-const TOS_MOCK_PHASE_RATIOS = [0.15, 0.15, 0.2, 0.25, 0.15, 0.1]
-
-/**
- * 生成 mock 部门预估投入列表。
- * 不依赖配置中心，直接按比例分配到各部门各阶段。
- */
-function createMockDepartmentInvestments(
-  projectId: string,
-  budgetType: BudgetType,
-  total: number,
-): TosDepartmentInvestment[] {
-  const mockDepartments = [
-    { primary: '研发部', secondary: '软件部', ratio: 0.4 },
-    { primary: '研发部', secondary: '硬件部', ratio: 0.3 },
-    { primary: '市场部', secondary: '产品部', ratio: 0.2 },
-    { primary: '质量部', secondary: '测试部', ratio: 0.1 },
-  ]
-  return mockDepartments.map((d, idx) => {
-    const deptTotal = Math.round(total * d.ratio * 10) / 10
-    const phaseValues = TOS_MOCK_PHASE_RATIOS.map(r =>
-      Math.round(deptTotal * r * 10) / 10,
-    )
-    return {
-      id: `di-mock-${projectId}-${budgetType}-${idx}`,
-      primaryDepartment: d.primary,
-      secondaryDepartment: d.secondary,
-      estimatedInvestment: deptTotal,
-      planningPhase: phaseValues[0],
-      conceptPhase: phaseValues[1],
-      planningPhase2: phaseValues[2],
-      developmentValidationPhase: phaseValues[3],
-      marketIterationPhase: phaseValues[4],
-      maintenancePhase: phaseValues[5],
-    } as TosDepartmentInvestment
-  })
-}
-
-/**
- * 从部门投入列表计算预估投入合计（各阶段之和）。
- */
 function sumDepartmentInvestments(items: TosDepartmentInvestment[]): number {
-  return Math.round(
-    items.reduce((sum, d) => sum + (Number(d.estimatedInvestment) || 0), 0) * 10,
-  ) / 10
+  return Math.round(items.reduce((sum, item) => sum + (Number(item.estimatedInvestment) || 0), 0) * 10) / 10
 }
 
-/**
- * 为指定项目创建 mock 版本数据。
- */
-function createMockVersions(
-  projectId: string,
-  investments: { annual: number; projectEstimate: number; projectBudget: number },
-  dateOffsets?: { planningKO: string; marketIteration: string; maintenanceEnd: string },
-  lockConfig?: { annual?: boolean; projectEstimate?: boolean; projectBudget?: boolean },
-  extraVersions?: { budgetType: BudgetType; count: number }[],
-): HrTosVersion[] {
-  const milestones: TosMilestoneNodes = {
-    planningKO: dateOffsets?.planningKO ?? '2026-01-02',
-    conceptStart: '2026-02-15',
-    str1: '2026-04-15',
-    str3: '2026-06-20',
-    str5: '2026-09-15',
-    marketIteration: dateOffsets?.marketIteration ?? '2026-11-30',
-    maintenanceEnd: dateOffsets?.maintenanceEnd ?? '2027-02-28',
-  }
-  const baseDate = milestones.planningKO!
-  const versions: HrTosVersion[] = []
-
-  // 年度预算
-  const annualExtra = extraVersions?.find(v => v.budgetType === 'annual')?.count ?? 0
-  for (let i = 1; i <= 1 + annualExtra; i++) {
-    const isLocked = i === 1 + annualExtra ? (lockConfig?.annual ?? false) : true
-    versions.push({
-      id: `${projectId}-annual-v0${i}`,
-      projectId,
-      budgetType: 'annual',
-      versionNumber: `V0.${i}`,
-      lockState: isLocked ? 'locked' : 'unlocked',
-      majorVersion: 0,
-      minorVersion: i,
-      createdBy: '当前用户',
-      estimatedInvestment: investments.annual,
-      milestones: { ...milestones },
-      departmentInvestments: createMockDepartmentInvestments(
-        projectId,
-        'annual',
-        investments.annual,
-      ),
-      createdAt: baseDate,
-      lockedAt: isLocked ? '2026-01-10' : null,
-      operationLogs: [
-        makeLog('created', `创建年度预算版本 V0.${i}`),
-        ...(isLocked ? [makeLog('locked', '版本锁定')] : []),
-      ],
-    })
-  }
-
-  // 项目概算
-  const estimateExtra = extraVersions?.find(v => v.budgetType === 'projectEstimate')?.count ?? 0
-  for (let i = 1; i <= 1 + estimateExtra; i++) {
-    const isLocked = i === 1 + estimateExtra ? (lockConfig?.projectEstimate ?? false) : true
-    versions.push({
-      id: `${projectId}-estimate-v0${i}`,
-      projectId,
-      budgetType: 'projectEstimate',
-      versionNumber: `V0.${i}`,
-      lockState: isLocked ? 'locked' : 'unlocked',
-      majorVersion: 0,
-      minorVersion: i,
-      createdBy: '当前用户',
-      estimatedInvestment: investments.projectEstimate,
-      milestones: { ...milestones },
-      departmentInvestments: createMockDepartmentInvestments(
-        projectId,
-        'projectEstimate',
-        investments.projectEstimate,
-      ),
-      createdAt: baseDate,
-      lockedAt: isLocked ? '2026-01-12' : null,
-      operationLogs: [
-        makeLog('created', `创建项目概算版本 V0.${i}`),
-        ...(isLocked ? [makeLog('locked', '版本锁定')] : []),
-      ],
-    })
-  }
-
-  // 项目预算
-  const budgetExtra = extraVersions?.find(v => v.budgetType === 'projectBudget')?.count ?? 0
-  for (let i = 1; i <= 1 + budgetExtra; i++) {
-    const isLocked = i === 1 + budgetExtra ? (lockConfig?.projectBudget ?? false) : true
-    versions.push({
-      id: `${projectId}-budget-v0${i}`,
-      projectId,
-      budgetType: 'projectBudget',
-      versionNumber: `V0.${i}`,
-      lockState: isLocked ? 'locked' : 'unlocked',
-      majorVersion: 0,
-      minorVersion: i,
-      createdBy: '当前用户',
-      estimatedInvestment: investments.projectBudget,
-      milestones: { ...milestones },
-      departmentInvestments: createMockDepartmentInvestments(
-        projectId,
-        'projectBudget',
-        investments.projectBudget,
-      ),
-      createdAt: baseDate,
-      lockedAt: isLocked ? '2026-01-15' : null,
-      operationLogs: [
-        makeLog('created', `创建项目预算版本 V0.${i}`),
-        ...(isLocked ? [makeLog('locked', '版本锁定')] : []),
-      ],
-    })
-  }
-
-  return versions
-}
-
-/**
- * 使用配置中心数据，按部门拆分版本月度预估投入。
- */
+/** Generate monthly rows from each version's department values. */
 function generateDepartmentMonthlyRecords(
   projectId: string,
   version: HrTosVersion,
@@ -230,73 +79,8 @@ function generateDepartmentMonthlyRecords(
   }))
 }
 
-const MOCK_PROJECTS: HrTosProject[] = [
-  {
-    id: 'tp-tos1',
-    name: 'tOS-平台架构升级',
-    projectTarget: '构建高性能、可扩展的tOS平台架构，支持多产品线复用',
-    ipmProjectCode: 'IPM-TOS-001',
-    ipmProjectName: 'tOS-平台V1.0',
-    status: 'active',
-    annualBudget: 0,
-    projectEstimate: 0,
-    projectBudget: 0,
-    projectAccounting: 0,
-    versions: createMockVersions(
-      'tp-tos1',
-      { annual: 120, projectEstimate: 120, projectBudget: 120 },
-      { planningKO: '2026-01-15', marketIteration: '2026-11-30', maintenanceEnd: '2027-02-28' },
-      { annual: false, projectEstimate: false, projectBudget: false },
-    ),
-    createdAt: '2026-01-15',
-  },
-  {
-    id: 'tp-tos2',
-    name: 'tOS-组件库建设',
-    projectTarget: '建设统一组件库，提升研发效率和复用率',
-    ipmProjectCode: 'IPM-TOS-003',
-    ipmProjectName: 'tOS-组件库',
-    status: 'active',
-    annualBudget: 0,
-    projectEstimate: 0,
-    projectBudget: 0,
-    projectAccounting: 0,
-    versions: createMockVersions(
-      'tp-tos2',
-      { annual: 80, projectEstimate: 80, projectBudget: 80 },
-      { planningKO: '2026-02-01', marketIteration: '2026-10-15', maintenanceEnd: '2027-01-15' },
-      { annual: true, projectEstimate: false, projectBudget: false },
-    ),
-    createdAt: '2026-02-01',
-  },
-  {
-    id: 'tp-tos3',
-    name: 'tOS-安全加固',
-    projectTarget: '提升系统安全防护能力，满足合规要求',
-    ipmProjectCode: null,
-    ipmProjectName: null,
-    status: 'active',
-    annualBudget: 0,
-    projectEstimate: 0,
-    projectBudget: 0,
-    projectAccounting: 0,
-    versions: createMockVersions(
-      'tp-tos3',
-      { annual: 60, projectEstimate: 60, projectBudget: 60 },
-      { planningKO: '2026-03-01', marketIteration: '2026-09-30', maintenanceEnd: '2026-12-31' },
-      { annual: false, projectEstimate: false, projectBudget: false },
-    ),
-    createdAt: '2026-03-01',
-  },
-]
-
-/**
- * 为所有项目生成月度预估投入数据。
- */
-
-
 const ADDITIONAL_PROJECTS = createAdditionalTosProjects(getHrFormalProjectOptions('tos'))
-const INITIAL_PROJECTS = [...MOCK_PROJECTS, ...ADDITIONAL_PROJECTS]
+const INITIAL_PROJECTS = createResourceTosProjects()
 
 /* ── Helpers ────────────────────────────────────────────────────────── */
 
@@ -304,7 +88,7 @@ const INITIAL_PROJECTS = [...MOCK_PROJECTS, ...ADDITIONAL_PROJECTS]
 function makeLog(
   operation: TosVersionOperationType,
   description: string,
-  operator: string = '张明',
+  operator: string = useProjectStore.getState().currentLoginUser,
 ): TosVersionOperationLog {
   return {
     id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -351,6 +135,7 @@ function syncMonthlyInvestments(projects: HrTosProject[], existingMonthly: TosMo
 export type TosTab = 'projectList' | 'monthlyInvestment' | 'historyVersion'
 
 export interface HrTosState {
+  registryMigrationComplete: boolean
   projects: HrTosProject[]
   monthlyInvestments: TosMonthlyInvestment[]
   selectedProjectId: string | null
@@ -434,8 +219,9 @@ const ALL_BUDGET_TYPES: BudgetType[] = ['annual', 'projectEstimate', 'projectBud
 export const useHrTosStore = create<HrTosState & HrTosActions>()(
   persist(
     (set, get) => ({
+      registryMigrationComplete: false,
       projects: synchronizeProjects(INITIAL_PROJECTS),
-      monthlyInvestments: syncMonthlyInvestments(INITIAL_PROJECTS, []),
+      monthlyInvestments: seedResourceMonthlyEdits(syncMonthlyInvestments(INITIAL_PROJECTS, [])),
       selectedProjectId: null,
       activeTab: 'projectList',
       filters: { ...DEFAULT_TOS_PROJECT_FILTERS },
@@ -468,69 +254,28 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       setEditingMonthlyId: (id) => set({ editingMonthlyId: id }),
       setEditingVersionId: (id) => set({ editingVersionId: id }),
 
-      addProject: (form) => set((s) => {
-        const newProject: HrTosProject = {
-          id: `tp-${Date.now()}`,
-          name: form.name,
-          projectTarget: form.projectTarget,
-          ipmProjectCode: null,
-          ipmProjectName: null,
-          status: 'active',
-          annualBudget: 0,
-          projectEstimate: 0,
-          projectBudget: 0,
-          projectAccounting: 0,
-          versions: [],
-          createdAt: new Date().toISOString(),
-        }
-        const newProjects = [...s.projects, newProject]
-        return {
-          projects: synchronizeProjects(newProjects),
-          showNewProjectModal: false,
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
-        }
-      }),
+      addProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
-      deleteProject: (projectId) => set((s) => {
-        const newProjects = s.projects.filter(p => p.id !== projectId)
-        return {
-          projects: synchronizeProjects(newProjects),
-          selectedProjectId: null,
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
-        }
-      }),
+      deleteProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
       cancelProject: (projectId) => set((s) => ({
         projects: s.projects.map(p =>
-          p.id === projectId ? { ...p, status: 'cancelled' as const } : p,
+          p.id === projectId && canAccessHrProject(p, true) ? { ...p, status: 'cancelled' as const } : p,
         ),
       })),
 
       restoreProject: (projectId) => set((s) => ({
         projects: s.projects.map(p =>
-          p.id === projectId ? { ...p, status: 'active' as const } : p,
+          p.id === projectId && canAccessHrProject(p, true) ? { ...p, status: 'active' as const } : p,
         ),
       })),
 
-      bindIpmProject: (projectId, ipmCode) => set((s) => {
-        const ipmProject = getHrFormalProjectOptions('tos').find(p => p.code === ipmCode)
-        if (!ipmProject) return s
-        const newProjects = synchronizeProjects(s.projects.map(p => p.id === projectId
-          ? { ...p, ipmProjectCode: ipmProject.code, ipmProjectName: ipmProject.name } : p))
-        return { projects: newProjects, monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments) }
-      }),
+      bindIpmProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
       addVersion: (projectId, form) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const project = s.projects.find(p => p.id === projectId)
         if (!project || !canCreateHrVersion(project, form.budgetType)) return s
-
-        // IPM 校验
-        if (
-          (form.budgetType === 'projectEstimate' || form.budgetType === 'projectBudget') &&
-          !project.ipmProjectCode
-        ) {
-          return s
-        }
 
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
@@ -538,9 +283,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
           const latest = getHrVersionSeed(p.versions, form.budgetType)
           const minorVersion = nextHrMinorVersion(p.versions, form.budgetType)
 
-          const milestones: TosMilestoneNodes = latest
-            ? { ...latest.milestones }
-            : emptyTosMilestones()
+          const milestones: TosMilestoneNodes = { ...(latest?.milestones ?? emptyTosMilestones()), ...form.milestones }
 
           const newVersion: HrTosVersion = {
             id: `${projectId}-${form.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -551,7 +294,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             lockState: 'unlocked',
             majorVersion: 0,
             minorVersion,
-            createdBy: '当前用户',
+            createdBy: useProjectStore.getState().currentLoginUser,
             estimatedInvestment: sumDepartmentInvestments(form.departmentInvestments),
             milestones,
             departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
@@ -572,6 +315,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
       deleteVersion: (projectId, versionId) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.filter(v => v.id !== versionId)
@@ -579,12 +323,13 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         })
         return {
           projects: synchronizeProjects(newProjects),
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
+          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments.filter(row => row.versionId !== versionId)),
         }
       }),
 
 
       copyVersion: (projectId, versionId) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const project = s.projects.find(p => p.id === projectId)
         if (!project) return s
         const sourceVersion = project.versions.find(v => v.id === versionId)
@@ -594,7 +339,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
         const newVersion: HrTosVersion = {
           ...sourceVersion,
-          createdBy: '当前用户',
+          createdBy: useProjectStore.getState().currentLoginUser,
           id: `${projectId}-${sourceVersion.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           versionNumber: `V0.${minorVersion}`,
             batch: null,
@@ -636,6 +381,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
       updateVersion: (projectId, versionId, updates) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
@@ -672,6 +418,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
       updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments) => set((s) => {
+        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         // 计算所有部门预估投入合计
         const newEstimatedTotal = departmentInvestments.reduce(
           (sum, d) => sum + (Number(d.estimatedInvestment) || 0), 0,
@@ -702,15 +449,16 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
       refreshFormalProjects: () => set((s) => {
-        const projects = synchronizeProjects(s.projects)
-        const monthlyInvestments = syncMonthlyInvestments(projects, s.monthlyInvestments)
-        if (JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return s
-        return { projects, monthlyInvestments }
+        const reconciled = reconcileHrRegistry(s.projects, s.monthlyInvestments, 'tos', s.registryMigrationComplete)
+        const projects = synchronizeProjects(reconciled.projects)
+        const monthlyInvestments = syncMonthlyInvestments(projects, reconciled.monthlyInvestments)
+        if (s.registryMigrationComplete && JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return s
+        return { projects, monthlyInvestments, registryMigrationComplete: true }
       }),
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId
+          mi.id === monthlyId && !mi.isArchived && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),
@@ -734,7 +482,8 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
     {
       name: 'pms-hr-tos',
       merge: (persisted, current) => {
-        const merged = { ...current, ...(persisted as Partial<typeof current>) }
+        const saved = (persisted ?? {}) as Partial<typeof current>
+        const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
         const projects = synchronizeProjects(merged.projects)
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },

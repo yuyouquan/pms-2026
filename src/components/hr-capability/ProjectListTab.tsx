@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Card, Table, Button, Tooltip, Tag, Space, Select, Popover, App, Input } from 'antd'
 import { DownloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import {
   formatPersonMonth,
   formatPercent,
@@ -21,61 +21,8 @@ interface ProjectListTabProps {
 }
 
 /** IPM 编码单元格：可点击弹出绑定弹框 */
-function IpmCodeCell({ project }: { project: HrCapabilityProject }) {
-  const { message } = App.useApp()
-  const bindIpmProject = useHrCapabilityStore((s) => s.bindIpmProject)
-  const [open, setOpen] = useState(false)
-  const formalProjects = useProjectStore(s => s.projects)
-  const formalProjectOptions = useMemo(() => getHrFormalProjectOptions('capability', formalProjects), [formalProjects])
-
-  const handleSelect = (code: string) => {
-    const ipmProject = formalProjectOptions.find((p) => p.code === code)
-    if (ipmProject) {
-      bindIpmProject(project.id, ipmProject.code, ipmProject.name)
-      message.success(`已绑定 ${ipmProject.code} - ${ipmProject.name}`)
-      setOpen(false)
-    }
-  }
-
-  const content = (
-    <div onClick={e => e.stopPropagation()} style={{ width: 320 }}>
-      <Select
-        style={{ width: '100%' }}
-        value={project.ipmProjectCode ?? undefined}
-        placeholder="选择正式项目编码"
-        showSearch
-        optionFilterProp="label"
-        options={formalProjectOptions.map((p) => ({
-          label: `${p.code} - ${p.name}`,
-          value: p.code,
-        }))}
-        onChange={handleSelect}
-      />
-    </div>
-  )
-
-  if (project.ipmProjectCode) {
-    return (
-      <Popover content={content} trigger="click" open={open} onOpenChange={setOpen}>
-        <span onClick={e => e.stopPropagation()} style={{ cursor: 'pointer', color: 'var(--pms-brand-strong)' }}>
-          <Tooltip title={project.ipmProjectName ?? ''}>
-            <Space size={2}>
-              <LinkOutlined style={{ fontSize: 12 }} />
-              <span>{project.ipmProjectCode}</span>
-            </Space>
-          </Tooltip>
-        </span>
-      </Popover>
-    )
-  }
-
-  return (
-    <Popover content={content} trigger="click" open={open} onOpenChange={setOpen}>
-      <Button type="dashed" size="small" icon={<LinkOutlined />} onClick={e => e.stopPropagation()}>
-        绑定IPM
-      </Button>
-    </Popover>
-  )
+function IpmCodeCell({ record }: { record: HrCapabilityProject; bindIpmProject?: (...args: string[]) => void }) {
+  return <div><span>{record.ipmProjectCode || '—'}</span>{record.migrationIssue && <div>{record.migrationIssue}</div>}</div>
 }
 
 export default function ProjectListTab({ onSelectProject, onNewProject }: ProjectListTabProps) {
@@ -87,7 +34,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
   const [searchText, setSearchText] = useState('')
 
   const projectNameOptions = useMemo(
-    () => projects.map((p) => ({ label: p.name, value: p.name })),
+    () => projects.map((p) => ({ label: p.name, value: p.id })),
     [projects],
   )
 
@@ -95,7 +42,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
     const keyword = searchText.trim().toLowerCase()
     return projects
       .filter((p) => {
-        if (filters.projectName.length > 0 && !filters.projectName.includes(p.name)) return false
+        if (filters.projectName.length > 0 && !filters.projectName.includes(p.id) && !filters.projectName.includes(p.name)) return false
         if (keyword && !p.name.toLowerCase().includes(keyword)) return false
         return true
       })
@@ -146,7 +93,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       fixed: 'left',
       width: 140,
       render: (_value: unknown, record: typeof dataSource[number]) => (
-        <IpmCodeCell project={record} />
+        <IpmCodeCell record={record} />
       ),
     },
     {

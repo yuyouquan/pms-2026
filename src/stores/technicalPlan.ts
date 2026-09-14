@@ -436,6 +436,8 @@ const zustandActions = (set: (value: Partial<TechnicalPlanState> | ((state: Tech
   setCollapsed: (scope, ids) => { const key = getTechnicalPlanKey(scope); const item = get().plansByKey[key]; if (item) set({ plansByKey: { ...get().plansByKey, [key]: { ...item, collapsedRows: [...ids] } } }) },
 })
 
+let technicalPlanStoreHasHydrated = false
+
 export const useTechnicalPlanStore = create<TechnicalPlanState & TechnicalPlanActions>()(persist(
   (set, get) => ({ plansByKey: initializePlans(INITIAL_TECHNICAL_PLANS), ...zustandActions(set, get) }),
   {
@@ -443,7 +445,25 @@ export const useTechnicalPlanStore = create<TechnicalPlanState & TechnicalPlanAc
     version: TECHNICAL_PLAN_STORE_VERSION,
     storage: createJSONStorage(() => pmsLocalStorage),
     migrate: migrateTechnicalPlanState,
-    merge: (persisted, current) => ({ ...current, ...migrateTechnicalPlanState(persisted, TECHNICAL_PLAN_STORE_VERSION) }),
+    merge: (persisted, current) => {
+      const migrated = migrateTechnicalPlanState(persisted, TECHNICAL_PLAN_STORE_VERSION)
+      if (!technicalPlanStoreHasHydrated) return { ...current, ...migrated }
+      const plansByKey = Object.fromEntries(Object.entries(migrated.plansByKey).map(([key, incoming]) => {
+        const local = current.plansByKey[key]
+        if (!local) return [key, incoming]
+        const merged = {
+          ...incoming,
+          currentVersionId: incoming.versions.some(version => version.id === local.currentVersionId)
+            ? local.currentVersionId : incoming.currentVersionId,
+          columnSettings: local.columnSettings,
+          collapsedRows: local.collapsedRows,
+          versions: JSON.stringify(incoming.versions) === JSON.stringify(local.versions) ? local.versions : incoming.versions,
+        }
+        return [key, JSON.stringify(merged) === JSON.stringify(local) ? local : merged]
+      }))
+      return { ...current, plansByKey: JSON.stringify(plansByKey) === JSON.stringify(current.plansByKey) ? current.plansByKey : plansByKey }
+    },
+    onRehydrateStorage: () => state => { if (state) technicalPlanStoreHasHydrated = true },
     partialize: state => ({ plansByKey: state.plansByKey }),
   },
 ))

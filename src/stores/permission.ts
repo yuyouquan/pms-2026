@@ -1,10 +1,10 @@
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import { PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
-import { initialProjects } from '@/data/projects'
+import { GLOBAL_PERM_OPTIONS, PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
+import { ESTABLISHED_FORMAL_PROJECT_IDS, initialProjects } from '@/data/projects'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
-import { PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
 
 export const TECHNICAL_TEAM_PERMISSION_MAPPING = {
@@ -60,12 +60,23 @@ const getProjectTeamMembers = (project: RoleProject, field: string): string[] =>
   return normalizeRoleMembers(project.responsiblePersons ?? project.leader)
 }
 
+export const hasDerivedMachineResponsibilityRoles = (project: RoleProject): boolean => (
+  project.type === PROJECT_CATEGORY_MACHINE && Boolean(project.createdBy) && !ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)
+)
+
 export const getFixedProjectRoles = (project: RoleProject): Role[] => {
   const mapping = project.type === PROJECT_CATEGORY_TECH
     ? TECHNICAL_TEAM_PERMISSION_MAPPING
     : project.type === PROJECT_TYPE_TOS_VERSION
       ? TOS_TEAM_PERMISSION_MAPPING
       : null
+  if (project.createdBy && !ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)) {
+    const responsible = normalizeRoleMembers(project.responsiblePersons)
+    const team = mapping ? Object.entries(mapping).map(([name, field]) => ({ name, members: getProjectTeamMembers(project, field), isFixed: true }))
+      : buildDefaultRoles().filter(role => role.name !== '系统管理员').map(role => ({ ...role, members: [] as string[] }))
+    if (project.type === PROJECT_CATEGORY_MACHINE) team.push({ name: 'SPM', members: responsible, isFixed: true })
+    return [...team, { name: '系统管理员', members: responsible, isFixed: true }]
+  }
   if (!mapping) return buildDefaultRoles()
   return Object.entries(mapping).map(([name, field]) => ({
     name,
@@ -219,7 +230,7 @@ function buildDefaultRolePermissions(): Record<string, Record<string, boolean>> 
 
 function buildPermissionsForRoles(roles: readonly Role[]): Record<string, Record<string, boolean>> {
   return Object.fromEntries(roles.map(role => {
-    const managerRole = role.name === '技术项目负责人' || role.name === '版本项目经理'
+    const managerRole = role.name === '技术项目负责人' || role.name === '版本项目经理' || role.name === 'SPM'
     const source = managerRole
       ? PROJECT_PERMISSION_PRESETS['项目经理']
       : PROJECT_PERMISSION_PRESETS[role.name] || ['basicInfo:查看']
@@ -229,11 +240,19 @@ function buildPermissionsForRoles(roles: readonly Role[]): Record<string, Record
 
 function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = []): Role[] {
   const fixed = getFixedProjectRoles(project)
-  if (project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
+  if (hasDerivedMachineResponsibilityRoles(project)) {
+    const derived = new Set(['SPM', '系统管理员'])
+    const expectedNames = new Set(fixed.map(role => role.name))
+    return [
+      ...fixed.map(role => derived.has(role.name) ? role : existing.find(item => item.name === role.name) || role),
+      ...existing.filter(role => !expectedNames.has(role.name)),
+    ]
+  }
+  if ((!project.createdBy || ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)) && project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
   return [...fixed, ...existing.filter(role => !role.isFixed)]
 }
 
-type PersistedPermissionState = Pick<PermissionState, 'rolesByProject' | 'rolePermissionsByProject'>
+type PersistedPermissionState = Pick<PermissionState, 'rolesByProject' | 'rolePermissionsByProject'> & Partial<Pick<PermissionState, 'globalRoles' | 'globalRolePerms'>>
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -279,6 +298,21 @@ const sanitizeRolePermissionsByProject = (value: unknown): Record<string, Record
   }))
 }
 
+/** A missing model grant inherits once; explicit grants remain independent. */
+export function initializeHrModelPermissions(permissions: Record<string, Record<string, boolean>>) {
+  return Object.fromEntries(Object.entries(permissions).map(([role, grants]) => [role, {
+    ...grants, 'configCenter:hrModelEdit': grants['configCenter:hrModelEdit'] ?? grants['configCenter:planEdit'] === true,
+  }]))
+}
+
+const sanitizeGlobalPermissions = (value: unknown) => {
+  if (!isRecord(value)) return undefined
+  const keys = new Set(GLOBAL_PERM_OPTIONS.map(item => item.key))
+  return initializeHrModelPermissions(Object.fromEntries(Object.entries(value).flatMap(([role, grants]) => (
+    role.trim() && isRecord(grants) ? [[role.trim(), Object.fromEntries(Object.entries(grants).filter(([key, enabled]) => keys.has(key) && typeof enabled === 'boolean')) as Record<string, boolean>]] : []
+  ))))
+}
+
 export function migratePermissionState(persistedState: unknown, version: number): PersistedPermissionState {
   if (!isRecord(persistedState)) return { rolesByProject: {}, rolePermissionsByProject: {} }
   const rolesByProject = sanitizeRolesByProject(persistedState.rolesByProject)
@@ -286,6 +320,8 @@ export function migratePermissionState(persistedState: unknown, version: number)
     rolesByProject['1'] = withProjectSpecificMockMembers('1', rolesByProject['1'])
   }
   return {
+    ...(Array.isArray(persistedState.globalRoles) ? { globalRoles: sanitizeRolesByProject({ global: persistedState.globalRoles }).global ?? [] } : {}),
+    ...(isRecord(persistedState.globalRolePerms) ? { globalRolePerms: sanitizeGlobalPermissions(persistedState.globalRolePerms) } : {}),
     rolesByProject,
     rolePermissionsByProject: sanitizeRolePermissionsByProject(persistedState.rolePermissionsByProject),
   }
@@ -293,6 +329,8 @@ export function migratePermissionState(persistedState: unknown, version: number)
 
 export function partializePermissionState(state: PermissionState & PermissionActions): PersistedPermissionState {
   return {
+    globalRoles: state.globalRoles,
+    globalRolePerms: state.globalRolePerms,
     rolesByProject: state.rolesByProject,
     rolePermissionsByProject: state.rolePermissionsByProject,
   }
@@ -336,7 +374,7 @@ function buildInitialPerProject(): {
   const rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>> = {}
   initialProjects.forEach(p => {
     const responsiblePersons = getProjectResponsiblePersons(p)
-    const specialRoles = p.type === PROJECT_CATEGORY_TECH || p.type === PROJECT_TYPE_TOS_VERSION
+    const specialRoles = !ESTABLISHED_FORMAL_PROJECT_IDS.has(p.id) || p.type === PROJECT_CATEGORY_TECH || p.type === PROJECT_TYPE_TOS_VERSION
     const baseRoles = specialRoles
       ? mergeProjectRoles(p as unknown as RoleProject)
       : buildDefaultRoles().map(role => (
@@ -441,9 +479,9 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     { name: '查看组', members: ['演示用户05', '演示用户06', '演示用户08'], isFixed: true },
   ],
   globalRolePerms: {
-    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'configCenter:enumEdit': true, 'permissionCenter:manageRoles': true },
-    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
-    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
+    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:hrModelEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'configCenter:enumEdit': true, 'permissionCenter:manageRoles': true },
+    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:hrModelEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
+    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:hrModelEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
   },
   globalPermTab: 'roles',
   showGlobalAddRole: false,
@@ -527,7 +565,7 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
 
   // Global setters
   setGlobalRoles: (v) => set((s) => ({ globalRoles: typeof v === 'function' ? v(s.globalRoles) : v })),
-  setGlobalRolePerms: (v) => set((s) => ({ globalRolePerms: typeof v === 'function' ? v(s.globalRolePerms) : v })),
+  setGlobalRolePerms: (v) => set((s) => ({ globalRolePerms: initializeHrModelPermissions(typeof v === 'function' ? v(s.globalRolePerms) : v) })),
   setGlobalPermTab: (v) => set({ globalPermTab: v }),
   setShowGlobalAddRole: (v) => set({ showGlobalAddRole: v }),
   setGlobalNewRoleName: (v) => set({ globalNewRoleName: v }),
@@ -544,6 +582,8 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     const migrated = migratePermissionState(persistedState, PERMISSION_STORAGE_VERSION)
     return {
       ...currentState,
+      globalRoles: migrated.globalRoles ?? currentState.globalRoles,
+      globalRolePerms: initializeHrModelPermissions(migrated.globalRolePerms ?? currentState.globalRolePerms),
       rolesByProject: { ...currentState.rolesByProject, ...migrated.rolesByProject },
       rolePermissionsByProject: {
         ...currentState.rolePermissionsByProject,

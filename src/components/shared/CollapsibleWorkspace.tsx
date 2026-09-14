@@ -40,7 +40,7 @@ export function CollapsibleSidebarShell({
       aria-label={ariaLabel}
       style={style}
     >
-      {!collapsed && <div className="pms-collapsible-sidebar__title">{title}</div>}
+      {!collapsed && title && <div className="pms-collapsible-sidebar__title">{title}</div>}
       <div className="pms-collapsible-sidebar__content">{children}</div>
       <Tooltip title={collapsed ? '展开侧栏' : '收起侧栏'} placement="right">
         <Button

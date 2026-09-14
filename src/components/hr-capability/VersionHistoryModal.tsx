@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { Modal, Tag, Timeline, Empty } from 'antd'
-import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import {
   CAPABILITY_BUDGET_TYPE_LABELS,
   CAPABILITY_BUDGET_TYPE_COLORS,

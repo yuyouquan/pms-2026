@@ -298,8 +298,8 @@ assert.match(projectSpaceSource, /['"]clear-stale['"][\s\S]*consumeMrPlanNavigat
 assert.doesNotMatch(machineMrVersionPlanSource, /templateVersions|DEFAULT_MR_TEMPLATE_ACTIVITIES/)
 
 // Joint project space: navigation, real source aggregation, stable editable grid and validation UI.
-assert.ok(headerSource.indexOf('项目列表') < headerSource.indexOf('联合项目空间'))
-assert.ok(headerSource.indexOf('联合项目空间') < headerSource.indexOf('tOS路标'))
+assert.ok(headerSource.indexOf('项目管理') < headerSource.indexOf('项目组合管理'))
+assert.ok(headerSource.indexOf('项目组合管理') < headerSource.indexOf('tOS路标'))
 assert.match(uiSource, /\| ['"]jointProjectSpace['"]/)
 assert.match(pageSource, /activeModule === ['"]jointProjectSpace['"]/)
 assert.match(jointContainerSource, /tOS&整机1\+N项目计划/)

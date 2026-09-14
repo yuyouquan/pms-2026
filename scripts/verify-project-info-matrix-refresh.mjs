@@ -1,3 +1,4 @@
+import { loadTypeScriptModule, resolveTypeScriptModule } from './lib/typescript-module-loader.mjs'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
@@ -95,7 +96,7 @@ assert.equal(JSON.stringify(keysFor(machineFields, 'basic')), JSON.stringify([
 ]), 'machine basic field order must match the reference document')
 assert.equal(JSON.stringify(keysFor(machineFields, 'extended')), JSON.stringify([
   'chipCode', 'chipModel', 'chipPlatform', 'memorySize', 'startingRam', 'isTwoStage',
-  'isOutsourcedMini', 'jiraProjects', 'baselineName', 'wholeMachinePd', 'pcbaSheet',
+  'isOutsourcedMini', 'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects', 'baselineName', 'wholeMachinePd', 'pcbaSheet',
   'shippingCountrySheet', 'keyComponentsSheet',
 ]), 'machine extended field order must match the reference document')
 assert.equal(JSON.stringify(keysFor(machineFields, 'team')), JSON.stringify([
@@ -106,12 +107,12 @@ assert.equal(JSON.stringify(keysFor(machineFields, 'team')), JSON.stringify([
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.required)), JSON.stringify([
   'currentTosVersion', 'versionType', 'softwareProjectLevel', 'isFirstLaunchProject',
   'productSeries', 'developmentMode', 'systemType', 'kernelVersion', 'chipCode',
-  'chipModel', 'chipPlatform', 'memorySize', 'isTwoStage', 'machineSpm',
+  'chipModel', 'chipPlatform', 'memorySize', 'isTwoStage', 'fanTrialEnabled', 'fanTrialCountries', 'machineSpm',
 ]), 'machine overall required fields must match the reference document')
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.requiredOnCreate)), JSON.stringify([
   'versionType', 'softwareProjectLevel', 'isFirstLaunchProject', 'productSeries',
   'developmentMode', 'systemType', 'kernelVersion', 'chipCode', 'memorySize',
-  'isTwoStage', 'machineSpm',
+  'isTwoStage', 'fanTrialEnabled', 'fanTrialCountries', 'machineSpm',
 ]), 'machine create-required fields must match the reference document')
 assert.equal(JSON.stringify(keysWhere(machineFields, field => field.defaultVisible)), JSON.stringify([
   'currentTosVersion', 'versionType', 'softwareProjectLevel', 'isFirstLaunchProject',
@@ -119,7 +120,7 @@ assert.equal(JSON.stringify(keysWhere(machineFields, field => field.defaultVisib
   'systemType', 'kernelVersion', 'androidMajorUpgrade', 'modelCategory',
   'productionForbiddenDate', 'confidentialityLevel', 'chipCode', 'chipModel',
   'chipPlatform', 'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini',
-  'jiraProjects', 'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
+  'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects', 'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
   'machineQualityRepresentative', 'machineDevelopmentRepresentative',
   'machineTestRepresentative', 'machineOther',
 ]), 'machine default-visible fields must match the reference document')
@@ -149,7 +150,7 @@ const projectInfoValuesModule = evaluateTypeScriptModule(
   id => {
     if (id === '@/constants/projectInfoSchema') return { isExternalMachineDevelopment: () => false }
     if (id === '@/constants/projectTypes') return { isMachineProjectType: type => type === '整机产品-手机' }
-    throw new Error(`Unexpected project-info values module: ${id}`)
+    return loadTypeScriptModule(resolveTypeScriptModule(id))
   },
 )
 const projectInfoRulesModule = evaluateTypeScriptModule(
@@ -181,6 +182,7 @@ const projectInfoRulesModule = evaluateTypeScriptModule(
     if (id === '@/lib/jiraProject') {
       return { validateJiraProjectRows: () => [] }
     }
+    if (id === '@/lib/fanTrial') return loadTypeScriptModule(resolveTypeScriptModule(id))
     throw new Error(`Unexpected project-info rules module: ${id}`)
   },
 )

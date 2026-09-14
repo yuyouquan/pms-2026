@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { HTMLAttributes } from 'react'
 import {
   App,
@@ -19,11 +19,10 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import {
   ENUM_DEFINITIONS,
-  ENUM_TYPE_KEYS,
   formatEnumCellValue,
   getEnumRowSummary,
 } from '@/lib/enumValues'
@@ -38,14 +37,11 @@ import type {
   EnumTypeKey,
 } from '@/types/enums'
 import { useOverlayInteraction } from '@/hooks/useOverlayInteraction'
-import { ConfigWorkspaceShell } from '@/components/shared/CollapsibleWorkspace'
 
 type ModalMode = 'add' | 'edit'
 type DraftValues = Partial<Record<EnumFieldKey, string>>
 
 interface EnumConfigProps {
-  collapsed: boolean
-  onCollapsedChange: (collapsed: boolean) => void
   currentLoginUser: string
 }
 
@@ -84,14 +80,11 @@ function resultMessage(result: EnumActionResult): string {
 }
 
 export default function EnumConfig({
-  collapsed,
-  onCollapsedChange,
   currentLoginUser,
 }: EnumConfigProps) {
   const { message, modal } = App.useApp()
   const rowsByType = useEnumStore(state => state.rowsByType)
   const selectedType = useEnumStore(state => state.selectedType)
-  const setSelectedType = useEnumStore(state => state.setSelectedType)
   const addEnumRow = useEnumStore(state => state.addEnumRow)
   const updateEnumRow = useEnumStore(state => state.updateEnumRow)
   const deleteEnumRow = useEnumStore(state => state.deleteEnumRow)
@@ -104,7 +97,6 @@ export default function EnumConfig({
   const canEditRef = useRef(canEditEnums)
   canEditRef.current = canEditEnums
   const editorTriggerRef = useRef<HTMLElement | null>(null)
-  const [searchText, setSearchText] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editorType, setEditorType] = useState<EnumTypeKey | null>(null)
   const [modalMode, setModalMode] = useState<ModalMode>('add')
@@ -124,13 +116,6 @@ export default function EnumConfig({
   const selectedDefinition = ENUM_DEFINITIONS[selectedType]
   const editorDefinition = editorType ? ENUM_DEFINITIONS[editorType] : null
   const rows = rowsByType[selectedType] as EnumRow[]
-  const filteredTypes = useMemo(() => {
-    const query = searchText.trim()
-    return ENUM_TYPE_KEYS.filter(type => {
-      const definition = ENUM_DEFINITIONS[type]
-      return !query || definition.label.includes(query)
-    })
-  }, [searchText])
 
   const setDraftField = (field: EnumFieldKey, value: string) => {
     setDraft(previous => ({ ...previous, [field]: value }))
@@ -148,6 +133,7 @@ export default function EnumConfig({
     try {
       if (typeof CSS === 'undefined' || typeof CSS.escape !== 'function') return null
       return document.querySelector<HTMLElement>(`[data-testid="enum-type-${CSS.escape(type)}"]`)
+        ?.closest<HTMLElement>('[role="menuitem"]') ?? null
     } catch {
       return null
     }
@@ -593,15 +579,7 @@ export default function EnumConfig({
   }
 
   return (
-    <div className="pms-enum-workspace-shell">
-      <ConfigWorkspaceShell
-        collapsed={collapsed}
-        onCollapsedChange={onCollapsedChange}
-        expandedWidth={288}
-        title="配置项（24）"
-        ariaLabel="枚举配置项"
-        className="pms-enum-sidebar"
-        content={(
+    <>
           <Card className="pms-enum-values-card pms-config-workspace-card pms-solid-surface">
             {saveErrorAlert}
             <div className="pms-enum-table-header">
@@ -646,46 +624,7 @@ export default function EnumConfig({
               }}
             />
           </Card>
-        )}
-      >
-        {!collapsed && (
-          <Input
-            className="pms-enum-search"
-            allowClear
-            prefix={<SearchOutlined />}
-            value={searchText}
-            placeholder="搜索配置项"
-            aria-label="搜索配置项名称"
-            onChange={event => setSearchText(event.target.value)}
-          />
-        )}
-        <div className="pms-enum-type-list">
-          {filteredTypes.map(type => {
-            const definition = ENUM_DEFINITIONS[type]
-            const active = type === selectedType
-            return (
-              <button
-                key={type}
-                type="button"
-                data-testid={`enum-type-${type}`}
-                className={`pms-enum-type-item${active ? ' pms-enum-type-item--active' : ''}`}
-                aria-current={active ? 'page' : undefined}
-                aria-label={`${definition.label}，${rowsByType[type].length} 条`}
-                title={collapsed ? definition.label : undefined}
-                onClick={() => setSelectedType(type)}
-              >
-                <span className="pms-enum-type-copy">{definition.label}</span>
-                <span className="pms-enum-type-count">{rowsByType[type].length}</span>
-              </button>
-            )
-          })}
-          {filteredTypes.length === 0 && !collapsed && (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到配置项" />
-          )}
-        </div>
-      </ConfigWorkspaceShell>
-
       {editorModal}
-    </div>
+    </>
   )
 }

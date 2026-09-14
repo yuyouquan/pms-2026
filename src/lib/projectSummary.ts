@@ -49,7 +49,7 @@ export function getProjectListFieldDefinitions(
   templateTasks: readonly ProjectListTemplateTask[],
   projectType: string,
 ): ProjectSummaryFieldDefinition[] {
-  const optionalFields = getProjectInfoFields(projectType).map(field => ({
+  const optionalFields = getProjectInfoFields(projectType).filter(field => field.key !== 'fanTrialCountries').map(field => ({
     key: field.key,
     label: field.label,
     defaultVisible: field.defaultVisible,
@@ -398,6 +398,9 @@ export function buildProjectSummaryRow(
   )
   const row: ProjectSummaryRow = {
     key: project.id,
+    __jiraProjects: getProjectInfoValue(project, 'jiraProjects'),
+    __fanTrialEnabled: getProjectInfoValue(project, 'fanTrialEnabled'),
+    __fanTrialCountries: getProjectInfoValue(project, 'fanTrialCountries'),
     projectId: project.id,
     projectName: project.name,
     secondaryCategory: String(project.secondaryCategory || '-'),

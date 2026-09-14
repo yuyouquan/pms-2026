@@ -25,6 +25,7 @@ export type ProjectInfoInputType =
   | 'date'
   | 'boolean'
   | 'jira'
+  | 'fanTrial'
   | 'textarea'
   | 'deliverable'
 
@@ -116,6 +117,8 @@ export const MACHINE_PROJECT_INFO_FIELDS: ProjectInfoFieldDefinition[] = defineF
   { key: 'startingRam', label: '起步RAM', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: true, hideable: false, readOnly: true },
   { key: 'isTwoStage', label: '是否二段式', group: 'extended', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: yesNo, visibleWhen: isExternalMachineDevelopment, conditionalHint: '外研或 ODC 项目时显示' },
   { key: 'isOutsourcedMini', label: '是否外研Mini版本', group: 'extended', inputType: 'boolean', requiredOnCreate: false, defaultVisible: true, hideable: false, options: yesNo, visibleWhen: isExternalMachineDevelopment, conditionalHint: '外研或 ODC 项目时显示' },
+  { key: 'fanTrialEnabled', label: '是否粉丝试用', group: 'extended', inputType: 'boolean', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, options: yesNo },
+  { key: 'fanTrialCountries', label: '粉丝试用国家', group: 'extended', inputType: 'fanTrial', required: true, requiredOnCreate: true, defaultVisible: true, hideable: false, visibleWhen: values => values.fanTrialEnabled === '是' },
   { key: 'jiraProjects', label: 'JIRA项目', group: 'extended', inputType: 'jira', requiredOnCreate: false, defaultVisible: true, hideable: false },
   { key: 'baselineName', label: '基线名称', group: 'extended', inputType: 'text', requiredOnCreate: false, defaultVisible: false, hideable: true, readOnly: true },
   { key: 'wholeMachinePd', label: '整机PD', group: 'extended', inputType: 'link', requiredOnCreate: false, defaultVisible: false, hideable: true, placeholder: '请输入链接或 Excel 文件地址' },
@@ -156,7 +159,7 @@ export const MACHINE_PROJECT_CREATE_FIELD_KEYS = [
   'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'androidMajorUpgrade',
   'modelCategory', 'confidentialityLevel', 'chipCode', 'chipModel', 'chipPlatform',
   'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'wholeMachinePd',
-  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'jiraProjects',
+  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects',
   'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
   'machineQualityRepresentative', 'machineDevelopmentRepresentative',
   'machineTestRepresentative', 'machineOther',
@@ -193,7 +196,7 @@ export const MACHINE_PROJECT_SPACE_INFO_FIELD_KEYS = [
   'keyComponentsSheet', 'machineSpm', 'machineSpp', 'machineCmo',
   'machineSoftwareSe', 'machineQualityRepresentative',
   'machineDevelopmentRepresentative', 'machineTestRepresentative', 'machineOther',
-  'jiraProjects',
+  'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects',
 ] as const
 
 export const MACHINE_PROJECT_SPACE_INFO_FIELDS = pickOrderedFields(
@@ -251,7 +254,7 @@ const TECHNICAL_PROJECT_TEAM_INFO_FIELDS = defineFields(TECHNICAL_TEAM_FIELDS.ma
   key: field.key,
   label: field.label,
   group: 'team' as const,
-  inputType: 'person' as const,
+  inputType: field.key === 'technicalLead' ? 'people' as const : 'person' as const,
   required: field.required,
   requiredOnCreate: field.required,
   defaultVisible: true,

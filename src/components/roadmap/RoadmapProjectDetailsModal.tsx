@@ -39,7 +39,7 @@ export default function RoadmapProjectDetailsModal({
 }: RoadmapProjectDetailsModalProps) {
   const version = row ? versions.find(candidate => candidate.id === row.firstSaleTosVersionId) : null
   const title = row
-    ? `${row.marketName || '—'}（${buildRoadmapDisplayName(row.projectCode, row.androidVersion, row.productType)}）`
+    ? `${row.marketName || '—'}（${row.source === 'planned' ? row.displayName : buildRoadmapDisplayName(row.projectCode, row.androidVersion, row.productType)}）`
     : ''
   const details = row ? [
     ['tOS版本', version ? formatTosVersionDisplay(version) : '—'],
@@ -50,7 +50,8 @@ export default function RoadmapProjectDetailsModal({
     ['产品线', row.productLine],
     ['产品系列', row.productSeries],
     ['市场名', row.marketName],
-    ['项目名', row.projectCode],
+    ['项目名', row.displayName],
+    ['项目编码', row.projectCode],
     ['产品类型', row.productType],
     ['芯片编码', row.chipCode],
     ['起步RAM', row.startRam],

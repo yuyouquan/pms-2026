@@ -1,10 +1,18 @@
 'use client'
 
+import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachineBudget, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
+
+import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
+import type { ProjectItem } from '@/types/app'
+import { changedManualInfoValues, resolveManualCompletionResponsibility, validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
+import { getMissingProjectInfoFields } from '@/lib/projectInfoCompletion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
+import { FanTrialCountryEditor } from '@/components/project-info/FanTrialCountries'
+import { readFanTrialRows, validateFanTrial } from '@/lib/fanTrial'
 import { JiraProjectEditor } from '@/components/project-info/JiraProjectEditor'
 import TechnicalProjectCreateFields from '@/components/technical-project/TechnicalProjectCreateFields'
 import {
@@ -187,7 +195,14 @@ export default function ProjectInfoModal({
   onSubmit,
   onAfterCreate,
 }: ProjectInfoModalProps) {
+  const manualCompletion = mode === 'edit' && Boolean(project && !isFormalProject(project as unknown as ProjectItem))
+  const missingSavedFields = mode === 'edit' && project && getProjectAttribute(project as unknown as ProjectItem) !== 'budget' ? getMissingProjectInfoFields(project as unknown as ProjectItem) : []
+  const boundMachineMetadataReadonly = Boolean(project && isBoundMachineBudget(project as unknown as ProjectItem))
+  const followedMetadata = project ? withBoundMachineBudgetMetadata(project as unknown as ProjectItem, existingProjects as unknown as ProjectItem[]) : undefined
   const [form] = Form.useForm<ProjectInfoFormState>()
+  useEffect(() => {
+    if (open && boundMachineMetadataReadonly) form.setFieldsValue({ brand: followedMetadata?.brand || '', productLine: followedMetadata?.productLine || '', marketName: followedMetadata?.marketName || '' })
+  }, [open, boundMachineMetadataReadonly, followedMetadata?.brand, followedMetadata?.productLine, followedMetadata?.marketName, form])
   const { message: messageApi, modal: modalApi } = App.useApp()
   const rowsByType = useEnumStore(state => state.rowsByType)
   const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
@@ -211,6 +226,7 @@ export default function ProjectInfoModal({
   const createDraftSessionGenerationRef = useRef(0)
   const currentCreateDraftSessionRef = useRef<ProjectCreationDraftSession | null>(null)
   const editHydrationKeyRef = useRef('')
+  const manualInitialValuesRef = useRef<ProjectInfoValues>({})
   const createDraftContextRef = useRef({ open, mode, ownerId: draftOwnerId || '' })
   createDraftContextRef.current = { open, mode, ownerId: draftOwnerId || '' }
   const watchedValues = (Form.useWatch([], { form, preserve: true }) || {}) as ProjectInfoFormState
@@ -233,20 +249,30 @@ export default function ProjectInfoModal({
     || projectType === PROJECT_CATEGORY_TECH
     || projectType === PROJECT_CATEGORY_CAPABILITY
     || projectType === PROJECT_TYPE_TOS_VERSION
-  const fields = useMemo(() => getProjectInfoModalFields(projectType), [projectType])
+  const completionFields = (definitions: ProjectInfoFieldDefinition[]) => manualCompletion
+    ? definitions.map(field => ({ ...field, required: field.key.startsWith('fanTrial'), requiredOnCreate: field.key.startsWith('fanTrial'),
+        readOnly: ['projectModel', 'projectName', 'chipModel', 'chipPlatform', 'firstLaunchProjectChips', 'applicableBrands', 'applicableProductLines', 'applicableChipPlatforms', 'newProductProjectList', 'legacyProductProjectList'].includes(field.key),
+      }))
+    : definitions
+  const fields = useMemo(() => {
+    const base = getProjectInfoModalFields(projectType)
+    const manualExtra = manualCompletion && isMachineProjectType(projectType)
+      ? getProjectInfoFields(projectType).filter(field => field.key !== 'projectModel' && !base.some(item => item.key === field.key)) : []
+    return completionFields([...base, ...manualExtra])
+  }, [projectType, manualCompletion])
   const createFields = useMemo(() => getProjectInfoCreateFields(projectType), [projectType])
   const technicalCreateFields = useMemo(
     () => isTechnicalProject ? createFields : [],
     [createFields, isTechnicalProject],
   )
   const technicalGroupedFields = useMemo(
-    () => isTechnicalProject ? getProjectInfoGroupedFields(projectType) : [],
-    [isTechnicalProject, projectType],
+    () => isTechnicalProject ? completionFields(getProjectInfoGroupedFields(projectType)) : [],
+    [isTechnicalProject, projectType, manualCompletion],
   )
   const editableFields = useMemo(() => fields.filter(field => !field.readOnly), [fields])
   const groups = useMemo(() => getProjectInfoModalGroups(projectType), [projectType])
   const firstLaunchOptions = useMemo(() => existingProjects
-    .filter(item => isMachineProjectType(item.type))
+    .filter(item => isFormalProject(item as unknown as ProjectItem) && isMachineProjectType(item.type))
     .map(item => ({ label: item.name, value: item.id })), [existingProjects])
   const secondaryCategoryOptions = useMemo(() => {
     const values = PROJECT_SECONDARY_CATEGORIES[
@@ -434,24 +460,29 @@ export default function ProjectInfoModal({
       infoValues = { ...storedInfoValues, ...aggregateResult.values }
       setAggregateWarnings(aggregateResult.missingSources)
     }
+    const metadataProject = withBoundMachineBudgetMetadata(editingProject as unknown as ProjectItem, hydrationExistingProjects as unknown as ProjectItem[])
     const initialValues: ProjectInfoFormState = {
       ...infoValues,
+      ...(manualCompletion ? Object.fromEntries(['brand', 'productLine', 'marketName', 'str5Date', 'launchDate', 'str5Estimated', 'launchEstimated', 'remark'].map(key => [key, editingProject[key]])) : {}),
       projectName: editingProject.name,
       type: normalizedProjectType,
       secondaryCategory: normalizedProjectType === PROJECT_CATEGORY_MACHINE
-        ? classification.secondaryCategory || ''
+        ? manualCompletion ? String(editingProject.secondaryCategory || '') : classification.secondaryCategory || ''
         : normalizedProjectType === PROJECT_CATEGORY_TECH
           ? String(editingProject.fieldValues?.ipmProjectType || editingProject.ipmProjectType || editingProject.secondaryCategory || '')
           : '',
       responsiblePersons: hydrationResponsiblePersons,
-      healthStatus: typeof editingProject.healthStatus === 'string' ? editingProject.healthStatus : '',
+      healthStatus: manualCompletion
+        ? ({ normal: '正常', attention: '关注', risk: '风险' } as Record<string, string>)[String(editingProject.healthStatus)] || String(editingProject.healthStatus || '')
+        : typeof editingProject.healthStatus === 'string' ? editingProject.healthStatus : '',
       status: typeof editingProject.status === 'string' ? editingProject.status : '',
       currentNode: typeof editingProject.currentNode === 'string' ? editingProject.currentNode : '',
       cancelPauseDate: typeof editingProject.cancelPauseDate === 'string' ? editingProject.cancelPauseDate : '',
-      marketName: typeof editingProject.marketName === 'string' ? editingProject.marketName : '',
-      brand: typeof editingProject.brand === 'string' ? editingProject.brand : '',
-      productLine: typeof editingProject.productLine === 'string' ? editingProject.productLine : '',
+      marketName: typeof metadataProject.marketName === 'string' ? metadataProject.marketName : '',
+      brand: typeof metadataProject.brand === 'string' ? metadataProject.brand : '',
+      productLine: typeof metadataProject.productLine === 'string' ? metadataProject.productLine : '',
     }
+    manualInitialValuesRef.current = JSON.parse(JSON.stringify(initialValues))
     form.setFieldsValue(initialValues)
     const nextActiveGroups = projectFields.length
       ? getDefaultActiveProjectInfoGroups(normalizedProjectType)
@@ -695,7 +726,7 @@ export default function ProjectInfoModal({
   const watchedFirstSaleTosVersion = String(watchedValues.firstSaleTosVersion || '')
 
   useEffect(() => {
-    if (!open || !isMachineProjectType(projectType) || !machineProjectName) {
+    if (manualCompletion || !open || !isMachineProjectType(projectType) || !machineProjectName) {
       setMachineFamilyError('')
       return
     }
@@ -715,7 +746,7 @@ export default function ProjectInfoModal({
         firstSaleTosVersionId: normalizedFirstSale,
         firstSaleTosVersion: normalizedFirstSale,
       }
-      const resolution = resolveMachineTosUpdate(existingProjects, candidate)
+      const resolution = resolveMachineTosUpdate(existingProjects.filter(item => isFormalProject(item as unknown as ProjectItem)), candidate)
       if (!resolution.ok) {
         setMachineFamilyError(resolution.reason === 'duplicate-new-product'
           ? '已存在项目名完全相同的新品项目，不能重复创建或保存'
@@ -734,7 +765,7 @@ export default function ProjectInfoModal({
 
     const familyName = normalizeMachineFamilyName(machineProjectName)
     const matchingNewProjects = existingProjects.filter(item => {
-      if (item.id === project?.id || !isMachineProjectType(item.type)) return false
+      if (item.id === project?.id || !isFormalProject(item as unknown as ProjectItem) || !isMachineProjectType(item.type)) return false
       const values = buildProjectInfoValues(item, ['productType'])
       return values.productType === '新品'
         && normalizeMachineFamilyName(item.name) === familyName
@@ -752,7 +783,7 @@ export default function ProjectInfoModal({
       normalizeTosSnapshot(inheritedValues.firstSaleTosVersion),
     )
     setMachineFamilyError('')
-  }, [existingProjects, form, isLegacyMachine, machineProjectName, mode, open, project?.id, projectType, watchedFirstSaleTosVersion])
+  }, [existingProjects, form, isLegacyMachine, machineProjectName, manualCompletion, mode, open, project?.id, projectType, watchedFirstSaleTosVersion])
 
   const persistCreateDraft = useCallback(async (session: ProjectCreationDraftSession) => {
     if (draftReadStatusRef.current !== 'ready' || !isCurrentCreateDraftSession(session)) return
@@ -965,17 +996,27 @@ export default function ProjectInfoModal({
               || project?.fieldValues?.ipmProjectType,
           })
       : ''
-    if (!normalizedProjectType || (normalizedProjectType === PROJECT_CATEGORY_MACHINE && !projectSecondaryCategory)) {
+    if (!normalizedProjectType || (!manualCompletion && normalizedProjectType === PROJECT_CATEGORY_MACHINE && !projectSecondaryCategory)) {
       messageApi.error(normalizedProjectType === PROJECT_CATEGORY_MACHINE ? '项目分类和项目二级分类均为必填项' : '项目分类为必填项')
       return
     }
     const rawInfoValues = normalizedProjectType === PROJECT_CATEGORY_TECH
       ? normalizeTechnicalProjectValues(values as Record<string, unknown>) as ProjectInfoValues
       : getProjectInfoModalSubmitValues(normalizedProjectType, values)
-    const infoValues = normalizeProjectInfoModalSubmitValues(rawInfoValues)
+    let infoValues = normalizeProjectInfoModalSubmitValues({ ...rawInfoValues,
+      ...(manualCompletion ? Object.fromEntries(['brand', 'productLine', 'marketName', 'androidVersion', 'productType', 'str5Date', 'launchDate', 'str5Estimated', 'launchEstimated', 'remark'].filter(key => values[key] !== undefined).map(key => [key, values[key]])) : {}),
+    })
+    if (boundMachineMetadataReadonly) for (const key of MACHINE_BUDGET_METADATA_KEYS) delete infoValues[key]
+    if (manualCompletion && project) {
+      const error = validateManualProjectCompletion({ ...project, ...infoValues, secondaryCategory: projectSecondaryCategory,
+        developMode: infoValues.developmentMode, firstSaleTosVersion: infoValues.firstSaleTosVersion,
+        fieldValues: { ...project.fieldValues, ...infoValues },
+      } as unknown as ProjectItem, project as unknown as ProjectItem, rowsByType)
+      if (error) { messageApi.error(error); return }
+    }
     const canonicalJiraProjectErrors = validateJiraProjectRows(infoValues.jiraProjects)
     setJiraProjectErrors(canonicalJiraProjectErrors)
-    if (normalizedProjectType === PROJECT_CATEGORY_TECH) {
+    if (normalizedProjectType === PROJECT_CATEGORY_TECH && !manualCompletion) {
       try {
         validateTechnicalProject({
           ...infoValues,
@@ -1020,7 +1061,7 @@ export default function ProjectInfoModal({
       messageApi.error(machineFamilyError)
       return
     }
-    const editableFieldKeys = new Set(editableFields.map(field => field.key))
+    const editableFieldKeys = new Set(editableFields.filter(field => !manualCompletion || (infoValues[field.key] !== undefined && infoValues[field.key] !== '' && (!Array.isArray(infoValues[field.key]) || (infoValues[field.key] as unknown[]).length))).map(field => field.key))
     const editableErrors = validateProjectInfoValues(
       normalizedProjectType,
       infoValues,
@@ -1048,17 +1089,18 @@ export default function ProjectInfoModal({
       messageApi.error('未找到项目名称')
       return
     }
+    if (manualCompletion) infoValues = changedManualInfoValues(infoValues, manualInitialValuesRef.current)
+    const formResponsible = Array.isArray(values.responsiblePersons) ? values.responsiblePersons : []
+    const nextResponsiblePersons = manualCompletion
+      ? resolveManualCompletionResponsibility(normalizedProjectType, infoValues, formResponsible, (manualInitialValuesRef.current.responsiblePersons || []) as string[], responsiblePersons)
+      : deriveProjectResponsiblePersons(normalizedProjectType, infoValues, formResponsible)
     cancelDraftSave()
       const submitResult = await onSubmit({
         bid: values.bid,
         projectName,
         projectType: normalizedProjectType,
         projectSecondaryCategory,
-        responsiblePersons: deriveProjectResponsiblePersons(
-          normalizedProjectType,
-          infoValues,
-          Array.isArray(values.responsiblePersons) ? values.responsiblePersons : [],
-        ),
+        responsiblePersons: nextResponsiblePersons,
         healthStatus: resolveProjectHealthStatus({
           mode,
           projectType: normalizedProjectType,
@@ -1125,8 +1167,11 @@ export default function ProjectInfoModal({
           getValueFromEvent: (rowId: string) => resolveChipRow(rowsByType, rowId)?.chipCode || '',
         } : {})}
         extra={field.conditionalHint}
-        className={field.inputType === 'jira' ? 'pms-project-info-form-span' : undefined}
-        rules={isRequired
+        className={['jira', 'fanTrial'].includes(field.inputType) ? 'pms-project-info-form-span' : undefined}
+        rules={field.inputType === 'fanTrial' ? [{ required: true, validator: async (_, value) => {
+          const error = validateFanTrial({ fanTrialEnabled: form.getFieldValue('fanTrialEnabled'), fanTrialCountries: value }, rowsByType['fan-trial-country'].map(row => row.value), project?.fieldValues?.fanTrialCountries)
+          if (error) throw new Error(error.message)
+        } }] : isRequired
           ? [{ required: true, message: `请填写${renderedField.label}` }]
           : undefined}
       >
@@ -1152,6 +1197,8 @@ export default function ProjectInfoModal({
               })
             }}
           />
+        ) : field.inputType === 'fanTrial' ? (
+          <FanTrialCountryEditor options={buildEnumOptions(rowsByType, 'fan-trial-country', readFanTrialRows(project?.fieldValues?.fanTrialCountries).map(row => row.country))} />
         ) : field.inputType === 'jira' ? (
           <JiraProjectEditor
             rows={Array.isArray(watchedValues.jiraProjects) ? watchedValues.jiraProjects as JiraProjectConfig[] : []}
@@ -1196,7 +1243,7 @@ export default function ProjectInfoModal({
       cancelButtonProps={{ disabled: isDraftInteractionLocked }}
       okButtonProps={{ disabled: !enumReady || isCreateDraftInteractionBlocked || isIpmClassificationMissing }}
       destroyOnHidden
-      className="pms-modal pms-project-info-modal pms-project-info-modal-surface"
+      className={`pms-modal pms-project-info-modal pms-project-info-modal-surface${mode === 'edit' ? ' pms-project-space-editor' : ''}`}
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
     >
       {!hasHydrated ? (
@@ -1221,6 +1268,12 @@ export default function ProjectInfoModal({
         />
       )}
       <Spin spinning={isDraftInteractionLocked} description={draftInteractionDescription}>
+      {missingSavedFields.length > 0 && (
+        <Alert type="info" showIcon title="待补全基础信息"
+          description={`尚未保存的必填信息：${missingSavedFields.map(field => field.label).join('、')}。补齐保存后，工作台待办自动移除。`}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Form
         form={form}
         layout="vertical"
@@ -1234,7 +1287,7 @@ export default function ProjectInfoModal({
         }}
       >
         {(mode === 'create' || projectType) && (
-          <div className="pms-project-info-form-grid pms-project-info-universal" aria-label="IPM项目来源">
+          <div className="pms-project-info-form-grid pms-project-info-universal" aria-label={manualCompletion ? "项目档案" : "IPM项目来源"}>
             {mode === 'create' ? (
               <Form.Item label="项目名" name="bid" rules={[{ required: true, message: '请选择项目名' }]}>
                 <Select
@@ -1248,7 +1301,7 @@ export default function ProjectInfoModal({
               <Form.Item label="项目名" name="projectName"><Input disabled /></Form.Item>
             )}
             {projectType && (<>
-              {isTechnicalProject ? (
+              {isTechnicalProject && !manualCompletion ? (
                 <Form.Item label="项目分类" name="secondaryCategory"><Input disabled /></Form.Item>
               ) : (
                 <Form.Item label="项目分类" name="type" rules={[{ required: true, message: '请选择项目分类' }]}>
@@ -1256,8 +1309,8 @@ export default function ProjectInfoModal({
                 </Form.Item>
               )}
               {isMachineProjectType(projectType) && (
-                <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: true, message: '请选择项目二级分类' }]}>
-                  <Select disabled options={secondaryCategoryOptions} />
+                <Form.Item label="项目二级分类" name="secondaryCategory" rules={[{ required: !manualCompletion, message: '请选择项目二级分类' }]}>
+                  <Select disabled={!manualCompletion} options={secondaryCategoryOptions} />
                 </Form.Item>
               )}
               {showConfiguredProjectStatus && !isMachineProjectType(projectType) && !isTechnicalProject && (
@@ -1285,6 +1338,19 @@ export default function ProjectInfoModal({
           </div>
         )}
 
+        {boundMachineMetadataReadonly && <Alert type="info" showIcon title={BOUND_MACHINE_METADATA_HINT} style={{ marginBottom: 12 }} />}
+        {manualCompletion && isMachineProjectType(projectType) && (
+          <div className="pms-project-info-form-grid">
+            <Form.Item label="品牌" name="brand">{boundMachineMetadataReadonly ? <Input disabled placeholder="—" /> : <Select allowClear options={['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌'].map(value => ({ label: value, value }))} />}</Form.Item>
+            <Form.Item label="产品线" name="productLine"><Input disabled={boundMachineMetadataReadonly} placeholder="—" /></Form.Item>
+            <Form.Item label="市场名" name="marketName"><Input disabled={boundMachineMetadataReadonly} placeholder="—" /></Form.Item>
+            <Form.Item label="STR5时间" name="str5Date"><Input placeholder="YYYY-MM-DD" /></Form.Item>
+            <Form.Item label="上市时间" name="launchDate"><Input placeholder="YYYY-MM-DD" /></Form.Item>
+            <Form.Item label="STR5为预估时间" name="str5Estimated"><Select options={[{ label: '是', value: true }, { label: '否', value: false }]} /></Form.Item>
+            <Form.Item label="上市为预估时间" name="launchEstimated"><Select options={[{ label: '是', value: true }, { label: '否', value: false }]} /></Form.Item>
+            <Form.Item label="备注" name="remark"><Input.TextArea /></Form.Item>
+          </div>
+        )}
         {projectType === PROJECT_TYPE_TOS_VERSION && aggregateWarnings.length > 0 && (
           <Alert type="warning" showIcon style={{ marginBottom: 12 }} title="首发项目来源字段不完整" description={aggregateWarnings.join('；')} />
         )}

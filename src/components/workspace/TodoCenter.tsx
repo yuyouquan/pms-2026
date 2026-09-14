@@ -13,7 +13,7 @@ import {
   Tag,
   Tooltip,
 } from 'antd'
-import { DeploymentUnitOutlined, ProjectOutlined, SearchOutlined } from '@ant-design/icons'
+import { DeploymentUnitOutlined, FormOutlined, ProjectOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   filterWorkbenchTodos,
@@ -23,6 +23,8 @@ import {
   type TodoStatusFilter,
   type WorkbenchTodo,
 } from '@/lib/todoAggregation'
+
+import { PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 
 const { RangePicker } = DatePicker
 
@@ -44,6 +46,7 @@ const EMPTY_FIELD_FILTERS: FieldFilters = {
 }
 
 const SOURCE_LABELS: Record<TodoSource, string> = {
+  basicInfo: '基础信息',
   plan: '计划',
   transfer: '转维',
 }
@@ -80,6 +83,7 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
   }, [directoryTodos])
 
   const pendingCounts = useMemo(() => ({
+    basicInfo: todos.filter(todo => todo.source === 'basicInfo' && todo.status === 'pending').length,
     plan: todos.filter(todo => todo.source === 'plan' && todo.status === 'pending').length,
     transfer: todos.filter(todo => todo.source === 'transfer' && todo.status === 'pending').length,
   }), [todos])
@@ -130,9 +134,9 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
       <aside className="pms-todo-directory" aria-label="任务目录">
         <h2>任务目录</h2>
         <div className="pms-todo-directory__items">
-          {(['plan', 'transfer'] as const).map(item => {
+          {(['basicInfo', 'plan', 'transfer'] as const).map(item => {
             const active = source === item
-            const Icon = item === 'plan' ? ProjectOutlined : DeploymentUnitOutlined
+            const Icon = item === 'basicInfo' ? FormOutlined : item === 'plan' ? ProjectOutlined : DeploymentUnitOutlined
             return (
               <button
                 key={item}
@@ -257,7 +261,7 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                   setPageSize(nextPageSize)
                 },
               }}
-              scroll={{ x: 1320, y: 460 }}
+              scroll={{ x: source === 'basicInfo' ? 1580 : 1320, y: 460 }}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} /> }}
               columns={[
                 {
@@ -280,6 +284,23 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                   ellipsis: true,
                   render: (projectName: string) => projectName || '未关联项目',
                 },
+                ...(source === 'basicInfo' ? [
+                  {
+                    title: '项目类型',
+                    dataIndex: 'projectType',
+                    key: 'projectType',
+                    width: 150,
+                    render: (projectType: WorkbenchTodo['projectType']) => projectType || '—',
+                  },
+                  {
+                    title: '项目属性',
+                    dataIndex: 'projectAttribute',
+                    key: 'projectAttribute',
+                    width: 110,
+                    render: (projectAttribute: WorkbenchTodo['projectAttribute']) => projectAttribute
+                      ? <Tag>{PROJECT_ATTRIBUTE_LABELS[projectAttribute]}</Tag> : '—',
+                  },
+                ] : []),
                 {
                   title: '状态',
                   dataIndex: 'status',
@@ -335,7 +356,7 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                   fixed: 'right',
                   width: 110,
                   render: (_value, record) => {
-                    const actionLabel = record.status === 'completed' ? '查看详情' : '前往处理'
+                    const actionLabel = record.status === 'completed' ? '查看详情' : record.source === 'basicInfo' ? '去填写' : '前往处理'
                     return (
                       <Button
                         type="link"

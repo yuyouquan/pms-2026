@@ -1,5 +1,8 @@
 'use client'
 
+import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachineBudget, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
+import { hasDerivedMachineResponsibilityRoles } from '@/stores/permission'
+
 /**
  * ProjectSpaceContainer
  *
@@ -13,6 +16,12 @@
  * This is the LARGEST container, reading from ALL 5 stores.
  */
 
+import RoadmapProjectInformationView from '@/components/project-info/RoadmapProjectInformationView'
+import { getProjectSpaceModules } from '@/lib/projectSpaceNavigation'
+import RoadmapProjectInfoModal from '@/components/project-info/RoadmapProjectInfoModal'
+import ProjectResources from '@/components/project-resources/ProjectResources'
+import { buildManualProjectSpaceUpdate } from '@/lib/manualProjectCompletion'
+import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
 import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
 import {
   Card, Tabs, Table, Button, Progress, Tag, Space, Row, Col, Badge,
@@ -214,6 +223,7 @@ import {
   canEditLevel1HorizontalDateCell,
   filterLevel1TreeRows,
   getLevel1MaintainerUsers,
+  getTechnicalLevel1MaintainerUsers,
   selectLevel1HorizontalVersions,
   selectLatestPublishedLevel1Summary,
   resolveLevel1HorizontalActualProjectionAccess,
@@ -965,12 +975,7 @@ export default function ProjectSpaceContainer() {
   const canExportTechnicalPlan = canDo('plan:导出')
   const level1GlobalAdmins = perm.globalRoles.find(role => role.name === '管理组')?.members || []
   const level1SpmUsers = getLevel1MaintainerUsers(selectedProject?.spm, roles)
-  const level1TechnicalLead = String(
-    (selectedProject as any)?.technicalLead
-    || (selectedProject as any)?.fieldValues?.technicalLead
-    || roles.find(role => role.name === '技术项目负责人')?.members?.[0]
-    || '',
-  ).trim()
+  const level1TechnicalLead = getTechnicalLevel1MaintainerUsers(selectedProject, roles)
   const canGovernLevel1Plan = selectedProject ? canMaintainLevel1Plan({
     projectType: selectedProject.type,
     currentUser: currentLoginUser,
@@ -1004,6 +1009,21 @@ export default function ProjectSpaceContainer() {
   const [showTosTypeEditor, setShowTosTypeEditor] = useState(false)
   const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
   const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
+  const projectInfoNavigationIntent = useUiStore(state => state.projectInfoNavigationIntent)
+  const projectInfoEditorOwner = useRef({ projectId: selectedProject?.id, user: currentLoginUser })
+  useEffect(() => {
+    const previous = projectInfoEditorOwner.current
+    if (previous.projectId !== selectedProject?.id || previous.user !== currentLoginUser) setShowProjectInfoEditor(false)
+    projectInfoEditorOwner.current = { projectId: selectedProject?.id, user: currentLoginUser }
+  }, [selectedProject?.id, currentLoginUser])
+  useEffect(() => {
+    // Consume synchronously so Strict Mode and subsequent entries cannot reopen the modal.
+    const intent = useUiStore.getState().projectInfoNavigationIntent
+    if (!intent) return
+    useUiStore.getState().setProjectInfoNavigationIntent(null)
+    if (intent.projectId === selectedProject?.id && intent.currentUser === currentLoginUser
+      && canViewBasicInfo && canEditBasicInfo) setShowProjectInfoEditor(true)
+  }, [projectInfoNavigationIntent, selectedProject?.id, currentLoginUser, canViewBasicInfo, canEditBasicInfo])
   const [transferInfoCollapsed, setTransferInfoCollapsed] = useState(false)
   const [basicInfoJiraErrors, setBasicInfoJiraErrors] = useState<JiraProjectValidationError[]>([])
   const basicInfoJiraEditorRef = useRef<HTMLDivElement | null>(null)
@@ -2946,7 +2966,6 @@ export default function ProjectSpaceContainer() {
     setBasicInfoJiraErrors([])
     const currentJiraProjects = Array.isArray((p as any).jiraProjects) ? (p as any).jiraProjects.map((row: JiraProjectConfig) => ({ ...row })) : []
     setEditingProjectFields({
-      projectCode: p.projectCode || p.model || '',
       androidVersion: p.androidVersion || p.operatingSystem || '',
       firstSaleTosVersionId: normalizeTosSnapshot(p.firstSaleTosVersionId || p.tosVersionName) || '',
       brand: p.brand || '',
@@ -3044,7 +3063,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const saveTargetProjectInfo = async (payload: ProjectInfoSubmitPayload) => {
-    if (!selectedProject || !canEditBasicInfo) return
+    if (!selectedProject || !canEditBasicInfo) return false
     const previousResponsiblePersons = getProjectResponsiblePersons(selectedProject)
     const responsiblePersonsChanged = haveProjectResponsiblePersonsChanged(
       previousResponsiblePersons,
@@ -3052,7 +3071,7 @@ export default function ProjectSpaceContainer() {
     )
     const updatedBase = {
       ...selectedProject,
-      type: payload.projectType,
+      type: selectedProject.type,
       leader: payload.responsiblePersons[0] || '',
       responsiblePersons: payload.responsiblePersons,
       secondaryCategory: payload.projectSecondaryCategory,
@@ -3094,14 +3113,14 @@ export default function ProjectSpaceContainer() {
     const rawVersionType = typeof payload.infoValues.versionType === 'string'
       ? payload.infoValues.versionType
       : selectedProject.versionType || ''
-    const updated = isMachineProjectType(selectedProject.type)
+    let updated = isMachineProjectType(selectedProject.type)
       ? {
           ...merged,
           firstSaleTosVersionId,
           firstSaleTosVersion: submittedFirstSaleTos,
           currentTosVersionId,
           currentTosVersion: submittedCurrentTos,
-          projectCode: typeof payload.infoValues.projectModel === 'string' ? payload.infoValues.projectModel : selectedProject.projectCode,
+          projectCode: selectedProject.projectCode,
           startRam: typeof payload.infoValues.startingRam === 'string' ? payload.infoValues.startingRam : selectedProject.startRam,
           versionType: rawVersionType,
           developMode: typeof payload.infoValues.developmentMode === 'string' ? payload.infoValues.developmentMode : selectedProject.developMode,
@@ -3113,8 +3132,14 @@ export default function ProjectSpaceContainer() {
             { ipmProjectType: payload.projectSecondaryCategory || String(selectedProject.ipmProjectType || '') },
           ) as unknown as typeof merged
         : merged
-    if (isMachineProjectType(selectedProject.type)) {
-      const resolution = resolveMachineTosUpdate(projects as any[], updated as any)
+    if (!isFormalProject(selectedProject)) updated = buildManualProjectSpaceUpdate(selectedProject, payload) as unknown as typeof updated
+    // Preserve canonical identity exactly, including absent optional source/code fields.
+    for (const key of ['name', 'type', 'projectCode', 'sourceBid', 'projectAttribute', 'boundFormalProjectId', 'createdBy', 'createdAt'] as const) {
+      if (Object.hasOwn(selectedProject, key)) (updated as any)[key] = selectedProject[key]
+      else delete (updated as any)[key]
+    }
+    if (isFormalProject(selectedProject) && isMachineProjectType(selectedProject.type)) {
+      const resolution = resolveMachineTosUpdate(projects.filter(isFormalProject) as any[], updated as any)
       if (!resolution.ok) {
         const reasonMessage = resolution.reason === 'missing-new-product'
           ? '未找到项目名完全相同的新品项目，无法保存老品项目'
@@ -3141,7 +3166,8 @@ export default function ProjectSpaceContainer() {
           payload.responsiblePersons,
         ),
       )
-      setRoles(previous => replaceProjectSystemAdministrators(previous, payload.responsiblePersons))
+      // Derived machine roles were committed by the responsibility save, even when the saver just lost access.
+      if (!hasDerivedMachineResponsibilityRoles(selectedProject)) setRoles(previous => replaceProjectSystemAdministrators(previous, payload.responsiblePersons))
     }
     setShowProjectInfoEditor(false)
     message.success('项目信息已保存')
@@ -4539,9 +4565,14 @@ export default function ProjectSpaceContainer() {
 
   const renderProjectBasicInfo = () => {
     if (!canViewBasicInfo) return <Empty description="无基础信息查看权限" />
-    const p = selectedProject
-    if (!p) return null
+    if (!selectedProject) return null
+    const p = withBoundMachineBudgetMetadata(selectedProject, projects)
     const isWholeMachine = isMachineProjectType(p.type)
+    if (getProjectAttribute(p) === 'roadmap') return <>
+      <RoadmapProjectInformationView project={p} canEdit={canEditBasicInfo} onEdit={() => setShowProjectInfoEditor(true)} />
+      <RoadmapProjectInfoModal key={`${p.id}:${currentLoginUser}`} open={showProjectInfoEditor} project={p}
+        currentUser={currentLoginUser} canEdit={canEditBasicInfo} onCancel={() => setShowProjectInfoEditor(false)} onSubmit={saveTargetProjectInfo} />
+    </>
     const isTargetProject = isWholeMachine || p.type === PROJECT_TYPE_TOS_VERSION
     const isSoftware = isSoftwareProjectType(p.type)
     const isTech = p.type === '技术项目'
@@ -4557,6 +4588,7 @@ export default function ProjectSpaceContainer() {
     const ef = editingProjectFields
     const setEf = (key: string, value: any) => setEditingProjectFields((prev: any) => ({ ...prev, [key]: value }))
     const editableField = (key: string, value: any, options?: { type?: 'input' | 'select' | 'select-multiple' | 'textarea'; choices?: { label: string; value: string; disabled?: boolean }[] }) => {
+      if (isBoundMachineBudget(p) && (MACHINE_BUDGET_METADATA_KEYS as readonly string[]).includes(key)) return <Tooltip title={BOUND_MACHINE_METADATA_HINT}><span>{value || '—'}</span></Tooltip>
       if (!basicInfoEditMode) return <span>{value || '-'}</span>
       if (options?.type === 'select') return <Select size="small" value={ef[key]} onChange={(v: string) => setEf(key, v)} style={{ width: '100%' }} options={options.choices} />
       if (options?.type === 'select-multiple') return <Select size="small" mode="multiple" value={(ef[key] || '').split(',').filter(Boolean)} onChange={(v: string[]) => setEf(key, v.join(','))} style={{ width: '100%' }} options={options.choices} />
@@ -4564,7 +4596,11 @@ export default function ProjectSpaceContainer() {
       return <Input size="small" value={ef[key]} onChange={e => setEf(key, e.target.value)} />
     }
     const nodeChoices = [{ label: '概念启动', value: '概念启动' }, { label: 'STR1', value: 'STR1' }, { label: 'STR2', value: 'STR2' }, { label: 'STR3', value: 'STR3' }, { label: 'STR4', value: 'STR4' }, { label: 'STR5', value: 'STR5' }, { label: 'STR6', value: 'STR6' }]
-    const healthChoices = machineProjectSpaceOptions.healthStatus
+    const healthAliases: Record<string, string> = { normal: '正常', warning: '关注', risk: '风险' }
+    const healthChoices = isCapability && enumReady
+      ? buildEnumOptions(enumRowsByType, 'machine-health-status', [healthAliases[p.healthStatus] || p.healthStatus].filter(Boolean))
+        .map(option => ({ ...option, value: Object.keys(healthAliases).find(key => healthAliases[key] === option.value) || option.value }))
+      : machineProjectSpaceOptions.healthStatus
     const developModeChoices = machineProjectSpaceOptions.developmentMode
     const roadmapDevelopModeChoices = machineProjectSpaceOptions.developmentMode
     const startRamChoices = ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB'].map(value => ({ label: value, value }))
@@ -4624,7 +4660,7 @@ export default function ProjectSpaceContainer() {
       let content: React.ReactNode = field.key === 'firstSaleTosVersionId'
         ? firstSaleTosVersionName
         : getProjectFieldValue(field)
-      if (field.key === 'projectCode') content = editableField('projectCode', p.projectCode || p.model)
+      if (field.key === 'projectCode') content = <span>{p.projectCode || '—'}</span>
       if (field.key === 'androidVersion') content = editableField('androidVersion', p.androidVersion || p.operatingSystem)
       if (field.key === 'firstSaleTosVersionId') content = editableField('firstSaleTosVersionId', firstSaleTosVersionName, { type: 'select', choices: machineTosOptions })
       if (field.key === 'brand') content = editableField('brand', p.brand)
@@ -4729,45 +4765,12 @@ export default function ProjectSpaceContainer() {
         </Card>
       )
     }
-    const anchorSections = [
-      { id: 'section-header', label: isTargetProject ? '项目名称' : '项目概览', icon: <ProjectOutlined /> },
-      { id: 'section-plan', label: '计划信息', icon: <CalendarOutlined /> },
-      { id: 'section-basic', label: isTargetProject ? '项目信息' : '基本信息', icon: <SettingOutlined /> },
-      ...(isWholeMachine && canDo('basicInfo:transferView') && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
-      ...(!isTargetProject && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
-    ]
-    const scrollToSection = (id: string) => {
-      const container = document.getElementById('basic-info-scroll-container')
-      const target = document.getElementById(id)
-      if (container && target) {
-        const containerRect = container.getBoundingClientRect()
-        const targetRect = target.getBoundingClientRect()
-        const offset = targetRect.top - containerRect.top + container.scrollTop - 16
-        container.scrollTo({ top: offset, behavior: 'smooth' })
-      }
-    }
     return (
       <div
         className={!isTargetProject ? 'pms-project-information-surface pms-project-information-surface--legacy' : undefined}
-        style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}
+        style={{ maxWidth: 1400, margin: '0 auto' }}
       >
-        {/* Anchor navigation */}
-        <div style={{ position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150 }}>
-          <div className="pms-glass-surface" style={{ padding: '16px 0 12px' }}>
-            <div style={{ padding: '0 16px 10px', fontSize: 10, fontWeight: 700, color: '#a5b4fc', letterSpacing: 3, textTransform: 'uppercase' as const }}>导航</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {anchorSections.map((section) => (
-                <div key={section.id} onClick={() => scrollToSection(section.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 12, color: '#64748b', transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)', borderLeft: '2px solid transparent' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--pms-brand-surface) 72%, transparent)'; e.currentTarget.style.color = 'var(--pms-brand)'; e.currentTarget.style.borderLeftColor = 'var(--pms-brand)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderLeftColor = 'transparent' }}
-                >
-                  <span style={{ fontSize: 13, opacity: 0.7 }}>{section.icon}</span>
-                  <span style={{ fontWeight: 500 }}>{section.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        {isBoundMachineBudget(p) && <Alert type="info" showIcon title={BOUND_MACHINE_METADATA_HINT} style={{ marginBottom: 12 }} />}
         {isTargetProject ? (
           <TargetProjectInformationView
             project={p as unknown as ProjectInfoProject}
@@ -4963,7 +4966,17 @@ export default function ProjectSpaceContainer() {
             </Descriptions>
           </Card>
         )}
-        {(isTargetProject || isTech) && (
+        {getProjectAttribute(p) === 'roadmap' ? (
+          <RoadmapProjectInfoModal
+            key={`${p.id}:${currentLoginUser}`}
+            open={showProjectInfoEditor}
+            project={p}
+            currentUser={currentLoginUser}
+            canEdit={canEditBasicInfo}
+            onCancel={() => setShowProjectInfoEditor(false)}
+            onSubmit={saveTargetProjectInfo}
+          />
+        ) : (isTargetProject || isTech || p.type === '能力建设项目') && (
           <ProjectInfoModal
             mode="edit"
             open={showProjectInfoEditor}
@@ -5629,7 +5642,7 @@ export default function ProjectSpaceContainer() {
           className="pms-sidebar pms-project-space-sidebar pms-glass-surface"
           collapsed={projectSpaceSidebarCollapsed}
           onCollapsedChange={setProjectSpaceSidebarCollapsed}
-          title="项目导航"
+          title={null}
           ariaLabel="项目空间导航"
           expandedWidth={200}
           collapsedWidth={64}
@@ -5639,7 +5652,7 @@ export default function ProjectSpaceContainer() {
             inlineCollapsed={projectSpaceSidebarCollapsed}
             selectedKeys={[projectSpaceModule]}
             style={{ border: 'none', fontSize: 13, width: '100%', background: 'transparent' }}
-            items={menuItems.map(item => ({
+            items={menuItems.filter(item => !getProjectSpaceModules(selectedProject) || getProjectSpaceModules(selectedProject)!.includes(item.key)).map(item => ({
               ...item,
               title: item.label,
               label: <span style={{ fontWeight: projectSpaceModule === item.key ? 500 : 400 }}>{item.label}</span>,
@@ -5662,6 +5675,7 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}
           {transfer.transferView === 'review' && <TransferReview {...transferProps} />}
           {transfer.transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
+          {transfer.transferView === null && projectSpaceModule === 'resources' && selectedProject && <ProjectResources project={selectedProject} />}
           {transfer.transferView === null && projectSpaceModule === 'basic' && (
             !canViewBasicInfo ? <Empty description="无基础信息查看权限" /> : isTechnicalProject && selectedProject
               ? <TechnicalProjectInformationView
@@ -5703,7 +5717,7 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === null && projectSpaceModule === 'permission' && (canManageRoles ? (
             <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} projectType={selectedProject?.type} onRoleMembersChange={handleProjectRoleMembersChange} syncTosTeamPermissionMembers={handleProjectRoleMembersChange} canManageRoles={canManageRoles} />
           ) : <Empty description="无项目权限配置权限" />)}
-          {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission'].includes(projectSpaceModule) && (
+          {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission', 'resources'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
               <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
             </Card>

@@ -124,18 +124,21 @@ export const MACHINE_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
 ]
 
 export const TOS_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
-  templateTask('tos-stage-concept', null, 0, '概念阶段', 'stage'),
+  templateTask('tos-stage-planning', null, 0, '规划阶段', 'stage'),
+  templateTask('tos-ms-planning-ko', 'tos-stage-planning', 0, '规划KO', 'fixed-milestone', 'SPM'),
+  templateTask('tos-ms-cdcp', 'tos-stage-planning', 1, 'CDCP', 'fixed-milestone', 'SPM'),
+  templateTask('tos-stage-concept', null, 1, '概念阶段', 'stage'),
   templateTask('tos-ms-concept-kickoff', 'tos-stage-concept', 0, '概念启动', 'fixed-milestone', 'SPM'),
   templateTask('tos-ms-str1', 'tos-stage-concept', 1, 'STR1', 'fixed-milestone', 'SPM'),
-  templateTask('tos-stage-plan', null, 1, '计划阶段', 'stage'),
+  templateTask('tos-stage-plan', null, 2, '计划阶段', 'stage'),
   templateTask('tos-ms-str2', 'tos-stage-plan', 0, 'STR2', 'fixed-milestone', 'SPM'),
   templateTask('tos-ms-str3', 'tos-stage-plan', 1, 'STR3', 'fixed-milestone', 'SPM'),
-  templateTask('tos-stage-development-validation', null, 2, '开发验证阶段', 'stage'),
+  templateTask('tos-stage-development-validation', null, 3, '开发验证阶段', 'stage'),
   templateTask('tos-ms-str4', 'tos-stage-development-validation', 0, 'STR4', 'fixed-milestone', 'SPM'),
   templateTask('tos-ms-str4a', 'tos-stage-development-validation', 1, 'STR4A', 'fixed-milestone', 'SPM'),
   templateTask('tos-ms-str5', 'tos-stage-development-validation', 2, 'STR5', 'fixed-milestone', 'SPM'),
-  templateTask('tos-stage-launch-iteration', null, 3, '上市迭代阶段', 'stage'),
-  templateTask('tos-stage-maintenance', null, 4, '维护阶段', 'stage'),
+  templateTask('tos-stage-launch-iteration', null, 4, '上市迭代阶段', 'stage'),
+  templateTask('tos-stage-maintenance', null, 5, '维护阶段', 'stage'),
 ]
 
 export const CAPABILITY_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
@@ -168,6 +171,8 @@ const MACHINE_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: s
 }
 
 const TOS_MOCK_DATES: Record<string, { planEndDate: string; actualEndDate: string }> = {
+  'tos-ms-planning-ko': { planEndDate: '2026-01-08', actualEndDate: '2026-01-09' },
+  'tos-ms-cdcp': { planEndDate: '2026-02-05', actualEndDate: '2026-02-06' },
   'tos-ms-concept-kickoff': { planEndDate: '2026-02-26', actualEndDate: '2026-02-27' },
   'tos-ms-str1': { planEndDate: '2026-03-17', actualEndDate: '2026-03-18' },
   'tos-ms-str2': { planEndDate: '2026-04-28', actualEndDate: '2026-04-28' },
@@ -815,11 +820,14 @@ export const canMaintainLevel1Plan = (input: {
   projectType: string
   currentUser: string
   spmUsers: string[]
-  technicalLead: string
+  technicalLead: string | readonly string[]
   globalAdmins: string[]
 }): boolean => {
   if (input.globalAdmins.includes(input.currentUser)) return true
-  if (input.projectType === '技术项目') return input.technicalLead === input.currentUser
+  if (input.projectType === '技术项目') {
+    const leads = typeof input.technicalLead === 'string' ? input.technicalLead.split(/[、,]/) : input.technicalLead
+    return leads.some(name => name.trim() === input.currentUser)
+  }
   return input.spmUsers.includes(input.currentUser)
 }
 

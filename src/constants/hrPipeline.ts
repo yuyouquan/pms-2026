@@ -54,7 +54,6 @@ export const HR_SIDEBAR_NAV: HrSidebarGroup[] = [
     label: '配置中心',
     icon: 'SettingOutlined',
     children: [
-      { key: 'config/hr-model', label: '人力模型', description: '整机产品 — 人力模型配置' },
       { key: 'config/tos-phase-ratio', label: 'tOS阶段投入比', description: 'tOS项目 — 阶段投入比' },
       { key: 'config/tos-brand-allocation', label: '品牌&产品线分摊比', description: 'tOS项目 — 品牌分摊比' },
       { key: 'config/tech-module-dept', label: '模块与部门', description: '技术项目 — 模块与部门' },

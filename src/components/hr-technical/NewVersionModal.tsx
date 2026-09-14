@@ -1,21 +1,23 @@
 'use client'
 
-import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
+import { canAccessHrProject, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
+import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
+import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
+import { HrVersionMilestoneFields, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
 import { useState, useEffect, useMemo } from 'react'
 import {
   Modal,
   Select,
   Table,
   InputNumber,
+  Input,
   Button,
   Space,
   Alert,
   App,
-  Tooltip,
-  Tag,
   Form,
   Upload,
 } from 'antd'
@@ -27,12 +29,9 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import * as XLSX from 'xlsx'
-import { useHrTechnicalStore } from '@/stores/hrTechnical'
+import { useHrTechnicalStore } from '@/hooks/useHrResourceStores'
 import {
   TECH_BUDGET_TYPES,
-  TECH_BUDGET_TYPE_LABELS,
-  TECH_IPM_REQUIRED_TYPES,
-  TECH_IPM_REQUIRED_TIP,
   TECH_PHASE_INVESTMENT_FIELDS,
   formatPersonMonth,
 } from '@/constants/hrTechnical'
@@ -47,6 +46,7 @@ interface NewVersionModalProps {
 
 export default function NewVersionModal({ open, projectId, onCancel }: NewVersionModalProps) {
   const { message } = App.useApp()
+  const scopeId = useHrResourceScope()
   const { primaryOptions, getSecondaryOptions, isValidPair } = useHrDepartmentOptions()
   const { projects, addVersion } = useHrTechnicalStore()
   const [localProjectId, setLocalProjectId] = useState(projectId)
@@ -59,15 +59,13 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     [projects, localProjectId],
   )
 
-  const hasIpm = useMemo(
-    () => Boolean(project?.ipmProjectCode),
-    [project],
-  )
+  const milestoneForm = useHrVersionMilestones('technical', project, budgetType, open)
+
 
   useEffect(() => {
     if (open) {
-      setLocalProjectId(projectId || '')
-      setBudgetType('annual')
+      setLocalProjectId(scopeId ? projects.find(p => p.pmsProjectId === scopeId)?.id ?? '' : projectId || '')
+      setBudgetType(getHrAllowedBudgetTypes(projects.find(p => scopeId ? p.pmsProjectId === scopeId : p.id === projectId))[0] ?? 'annual')
       setEditData([])
     }
   }, [open, projectId])
@@ -229,14 +227,13 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       width: 140,
       fixed: 'left' as const,
       render: (_value: unknown, record: TechDepartmentInvestment) => (
-        <Select
+        !record.primaryDepartment ? <HrReadonlyField label="二级部门" placeholder="请先选择一级部门" reason="选择一级部门后可编辑" /> : <Select
           showSearch
           aria-label="二级部门"
           value={record.secondaryDepartment || undefined}
           placeholder="请选择二级部门"
           style={{ width: '100%' }}
           options={getSecondaryOptions(record.primaryDepartment)}
-          disabled={!record.primaryDepartment}
           onChange={value => updateRow(record.id, 'secondaryDepartment', value)}
         />
       ),
@@ -289,10 +286,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   const handleOk = async () => {
     if (project?.status === 'cancelled') { message.warning('已取消的项目不支持新建版本'); return }
     if (!project) { message.warning('请选择项目'); return }
-    if (!hasIpm && TECH_IPM_REQUIRED_TYPES.includes(budgetType)) {
-      message.warning(TECH_IPM_REQUIRED_TIP)
-      return
-    }
+    if (!canCreateHrVersion(project, budgetType)) { message.warning('当前项目无新建版本权限'); return }
     if (editData.length === 0) {
       message.warning('请至少添加一条部门预估投入数据')
       return
@@ -304,7 +298,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
     try {
       setSubmitting(true)
-      addVersion(project.id, { budgetType, departmentInvestments: editData })
+      addVersion(project.id, { budgetType, departmentInvestments: editData, milestones: milestoneForm.values })
       message.success('版本创建成功')
       onCancel()
     } finally {
@@ -312,24 +306,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
   }
 
-  const budgetOptions = TECH_BUDGET_TYPES.map(bt => {
-    const restricted = !hasIpm && TECH_IPM_REQUIRED_TYPES.includes(bt.value)
-    return {
-      value: bt.value,
-      label: restricted ? (
-        <Tooltip title={TECH_IPM_REQUIRED_TIP}>
-          <span style={{ color: 'var(--pms-text-tertiary)' }}>{bt.label}</span>
-        </Tooltip>
-      ) : (
-        bt.label
-      ),
-      disabled: restricted,
-    }
-  })
+  const budgetOptions = TECH_BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value))
 
   return (
     <Modal
-      className="pms-modal"
+      className="pms-modal pms-hr-version-modal"
       title="新增版本"
       open={open}
       onCancel={onCancel}
@@ -340,52 +321,20 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       cancelText="取消"
       width={1280}
     >
-      <div style={{ marginTop: 16 }}>
-        {/* 项目信息 */}
-        <div
-          style={{
-            marginBottom: 16,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-            fontSize: 12,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: 'var(--pms-text-tertiary)' }}>TDT项目：</span>
-            <Select
-              showSearch
-              aria-label="选择项目"
-              placeholder="请选择项目"
-              value={localProjectId || undefined}
-              options={projects.map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.tdtName }))}
-              optionFilterProp="label"
-              style={{ minWidth: 280 }}
-              onChange={value => { setLocalProjectId(value); setBudgetType('annual'); setEditData([]) }}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--pms-text-tertiary)' }}>IPM：</span>
-            {hasIpm ? (
-              <span style={{ color: 'var(--pms-text-secondary)' }}>
-                <Tag color="green" style={{ marginRight: 6 }}>已绑定</Tag>
-                {project?.ipmProjectCode}
-                {project?.ipmProjectName ? ` · ${project.ipmProjectName}` : ''}
-              </span>
-            ) : (
-              <span style={{ color: 'var(--pms-text-tertiary)' }}>
-                <Tag color="default" style={{ marginRight: 6 }}>未绑定</Tag>
-                仅可创建年度预算版本
-              </span>
-            )}
-          </div>
-        </div>
-
-        {project && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-        {hasIpm && budgetType !== 'annual' && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={resolveHrFormalSource('technical', project?.ipmProjectCode ?? null).project ? '里程碑取自主市场／主类型最新已发布一级计划；尚无已发布计划时等待计划发布。' : '当前正式项目编码未找到对应项目，请在项目列表重新绑定。'} />}
-
+      <div>
         {/* 表单字段 */}
-        <Form layout="vertical">
+        <Form layout="vertical" className="pms-hr-version-form pms-hr-version-form--technical">
+          <Form.Item label="项目" required>
+            {scopeId ? <HrReadonlyField label="项目" value={project?.tdtName} reason="当前项目空间的项目，不可切换" /> : (<Select
+                showSearch
+                aria-label="选择项目"
+                placeholder="请选择项目"
+                value={localProjectId || undefined}
+                options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.tdtName }))}
+                optionFilterProp="label"
+                onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setEditData([]) }}
+              />)}
+          </Form.Item>
           <Form.Item label="预算类型" required>
             <Select
               value={budgetType}
@@ -394,6 +343,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               options={budgetOptions}
             />
           </Form.Item>
+          <HrVersionMilestoneFields category="technical" {...milestoneForm} />
         </Form>
 
         {/* 合计提示 */}
@@ -401,7 +351,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          title={`各阶段预估投入合计：${formatPersonMonth(editTotal)}`}
+          title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`}
         />
 
         {/* 操作按钮 */}
@@ -440,49 +390,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           }}
         />
 
-        {/* 合计汇总条 */}
-        <div
-          style={{
-            marginTop: 12,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-            <span style={{ color: 'var(--pms-text-secondary)' }}>
-              编辑各阶段预估投入，合计将自动更新
-            </span>
-            <span>
-              <span style={{ color: 'var(--pms-text-tertiary)' }}>合计：</span>
-              <strong style={{ color: 'var(--pms-brand-strong)', fontSize: 14 }}>
-                {formatPersonMonth(editTotal)}
-              </strong>
-            </span>
-          </div>
-        </div>
 
-        {/* 版本规则说明 */}
-        <div
-          style={{
-            marginTop: 12,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-            fontSize: 12,
-            color: 'var(--pms-text-tertiary)',
-          }}
-        >
-          <p style={{ margin: 0, fontWeight: 500, color: 'var(--pms-text-secondary)' }}>
-            版本规则：
-          </p>
-          <ul style={{ margin: '4px 0 0', paddingLeft: 16, lineHeight: '1.8' }}>
-            <li>同一项目、同一预算类型从 V0.1 开始递增</li>
-            <li>仅最新版本可编辑，历史版本保留原有日期和投入数据</li>
-            <li>年度预算最新版本采用手动里程碑；其他预算类型绑定后随正式项目最新已发布一级计划更新</li>
-            <li>预估投入合计由各部门各阶段投入自动汇总</li>
-          </ul>
-        </div>
       </div>
 
       <style jsx global>{`

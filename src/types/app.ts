@@ -1,3 +1,5 @@
+import type { FanTrialAllocation } from '@/types/fanTrial'
+import type { ProjectRegistryMetadata } from '@/types/projectRegistry'
 // Common prop types for extracted components
 // Derived from the mock data structures in src/app/page.tsx
 
@@ -23,11 +25,12 @@ export interface VersionFiveRoles {
 
 export type ProjectTeamRoleValue = string | string[]
 export type ProjectTeamRoleMap = Record<string, ProjectTeamRoleValue>
-export type ProjectInfoValue = string | boolean | null | string[] | JiraProjectConfig[] | ProjectTeamRoleMap | DeliverableValue
+export type ProjectInfoValue = string | boolean | null | string[] | FanTrialAllocation[] | JiraProjectConfig[] | ProjectTeamRoleMap | DeliverableValue
 export type ProjectInfoValues = Record<string, ProjectInfoValue>
 
 /** Project record - matches initialProjects structure in page.tsx */
-export interface ProjectItem {
+export interface ProjectItem extends ProjectRegistryMetadata {
+  responsiblePersons?: string[];
   id: string;
   sourceBid?: string;
   name: string;
@@ -80,6 +83,10 @@ export interface ProjectItem {
   platform?: string;
   startRam?: RoadmapRam;
   str5Date?: string;
+  str5Estimated?: boolean;
+  launchEstimated?: boolean;
+  /** Original roadmap record retained losslessly during one-time migration. */
+  legacyRoadmapSnapshot?: import('@/types/roadmap').PlannedRoadmapProject;
   remark?: string;
   market?: string;
   ppm?: string;

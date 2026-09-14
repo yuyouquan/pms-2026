@@ -9,7 +9,7 @@ export type VersionLockState = 'locked' | 'unlocked'
 /** 项目状态 */
 export type ProjectStatus = 'active' | 'cancelled' | 'paused'
 
-/** 技术项目 里程碑节点（6个，与 tOS 7个不同） */
+/** 技术项目里程碑节点（9个，新增节点兼容旧版本缺省值） */
 export interface TechMilestoneNodes {
   /** 规划启动 */
   planningStart: string | null
@@ -17,10 +17,16 @@ export interface TechMilestoneNodes {
   charterDCP: string | null
   /** TDR1 */
   tdr1: string | null
+  /** TDR2 */
+  tdr2?: string | null
   /** PDCP */
   pdcp: string | null
-  /** TDCP-X */
+  /** TDR3_X */
+  tdr3x?: string | null
+  /** TDCP_X */
   tdcpx: string | null
+  /** TDR4 */
+  tdr4?: string | null
   /** EDCP */
   edcp: string | null
 }
@@ -113,6 +119,9 @@ export interface HrTechnicalVersion {
 
 /** 技术项目 */
 export interface HrTechnicalProject {
+  pmsProjectId?: string
+  migrationIssue?: string
+  legacyHrSnapshot?: unknown
   id: string
   /** TDT项目名称 */
   tdtName: string
@@ -171,6 +180,8 @@ export interface TechMonthlyInvestment {
   monthlyData: Record<string, number>
   /** 是否已手动编辑 */
   isEdited: boolean
+  /** Removed source rows remain archived for manual-data restoration, excluded from active totals. */
+  isArchived?: boolean
 }
 
 /** 项目列表筛选器 */
@@ -211,6 +222,7 @@ export interface TechNewProjectForm {
 
 /** 新建版本表单 */
 export interface TechNewVersionForm {
+  milestones?: Partial<TechMilestoneNodes>
   budgetType: BudgetType
   departmentInvestments: TechDepartmentInvestment[]
 }

@@ -1,9 +1,14 @@
+import { useProjectStore } from '@/stores/project'
+import { resolveProjectSpaceModule } from '@/lib/projectSpaceNavigation'
 import { create } from 'zustand'
 import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
+import type { AnyFilterCondition } from '@/lib/filterConditions'
+import type { ConfigModuleKey } from '@/types/hrConfig'
+import { createProjectConfigurationFilters, type ProjectConfigurationFilters } from '@/types/projectRegistry'
 
 export type MainModule =
   | 'workbench'
-  | 'projectList'
+  | 'projectManagement'
   | 'jointProjectSpace'
   | 'roadmap'
   | 'hrPipeline'
@@ -11,6 +16,8 @@ export type MainModule =
   | 'projectSpace'
 
 export type WorkbenchTab = 'todo'
+export interface ProjectInfoNavigationIntent { projectId: string; currentUser: string }
+export type ProjectManagementTab = 'configuration' | 'view'
 
 export interface PlanNavigationIntent {
   source: 'todo'
@@ -34,20 +41,30 @@ export interface MrPlanNavigationIntent {
 export type ProjectSpaceOrigin = {
   module: Exclude<MainModule, 'projectSpace'>
   workbenchTab?: WorkbenchTab
+  projectManagementTab?: ProjectManagementTab
 } | null
 
 export interface UiState {
   // Navigation
   activeModule: MainModule
   workbenchTab: WorkbenchTab
+  projectManagementTab: ProjectManagementTab
+  projectConfigurationPage: number
+  projectConfigurationFilters: ProjectConfigurationFilters
+  projectListSummaryFilters: AnyFilterCondition[]
+  projectListTechnicalFilters: AnyFilterCondition[]
+  projectListAboutMineOnly: boolean
+  projectListTablePage: number
   projectSpaceOrigin: ProjectSpaceOrigin
   configTab: string
+  hrConfigModule: ConfigModuleKey
   configSidebarCollapsed: boolean
   projectSpaceSidebarCollapsed: boolean
   hrSidebarCollapsed: boolean
   selectedProjectType: string
   projectSpaceModule: string
   planNavigationIntent: PlanNavigationIntent | null
+  projectInfoNavigationIntent: ProjectInfoNavigationIntent | null
   mrPlanNavigationIntent: MrPlanNavigationIntent | null
 
   // Edit guard
@@ -67,15 +84,26 @@ export interface UiState {
 export interface UiActions {
   setActiveModule: (v: MainModule) => void
   setWorkbenchTab: (v: WorkbenchTab) => void
+  setProjectManagementTab: (v: ProjectManagementTab) => void
+  openProjectConfiguration: () => void
+  setProjectConfigurationPage: (v: number) => void
+  setProjectConfigurationFilters: (patch: Partial<ProjectConfigurationFilters>) => void
+  resetProjectConfigurationFilters: () => void
+  setProjectListSummaryFilters: (v: AnyFilterCondition[] | ((previous: AnyFilterCondition[]) => AnyFilterCondition[])) => void
+  setProjectListTechnicalFilters: (v: AnyFilterCondition[] | ((previous: AnyFilterCondition[]) => AnyFilterCondition[])) => void
+  setProjectListAboutMineOnly: (v: boolean | ((previous: boolean) => boolean)) => void
+  setProjectListTablePage: (v: number) => void
   enterProjectSpace: (origin: NonNullable<ProjectSpaceOrigin>) => void
   returnFromProjectSpace: () => void
   setConfigTab: (v: string) => void
+  setHrConfigModule: (v: ConfigModuleKey) => void
   setConfigSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setProjectSpaceSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setHrSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setSelectedProjectType: (v: string) => void
   setProjectSpaceModule: (v: string) => void
   setPlanNavigationIntent: (v: PlanNavigationIntent | null) => void
+  setProjectInfoNavigationIntent: (v: ProjectInfoNavigationIntent | null) => void
   setMrPlanNavigationIntent: (v: MrPlanNavigationIntent) => void
   consumeMrPlanNavigationIntent: () => MrPlanNavigationIntent | null
   clearMrPlanNavigationIntent: () => void
@@ -101,14 +129,28 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   // Navigation
   activeModule: 'workbench',
   workbenchTab: 'todo',
+  projectManagementTab: 'view',
+  projectConfigurationPage: 1,
+  projectConfigurationFilters: createProjectConfigurationFilters(),
+  projectListSummaryFilters: [],
+  projectListTechnicalFilters: [{
+    id: 'quick-technicalProjectType',
+    field: 'technicalProjectType',
+    operator: 'contains',
+    value: ['tdt'],
+  }],
+  projectListAboutMineOnly: true,
+  projectListTablePage: 1,
   projectSpaceOrigin: null,
   configTab: 'plan',
+  hrConfigModule: 'hrModel',
   configSidebarCollapsed: false,
   projectSpaceSidebarCollapsed: false,
   hrSidebarCollapsed: false,
   selectedProjectType: PROJECT_CATEGORY_MACHINE,
   projectSpaceModule: 'basic',
   planNavigationIntent: null,
+  projectInfoNavigationIntent: null,
   mrPlanNavigationIntent: null,
 
   // Edit guard
@@ -126,7 +168,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
 
   // Setters
   setActiveModule: (v) => {
-    const { activeModule, workbenchTab, projectSpaceOrigin } = get()
+    const { activeModule, workbenchTab, projectManagementTab, projectSpaceOrigin } = get()
     // Compatibility for existing callers that still navigate directly. New
     // project-space entry points should call enterProjectSpace explicitly.
     if (v === 'projectSpace' && activeModule !== 'projectSpace' && !projectSpaceOrigin) {
@@ -135,6 +177,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
         projectSpaceOrigin: {
           module: activeModule,
           ...(activeModule === 'workbench' ? { workbenchTab } : {}),
+          ...(activeModule === 'projectManagement' ? { projectManagementTab } : {}),
         },
       })
       return
@@ -142,26 +185,59 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     set({ activeModule: v, ...(v !== 'projectSpace' ? { mrPlanNavigationIntent: null } : {}) })
   },
   setWorkbenchTab: (v) => set({ workbenchTab: v }),
+  setProjectManagementTab: (v) => set({ projectManagementTab: v }),
+  openProjectConfiguration: () => set({
+    activeModule: 'projectManagement',
+    projectManagementTab: 'configuration',
+    mrPlanNavigationIntent: null,
+  }),
+  setProjectConfigurationPage: (v) => set({ projectConfigurationPage: v }),
+  setProjectConfigurationFilters: (patch) => set(state => ({
+    projectConfigurationFilters: { ...state.projectConfigurationFilters, ...patch },
+    projectConfigurationPage: 1,
+  })),
+  resetProjectConfigurationFilters: () => set({
+    projectConfigurationFilters: createProjectConfigurationFilters(),
+    projectConfigurationPage: 1,
+  }),
+  setProjectListSummaryFilters: (v) => set(state => ({
+    projectListSummaryFilters: typeof v === 'function' ? v(state.projectListSummaryFilters) : v,
+  })),
+  setProjectListTechnicalFilters: (v) => set(state => ({
+    projectListTechnicalFilters: typeof v === 'function' ? v(state.projectListTechnicalFilters) : v,
+  })),
+  setProjectListAboutMineOnly: (v) => set(state => ({
+    projectListAboutMineOnly: typeof v === 'function' ? v(state.projectListAboutMineOnly) : v,
+  })),
+  setProjectListTablePage: (v) => set({ projectListTablePage: v }),
   enterProjectSpace: (origin) => set({
     activeModule: 'projectSpace',
+    projectSpaceModule: resolveProjectSpaceModule(useProjectStore.getState().selectedProject, get().projectSpaceModule),
     projectSpaceOrigin: origin.module === 'workbench'
       ? { module: 'workbench', workbenchTab: origin.workbenchTab ?? get().workbenchTab }
-      : { module: origin.module },
+      : origin.module === 'projectManagement'
+        ? { module: 'projectManagement', projectManagementTab: origin.projectManagementTab ?? get().projectManagementTab }
+        : { module: origin.module },
   }),
   returnFromProjectSpace: () => {
     const projectSpaceOrigin = get().projectSpaceOrigin ?? {
       module: 'workbench' as const,
       workbenchTab: 'todo' as const,
     }
-    const { module, workbenchTab } = projectSpaceOrigin
+    const { module, workbenchTab, projectManagementTab } = projectSpaceOrigin
     set({
       activeModule: module,
       workbenchTab: module === 'workbench' ? (workbenchTab ?? 'todo') : get().workbenchTab,
+      projectManagementTab: module === 'projectManagement'
+        ? (projectManagementTab ?? get().projectManagementTab)
+        : get().projectManagementTab,
       projectSpaceOrigin: null,
+      projectInfoNavigationIntent: null,
       mrPlanNavigationIntent: null,
     })
   },
   setConfigTab: (v) => set({ configTab: v }),
+  setHrConfigModule: (v) => set({ hrConfigModule: v }),
   setConfigSidebarCollapsed: (v) => set((s) => ({
     configSidebarCollapsed: typeof v === 'function' ? v(s.configSidebarCollapsed) : v,
   })),
@@ -172,8 +248,9 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     hrSidebarCollapsed: typeof v === 'function' ? v(s.hrSidebarCollapsed) : v,
   })),
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
-  setProjectSpaceModule: (v) => set({ projectSpaceModule: v }),
+  setProjectSpaceModule: (v) => set({ projectSpaceModule: resolveProjectSpaceModule(useProjectStore.getState().selectedProject, v) }),
   setPlanNavigationIntent: (v) => set({ planNavigationIntent: v }),
+  setProjectInfoNavigationIntent: (v) => set({ projectInfoNavigationIntent: v }),
   setMrPlanNavigationIntent: (v) => set({ mrPlanNavigationIntent: v }),
   consumeMrPlanNavigationIntent: () => {
     const intent = get().mrPlanNavigationIntent

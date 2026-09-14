@@ -47,9 +47,10 @@ const eq = (actual,expected,message) => { assert.deepEqual(actual,expected,messa
 for(let index=0;index<stores.length;index++) {
  const store=stores[index], category=categories[index]
  const template=store.getState().projects[0]
- const project={...template,id:`hr-${category}`,versions:[],ipmProjectCode:null,ipmProjectName:null}
- store.setState({projects:[project],monthlyInvestments:[]})
- const add = budgetType => index===0 ? store.getState().addVersion(project.id,budgetType,{projectLevel:'S',levelCoefficient:1,hrModelVersion:'V2026.1'}) : store.getState().addVersion(project.id,{budgetType,departmentInvestments:[dept,{...dept,id:'two',secondaryDepartment:'测试部'}],projectStartTime:'2026-03-01',projectEndTime:'2027-04-01'})
+ let project={...template,id:`hr-${category}`,pmsProjectId:`budget-${category}`,versions:[],ipmProjectCode:null,ipmProjectName:null}
+ projectStore.setState({currentLoginUser:'演示用户01',projects:[...projectStore.getState().projects,{...formalProjects[index],id:`budget-${category}`,projectAttribute:'budget',sourceBid:undefined}]})
+ store.setState({projects:[project],monthlyInvestments:[],registryMigrationComplete:true})
+ const add = budgetType => index===0 ? store.getState().addVersion(project.id,budgetType,{projectLevel:'S',levelCoefficient:1,hrModelVersion:'V2026.1',milestones:{productLaunch:'2027-06-01',lifecycleEnd:'2027-12-01'}}) : store.getState().addVersion(project.id,{budgetType,departmentInvestments:[dept,{...dept,id:'two',secondaryDepartment:'测试部'}],projectStartTime:'2026-03-01',projectEndTime:'2027-04-01'})
  add('annual')
  const first=store.getState().projects[0].versions[0]
  eq(first.versionNumber,'V0.1',category+' first version')
@@ -64,35 +65,39 @@ for(let index=0;index<stores.length;index++) {
  eq(current.versions[0].batch,20,category+' historical batch editable')
  store.getState().updateVersion(project.id,first.id,{batch:21})
  eq(store.getState().projects[0].versions[0].batch,20,category+' invalid batch rejected')
- store.getState().bindIpmProject(project.id,`FORMAL-${category}`,`正式${category}`)
+ // Prior mixed ownership is split before nonannual creation.
+ const annualSource={...store.getState().projects[0],id:`annual-${category}`}
+ annualSource.versions=annualSource.versions.map(v=>({...v,projectId:annualSource.id}))
+ project={...project,pmsProjectId:formalProjects[index].id,ipmProjectCode:`FORMAL-${category}`}
+ store.setState({projects:[project,annualSource],monthlyInvestments:store.getState().monthlyInvestments.map(m=>({...m,projectId:annualSource.id}))})
  add('projectEstimate');add('projectBudget')
  current=store.getState().projects[0]
  eq(current.versions.filter(v=>v.budgetType!=='annual').map(v=>v.versionNumber),['V0.1','V0.1'],category+' independent budgets')
- const annual=current.versions.find(v=>v.budgetType==='annual'&&v.minorVersion===2)
- const manualDates=index===3?{projectStartTime:'2026-02-01',projectEndTime:'2027-04-01'}:{milestones:{...formal.resolveHrFormalSource(category,`FORMAL-${category}`).milestones,[index===2?'planningStart':'conceptStart']:'2026-02-01'}}
- store.getState().updateVersion(project.id,annual.id,manualDates)
- const manual=store.getState().projects[0].versions.find(v=>v.id===annual.id)
+ const annual=store.getState().projects[1].versions.find(v=>v.budgetType==='annual'&&v.minorVersion===2)
+ const manualDates=index===3?{projectStartTime:'2026-02-01',projectEndTime:'2027-04-01'}:{milestones:{...formal.resolveHrFormalSource(category,`FORMAL-${category}`).milestones,[index===2?'planningStart':'conceptStart']:'2026-02-01',...(index===0?{productLaunch:'2027-06-01',lifecycleEnd:'2027-12-01'}:{})}}
+ store.getState().updateVersion(annualSource.id,annual.id,manualDates)
+ const manual=store.getState().projects.find(p=>p.id===annualSource.id).versions.find(v=>v.id===annual.id)
  eq(index===3?manual.projectStartTime:index===2?manual.milestones.planningStart:manual.milestones.conceptStart,'2026-02-01',category+' bound annual accepts manual dates')
  store.getState().refreshFormalProjects()
- const refreshed=store.getState().projects[0].versions.find(v=>v.id===annual.id)
+ const refreshed=store.getState().projects.find(p=>p.id===annualSource.id).versions.find(v=>v.id===annual.id)
  eq(index===3?refreshed.projectStartTime:index===2?refreshed.milestones.planningStart:refreshed.milestones.conceptStart,'2026-02-01',category+' annual manual dates survive refresh')
  current=store.getState().projects[0]
  const latest=current.versions.find(v=>v.budgetType==='projectEstimate')
- eq(JSON.stringify(current.versions[0].milestones ?? [current.versions[0].projectStartTime,current.versions[0].projectEndTime]),historical,category+' binding preserves historical snapshot')
- eq(index===3?latest.projectStartTime:index===2?latest.milestones.planningStart:latest.milestones.conceptStart,index===2?'2027-04-01':'2026-03-01',category+' uses latest published main plan')
- store.getState().updateVersion(project.id,latest.id,index===3?{projectStartTime:'2044-01-01',batch:3}:{milestones:index===2?{planningStart:'2044-01-01'}:{conceptStart:'2044-01-01'},projectLevel:'C',batch:3})
+ eq(JSON.stringify(store.getState().projects.find(p=>p.id===annualSource.id).versions[0].milestones ?? [store.getState().projects.find(p=>p.id===annualSource.id).versions[0].projectStartTime,store.getState().projects.find(p=>p.id===annualSource.id).versions[0].projectEndTime]),historical,category+' binding preserves historical snapshot')
+ eq(index===3?latest.projectStartTime:index===2?latest.milestones.planningStart:latest.milestones.conceptStart,index===2?'2027-04-01':'2026-03-01',category+' uses published plan or independent capability dates')
+ store.getState().updateVersion(project.id,latest.id,index===3?{projectStartTime:'2026-04-01',batch:3}:{milestones:index===2?{planningStart:'2044-01-01'}:{conceptStart:'2044-01-01'},projectLevel:'C',batch:3})
  current=store.getState().projects[0]
  const now=current.versions.find(v=>v.id===latest.id)
- eq(index===3?now.projectStartTime:index===2?now.milestones.planningStart:now.milestones.conceptStart,index===2?'2027-04-01':'2026-03-01',category+' bound dates guarded')
+ eq(index===3?now.projectStartTime:index===2?now.milestones.planningStart:now.milestones.conceptStart,index===3?'2026-04-01':index===2?'2027-04-01':'2026-03-01',category+' formal date ownership enforced')
  eq(now.batch,3,category+' latest batch editable')
  if(index===0){
   eq(now.projectLevel,'S','bound machine level');eq(current.projectYear,'26年立项27年结项','machine year derived')
-  eq(store.getState().monthlyInvestments.length,9,'machine all model departments and budgets monthly')
+  eq(store.getState().monthlyInvestments.filter(row=>store.getState().projects.some(p=>rules.getLatestHrVersion(p.versions,row.budgetType)?.id===row.versionId)).length,9,'machine all model departments and budgets monthly')
   eq(store.getState().monthlyInvestments.filter(r=>r.versionId===latest.id).map(r=>r.batch),[3,3,3],'machine batch synchronized to all monthly departments')
-  for(const row of store.getState().monthlyInvestments) eq(Math.round(Object.values(row.monthlyData).reduce((a,b)=>a+b,0)*10),Math.round(row.estimatedTotal*10),'machine monthly exact rounding')
+  for(const row of store.getState().monthlyInvestments.filter(row=>store.getState().projects.some(p=>rules.getLatestHrVersion(p.versions,row.budgetType)?.id===row.versionId))) eq(Math.round(Object.values(row.monthlyData).reduce((a,b)=>a+b,0)*10),Math.round(row.estimatedTotal*10),'machine monthly exact rounding')
 }
  if(index!==0){
-  eq(store.getState().monthlyInvestments.length,6,category+' every department and budget monthly');
+  eq(store.getState().monthlyInvestments.filter(row=>store.getState().projects.some(p=>rules.getLatestHrVersion(p.versions,row.budgetType)?.id===row.versionId)).length,6,category+' every department and budget monthly');
   eq(store.getState().monthlyInvestments.filter(r=>r.versionId===latest.id).map(r=>r.batch),[3,3],category+' batch synchronized to monthly');
   const before=JSON.stringify(current.versions[0].departmentInvestments)
   store.getState().updateVersionDepartmentInvestments(project.id,first.id,[])
@@ -104,8 +109,8 @@ for(let index=0;index<stores.length;index++) {
 }
 eq(rules.getMachineProjectYear({versions:[{createdAt:'2026-09-09T01:00:00Z',milestones:{conceptStart:'2025-01-01',str5:'2026-01-01'}},{createdAt:'2026-09-09T02:00:00Z',milestones:{conceptStart:'2027-01-01',str5:'2028-01-01'}}]}),'27年立项28年结项','year chooses full newest timestamp')
 eq(rules.formatHrBatch(20),'第20批','batch label')
-eq(formal.resolveHrFormalSource('tos','FORMAL-tos').milestones.marketIteration,'2027-04-01','tOS stage start derives from published child business period')
-eq(formal.resolveHrFormalSource('tos','FORMAL-tos').milestones.maintenanceEnd,'2027-04-01','tOS maintenance end derives from published child business period')
+eq(formal.resolveHrFormalSource('tos','FORMAL-tos').milestones.marketIteration,null,'tOS iteration ending is independently entered, never pulled from plan')
+eq(formal.resolveHrFormalSource('tos','FORMAL-tos').milestones.maintenanceEnd,null,'tOS maintenance ending is independently entered, never pulled from plan')
 const configMath=load('src/constants/hrConfig.ts')
 const partialDepartment={...dept,estimatedInvestment:60,planningPhase:10,conceptPhase:10,planningPhase2:10,developmentValidationPhase:10,marketIterationPhase:10,maintenancePhase:10}
 const partialTos=configMath.calcTosDepartmentMonthlySplit([partialDepartment],{planningKO:null,conceptStart:'2026-01-01',str1:'2026-01-31',str3:null,str5:null,marketIteration:null,maintenanceEnd:null})[0]
@@ -121,7 +126,7 @@ const { useHrConfigStore: modelStore } = load('src/stores/hrConfig.ts')
 const machineBeforeModelCheck = structuredClone(stores[0].getState().projects)
 const monthlyBeforeModelCheck = structuredClone(stores[0].getState().monthlyInvestments)
 const modelBefore = structuredClone(modelStore.getState().data)
-const unbound = structuredClone(machineBeforeModelCheck[0])
+const unbound = structuredClone(machineBeforeModelCheck.find(p=>p.pmsProjectId==='budget-machine'))
 unbound.ipmProjectCode = null
 unbound.ipmProjectName = null
 stores[0].setState({projects:[unbound],monthlyInvestments:[]})
@@ -144,13 +149,13 @@ modelStore.setState({data:modelBefore})
 stores[0].setState({projects:machineBeforeModelCheck,monthlyInvestments:monthlyBeforeModelCheck})
 // Publishing a new plan updates only the latest HR version of each budget type.
 const machineStore = stores[0]
-const firstHistory = JSON.stringify(machineStore.getState().projects[0].versions[0])
+const firstHistory = JSON.stringify(machineStore.getState().projects.find(p=>p.pmsProjectId==='budget-machine').versions[0])
 const updatedTasks = publishedTasks.map(t=>({...t,planStartDate:'2029-05-01',planEndDate:'2029-05-01'}))
 planStore.setState({ publishedSnapshots:{ ...planStore.getState().publishedSnapshots, [getProjectMarketSnapshotKey('verify-machine','TR','pub2')]:updatedTasks } })
 projectStore.setState({projects:projectStore.getState().projects.map(p=>p.id==='verify-machine'?{...p,fieldValues:{softwareProjectLevel:'A'}}:p)})
 machineStore.getState().refreshFormalProjects()
-eq(JSON.stringify(machineStore.getState().projects[0].versions[0]),firstHistory,'plan updates preserve complete historical snapshot')
-eq(machineStore.getState().projects[0].versions.filter(v=>v.minorVersion===2||v.budgetType!=='annual').map(v=>v.milestones.conceptStart),['2026-02-01','2029-05-01','2029-05-01'],'annual manual dates persist while nonannual latest versions follow publication')
+eq(JSON.stringify(machineStore.getState().projects.find(p=>p.pmsProjectId==='budget-machine').versions[0]),firstHistory,'plan updates preserve complete historical snapshot')
+eq(machineStore.getState().projects[0].versions.filter(v=>v.budgetType!=='annual').map(v=>v.milestones.conceptStart),['2029-05-01','2029-05-01'],'annual manual dates persist while nonannual latest versions follow publication')
 eq(machineStore.getState().projects[0].projectYear,'29年立项29年结项','machine year follows newest created version after publication')
 const legacy = rules.normalizeHrVersionSequence([
  {id:'old-a',budgetType:'annual',minorVersion:0,majorVersion:1,versionNumber:'V1.0',createdAt:'2026-01-01',milestones:{conceptStart:'2025-01-01'}},
@@ -174,7 +179,7 @@ const saved=JSON.parse(memory.get('pms-hr-capability'))
 cap.setState({monthlyInvestments:[]})
 memory.set('pms-hr-capability',JSON.stringify(saved))
 await cap.persist.rehydrate()
-eq(cap.getState().monthlyInvestments.length,6,'rehydration retains every department and budget')
+eq(cap.getState().monthlyInvestments.filter(row=>cap.getState().projects.some(p=>rules.getLatestHrVersion(p.versions,row.budgetType)?.id===row.versionId)).length,6,'rehydration retains every department and budget')
 eq(cap.getState().monthlyInvestments.find(r=>r.id===originalRecord.id).isEdited,true,'rehydration retains matching manual monthly edits')
-eq(cap.getState().projects[0].versions[0].batch,20,'historical batch survives rehydration')
+eq(cap.getState().projects.find(p=>p.pmsProjectId==='budget-capability').versions[0].batch,20,'historical batch survives rehydration')
 console.log(`HR investment rules: ${assertions} assertions passed`)

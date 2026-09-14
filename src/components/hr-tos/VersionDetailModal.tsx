@@ -1,12 +1,16 @@
 'use client'
 
+import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
+
+import { canEditHrInScope } from '@/lib/hrProjectRegistry'
+import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { isLatestHrVersion } from '@/lib/hrVersionRules'
 import { Modal, Table, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import * as XLSX from 'xlsx'
-import { useHrTosStore } from '@/stores/hrTos'
+import { useHrTosStore } from '@/hooks/useHrResourceStores'
 import { TOS_BUDGET_TYPE_LABELS, TOS_PHASE_INVESTMENT_FIELDS, formatPersonMonth } from '@/constants/hrTos'
 import { exportSheet } from '@/utils/exportExcel'
 import type { TosDepartmentInvestment, TosPhaseKey } from '@/types/hrTos'
@@ -40,7 +44,8 @@ export default function VersionDetailModal({
     if (!v) return { project: null, version: null }
     return { project: p, version: v }
   }, [projects, projectId, versionId])
-  const readOnly = requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
+  const scopeId = useHrResourceScope()
+  const readOnly = !canEditHrInScope(project, scopeId) || requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
   const versionRef = useRef(version)
   versionRef.current = version
 
@@ -189,6 +194,7 @@ export default function VersionDetailModal({
   const handleOk = () => {
     if (!project || !version || readOnly) return
     updateVersionDepartmentInvestments(project.id, version.id, editData)
+    onCancel()
     message.success('部门预估投入已更新')
   }
 
@@ -336,6 +342,8 @@ export default function VersionDetailModal({
             </strong>
           </span>
         </div>
+
+        <HrVersionMilestoneDetails category="tos" values={version.milestones} />
 
         {/* 合计提示 */}
         <Alert

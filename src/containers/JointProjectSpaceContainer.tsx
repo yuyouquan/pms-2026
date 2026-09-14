@@ -31,7 +31,7 @@ export default function JointProjectSpaceContainer() {
   }
 
   return (
-    <section className="pms-joint-space" aria-label="联合项目空间">
+    <section className="pms-joint-space" aria-label="项目组合管理">
       <Card className="pms-joint-space__card pms-solid-surface" variant="borderless">
         <Tabs
           className="pms-joint-space__tabs"
