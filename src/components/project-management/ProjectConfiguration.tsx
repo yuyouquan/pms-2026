@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd'
+import { App, Button, Descriptions, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd'
 import { ClearOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { PROJECT_TYPES } from '@/constants/projectTypes'
 import type { ColumnsType } from 'antd/es/table'
@@ -97,18 +97,39 @@ export default function ProjectConfiguration() {
       setCurrentEditing(null)
       return
     }
+    const project = projects.find(item => item.id === current.projectId)
+    if (!project) {
+      setCurrentEditing(null)
+      return
+    }
+    const fieldLabel = { name: '项目名称', projectCode: '项目编码', boundFormalProjectId: '绑定正式项目' }[current.field]
+    const displayValue = (value: string | null) => {
+      const normalized = normalizeConfigurationCellValue(value)
+      if (current.field === 'boundFormalProjectId') {
+        return normalized ? projects.find(item => item.id === normalized)?.name ?? '已删除的正式项目' : '未绑定'
+      }
+      return normalized || '未填写'
+    }
     confirmingRef.current = true
     modal.confirm({
+      className: 'pms-modal',
+      width: 560,
       title: '确认修改',
-      content: '确认保存本次修改吗？',
+      content: (
+        <Descriptions size="small" column={1}
+          styles={{ label: { whiteSpace: 'nowrap' }, content: { overflowWrap: 'anywhere' } }}
+          items={[
+            { key: 'project', label: '项目名称', children: project.name },
+            { key: 'field', label: '修改字段', children: fieldLabel },
+            { key: 'before', label: '修改前', children: displayValue(current.original) },
+            { key: 'after', label: '修改后', children: displayValue(current.value) },
+          ]}
+        />
+      ),
       okText: '确认',
       cancelText: '取消',
       onOk: () => {
-        const pending = editingRef.current
-        if (!pending) {
-          confirmingRef.current = false
-          return
-        }
+        const pending = current
         const normalized = normalizeConfigurationCellValue(pending.value)
         const result = updateConfiguredProject(pending.projectId, {
           [pending.field]: pending.field === 'boundFormalProjectId' ? (normalized || null) : normalized,
@@ -154,10 +175,16 @@ export default function ProjectConfiguration() {
   const confirmDelete = (project: ProjectItem) => {
     const linked = isFormalProject(project) ? getLinkedRegistryProjects(projects, project.id) : []
     modal.confirm({
+      className: 'pms-modal',
+      width: 560,
       title: '确认删除项目',
-      content: linked.length
-        ? `删除后将解除以下项目的绑定：${linked.map(item => item.name).join('、')}。项目历史仍会保留。`
-        : `确认删除“${project.name}”吗？项目历史仍会保留。`,
+      content: (
+        <div style={{ overflowWrap: 'anywhere' }}>
+          {`确认删除“${project.name}”吗？`}
+          {linked.length ? `删除后将解除以下项目的绑定：${linked.map(item => item.name).join('、')}。` : ''}
+          项目历史仍会保留。
+        </div>
+      ),
       okText: '删除',
       okButtonProps: { danger: true },
       cancelText: '取消',
