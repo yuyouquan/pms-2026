@@ -8899,6 +8899,7 @@ input.ant-input,
 
 /* Shared HR creation fields; department tables stay outside this grid. */
 .pms-hr-version-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 20px; }
+.pms-hr-version-form--technical { grid-template-columns: repeat(5, minmax(0, 1fr)); column-gap: 12px; }
 @media (max-width: 700px) { .pms-hr-version-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .pms-hr-version-form { grid-template-columns: minmax(0, 1fr); } }
 

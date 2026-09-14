@@ -38,8 +38,11 @@ function emptyTechMilestones(): TechMilestoneNodes {
     planningStart: null,
     charterDCP: null,
     tdr1: null,
+    tdr2: null,
     pdcp: null,
+    tdr3x: null,
     tdcpx: null,
+    tdr4: null,
     edcp: null,
   }
 }

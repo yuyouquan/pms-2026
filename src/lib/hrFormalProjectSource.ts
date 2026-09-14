@@ -57,7 +57,8 @@ export function resolveHrFormalSource(category: HrProjectCategory, code: string 
   const stages = projectLevel1Plan(tasks, { mode: 'standard' }).rows
   const milestones = category === 'technical' ? {
     planningStart: dateOf(tasks, ['规划启动']), charterDCP: dateOf(tasks, ['Charter DCP', 'Charter']),
-    tdr1: dateOf(tasks, ['TDR1']), pdcp: dateOf(tasks, ['PDCP']), tdcpx: dateOf(tasks, ['TDCP-X']), edcp: dateOf(tasks, ['EDCP']),
+    tdr1: dateOf(tasks, ['TDR1']), tdr2: dateOf(tasks, ['TDR2']), pdcp: dateOf(tasks, ['PDCP']),
+    tdr3x: dateOf(tasks, ['TDR3_X']), tdcpx: dateOf(tasks, ['TDCP_X']), tdr4: dateOf(tasks, ['TDR4']), edcp: dateOf(tasks, ['EDCP']),
   } : category === 'tos' ? {
     planningKO: dateOf(tasks, ['规划KO']), conceptStart: dateOf(tasks, ['概念启动']),
     str1: dateOf(tasks, ['STR1']), str3: dateOf(tasks, ['STR3']), str5: dateOf(tasks, ['STR5']),

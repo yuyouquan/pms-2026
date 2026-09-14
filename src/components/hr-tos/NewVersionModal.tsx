@@ -1,9 +1,8 @@
 'use client'
 
-import { canAccessHrProject, getHrRegistryProject, getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { canAccessHrProject, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
-import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
+import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 import { HrVersionMilestoneFields, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
@@ -17,8 +16,6 @@ import {
   Space,
   Alert,
   App,
-  Tooltip,
-  Tag,
   Form,
   Upload,
 } from 'antd'
@@ -33,9 +30,6 @@ import * as XLSX from 'xlsx'
 import { useHrTosStore } from '@/hooks/useHrResourceStores'
 import {
   TOS_BUDGET_TYPES,
-  TOS_BUDGET_TYPE_LABELS,
-  TOS_IPM_REQUIRED_TYPES,
-  TOS_IPM_REQUIRED_TIP,
   TOS_PHASE_INVESTMENT_FIELDS,
   formatPersonMonth,
 } from '@/constants/hrTos'
@@ -65,10 +59,6 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
   const milestoneForm = useHrVersionMilestones('tos', project, budgetType, open)
 
-  const hasIpm = useMemo(
-    () => isHrFormalRecord(project) || Boolean(getHrRegistryProject(project)?.boundFormalProjectId),
-    [project],
-  )
 
   useEffect(() => {
     if (open) {
@@ -334,51 +324,19 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       width={1280}
     >
       <div>
-        {/* 项目信息 */}
-        <div
-          style={{
-            marginBottom: 8,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-            fontSize: 12,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: 'var(--pms-text-tertiary)' }}>项目：</span>
-            {scopeId ? <span>{project?.name}</span> : (<Select
-              showSearch
-              aria-label="选择项目"
-              placeholder="请选择项目"
-              value={localProjectId || undefined}
-              options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))}
-              optionFilterProp="label"
-              style={{ minWidth: 280 }}
-              onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setEditData([]) }}
-            />)}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--pms-text-tertiary)' }}>IPM：</span>
-            {hasIpm ? (
-              <span style={{ color: 'var(--pms-text-secondary)' }}>
-                <Tag color="green" style={{ marginRight: 6 }}>{isHrFormalRecord(project) ? '正式项目' : '已绑定'}</Tag>
-                {project?.ipmProjectCode || '—'}
-                {project?.ipmProjectName ? ` · ${project.ipmProjectName}` : ''}
-              </span>
-            ) : (
-              <span style={{ color: 'var(--pms-text-tertiary)' }}>
-                <Tag color="default" style={{ marginRight: 6 }}>未绑定</Tag>
-                仅可创建年度预算版本
-              </span>
-            )}
-          </div>
-        </div>
-
-        {project && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-        {isHrFormalRecord(project) && budgetType !== 'annual' && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={resolveHrFormalSource('tos', project?.ipmProjectCode ?? null, project?.pmsProjectId).project ? '里程碑取自主市场／主类型最新已发布一级计划；尚无已发布计划时等待计划发布。' : '当前正式项目编码未找到对应项目，请在项目列表重新绑定。'} />}
-
         {/* 表单字段 */}
         <Form layout="vertical" className="pms-hr-version-form">
+          {!scopeId && <Form.Item label="项目" required>
+            <Select
+                showSearch
+                aria-label="选择项目"
+                placeholder="请选择项目"
+                value={localProjectId || undefined}
+                options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))}
+                optionFilterProp="label"
+                onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setEditData([]) }}
+              />
+          </Form.Item>}
           <Form.Item label="预算类型" required>
             <Select
               value={budgetType}

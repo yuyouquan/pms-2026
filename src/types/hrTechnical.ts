@@ -9,7 +9,7 @@ export type VersionLockState = 'locked' | 'unlocked'
 /** 项目状态 */
 export type ProjectStatus = 'active' | 'cancelled' | 'paused'
 
-/** 技术项目 里程碑节点（6个，与 tOS 7个不同） */
+/** 技术项目里程碑节点（9个，新增节点兼容旧版本缺省值） */
 export interface TechMilestoneNodes {
   /** 规划启动 */
   planningStart: string | null
@@ -17,10 +17,16 @@ export interface TechMilestoneNodes {
   charterDCP: string | null
   /** TDR1 */
   tdr1: string | null
+  /** TDR2 */
+  tdr2?: string | null
   /** PDCP */
   pdcp: string | null
-  /** TDCP-X */
+  /** TDR3_X */
+  tdr3x?: string | null
+  /** TDCP_X */
   tdcpx: string | null
+  /** TDR4 */
+  tdr4?: string | null
   /** EDCP */
   edcp: string | null
 }

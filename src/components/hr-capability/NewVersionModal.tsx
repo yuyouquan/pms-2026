@@ -2,7 +2,7 @@
 
 import { canAccessHrProject, getHrAllowedBudgetTypes, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
-import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -305,28 +305,20 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
     >
       <div>
-        {/* 项目信息 */}
-        <div
-          style={{
-            marginBottom: 12,
-            display: 'flex',
-            gap: 24,
-            fontSize: 12,
-            color: 'var(--pms-text-secondary)',
-            flexWrap: 'wrap',
-          }}
-        >
-          <Space><span>项目名称：</span>{scopeId ? <span>{project?.name}</span> : (<Select showSearch aria-label="选择项目" placeholder="请选择项目" value={localProjectId || undefined} options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))} optionFilterProp="label" style={{ minWidth: 280 }} onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setStartTime(null); setEndTime(null); setEditData([]) }} />)}</Space>
-          {project?.ipmProjectCode && (
-            <span>IPM编码：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.ipmProjectCode}</strong></span>
-          )}
-        </div>
-
-        {project && budgetType && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-
         {/* 表单区 */}
         <Form form={form} layout="vertical">
           <div className="pms-hr-version-form">
+          {!scopeId && <Form.Item label="项目" required>
+            <Select
+                showSearch
+                aria-label="选择项目"
+                placeholder="请选择项目"
+                value={localProjectId || undefined}
+                options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))}
+                optionFilterProp="label"
+                onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setStartTime(null); setEndTime(null); setEditData([]) }}
+              />
+          </Form.Item>}
             <Form.Item label="预算类型" required>
               <Select
                 style={{ width: '100%' }}

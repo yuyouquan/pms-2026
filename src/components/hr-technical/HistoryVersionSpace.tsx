@@ -194,7 +194,7 @@ export default function HistoryVersionSpace() {
       align: 'center',
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
-          value={record.milestones[field.key]}
+          value={record.milestones[field.key] ?? null}
           editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
           onSave={v =>
             updateVersion(record.projectId, record.id, {

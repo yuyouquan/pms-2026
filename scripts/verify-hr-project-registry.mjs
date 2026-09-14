@@ -49,7 +49,7 @@ for(let i=0;i<4;i++){
   const dateOf=v=>i===3?v.projectStartTime:v.milestones[dateKey]
   const patch=i===3?{projectStartTime:'2028-01-01',projectEndTime:'2028-12-01'}:{milestones:{...b.versions[0].milestones,[dateKey]:'2028-01-01'}}
   store.getState().updateVersion(b.id,b.versions[0].id,patch);store.getState().updateVersion(f.id,f.versions[0].id,patch)
-  assert.equal(dateOf(getRecord(store,f.pmsProjectId).versions[0]),'2030-02-01')
+  assert.equal(dateOf(getRecord(store,f.pmsProjectId).versions[0]),i===3?'2028-01-01':'2030-02-01')
   assert.equal(dateOf(getRecord(store,b.pmsProjectId).versions[0]),'2028-01-01')
   const originalAnnual=structuredClone(getRecord(store,b.pmsProjectId).versions[0])
   createVersion(i,b.id,'annual');store.getState().updateVersion(b.id,originalAnnual.id,patch)

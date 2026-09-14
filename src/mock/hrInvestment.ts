@@ -68,7 +68,12 @@ function dates(scenario: number, minor: number): (string | null)[] {
 const midpointDate = (start: string, end: string) => new Date((Date.parse(start) + Date.parse(end)) / 2).toISOString().slice(0, 10)
 const machineDates = (d: (string | null)[]): MilestoneNodes => ({ conceptStart: d[0], str1: d[1], str2: d[1] && d[2] ? midpointDate(d[1], d[2]) : null, str3: d[2], str4: d[3], str4a: d[3] && d[4] ? midpointDate(d[3], d[4]) : null, str5: d[4], productLaunch: d[5] })
 const tosDates = (d: (string | null)[]): TosMilestoneNodes => ({ planningKO: d[0], conceptStart: d[1], str1: d[2], str3: d[3], str5: d[4], marketIteration: d[5], maintenanceEnd: d[6] })
-const techDates = (d: (string | null)[]): TechMilestoneNodes => ({ planningStart: d[0], charterDCP: d[1], tdr1: d[2], pdcp: d[3], tdcpx: d[4], edcp: d[5] })
+const techDates = (d: (string | null)[]): TechMilestoneNodes => ({
+  planningStart: d[0], charterDCP: d[1], tdr1: d[2],
+  tdr2: d[2] && d[3] ? midpointDate(d[2], d[3]) : null,
+  pdcp: d[3], tdr3x: d[3] && d[4] ? midpointDate(d[3], d[4]) : null,
+  tdcpx: d[4], tdr4: d[4] && d[5] ? midpointDate(d[4], d[5]) : null, edcp: d[5],
+})
 
 function departmentValues(versionId: string, scenario: number, minor: number, phaseCount: number) {
   return DEPARTMENTS.map((department, index) => {

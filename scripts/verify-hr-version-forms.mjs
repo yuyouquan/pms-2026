@@ -40,7 +40,7 @@ await check('All category creation payloads retain manual dates, reuse source se
   for (let i = 1; i < 4; i++) {
     const milestones = i === 1 ? { planningKO: '2028-01-02', conceptStart: '2028-02-02', str1: '2028-03-02', str3: '2028-04-02', str5: '2028-05-02', marketIteration: '2028-06-02', maintenanceEnd: '2028-07-02' } : { planningStart: '2028-01-02', charterDCP: '2028-02-02', tdr1: '2028-03-02', pdcp: '2028-04-02', tdcpx: '2028-05-02', edcp: '2028-06-02' }
     stores[i].getState().addVersion(getRecord(i).id, { budgetType: 'annual', departmentInvestments: [dept], milestones, projectStartTime: '2028-01-02', projectEndTime: '2028-12-02' })
-    assert.deepEqual(i === 3 ? { start: getRecord(i).versions[0].projectStartTime, end: getRecord(i).versions[0].projectEndTime } : getRecord(i).versions[0].milestones, i === 3 ? { start: '2028-01-02', end: '2028-12-02' } : milestones)
+    assert.deepEqual(i === 3 ? { start: getRecord(i).versions[0].projectStartTime, end: getRecord(i).versions[0].projectEndTime } : getRecord(i).versions[0].milestones, i === 3 ? { start: '2028-01-02', end: '2028-12-02' } : i === 2 ? { ...milestones, tdr2: null, tdr3x: null, tdr4: null } : milestones)
   }
   for (let i = 0; i < 4; i++) {
     const before = structuredClone(getRecord(i).versions)
@@ -56,7 +56,7 @@ await check('Machine configured preview and canonical version totals agree acros
     rows.forEach(row => assert.equal(Math.round(Object.values(row.phases).reduce((a,b) => a+b,0)*10)/10, row.estimatedTotal))
   }
 })
-await check('All four canonical formal projects create without source codes or published plans; provided manual dates cannot override own plan', () => {
+await check('Formal projects create without source codes; plan-owned dates stay empty while capability accepts manual dates', () => {
   registry.setState({ projects: [...registry.getState().projects, ...types.map((type, i) => ({ ...base, id: `formal-empty-${i}`, type, name: `正式空编码${i}`, projectAttribute: 'formal', sourceBid: '', projectCode: '', fieldValues: { softwareProjectLevel: 'S' }, markets: [], versionTypes: [] }))] })
   stores.forEach((store, i) => {
     store.getState().refreshFormalProjects()
@@ -68,7 +68,7 @@ await check('All four canonical formal projects create without source codes or p
     else store.getState().addVersion(project.id, { budgetType: 'projectEstimate', departmentInvestments: [dept], milestones: { conceptStart: '2040-01-01', planningStart: '2040-01-01' }, projectStartTime: '2040-01-01', projectEndTime: '2040-12-01' })
     const version = store.getState().projects.find(p => p.id === project.id).versions[0]
     assert.ok(version, `${types[i]} can create with no external code`)
-    if (i === 3) { assert.equal(version.projectStartTime, ''); assert.equal(version.projectEndTime, '') }
+    if (i === 3) { assert.equal(version.projectStartTime, '2040-01-01'); assert.equal(version.projectEndTime, '2040-12-01') }
     else assert.ok(Object.values(version.milestones).every(value => value === null))
   })
 })
@@ -144,15 +144,15 @@ await check('Model stores deny seed editor/viewer; explicit custom grants permit
   config.getState().importRecords('hrModel', [{ id: 'custom-import', modelVersion: 'IMPORT' }]); assert.ok(config.getState().data.hrModel.some(row => row.id === 'custom-import'))
   config.getState().deleteRecord('hrModel', 'custom-import'); assert.ok(!config.getState().data.hrModel.some(row => row.id === 'custom-import'))
 })
-await check('Forms and navigation wire shared readonly milestones, three-column layout, permission guards and existing model data', () => {
+await check('Forms and navigation wire shared milestones, category layouts, permission guards and existing model data', () => {
   const source = file => fs.readFileSync(file, 'utf8')
   for (const category of ['machine', 'tos', 'technical', 'capability']) {
-    assert.match(source(`src/components/hr-${category}/NewVersionModal.tsx`), /pms-hr-version-form/)
+    assert.match(source(`src/components/hr-${category}/NewVersionModal.tsx`), category === 'machine' ? /pms-hr-version-row--metadata/ : /pms-hr-version-form/)
     assert.match(source(`src/components/hr-${category}/${category === 'machine' ? 'MachineVersionDetailModal' : 'VersionDetailModal'}.tsx`), /HrVersionMilestoneDetails/)
   }
   assert.doesNotMatch(source('src/constants/hrPipeline.ts'), /key: 'config\/hr-model'/)
   assert.match(source('src/containers/ConfigContainer.tsx'), /HR_CONFIG_CENTER_MODULES: ConfigModuleKey\[\] = \['hrModel'\]/)
-  assert.match(source('src/containers/ConfigContainer.tsx'), /ariaLabel="人力资源管道配置项"/)
+  assert.match(source('src/containers/ConfigContainer.tsx'), /ariaLabel="配置分类"/)
   assert.match(source('src/containers/ConfigContainer.tsx'), /HrConfigContent key=\{selectedHrConfigModule\} moduleKey=\{selectedHrConfigModule\}/)
   assert.match(source('src/components/hr-config/ConfigTablePanel.tsx'), /canEdit \? actionColumn : \[\]/)
 })

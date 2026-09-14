@@ -36,13 +36,16 @@ export const TECH_IPM_REQUIRED_TYPES: BudgetType[] = ['projectEstimate', 'projec
 /** IPM 未绑定提示 */
 export const TECH_IPM_REQUIRED_TIP = '请先绑定正式项目编码后再创建项目概算/项目预算版本'
 
-/** 里程碑字段定义（6个，与 tOS 7个不同） */
+/** 里程碑字段定义（9个） */
 export const TECH_MILESTONE_FIELDS: { key: keyof TechMilestoneNodes; label: string }[] = [
   { key: 'planningStart', label: '规划启动' },
-  { key: 'charterDCP', label: 'Charter DCP' },
+  { key: 'charterDCP', label: 'charter DCP' },
   { key: 'tdr1', label: 'TDR1' },
+  { key: 'tdr2', label: 'TDR2' },
   { key: 'pdcp', label: 'PDCP' },
-  { key: 'tdcpx', label: 'TDCP-X' },
+  { key: 'tdr3x', label: 'TDR3_X' },
+  { key: 'tdcpx', label: 'TDCP_X' },
+  { key: 'tdr4', label: 'TDR4' },
   { key: 'edcp', label: 'EDCP' },
 ]
 
