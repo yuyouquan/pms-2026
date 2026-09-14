@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd'
-import { DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined } from '@ant-design/icons'
+import { ClearOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { PROJECT_TYPES } from '@/constants/projectTypes'
 import type { ColumnsType } from 'antd/es/table'
 import { resolvePermissionProjectId, usePermissionStore } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
@@ -20,6 +21,7 @@ import {
   normalizeConfigurationCellValue,
   shouldConfirmConfigurationChange,
   buildProjectRegistryHistoryRows,
+  filterConfigurationProjects,
 } from '@/lib/projectManagementUi'
 import { getProjectAttribute, isFormalProject, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import type { ProjectItem } from '@/types/app'
@@ -45,6 +47,9 @@ export default function ProjectConfiguration() {
     navigateWithEditGuard,
     projectConfigurationPage,
     setProjectConfigurationPage,
+    projectConfigurationFilters: filters,
+    setProjectConfigurationFilters: setFilters,
+    resetProjectConfigurationFilters: resetFilters,
     setProjectSpaceModule,
   } = useUiStore()
   const activateProject = useActivateProject()
@@ -55,6 +60,13 @@ export default function ProjectConfiguration() {
   const confirmingRef = useRef(false)
   const canManage = canManageProjectRegistry(currentLoginUser)
   const isAdmin = globalRoles.some(role => role.name === '管理组' && role.members.includes(currentLoginUser))
+  const filteredProjects = useMemo(() => filterConfigurationProjects(projects, filters), [projects, filters])
+  const hasFilters = Boolean(filters.name || filters.projectCode || filters.boundFormalProjectName || filters.projectTypes.length || filters.projectAttributes.length)
+  const currentPage = Math.min(Math.max(1, projectConfigurationPage), Math.max(1, Math.ceil(filteredProjects.length / 15)))
+
+  useEffect(() => {
+    if (projectConfigurationPage !== currentPage) setProjectConfigurationPage(currentPage)
+  }, [currentPage, projectConfigurationPage, setProjectConfigurationPage])
 
   const setCurrentEditing = (next: EditingCell | null) => {
     editingRef.current = next
@@ -288,16 +300,49 @@ export default function ProjectConfiguration() {
         </div>
         {canManage ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewProjectOpen(true)}>新项目</Button> : null}
       </div>
+      <div className="pms-project-config__filters" role="search" aria-label="项目配置筛选">
+        <div className="pms-project-config__filter">
+          <label htmlFor="project-config-name-filter">项目名称</label>
+          <Input id="project-config-name-filter" aria-label="筛选项目名称" allowClear prefix={<SearchOutlined />}
+            placeholder="模糊搜索项目名称" value={filters.name} onChange={event => setFilters({ name: event.target.value })} />
+        </div>
+        <div className="pms-project-config__filter">
+          <label htmlFor="project-config-type-filter">项目类型</label>
+          <Select id="project-config-type-filter" aria-label="筛选项目类型" mode="multiple" allowClear showSearch maxTagCount="responsive"
+            placeholder="全部项目类型" value={filters.projectTypes} options={PROJECT_TYPES.map(value => ({ value, label: value }))}
+            onChange={projectTypes => setFilters({ projectTypes })} />
+        </div>
+        <div className="pms-project-config__filter">
+          <label htmlFor="project-config-attribute-filter">项目属性</label>
+          <Select id="project-config-attribute-filter" aria-label="筛选项目属性" mode="multiple" allowClear showSearch maxTagCount="responsive"
+            placeholder="全部项目属性" value={filters.projectAttributes} optionFilterProp="label"
+            options={Object.entries(PROJECT_ATTRIBUTE_LABELS).map(([value, label]) => ({ value, label }))}
+            onChange={projectAttributes => setFilters({ projectAttributes })} />
+        </div>
+        <div className="pms-project-config__filter">
+          <label htmlFor="project-config-code-filter">项目编码</label>
+          <Input id="project-config-code-filter" aria-label="筛选项目编码" allowClear prefix={<SearchOutlined />}
+            placeholder="模糊搜索项目编码" value={filters.projectCode} onChange={event => setFilters({ projectCode: event.target.value })} />
+        </div>
+        <div className="pms-project-config__filter">
+          <label htmlFor="project-config-binding-filter">绑定正式项目</label>
+          <Input id="project-config-binding-filter" aria-label="筛选绑定正式项目" allowClear prefix={<SearchOutlined />}
+            placeholder="模糊搜索正式项目名称" value={filters.boundFormalProjectName} onChange={event => setFilters({ boundFormalProjectName: event.target.value })} />
+        </div>
+        <Button icon={<ClearOutlined />} disabled={!hasFilters} onClick={resetFilters}>清空筛选</Button>
+      </div>
       <Table<ProjectItem>
         className="pms-table"
         rowKey="id"
         columns={columns}
-        dataSource={projects}
+        dataSource={filteredProjects}
+        locale={{ emptyText: hasFilters ? '未找到符合条件的项目' : '暂无项目' }}
         scroll={{ x: 1320 }}
         pagination={{
-          current: projectConfigurationPage,
+          current: currentPage,
           pageSize: 15,
-          total: projects.length,
+          showSizeChanger: false,
+          total: filteredProjects.length,
           showTotal: total => `共 ${total} 个项目`,
           onChange: setProjectConfigurationPage,
         }}
@@ -305,9 +350,11 @@ export default function ProjectConfiguration() {
       <NewProjectModal
         open={newProjectOpen}
         onCancel={() => setNewProjectOpen(false)}
-        onCreated={() => {
+        onCreated={projectId => {
           setNewProjectOpen(false)
-          setProjectConfigurationPage(Math.max(1, Math.ceil((projects.length + 1) / 15)))
+          resetFilters()
+          const index = useProjectStore.getState().projects.findIndex(project => project.id === projectId)
+          setProjectConfigurationPage(Math.floor(Math.max(0, index) / 15) + 1)
         }}
       />
       <Modal

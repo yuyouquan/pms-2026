@@ -198,6 +198,32 @@
   font-size: 12px;
 }
 
+.pms-project-config__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pms-project-config__filter {
+  display: flex;
+  flex: 1 1 170px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pms-project-config__filter > label {
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-font-size-body);
+  line-height: var(--pms-line-height-body);
+}
+
+.pms-project-config__filter > .ant-select {
+  width: 100%;
+}
+
 .pms-project-config__cell-value {
   display: flex;
   align-items: center;

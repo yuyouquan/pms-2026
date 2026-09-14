@@ -9,12 +9,30 @@ import {
 } from '@/constants/projectInfoSchema'
 import {
   PROJECT_ATTRIBUTE_LABELS,
+  getProjectAttribute,
+  getRegistryProjectCategory,
   isFormalProject,
+  type ProjectConfigurationFilters,
   type ProjectRegistryHistoryEntry,
 } from '@/types/projectRegistry'
 
 export function filterFormalRegistryProjects<T extends ProjectItem>(projects: readonly T[]): T[] {
   return projects.filter(isFormalProject)
+}
+
+export function filterConfigurationProjects<T extends ProjectItem>(projects: readonly T[], filters: ProjectConfigurationFilters): T[] {
+  const normalize = (value: string | null | undefined) => (value ?? '').trim().toLowerCase()
+  const name = normalize(filters.name)
+  const code = normalize(filters.projectCode)
+  const boundName = normalize(filters.boundFormalProjectName)
+  const formalNames = new Map(projects.filter(isFormalProject).map(project => [project.id, normalize(project.name)]))
+  return projects.filter(project => (
+    (!name || normalize(project.name).includes(name))
+    && (!filters.projectTypes.length || filters.projectTypes.includes(getRegistryProjectCategory(project)))
+    && (!filters.projectAttributes.length || filters.projectAttributes.includes(getProjectAttribute(project)))
+    && (!code || normalize(project.projectCode).includes(code))
+    && (!boundName || (!isFormalProject(project) && (formalNames.get(project.boundFormalProjectId ?? '') ?? '').includes(boundName)))
+  ))
 }
 
 export function normalizeConfigurationCellValue(value: string | null | undefined): string {

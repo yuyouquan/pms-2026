@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
 import type { AnyFilterCondition } from '@/lib/filterConditions'
 import type { ConfigModuleKey } from '@/types/hrConfig'
+import { createProjectConfigurationFilters, type ProjectConfigurationFilters } from '@/types/projectRegistry'
 
 export type MainModule =
   | 'workbench'
@@ -46,6 +47,7 @@ export interface UiState {
   workbenchTab: WorkbenchTab
   projectManagementTab: ProjectManagementTab
   projectConfigurationPage: number
+  projectConfigurationFilters: ProjectConfigurationFilters
   projectListSummaryFilters: AnyFilterCondition[]
   projectListTechnicalFilters: AnyFilterCondition[]
   projectListAboutMineOnly: boolean
@@ -81,6 +83,8 @@ export interface UiActions {
   setProjectManagementTab: (v: ProjectManagementTab) => void
   openProjectConfiguration: () => void
   setProjectConfigurationPage: (v: number) => void
+  setProjectConfigurationFilters: (patch: Partial<ProjectConfigurationFilters>) => void
+  resetProjectConfigurationFilters: () => void
   setProjectListSummaryFilters: (v: AnyFilterCondition[] | ((previous: AnyFilterCondition[]) => AnyFilterCondition[])) => void
   setProjectListTechnicalFilters: (v: AnyFilterCondition[] | ((previous: AnyFilterCondition[]) => AnyFilterCondition[])) => void
   setProjectListAboutMineOnly: (v: boolean | ((previous: boolean) => boolean)) => void
@@ -122,6 +126,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   workbenchTab: 'todo',
   projectManagementTab: 'configuration',
   projectConfigurationPage: 1,
+  projectConfigurationFilters: createProjectConfigurationFilters(),
   projectListSummaryFilters: [],
   projectListTechnicalFilters: [{
     id: 'quick-technicalProjectType',
@@ -181,6 +186,14 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     mrPlanNavigationIntent: null,
   }),
   setProjectConfigurationPage: (v) => set({ projectConfigurationPage: v }),
+  setProjectConfigurationFilters: (patch) => set(state => ({
+    projectConfigurationFilters: { ...state.projectConfigurationFilters, ...patch },
+    projectConfigurationPage: 1,
+  })),
+  resetProjectConfigurationFilters: () => set({
+    projectConfigurationFilters: createProjectConfigurationFilters(),
+    projectConfigurationPage: 1,
+  }),
   setProjectListSummaryFilters: (v) => set(state => ({
     projectListSummaryFilters: typeof v === 'function' ? v(state.projectListSummaryFilters) : v,
   })),

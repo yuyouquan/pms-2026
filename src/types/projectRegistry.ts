@@ -2,6 +2,16 @@ import { PROJECT_CATEGORY_MACHINE, PROJECT_TYPES, resolveProjectClassification }
 import type { ProjectItem } from '@/types/app'
 
 export type ProjectAttribute = 'formal' | 'budget' | 'roadmap'
+export interface ProjectConfigurationFilters {
+  name: string
+  projectTypes: string[]
+  projectAttributes: ProjectAttribute[]
+  projectCode: string
+  boundFormalProjectName: string
+}
+export const createProjectConfigurationFilters = (): ProjectConfigurationFilters => ({
+  name: '', projectTypes: [], projectAttributes: [], projectCode: '', boundFormalProjectName: '',
+})
 export type MachineBudgetMetadataField = 'brand' | 'productLine' | 'marketName'
 export interface ProjectRegistryMetadata {
   projectAttribute?: ProjectAttribute
