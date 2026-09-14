@@ -23,15 +23,15 @@ export default function ProjectManagementContainer() {
                 value={projectManagementTab}
                 onChange={setProjectManagementTab}
                 options={[
-                  { value: 'configuration', label: <span id="project-management-views-tab-configuration">项目配置</span> },
                   { value: 'view', label: <span id="project-management-views-tab-view">项目视图</span> },
+                  { value: 'configuration', label: <span id="project-management-views-tab-configuration">项目配置</span> },
                 ]}
               />
             </div>
           )}
           items={[
-            { key: 'configuration', label: '项目配置', children: <ProjectConfiguration /> },
             { key: 'view', label: '项目视图', children: <ProjectListContainer /> },
+            { key: 'configuration', label: '项目配置', children: <ProjectConfiguration /> },
           ]}
         />
       </Card>

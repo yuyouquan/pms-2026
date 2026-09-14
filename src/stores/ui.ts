@@ -127,7 +127,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   // Navigation
   activeModule: 'workbench',
   workbenchTab: 'todo',
-  projectManagementTab: 'configuration',
+  projectManagementTab: 'view',
   projectConfigurationPage: 1,
   projectConfigurationFilters: createProjectConfigurationFilters(),
   projectListSummaryFilters: [],
