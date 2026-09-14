@@ -70,6 +70,11 @@ const buildDatedMilestones = <T extends ProjectListMockTemplateTask>(
       }
     }
     if (task.nodeKind === 'business-period') return { ...task }
+    const planningDate = task.stableId === 'tos-ms-planning-ko' ? '2026-01-08'
+      : task.stableId === 'tos-ms-cdcp' ? '2026-02-05' : undefined
+    if (planningDate) {
+      return { ...task, planStartDate: '', planEndDate: shiftIsoDate(planningDate, offset), actualStartDate: '', actualEndDate: shiftIsoDate(planningDate, offset + 1) }
+    }
     const currentMilestoneIndex = milestoneIndex
     milestoneIndex += 1
     const planEndDate = getMilestoneDate(currentMilestoneIndex, offset)

@@ -2020,6 +2020,10 @@
   scrollbar-gutter: stable;
 }
 
+.pms-config-center > .pms-config-workspace > .pms-config-workspace__content {
+  padding: 0;
+}
+
 .pms-config-workspace__content > .ant-card,
 .pms-config-workspace__content > .pms-config-workspace-card {
   display: flex;
