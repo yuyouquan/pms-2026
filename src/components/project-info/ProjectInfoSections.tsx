@@ -3,7 +3,7 @@
 import { useMemo } from 'react'
 import { Avatar, Collapse, Space, Tag, message } from 'antd'
 import { InfoCircleOutlined, LinkOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons'
-import { FanTrialCountrySummary } from '@/components/project-info/FanTrialCountries'
+import { FanTrialSummary } from '@/components/project-info/FanTrialCountries'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import {
   getProjectInfoGroups,
@@ -41,7 +41,6 @@ const isJiraArray = (value: unknown): value is JiraProjectConfig[] => (
 )
 
 const renderNormalValue = (value: ReturnType<typeof getProjectInfoValue>, inputType: string, fieldKey: string) => {
-  if (inputType === 'fanTrial') return <FanTrialCountrySummary value={value} />
   if (inputType === 'jira' && isJiraArray(value)) {
     if (!value.length) return <span className="pms-project-info-empty">-</span>
     return (
@@ -89,6 +88,7 @@ function ProjectInfoGroupPanel({
   const values = buildProjectInfoValues(project, fields.map(field => field.key))
   const visibleFields = fields.filter(field => (
     visibleFieldKeys.includes(field.key)
+    && field.key !== 'fanTrialCountries'
     && (!field.visibleWhen || field.visibleWhen(values))
   ))
   return (
@@ -141,12 +141,18 @@ function ProjectInfoGroupPanel({
           ) : (
             <div className="pms-project-info-display-rows">
               <div className="pms-project-info-display-grid">
-                {visibleFields.map(field => (
-                  <div key={field.key} className={`pms-project-info-display-item${field.key === 'jiraProjects' ? ' pms-project-info-display-item--full-row pms-project-info-jira-horizontal' : field.inputType === 'fanTrial' ? ' pms-project-info-display-item--full-row' : ''}`}>
-                    <div className="pms-project-info-display-label">{field.label}</div>
-                    <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType, field.key)}</div>
-                  </div>
-                ))}
+                {visibleFields.map(field => {
+                  const showFanTrialSummary = field.key === 'fanTrialEnabled' && values.fanTrialEnabled === '是'
+                  const isHorizontalRow = field.key === 'jiraProjects' || showFanTrialSummary
+                  return (
+                    <div key={field.key} className={`pms-project-info-display-item${isHorizontalRow ? ' pms-project-info-display-item--full-row pms-project-info-display-item--horizontal' : ''}${field.key === 'jiraProjects' ? ' pms-project-info-jira-horizontal' : ''}`}>
+                      <div className="pms-project-info-display-label">{field.label}</div>
+                      <div className="pms-project-info-display-value">{showFanTrialSummary
+                        ? <FanTrialSummary value={getProjectInfoValue(project, 'fanTrialCountries')} />
+                        : renderNormalValue(getProjectInfoValue(project, field.key), field.inputType, field.key)}</div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           ),

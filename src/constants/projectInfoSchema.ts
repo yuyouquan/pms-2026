@@ -158,8 +158,8 @@ export const MACHINE_PROJECT_CREATE_FIELD_KEYS = [
   'isFirstLaunchProject', 'productSeries', 'researchMode', 'developmentMode',
   'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'androidMajorUpgrade',
   'modelCategory', 'confidentialityLevel', 'chipCode', 'chipModel', 'chipPlatform',
-  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'fanTrialEnabled', 'fanTrialCountries', 'wholeMachinePd',
-  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'jiraProjects',
+  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'wholeMachinePd',
+  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects',
   'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
   'machineQualityRepresentative', 'machineDevelopmentRepresentative',
   'machineTestRepresentative', 'machineOther',
@@ -191,12 +191,12 @@ export const MACHINE_PROJECT_SPACE_INFO_FIELD_KEYS = [
   'systemType', 'kernelVersion', 'androidMajorUpgrade', 'modelCategory',
   'productionForbiddenDate', 'confidentialityLevel', 'projectModel', 'androidVersion',
   'mainboardName', 'productType', 'chipCode', 'chipModel', 'chipPlatform',
-  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'fanTrialEnabled', 'fanTrialCountries',
+  'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini',
   'baselineName', 'wholeMachinePd', 'pcbaSheet', 'shippingCountrySheet',
   'keyComponentsSheet', 'machineSpm', 'machineSpp', 'machineCmo',
   'machineSoftwareSe', 'machineQualityRepresentative',
   'machineDevelopmentRepresentative', 'machineTestRepresentative', 'machineOther',
-  'jiraProjects',
+  'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects',
 ] as const
 
 export const MACHINE_PROJECT_SPACE_INFO_FIELDS = pickOrderedFields(

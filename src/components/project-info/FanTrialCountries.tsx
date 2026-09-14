@@ -1,6 +1,6 @@
 'use client'
 
-import { Button, Form, InputNumber, Select } from 'antd'
+import { Button, Form, InputNumber, Select, Space, Tag } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { isValidTrialQuantity, readFanTrialRows, selectFanTrialCountries } from '@/lib/fanTrial'
 import type { EnumOption } from '@/lib/enumConsumers'
@@ -61,14 +61,13 @@ export function FanTrialCountryEditor({ value, id, options = [], onChange }: Fan
   )
 }
 
-export function FanTrialCountrySummary({ value }: Pick<FanTrialCountriesProps, 'value'>) {
+export function FanTrialSummary({ value }: Pick<FanTrialCountriesProps, 'value'>) {
   const rows = readFanTrialRows(value)
-  if (!rows.length) return <span className="pms-project-info-empty">待配置</span>
-  return <div className="pms-fan-trial">
-    <table className="pms-fan-trial-table" aria-label="粉丝试用台数">
-      <thead><tr><th scope="col">国家</th><th scope="col">试用台数</th></tr></thead>
-      <tbody>{rows.map(row => <tr key={row.country}><td>{row.country}</td><td>{isValidTrialQuantity(row.quantity) ? `${row.quantity} 台` : '待填写'}</td></tr>)}</tbody>
-    </table>
-    <TrialTotal value={value} />
-  </div>
+  return <Space size={[8, 6]} wrap aria-label="粉丝试用国家及试用台数">
+    <span>是</span>
+    {rows.length ? rows.map(row => (
+      <Tag key={row.country} color="blue">{row.country}：{isValidTrialQuantity(row.quantity) ? `${row.quantity} 台` : '待填写'}</Tag>
+    )) : <span className="pms-project-info-empty">国家及试用台数待配置</span>}
+    {rows.length > 0 && <TrialTotal value={value} />}
+  </Space>
 }
