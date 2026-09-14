@@ -1,7 +1,7 @@
 import { isFormalProject } from '@/types/projectRegistry'
 import { isMachineProjectType, PROJECT_TYPE_TOS_VERSION, PROJECT_TYPE_TECH, PROJECT_TYPE_CAPABILITY } from '@/constants/projectTypes'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
-import { projectLevel1Plan, type Level1PlanTask } from '@/lib/level1PlanRules'
+import { type Level1PlanTask } from '@/lib/level1PlanRules'
 import { resolveSharedLevel1Plan } from '@/lib/sharePlan'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
@@ -54,7 +54,6 @@ export function resolveHrFormalSource(category: HrProjectCategory, code: string 
       if (source.ok) { tasks = source.tasks; planVersion = source.version.versionNo }
     }
   }
-  const stages = projectLevel1Plan(tasks, { mode: 'standard' }).rows
   const milestones = category === 'technical' ? {
     planningStart: dateOf(tasks, ['规划启动']), charterDCP: dateOf(tasks, ['Charter DCP', 'Charter']),
     tdr1: dateOf(tasks, ['TDR1']), tdr2: dateOf(tasks, ['TDR2']), pdcp: dateOf(tasks, ['PDCP']),
@@ -67,7 +66,7 @@ export function resolveHrFormalSource(category: HrProjectCategory, code: string 
   } : {
     conceptStart: dateOf(tasks, ['概念启动']), str1: dateOf(tasks, ['STR1']), str3: dateOf(tasks, ['STR3']),
     str2: dateOf(tasks, ['STR2']), str4: dateOf(tasks, ['STR4']), str4a: dateOf(tasks, ['STR4A']), str5: dateOf(tasks, ['STR5']),
-    productLaunch: dateOf(tasks, ['产品上市', '上市']) || dateOf(stages, ['上市阶段'], 'planStartDate'),
+    productLaunch: null, lifecycleEnd: null,
   }
   const level = project ? getProjectInfoValue(project, 'softwareProjectLevel') : ''
   return {

@@ -43,12 +43,13 @@ for(let i=0;i<4;i++)check(`${categories[i]}: published own dates, annual history
  assert.deepEqual(b.versions.map(v=>v.versionNumber),['V0.1','V0.2'])
  for(const v of f.versions){
   assert.notEqual(v.budgetType,'annual')
-  if(cat==='tos') {
+  if(cat==='tos'||cat==='machine') {
+   const manualKeys=cat==='tos'?['marketIteration','maintenanceEnd']:['productLaunch','lifecycleEnd']
    for(const [key,value] of Object.entries(formalSource.milestones)) {
-    if(!['marketIteration','maintenanceEnd'].includes(key)) assert.equal(v.milestones[key],value,'formal plan-owned mock dates match published source')
+    if(!manualKeys.includes(key)) assert.equal(v.milestones[key],value,'formal plan-owned mock dates match published source')
    }
-   assert.equal(v.milestones.marketIteration,v.minorVersion===1?'2027-10-01':'2027-11-01','mock formal iteration end demonstrates manual version data')
-   assert.equal(v.milestones.maintenanceEnd,'2028-03-01')
+   assert.equal(v.milestones[manualKeys[0]],v.minorVersion===1?'2027-10-01':'2027-11-01','mock formal ending demonstrates manual version data')
+   assert.equal(v.milestones[manualKeys[1]],'2028-03-01')
   } else assert.deepEqual(date(cat,v),cat==='capability'?[formalSource.projectStartTime,formalSource.projectEndTime]:formalSource.milestones)
  }
  if(cat==='tos') for(const v of b.versions) for(const key of ['cdcp','str2','str4','str4a']) assert.ok(v.milestones[key],'budget mocks include new milestones')

@@ -237,7 +237,7 @@ interface PhaseDef {
   endField: keyof MilestoneNodes
   /** 配置中心记录中对应的阶段值 key */
   configKey: string
-  /** 是否为生命周期阶段（特殊处理：固定 180 天） */
+  /** 是否为生命周期阶段（旧数据没有结束字段时保留 180 天规则） */
   isLifecycle?: boolean
 }
 
@@ -248,7 +248,7 @@ const PHASE_DEFS: PhaseDef[] = [
   { label: '开发阶段', startField: 'str3', endField: 'str4', configKey: 'developmentPhase' },
   { label: '验证阶段', startField: 'str4', endField: 'str5', configKey: 'validationPhase' },
   { label: '上市阶段', startField: 'str5', endField: 'productLaunch', configKey: 'launchPhase' },
-  { label: '生命周期阶段', startField: 'productLaunch', endField: 'productLaunch', configKey: 'lifecycle', isLifecycle: true },
+  { label: '生命周期阶段', startField: 'productLaunch', endField: 'lifecycleEnd', configKey: 'lifecycle', isLifecycle: true },
 ]
 
 /** 计算两个日期之间的天数（包含首尾，+1） */
@@ -323,7 +323,7 @@ export interface DepartmentMonthlySplit {
  * 逻辑：
  * 1. 从配置中心筛选出与版本 projectLevel + hrModelVersion 匹配的所有记录（每条 = 一个部门）
  * 2. 对每个部门的每个阶段：
- *    - 阶段工期 = (结束里程碑 - 起始里程碑) + 1（生命周期固定 180 天）
+ *    - 阶段工期 = (结束里程碑 - 起始里程碑) + 1（旧数据未提供生命周期结束字段时保留 180 天）
  *    - 每日预估 = 配置中心阶段值 × 等级系数 / 阶段工期
  *    - 月度预估 = 该阶段在当月的天数 × 每日预估
  * 3. 汇总所有阶段的月度数据
@@ -351,8 +351,8 @@ export function calcDepartmentMonthlySplit(
       let phaseStart: string
       let phaseEnd: string
 
-      if (phase.isLifecycle) {
-        // 生命周期：自上市日期起 180 天
+      if (phase.isLifecycle && milestones.lifecycleEnd === undefined) {
+        // Only legacy snapshots without this field retain the original 180-day allocation.
         phaseDays = 180
         phaseStart = startVal
         phaseEnd = addDays(startVal, 179) // 180 days inclusive

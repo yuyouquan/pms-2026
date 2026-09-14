@@ -39,8 +39,10 @@ export interface MilestoneNodes {
   str4a?: string | null
   /** STR5 */
   str5: string | null
-  /** 产品上市 */
+  /** 上市结束（保留原字段名以兼容历史数据） */
   productLaunch: string | null
+  /** 生命周期结束；旧版本可能没有此字段 */
+  lifecycleEnd?: string | null
 }
 
 /** 单项目版本 */

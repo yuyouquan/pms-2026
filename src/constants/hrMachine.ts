@@ -91,7 +91,8 @@ export const MILESTONE_FIELDS = [
   { key: 'str4', label: 'STR4' },
   { key: 'str4a', label: 'STR4A' },
   { key: 'str5', label: 'STR5' },
-  { key: 'productLaunch', label: '产品上市' },
+  { key: 'productLaunch', label: '上市结束' },
+  { key: 'lifecycleEnd', label: '生命周期结束' },
 ] as const
 
 /** 项目列表列定义 */
@@ -124,7 +125,8 @@ export const VERSION_LIST_COLUMNS = [
   { key: 'str4', label: 'STR4', width: 120 },
   { key: 'str4a', label: 'STR4A', width: 120 },
   { key: 'str5', label: 'STR5', width: 120 },
-  { key: 'productLaunch', label: '产品上市', width: 120 },
+  { key: 'productLaunch', label: '上市结束', width: 120 },
+  { key: 'lifecycleEnd', label: '生命周期结束', width: 130 },
   { key: 'budgetType', label: '预算类型', width: 100 },
   { key: 'versionNumber', label: '版本号', width: 100 },
   { key: 'versionLock', label: '版本锁定', width: 100 },

@@ -50,7 +50,7 @@ for(let index=0;index<stores.length;index++) {
  let project={...template,id:`hr-${category}`,pmsProjectId:`budget-${category}`,versions:[],ipmProjectCode:null,ipmProjectName:null}
  projectStore.setState({currentLoginUser:'演示用户01',projects:[...projectStore.getState().projects,{...formalProjects[index],id:`budget-${category}`,projectAttribute:'budget',sourceBid:undefined}]})
  store.setState({projects:[project],monthlyInvestments:[],registryMigrationComplete:true})
- const add = budgetType => index===0 ? store.getState().addVersion(project.id,budgetType,{projectLevel:'S',levelCoefficient:1,hrModelVersion:'V2026.1'}) : store.getState().addVersion(project.id,{budgetType,departmentInvestments:[dept,{...dept,id:'two',secondaryDepartment:'测试部'}],projectStartTime:'2026-03-01',projectEndTime:'2027-04-01'})
+ const add = budgetType => index===0 ? store.getState().addVersion(project.id,budgetType,{projectLevel:'S',levelCoefficient:1,hrModelVersion:'V2026.1',milestones:{productLaunch:'2027-06-01',lifecycleEnd:'2027-12-01'}}) : store.getState().addVersion(project.id,{budgetType,departmentInvestments:[dept,{...dept,id:'two',secondaryDepartment:'测试部'}],projectStartTime:'2026-03-01',projectEndTime:'2027-04-01'})
  add('annual')
  const first=store.getState().projects[0].versions[0]
  eq(first.versionNumber,'V0.1',category+' first version')
@@ -74,7 +74,7 @@ for(let index=0;index<stores.length;index++) {
  current=store.getState().projects[0]
  eq(current.versions.filter(v=>v.budgetType!=='annual').map(v=>v.versionNumber),['V0.1','V0.1'],category+' independent budgets')
  const annual=store.getState().projects[1].versions.find(v=>v.budgetType==='annual'&&v.minorVersion===2)
- const manualDates=index===3?{projectStartTime:'2026-02-01',projectEndTime:'2027-04-01'}:{milestones:{...formal.resolveHrFormalSource(category,`FORMAL-${category}`).milestones,[index===2?'planningStart':'conceptStart']:'2026-02-01'}}
+ const manualDates=index===3?{projectStartTime:'2026-02-01',projectEndTime:'2027-04-01'}:{milestones:{...formal.resolveHrFormalSource(category,`FORMAL-${category}`).milestones,[index===2?'planningStart':'conceptStart']:'2026-02-01',...(index===0?{productLaunch:'2027-06-01',lifecycleEnd:'2027-12-01'}:{})}}
  store.getState().updateVersion(annualSource.id,annual.id,manualDates)
  const manual=store.getState().projects.find(p=>p.id===annualSource.id).versions.find(v=>v.id===annual.id)
  eq(index===3?manual.projectStartTime:index===2?manual.milestones.planningStart:manual.milestones.conceptStart,'2026-02-01',category+' bound annual accepts manual dates')

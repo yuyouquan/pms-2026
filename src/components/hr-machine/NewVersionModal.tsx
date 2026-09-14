@@ -69,11 +69,10 @@ export default function NewVersionModal({ open, projectId, onCancel }: { open: b
     } catch (error) { message.warning(error instanceof Error ? error.message : '版本创建失败') }
   }
 
-  return <Modal className="pms-modal pms-hr-version-modal" title="新增版本" open={open} onCancel={onCancel} onOk={handleOk} okText="创建" cancelText="取消" width={1280} okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}>
+  return <Modal className="pms-modal pms-hr-version-modal" title="新增版本" open={open} onCancel={onCancel} onOk={handleOk} okText="创建" cancelText="取消" width={1560} okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}>
     {bound && Object.values(effectiveMetadata).some(value => !value.trim()) && <Alert type="info" showIcon style={{ marginBottom: 8 }} title="来源正式项目的品牌信息尚未补充完整，可在正式项目空间完善；仍可创建年度预算版本。" />}
     <Form layout="vertical">
       <div className="pms-hr-version-row pms-hr-version-row--metadata">
-      <Form.Item label="项目">{scopeId ? <HrReadonlyField label="项目" value={project?.name} reason="当前项目空间的项目，不可切换" /> : <Select showSearch aria-label="选择项目" value={localProjectId || undefined} optionFilterProp="label" options={projects.filter(item => canAccessHrProject(item, true) && getHrAllowedBudgetTypes(item).length > 0).map(item => ({ value: item.id, label: item.name, disabled: item.status !== 'active' }))} onChange={id => { setLocalProjectId(id); setBudgetType(getHrAllowedBudgetTypes(projects.find(item => item.id === id))[0] ?? 'annual') }} />}</Form.Item>
       <Form.Item label="预算类型" required><Select value={budgetType} options={budgetOptions} onChange={setBudgetType} /></Form.Item>
       <Form.Item label="将创建版本"><HrReadonlyField label="将创建版本" value={project ? `V0.${nextHrMinorVersion(project.versions, budgetType)}` : ''} reason="版本号自动生成" /></Form.Item>
       <Form.Item label="品牌" required={!formal && !bound}>{metadataReadOnly ? <HrReadonlyField label="品牌" value={effectiveMetadata.brand} reason="来源于正式项目基础信息" /> : <Select aria-label="品牌" value={metadata.brand || undefined} options={[...new Set([...Object.keys(PRODUCT_LINES_BY_BRAND), ...(metadata.brand ? [metadata.brand] : [])])].map(value => ({ value, label: value }))} onChange={brand => setMetadata(previous => ({ ...previous, brand, productLine: '' }))} />}</Form.Item>
@@ -86,6 +85,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: { open: b
       <Form.Item label="人力模型版本号" required><Select value={hrModelVersion || undefined} options={getConfigModelVersions(records).map(value => ({ value, label: value }))} onChange={setHrModelVersion} /></Form.Item>
       </div>
       <div className="pms-hr-version-row pms-hr-version-row--milestones">
+      <Form.Item label="项目">{scopeId ? <HrReadonlyField label="项目" value={project?.name} reason="当前项目空间的项目，不可切换" /> : <Select showSearch aria-label="选择项目" value={localProjectId || undefined} optionFilterProp="label" options={projects.filter(item => canAccessHrProject(item, true) && getHrAllowedBudgetTypes(item).length > 0).map(item => ({ value: item.id, label: item.name, disabled: item.status !== 'active' }))} onChange={id => { setLocalProjectId(id); setBudgetType(getHrAllowedBudgetTypes(projects.find(item => item.id === id))[0] ?? 'annual') }} />}</Form.Item>
         <HrVersionMilestoneFields category="machine" {...milestoneForm} />
       </div>
     </Form>

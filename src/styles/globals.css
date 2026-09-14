@@ -8983,9 +8983,14 @@ input.ant-input,
 .pms-hr-readonly-field:hover .pms-hr-readonly-field__icon,
 .pms-hr-readonly-field:focus-within .pms-hr-readonly-field__icon { opacity: 1; }
 .pms-hr-version-row { display: grid; gap: 0 12px; }
-.pms-hr-version-row--metadata { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.pms-hr-version-row--metadata { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .pms-hr-version-row--model { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.pms-hr-version-row--milestones { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.pms-hr-version-row--milestones { grid-template-columns: repeat(10, minmax(0, 1fr)); column-gap: 8px; }
+.pms-hr-version-row--milestones .ant-form-item-label > label { font-size: 12px; white-space: nowrap; }
+.pms-hr-version-row--milestones .ant-form-item-label > label::after { display: none; }
+.pms-hr-version-row--milestones .ant-input-affix-wrapper,
+.pms-hr-version-row--milestones .ant-picker { padding-inline: 6px; }
+.pms-hr-version-row--milestones input { font-size: 12px; }
 .pms-hr-version-row .ant-picker-input > input { min-width: 0; }
 .pms-project-space-editor .pms-project-info-form-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0 14px; }
 .pms-roadmap-space-editor .ant-form-item { margin-bottom: 12px; }

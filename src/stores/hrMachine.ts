@@ -39,6 +39,7 @@ function emptyMilestones(): MilestoneNodes {
     str4a: null,
     str5: null,
     productLaunch: null,
+    lifecycleEnd: null,
   }
 }
 
@@ -279,7 +280,9 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           const minorVersion = nextHrMinorVersion(p.versions, budgetType)
 
           // 里程碑：从最新版本复制，若无则空
-          const milestones: MilestoneNodes = { ...(latest?.milestones ?? emptyMilestones()), ...versionMeta.milestones }
+          const milestones: MilestoneNodes = { ...emptyMilestones(), ...latest?.milestones, ...versionMeta.milestones }
+          // Only existing legacy versions retain the missing-field allocation rule.
+          milestones.lifecycleEnd ??= null
 
           const newVersion: HrMachineVersion = {
             id: `${projectId}-${budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
