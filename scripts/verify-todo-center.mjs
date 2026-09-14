@@ -58,8 +58,8 @@ assert.deepEqual(
 )
 assert.deepEqual(
   todos.resolveWorkbenchDefaultSelection([{ source: 'plan', status: 'completed' }]),
-  { source: 'plan', status: 'all' },
-  'plan/all is the fallback when neither directory has pending work',
+  { source: 'basicInfo', status: 'all' },
+  'the first directory is the fallback when no directory has pending work',
 )
 assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'transfer', status: 'all' }).map(item => item.id), ['transfer-mine', 'transfer-done'], 'directory filtering includes pending and completed work')
 assert.deepEqual(todos.filterWorkbenchTodos(all, { source: 'plan', status: 'pending' }).map(item => item.id), ['plan-overdue', 'plan-today'], 'status filtering collapses every unfinished plan state into pending')
@@ -313,7 +313,7 @@ const projectSpaceSource = readSource(root, 'src/containers/ProjectSpaceContaine
 const uiStoreSource = readSource(root, 'src/stores/ui.ts')
 const todayHookSource = readSource(root, 'src/hooks/useLocalToday.ts')
 const browserSource = readSource(root, 'screenshots/verify-workbench-summary-floating-panels.mjs')
-for (const label of ['任务目录', '计划', '转维', '全部', '待处理', '已完成', '搜索待办', '项目筛选', '生成时间', '清空筛选', '前往处理', '查看详情']) {
+for (const label of ['任务目录', '基础信息', '去填写', '计划', '转维', '全部', '待处理', '已完成', '搜索待办', '项目筛选', '生成时间', '清空筛选', '前往处理', '查看详情']) {
   assert.match(todoCenterSource, new RegExp(label), `todo center missing visible or accessible contract: ${label}`)
 }
 assert.doesNotMatch(todoCenterSource, /转维护/, 'workbench directory uses the canonical 转维 label')
@@ -356,7 +356,7 @@ assert.match(todoCenterSource, /error\?:\s*string/, 'todo center exposes a conte
 assert.match(todoCenterSource, /onRetry\?:\s*\(\)\s*=>\s*void/, 'todo error offers a recovery action')
 assert.match(todoCenterSource, /<Skeleton\b/, 'todo loading state reserves the final table footprint')
 assert.match(todoCenterSource, /role="alert"/, 'todo load errors are announced')
-assert.match(todoCenterSource, /record\.status === ['"]completed['"]\s*\?\s*['"]查看详情['"]\s*:\s*['"]前往处理['"]/, 'completed plan rows expose 查看详情 while pending rows expose 前往处理')
+assert.match(todoCenterSource, /record\.status === ['"]completed['"]\s*\?\s*['"]查看详情['"]\s*:\s*record\.source === ['"]basicInfo['"]\s*\?\s*['"]去填写['"]\s*:\s*['"]前往处理['"]/, 'basic information uses 去填写 while existing task actions are preserved')
 assert.match(todoCenterSource, /onClick=\{\(\) => onOpenTodo\(record\)\}/, 'both todo actions use the same version-aware navigation callback')
 assert.match(todayHookSource, /setTimeout/, 'local today hook schedules the next midnight refresh')
 assert.match(todayHookSource, /clearTimeout/, 'local today hook cleans up its midnight timer')

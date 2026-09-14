@@ -20,6 +20,13 @@ function project(id: string, name: string, type: ProjectItem['type'], attribute:
 }
 
 export const RESOURCE_REGISTRY_PROJECTS: ProjectItem[] = [
+  ...([false, true] as const).map(complete => ({
+    ...project(`mock-budget-technical-info-${complete ? 'complete' : 'pending'}`, `示例技术-基础信息${complete ? '已完整' : '待补一项'}`, types.technical, 'budget'),
+    projectCode: `DEMOB-INFO-${complete ? 'COMPLETE' : 'PENDING'}`,
+    projectDescription: complete ? '必填资料已完整，不生成基础信息待办。' : '仅缺项目价值；从工作台去填写，保存后待办消失。',
+    fieldValues: { technicalLead: ['演示用户01'], technicalProjectManager: '演示用户02',
+      tmg: '示例应用领域', subdomain: '示例智能技术', projectYear: '2026', projectValue: complete ? '人无我有' : '' },
+  })),
   ...Object.entries(RESOURCE_FORMAL_IDS).map(([key, formalId]) => {
     const category = key as keyof typeof types
     return { ...project(RESOURCE_BUDGET_IDS[category], `示例${labels[category]}-关联年度预算`, types[category], 'budget', category === 'machine' ? '演示用户09' : '演示用户01'),

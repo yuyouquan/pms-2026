@@ -6307,11 +6307,15 @@ body {
     min-width: 0;
     flex: 1;
     gap: 6px;
+    overflow-x: auto;
   }
 
   .pms-todo-directory__item {
     width: auto;
     min-width: 118px;
+    flex: 0 0 auto;
+    grid-template-columns: 18px max-content auto;
+    white-space: nowrap;
   }
 
   .pms-todo-workspace {

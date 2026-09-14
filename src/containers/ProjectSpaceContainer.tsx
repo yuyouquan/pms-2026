@@ -1006,6 +1006,21 @@ export default function ProjectSpaceContainer() {
   const [showTosTypeEditor, setShowTosTypeEditor] = useState(false)
   const [tosTypeDraftRows, setTosTypeDraftRows] = useState<TosTypeConfigRow[]>([])
   const [showProjectInfoEditor, setShowProjectInfoEditor] = useState(false)
+  const projectInfoNavigationIntent = useUiStore(state => state.projectInfoNavigationIntent)
+  const projectInfoEditorOwner = useRef({ projectId: selectedProject?.id, user: currentLoginUser })
+  useEffect(() => {
+    const previous = projectInfoEditorOwner.current
+    if (previous.projectId !== selectedProject?.id || previous.user !== currentLoginUser) setShowProjectInfoEditor(false)
+    projectInfoEditorOwner.current = { projectId: selectedProject?.id, user: currentLoginUser }
+  }, [selectedProject?.id, currentLoginUser])
+  useEffect(() => {
+    // Consume synchronously so Strict Mode and subsequent entries cannot reopen the modal.
+    const intent = useUiStore.getState().projectInfoNavigationIntent
+    if (!intent) return
+    useUiStore.getState().setProjectInfoNavigationIntent(null)
+    if (intent.projectId === selectedProject?.id && intent.currentUser === currentLoginUser
+      && canViewBasicInfo && canEditBasicInfo) setShowProjectInfoEditor(true)
+  }, [projectInfoNavigationIntent, selectedProject?.id, currentLoginUser, canViewBasicInfo, canEditBasicInfo])
   const [transferInfoCollapsed, setTransferInfoCollapsed] = useState(false)
   const [basicInfoJiraErrors, setBasicInfoJiraErrors] = useState<JiraProjectValidationError[]>([])
   const basicInfoJiraEditorRef = useRef<HTMLDivElement | null>(null)
@@ -4977,7 +4992,7 @@ export default function ProjectSpaceContainer() {
             </Descriptions>
           </Card>
         )}
-        {(isTargetProject || isTech) && (
+        {(isTargetProject || isTech || p.type === '能力建设项目') && (
           <ProjectInfoModal
             mode="edit"
             open={showProjectInfoEditor}

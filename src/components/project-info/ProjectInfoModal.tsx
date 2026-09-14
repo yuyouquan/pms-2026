@@ -5,6 +5,7 @@ import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachi
 import { isFormalProject } from '@/types/projectRegistry'
 import type { ProjectItem } from '@/types/app'
 import { changedManualInfoValues, resolveManualCompletionResponsibility, validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
+import { getMissingProjectInfoFields } from '@/lib/projectInfoCompletion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag } from 'antd'
@@ -193,6 +194,7 @@ export default function ProjectInfoModal({
   onAfterCreate,
 }: ProjectInfoModalProps) {
   const manualCompletion = mode === 'edit' && Boolean(project && !isFormalProject(project as unknown as ProjectItem))
+  const missingSavedFields = mode === 'edit' && project ? getMissingProjectInfoFields(project as unknown as ProjectItem) : []
   const boundMachineMetadataReadonly = Boolean(project && isBoundMachineBudget(project as unknown as ProjectItem))
   const followedMetadata = project ? withBoundMachineBudgetMetadata(project as unknown as ProjectItem, existingProjects as unknown as ProjectItem[]) : undefined
   const [form] = Form.useForm<ProjectInfoFormState>()
@@ -1259,6 +1261,12 @@ export default function ProjectInfoModal({
         />
       )}
       <Spin spinning={isDraftInteractionLocked} description={draftInteractionDescription}>
+      {missingSavedFields.length > 0 && (
+        <Alert type="info" showIcon title="待补全基础信息"
+          description={`尚未保存的必填信息：${missingSavedFields.map(field => field.label).join('、')}。补齐保存后，工作台待办自动移除。`}
+          style={{ marginBottom: 16 }}
+        />
+      )}
       <Form
         form={form}
         layout="vertical"

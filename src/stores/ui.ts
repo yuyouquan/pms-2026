@@ -14,6 +14,7 @@ export type MainModule =
   | 'projectSpace'
 
 export type WorkbenchTab = 'todo'
+export interface ProjectInfoNavigationIntent { projectId: string; currentUser: string }
 export type ProjectManagementTab = 'configuration' | 'view'
 
 export interface PlanNavigationIntent {
@@ -61,6 +62,7 @@ export interface UiState {
   selectedProjectType: string
   projectSpaceModule: string
   planNavigationIntent: PlanNavigationIntent | null
+  projectInfoNavigationIntent: ProjectInfoNavigationIntent | null
   mrPlanNavigationIntent: MrPlanNavigationIntent | null
 
   // Edit guard
@@ -99,6 +101,7 @@ export interface UiActions {
   setSelectedProjectType: (v: string) => void
   setProjectSpaceModule: (v: string) => void
   setPlanNavigationIntent: (v: PlanNavigationIntent | null) => void
+  setProjectInfoNavigationIntent: (v: ProjectInfoNavigationIntent | null) => void
   setMrPlanNavigationIntent: (v: MrPlanNavigationIntent) => void
   consumeMrPlanNavigationIntent: () => MrPlanNavigationIntent | null
   clearMrPlanNavigationIntent: () => void
@@ -145,6 +148,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   selectedProjectType: PROJECT_CATEGORY_MACHINE,
   projectSpaceModule: 'basic',
   planNavigationIntent: null,
+  projectInfoNavigationIntent: null,
   mrPlanNavigationIntent: null,
 
   // Edit guard
@@ -225,6 +229,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
         ? (projectManagementTab ?? get().projectManagementTab)
         : get().projectManagementTab,
       projectSpaceOrigin: null,
+      projectInfoNavigationIntent: null,
       mrPlanNavigationIntent: null,
     })
   },
@@ -242,6 +247,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
   setProjectSpaceModule: (v) => set({ projectSpaceModule: v }),
   setPlanNavigationIntent: (v) => set({ planNavigationIntent: v }),
+  setProjectInfoNavigationIntent: (v) => set({ projectInfoNavigationIntent: v }),
   setMrPlanNavigationIntent: (v) => set({ mrPlanNavigationIntent: v }),
   consumeMrPlanNavigationIntent: () => {
     const intent = get().mrPlanNavigationIntent

@@ -6,6 +6,7 @@ import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import TodoCenter from '@/components/workspace/TodoCenter'
+import { buildProjectInfoTodos } from '@/lib/projectInfoCompletion'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useLocalToday } from '@/hooks/useLocalToday'
 import { useTransferStore } from '@/stores/transfer'
@@ -174,6 +175,7 @@ export default function WorkbenchContainer() {
     navigateWithEditGuard,
     setIsEditMode,
     setPlanNavigationIntent,
+    setProjectInfoNavigationIntent,
   } = useUiStore()
   const {
     projects,
@@ -266,16 +268,23 @@ export default function WorkbenchContainer() {
     rolesByProject,
     transferTodoCandidates,
   ])
+  const projectInfoTodos = useMemo(() => buildProjectInfoTodos({
+    projects,
+    currentUser: currentLoginUser,
+    canEditProjectInfo: projectId => hasPermission(currentLoginUser, projectId, 'basicInfo:查看')
+      && hasPermission(currentLoginUser, projectId, 'basicInfo:编辑'),
+  }), [projects, currentLoginUser, globalRolePerms, globalRoles, rolePermissionsByProject, rolesByProject])
   const todos = useMemo(() => aggregateWorkbenchTodos({
     currentUser: currentLoginUser,
     today,
     planTodos: accessibleCandidates.planTodos,
     transferApplications: accessibleCandidates.transferApplications,
-  }), [accessibleCandidates, currentLoginUser, today])
+    projectInfoTodos,
+  }), [accessibleCandidates, currentLoginUser, today, projectInfoTodos])
 
   const openTodo = (todo: WorkbenchTodo) => {
     const route = todo.route
-    const project = projects.find(item => item.id === todo.projectId || item.name === todo.projectName)
+    const project = projects.find(item => todo.projectId ? item.id === todo.projectId : item.name === todo.projectName)
     if (!project) {
       void message.warning('该待办暂无可打开的项目，请先补齐项目关联')
       return
@@ -299,8 +308,10 @@ export default function WorkbenchContainer() {
 
     const permissionKey = route.kind === 'transfer'
       ? 'basicInfo:transferView'
+      : route.kind === 'basicInfo' ? 'basicInfo:编辑'
       : route.planLevel === 'level2' ? 'plan:二级计划-查看' : 'plan:一级计划-查看'
-    if (!hasPermission(currentLoginUser, project.id, permissionKey)) {
+    if (!hasPermission(currentLoginUser, project.id, permissionKey)
+      || (route.kind === 'basicInfo' && !hasPermission(currentLoginUser, project.id, 'basicInfo:查看'))) {
       void message.warning('当前用户无权访问该待办所在的项目内容')
       return
     }
@@ -312,7 +323,10 @@ export default function WorkbenchContainer() {
       })
       setIsEditMode(false)
 
-      if (route.kind === 'plan') {
+      if (route.kind === 'basicInfo') {
+        setProjectSpaceModule('basic')
+        setProjectInfoNavigationIntent({ projectId: project.id, currentUser: currentLoginUser })
+      } else if (route.kind === 'plan') {
         setPlanNavigationIntent({
           source: 'todo',
           projectId: project.id,

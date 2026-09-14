@@ -8,11 +8,12 @@ import {
   type PlanVersionLike,
 } from '@/lib/marketRules'
 
-export type TodoSource = 'plan' | 'transfer'
+export type TodoSource = 'basicInfo' | 'plan' | 'transfer'
 export type TodoStatus = 'pending' | 'completed'
 export type TodoStatusFilter = 'all' | TodoStatus
 
 export type WorkbenchTodoRoute =
+  | { kind: 'basicInfo' }
   | {
     kind: 'plan'
     planLevel: 'level1' | 'level2'
@@ -349,6 +350,7 @@ interface AggregateWorkbenchTodosInput {
   today: string | Date
   planTodos: readonly PlanTodoCandidate[]
   transferApplications: readonly TransferTodoCandidate[]
+  projectInfoTodos?: readonly WorkbenchTodo[]
 }
 
 /**
@@ -480,6 +482,7 @@ export function aggregateWorkbenchTodos({
   currentUser,
   planTodos,
   transferApplications,
+  projectInfoTodos = [],
 }: AggregateWorkbenchTodosInput): WorkbenchTodo[] {
   const normalizedUser = currentUser.trim()
   if (!normalizedUser) return []
@@ -549,18 +552,18 @@ export function aggregateWorkbenchTodos({
       }
     })
 
-  return sortTodos([...planItems, ...transferItems])
+  return sortTodos([...projectInfoTodos.filter(todo => todo.assignee.trim() === normalizedUser), ...planItems, ...transferItems])
 }
 
 export function resolveWorkbenchDefaultSelection(
   todos: readonly Pick<WorkbenchTodo, 'source' | 'status'>[],
 ): { source: TodoSource; status: TodoStatusFilter } {
-  for (const source of ['plan', 'transfer'] as const) {
+  for (const source of ['basicInfo', 'plan', 'transfer'] as const) {
     if (todos.some(todo => todo.source === source && todo.status === 'pending')) {
       return { source, status: 'pending' }
     }
   }
-  return { source: 'plan', status: 'all' }
+  return { source: 'basicInfo', status: 'all' }
 }
 
 export function filterWorkbenchTodos(
