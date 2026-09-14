@@ -70,6 +70,8 @@ registry.setState({ currentLoginUser: get('src/stores/project.ts').DEFAULT_LOGIN
 const config = get('src/stores/hrConfig.ts').useHrConfigStore
 config.setState({ data: { ...config.getState().data, hrModel: [{ ...rows[0], projectLevel: source.projectLevel }] } })
 const legacyVersion = structuredClone(latest(formalId))
+// Legacy records predate per-version model snapshots as well as explicit lifecycle endings.
+delete legacyVersion.modelSnapshot
 legacyVersion.projectLevel = source.projectLevel
 legacyVersion.hrModelVersion = 'TEST'
 legacyVersion.levelCoefficient = 1

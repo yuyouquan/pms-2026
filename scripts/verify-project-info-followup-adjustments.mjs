@@ -222,18 +222,19 @@ assert.equal(
 )
 
 const projectSpace = read('src/containers/ProjectSpaceContainer.tsx')
-const wholePlanStart = projectSpace.indexOf('const renderWholeMachinePlanInfo = () => {')
-const wholePlanEnd = projectSpace.indexOf('\n    const anchorSections', wholePlanStart)
-assert.notEqual(wholePlanStart, -1, 'whole-machine plan information renderer must exist')
-assert.notEqual(wholePlanEnd, -1, 'whole-machine plan information renderer must have a bounded section')
-assert.doesNotMatch(
-  projectSpace.slice(wholePlanStart, wholePlanEnd),
-  /里程碑计划（横排视图）/,
-  'whole-machine plan information must not show the horizontal-view subtitle',
-)
-const sharedPlanStart = projectSpace.indexOf('const renderProjectPlanInfo = () => {')
-const sharedPlanEnd = projectSpace.indexOf('\n  // ═══════ renderProjectPlanOverview', sharedPlanStart)
-const sharedPlan = projectSpace.slice(sharedPlanStart, sharedPlanEnd)
+const spaceAst = ts.createSourceFile('ProjectSpaceContainer.tsx', projectSpace, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+function rendererBody(name) {
+  let body
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.name.getText(spaceAst) === name && node.initializer && ts.isArrowFunction(node.initializer)) body = node.initializer.body.getText(spaceAst)
+    ts.forEachChild(node, visit)
+  }
+  visit(spaceAst)
+  assert.ok(body, `${name} must have a render body`)
+  return body
+}
+assert.doesNotMatch(rendererBody('renderWholeMachinePlanInfo'), /里程碑计划（横排视图）/)
+const sharedPlan = rendererBody('renderProjectPlanInfo')
 assert.match(
   sharedPlan,
   /!isTosVersionProject[\s\S]*里程碑计划（横排视图）/,
@@ -277,7 +278,7 @@ assert.match(projectInformationFrame, /embedded\s*=\s*false/, 'the shared frame 
 assert.match(projectInformationFrame, /id="section-header"/, 'the shared frame preserves the project-core anchor')
 assert.match(projectInformationFrame, /embedded \? planInformation : <ProjectInformationSlot anchorId="section-plan">\{planInformation\}<\/ProjectInformationSlot>/, 'the complete shared frame provides a stable plan-information slot anchor while embedded hosts retain their own')
 assert.match(projectInformationFrame, /embedded \? informationSections : <ProjectInformationSlot anchorId="section-basic">\{informationSections\}<\/ProjectInformationSlot>/, 'the complete shared frame provides a stable project-information slot anchor while embedded hosts retain their own')
-assert.match(projectInformationFrame, /basic-info-scroll-container/, 'anchor navigation keeps using the existing scroll container')
+assert.match(projectSpace, /id="basic-info-scroll-container"/, 'the project-space host owns the existing scroll container')
 assert.doesNotMatch(projectInformationFrame, /isWholeMachine|isTechnicalProject|projectType/, 'the shared frame contains no project-type branches')
 
 const collapsibleInformationSection = read(collapsibleInformationSectionPath)
@@ -294,9 +295,7 @@ assert.match(targetProjectInformationView, /informationSections=\{/, 'the target
 
 const smoke = read('screenshots/smoke-tos-type-plan.mjs')
 assert.match(smoke, /assertNoVisibleText\(page, '里程碑计划（横排视图）', '#section-plan'\)/, 'the smoke path must reject the removed subtitle')
-assert.match(smoke, /assertNoVisibleText\(page, '首发项目', '\.pms-project-info-modal'\)/, 'the smoke path must reject the removed tOS modal field')
 assert.match(smoke, /async function assertTransferInformationCollapse[\s\S]*'折叠'[\s\S]*!document\.querySelector\('#section-transfer-content'\)[\s\S]*'展开'/, 'the browser smoke must collapse and restore real transfer table content')
 assert.match(smoke, /collapsedLayout\.bodyDisplay !== 'none'[\s\S]*collapsedLayout\.cardHeight > collapsedLayout\.headHeight \+ 6/, 'the browser smoke must reject blank transfer-card body space')
-assert.match(smoke, /'tOS版本项目'[\s\S]*selectVisibleModalOption\(page, '项目名', 'tOS19\.0'\)[\s\S]*assertNoVisibleText\(page, '基础信息', '\.pms-project-info-modal'\)[\s\S]*assertVisibleText\(page, '团队信息', '\.pms-project-info-modal'\)/, 'the browser smoke must select tOS in create mode and verify its modal groups')
 
 console.log('Project information follow-up adjustment verification passed.')

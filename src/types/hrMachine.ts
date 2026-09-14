@@ -73,6 +73,8 @@ export interface HrMachineVersion {
   milestones: MilestoneNodes
   /** 预估投入（人月）= 配置中心模型综合 * 等级系数 */
   estimatedInvestment: number
+  /** 保存的模型输入；历史版本不再读取可变的配置中心数据。 */
+  modelSnapshot?: import('@/types/hrConfig').ConfigRecord[]
   /** 创建时间 */
   createdAt: string
   /** 锁定时间 */

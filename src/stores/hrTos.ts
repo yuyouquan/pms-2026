@@ -482,7 +482,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
     {
       name: 'pms-hr-tos',
       merge: (persisted, current) => {
-        const saved = persisted as Partial<typeof current>
+        const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
         const projects = synchronizeProjects(merged.projects)
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }

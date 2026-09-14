@@ -137,7 +137,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       name: 'pms-hr-config', version: 2,
       partialize: state => ({ data: state.data }),
       merge: (persisted, current) => {
-        const saved = persisted as Partial<HrConfigState>
+        const saved = (persisted ?? {}) as Partial<HrConfigState>
         return { ...current, data: !saved.data || JSON.stringify(saved.data) === JSON.stringify(current.data) ? current.data : saved.data }
       },
     },

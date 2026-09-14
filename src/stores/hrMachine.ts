@@ -1,7 +1,7 @@
 import { canAccessHrProject, getHrRegistryProject, isHrFormalRecord, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalMachineProjects, createResourceMachineProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
-import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -48,7 +48,7 @@ function generateDepartmentMonthlyRecords(
   projectId: string,
   version: HrMachineVersion,
 ): MonthlyInvestment[] {
-  const configRecords = useHrConfigStore.getState().data.hrModel ?? []
+  const configRecords = version.modelSnapshot ?? useHrConfigStore.getState().data.hrModel ?? []
   const splits = calcDepartmentMonthlySplit(
     configRecords,
     version.projectLevel,
@@ -100,7 +100,12 @@ function getLatestVersions(project: HrMachineProject): HrMachineVersion[] {
  */
 
 function synchronizeProjects(projects: HrMachineProject[]): HrMachineProject[] {
-  return synchronizeHrProjects(projects, 'machine', (level, model, coefficient) => calcEstimatedInvestment(useHrConfigStore.getState().data.hrModel ?? [], level, model, coefficient))
+  const records = useHrConfigStore.getState().data.hrModel ?? []
+  return synchronizeHrProjects(projects, 'machine', (level, model, coefficient) => calcEstimatedInvestment(records, level, model, coefficient))
+    .map(project => ({ ...project, versions: project.versions.map(version => isLatestHrVersion(project, version)
+      ? { ...version, modelSnapshot: records.filter(row => row.enabled !== false
+        && String(row.projectLevel) === version.projectLevel && String(row.modelVersion) === version.hrModelVersion).map(row => ({ ...row })) }
+      : version) }))
 }
 
 function syncMonthlyInvestments(projects: HrMachineProject[], existingMonthly: MonthlyInvestment[]): MonthlyInvestment[] {
@@ -399,7 +404,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       },
 
       calculateMonthlySplit: (version) => {
-        const configRecords = useHrConfigStore.getState().data.hrModel ?? []
+        const configRecords = version.modelSnapshot ?? useHrConfigStore.getState().data.hrModel ?? []
         return calcDepartmentMonthlySplit(
           configRecords,
           version.projectLevel,
@@ -412,7 +417,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
     {
       name: 'pms-hr-machine',
       merge: (persisted, current) => {
-        const saved = persisted as Partial<typeof current>
+        const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
         const projects = synchronizeProjects(merged.projects)
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }

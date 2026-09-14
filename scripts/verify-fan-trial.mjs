@@ -33,9 +33,10 @@ for (const projectAttribute of ['formal', 'budget', 'roadmap']) {
   assert.ok(getMissingProjectInfoFields({ ...base, projectAttribute, fieldValues: { fanTrialEnabled: '是' } }).some(field => field.key === 'fanTrialCountries'))
 }
 const { createInitialEnumRows } = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
-const { migrateEnumState } = loadTypeScriptModule(root, 'src/stores/enums.ts')
+const { migrateEnumState, ENUM_STORE_VERSION } = loadTypeScriptModule(root, 'src/stores/enums.ts')
 assert.ok(migrateEnumState({ rowsByType: {} }, 4).rowsByType['fan-trial-country'].length > 0)
-assert.deepEqual(migrateEnumState({ rowsByType: { 'fan-trial-country': [] } }, 4).rowsByType['fan-trial-country'], [], 'intentionally empty configuration stays empty')
+assert.ok(migrateEnumState({ rowsByType: { 'fan-trial-country': [] } }, 4).rowsByType['fan-trial-country'].length > 0, 'legacy empty configuration gets the requested one-time mock refresh')
+assert.deepEqual(migrateEnumState({ rowsByType: { 'fan-trial-country': [] } }, ENUM_STORE_VERSION).rowsByType['fan-trial-country'], [], 'deletion after the mock refresh stays durable')
 assert.ok(createInitialEnumRows()['fan-trial-country'].some(row => row.value === '尼日利亚'))
 assert.ok(validateProjectInfoValues(base.type, { ...valid, fanTrialCountries: [{country: '尼日利亚', quantity: null}] }, { fieldKeys: new Set(['fanTrialEnabled', 'fanTrialCountries']) }).some(error => error.fieldKey === 'fanTrialCountries'), 'collapsed sections still enforce per-country quantities at submission')
 console.log('PASS defaults, saved payload, display text, completion tasks and enum migration')

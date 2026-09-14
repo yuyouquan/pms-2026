@@ -1,4 +1,5 @@
 import { mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
+import { MOCK_CONFIG_DATA } from '@/constants/hrConfig'
 import { RESOURCE_FORMAL_IDS, RESOURCE_BUDGET_IDS } from '@/mock/projectRegistry'
 import { useProjectStore } from '@/stores/project'
 import { resolveHrFormalSource, getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
@@ -101,6 +102,7 @@ export function createAdditionalMachineProjects(options: FormalOption[]): HrMach
     const versions: HrMachineVersion[] = versionSpecs(base, scenario).map(version => ({
       ...version, projectLevel: level, levelCoefficient: coefficient, hrModelVersion: 'V2026.1',
       estimatedInvestment: (level === 'B' ? 52 : 100) * coefficient,
+      modelSnapshot: MOCK_CONFIG_DATA.hrModel.filter(row => String(row.projectLevel) === level && row.modelVersion === 'V2026.1').map(row => ({ ...row })),
       milestones: machineDates(dates(scenario, version.minorVersion)),
     }))
     return { ...base, brand: scenario % 2 === 0 ? 'TECNO' : 'Infinix', productLine: scenario % 2 === 0 ? 'CAMON' : 'NOTE', projectLevel: level, levelCoefficient: coefficient, hrModelVersion: 'V2026.1', projectYear: '-', versions }

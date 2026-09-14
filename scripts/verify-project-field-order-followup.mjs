@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import postcss from 'postcss'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
@@ -29,7 +30,7 @@ const machineCreateKeys = [
   'dimensionUpgradeStrategy', 'systemType', 'kernelVersion', 'androidMajorUpgrade',
   'modelCategory', 'confidentialityLevel', 'chipCode', 'chipModel', 'chipPlatform',
   'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini', 'wholeMachinePd',
-  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'jiraProjects',
+  'pcbaSheet', 'shippingCountrySheet', 'keyComponentsSheet', 'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects',
   'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
   'machineQualityRepresentative', 'machineDevelopmentRepresentative',
   'machineTestRepresentative', 'machineOther',
@@ -37,7 +38,7 @@ const machineCreateKeys = [
 const machineCreateRequiredKeys = [
   'firstSaleTosVersion', 'status', 'versionType', 'softwareProjectLevel',
   'isFirstLaunchProject', 'productSeries', 'developmentMode', 'systemType',
-  'kernelVersion', 'chipCode', 'memorySize', 'isTwoStage', 'machineSpm',
+  'kernelVersion', 'chipCode', 'memorySize', 'isTwoStage', 'fanTrialEnabled', 'fanTrialCountries', 'machineSpm',
 ]
 const machineSpaceCoreKeys = [
   'brand', 'productLine', 'marketName', 'firstSaleTosVersion', 'status',
@@ -58,7 +59,7 @@ const machineSpaceInfoKeys = [
   'keyComponentsSheet', 'machineSpm', 'machineSpp', 'machineCmo',
   'machineSoftwareSe', 'machineQualityRepresentative',
   'machineDevelopmentRepresentative', 'machineTestRepresentative', 'machineOther',
-  'jiraProjects',
+  'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects',
 ]
 const machineSpaceDefaultVisible = [
   ...machineSpaceCoreKeys,
@@ -71,7 +72,7 @@ const machineSpaceDefaultVisible = [
   'chipPlatform', 'memorySize', 'startingRam', 'isTwoStage', 'isOutsourcedMini',
   'machineSpm', 'machineSpp', 'machineCmo', 'machineSoftwareSe',
   'machineQualityRepresentative', 'machineDevelopmentRepresentative',
-  'machineTestRepresentative', 'machineOther', 'jiraProjects',
+  'machineTestRepresentative', 'machineOther', 'fanTrialEnabled', 'fanTrialCountries', 'jiraProjects',
 ]
 
 const technicalCreateKeys = [
@@ -129,7 +130,7 @@ assert.deepEqual(Array.from(schema.MACHINE_PROJECT_SPACE_INFO_FIELD_KEYS), machi
 assert.deepEqual(
   [...schema.MACHINE_PROJECT_SPACE_CORE_FIELD_KEYS, ...planSchema.MACHINE_PROJECT_SPACE_PLAN_FIELD_KEYS, ...schema.MACHINE_PROJECT_SPACE_INFO_FIELD_KEYS],
   [...machineSpaceCoreKeys, ...machineSpacePlanKeys, ...machineSpaceInfoKeys],
-  'machine project space must be core 1-7 + plan 8-14 + information 15-53',
+  'machine project space must be core 1-7 + plan 8-14 + information 15-55 (including conditional fields)',
 )
 
 assert.deepEqual(Array.from(schema.TECHNICAL_PROJECT_CREATE_FIELD_KEYS), technicalCreateKeys)
@@ -179,35 +180,39 @@ assert.match(
   /field\.key === 'jiraProjects'[\s\S]*pms-project-info-jira-horizontal/,
   'JIRA projects must use the dedicated horizontal full-row display class',
 )
-for (const rule of [
-  /\.pms-project-info-jira-horizontal\s*\{[\s\S]*flex-direction:\s*row/,
-  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-label\s*\{[\s\S]*min-width:\s*120px/,
-  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*margin-top:\s*0/,
-  /\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*text-align:\s*left/,
-  /\.pms-project-info-jira-horizontal\s+\.ant-space\s*\{[\s\S]*flex-wrap:\s*wrap/,
-]) {
-  assert.match(globalsSource, rule, 'JIRA project display must keep label and wrapped linked tags on one horizontal row')
+const cssAst = postcss.parse(globalsSource)
+function cssValue(selector, property, media = null) {
+  let value
+  cssAst.walkRules(rule => {
+    if (!rule.selectors.includes(selector)) return
+    const parentMedia = rule.parent.type === 'atrule' && rule.parent.name === 'media' ? rule.parent.params : null
+    if (parentMedia !== media) return
+    rule.walkDecls(property, declaration => { value = declaration.value })
+  })
+  return value
 }
-for (const rule of [
-  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s*\{[\s\S]*flex-direction:\s*column/,
-  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.pms-project-info-display-value\s*\{[\s\S]*width:\s*100%/,
-  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.ant-tag\s*\{[\s\S]*max-width:\s*100%/,
-  /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*\.pms-project-info-jira-horizontal\s+\.ant-tag\s+a\s*\{[\s\S]*text-overflow:\s*ellipsis/,
-]) {
-  assert.match(globalsSource, rule, 'JIRA project display must stay within the row on narrow screens')
-}
-const narrowJiraStart = globalsSource.lastIndexOf('@media (max-width: 480px)')
-const narrowJiraEnd = globalsSource.indexOf('@media (prefers-reduced-motion: reduce)', narrowJiraStart)
-const narrowJiraSource = globalsSource.slice(narrowJiraStart, narrowJiraEnd)
-const narrowJiraLinkRule = narrowJiraSource.match(/\.pms-project-info-jira-horizontal \.ant-tag a\s*\{([^}]*)\}/)?.[1] || ''
-assert.match(narrowJiraSource, /\.pms-project-info-jira-horizontal \.ant-tag\s*\{[^}]*display:\s*inline-flex/, 'narrow JIRA tags must keep their icon and link on one flex line')
-assert.match(narrowJiraSource, /\.pms-project-info-jira-horizontal \.ant-tag\s*\{[^}]*min-width:\s*0/, 'narrow JIRA tags must allow their text to shrink')
-assert.match(narrowJiraLinkRule, /text-overflow:\s*ellipsis/, 'narrow JIRA links must truncate safely')
-assert.doesNotMatch(narrowJiraLinkRule, /display:\s*block/, 'narrow JIRA links must not split from their tag icon')
+const jira = '.pms-project-info-jira-horizontal'
+for (const [selector, property, expected, media] of [
+  [jira, 'display', 'grid'], [jira, 'grid-template-columns', 'subgrid'],
+  [`${jira} .pms-project-info-display-label`, 'grid-column', '1'],
+  [`${jira} .pms-project-info-display-label`, 'min-width', '0'],
+  [`${jira} .pms-project-info-display-value`, 'grid-column', '2 / -1'],
+  [`${jira} .pms-project-info-display-value`, 'margin-top', '0'],
+  [`${jira} .pms-project-info-display-value`, 'text-align', 'left'],
+  ['.pms-project-info-tags', 'display', 'inline-flex'], ['.pms-project-info-tags', 'flex-wrap', 'wrap'],
+  [`${jira} .pms-project-info-display-value`, 'grid-column', '1 / -1', '(max-width: 640px)'],
+  [`${jira} .pms-project-info-display-value`, 'width', '100%', '(max-width: 480px)'],
+  [`${jira} .ant-tag`, 'display', 'inline-flex', '(max-width: 480px)'],
+  [`${jira} .ant-tag`, 'min-width', '0', '(max-width: 480px)'],
+  [`${jira} .ant-tag`, 'max-width', '100%', '(max-width: 480px)'],
+  [`${jira} .ant-tag a`, 'white-space', 'nowrap', '(max-width: 480px)'],
+  [`${jira} .ant-tag a`, 'text-overflow', 'ellipsis', '(max-width: 480px)'],
+]) assert.equal(cssValue(selector, property, media), expected, `${selector}: ${property} at ${media || 'desktop'}`)
+assert.notEqual(cssValue(`${jira} .ant-tag a`, 'display', '(max-width: 480px)'), 'block')
 assert.deepEqual(
   machineSpaceDefinitions.filter(field => field.defaultVisible).map(field => field.key),
   machineSpaceDefaultVisible,
-  'machine project-space default visibility must match all 53 approved rows',
+  'machine project-space default visibility must match the 55-field schema projection including conditional and combined fields',
 )
 assert.deepEqual(
   machineSpaceInfoKeys.filter(key => ['targetMarkets', 'launchDate', 'machineUx'].includes(key)),
@@ -343,7 +348,7 @@ assert.equal(
 assert.match(modalSource, /getProjectInfoCreateFields/, 'create pages must consume the ordered create projection')
 assert.match(
   modalSource,
-  /aria-label="IPM项目来源"[\s\S]*data-project-info-group/,
+  /aria-label=\{manualCompletion \? "项目档案" : "IPM项目来源"\}[\s\S]*data-project-info-group/,
   'the IPM source selector must render before grouped project fields',
 )
 assert.match(
@@ -371,7 +376,7 @@ assert.deepEqual(
   'technical common source fields stay outside the business groups without duplication',
 )
 assert.match(modalSource, /label="项目分类" name="secondaryCategory"[\s\S]{0,120}<Input disabled/, 'technical project category renders in the common top area')
-assert.match(modalSource, /aria-label="IPM项目来源"[\s\S]{0,950}mode === 'create' \?[\s\S]{0,800}: \(\s*<Form\.Item label="项目名" name="projectName"><Input disabled/, 'technical edit project name remains read-only in the common IPM source area')
+assert.match(modalSource, /aria-label=\{manualCompletion \? "项目档案" : "IPM项目来源"\}[\s\S]{0,950}mode === 'create' \?[\s\S]{0,800}: \(\s*<Form\.Item label="项目名" name="projectName"><Input disabled/, 'technical edit project name remains read-only in the common IPM source area')
 assert.match(modalSource, /fields=\{technicalGroupedFields\}/, 'technical Collapse receives only grouped fields')
 assert.match(modalSource, /invalidTechnicalField[\s\S]{0,260}setActiveGroups/, 'technical semantic validation expands the failing field group')
 assert.match(modalSource, /data-project-create-field=\{field\.key\}/, 'rendered create fields must expose their source key in the live DOM')
@@ -620,7 +625,7 @@ const technicalCreatePayload = technicalProjectRules.normalizeTechnicalProjectVa
   technicalProjectManager: '演示用户07',
   technicalOther: '协同丙',
 })
-assert.equal(technicalCreatePayload.technicalLead, '演示用户01')
+assert.deepEqual(technicalCreatePayload.technicalLead, ['演示用户01'])
 assert.equal(technicalCreatePayload.technicalProjectManager, '演示用户07')
 assert.equal(technicalCreatePayload.technicalOther, '协同丙', 'the new technical role must survive create/edit payload normalization')
 
