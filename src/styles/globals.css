@@ -178,26 +178,6 @@
   min-height: calc(100vh - 104px);
 }
 
-.pms-project-config__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.pms-project-config__title {
-  color: #111827;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.pms-project-config__description {
-  margin-top: 2px;
-  color: #6b7280;
-  font-size: 12px;
-}
-
 .pms-project-config__filters {
   display: flex;
   flex-wrap: wrap;
@@ -212,6 +192,12 @@
   min-width: 0;
   flex-direction: column;
   gap: 8px;
+}
+
+.pms-project-config__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
 }
 
 .pms-project-config__filter > label {

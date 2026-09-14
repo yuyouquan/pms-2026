@@ -293,13 +293,6 @@ export default function ProjectConfiguration() {
   return (
     <section className="pms-project-config" aria-label="项目配置">
       {modalContextHolder}
-      <div className="pms-project-config__toolbar">
-        <div>
-          <div className="pms-project-config__title">项目配置</div>
-          <div className="pms-project-config__description">统一管理正式项目、预算项目与路标项目。</div>
-        </div>
-        {canManage ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewProjectOpen(true)}>新项目</Button> : null}
-      </div>
       <div className="pms-project-config__filters" role="search" aria-label="项目配置筛选">
         <div className="pms-project-config__filter">
           <label htmlFor="project-config-name-filter">项目名称</label>
@@ -329,7 +322,10 @@ export default function ProjectConfiguration() {
           <Input id="project-config-binding-filter" aria-label="筛选绑定正式项目" allowClear prefix={<SearchOutlined />}
             placeholder="模糊搜索正式项目名称" value={filters.boundFormalProjectName} onChange={event => setFilters({ boundFormalProjectName: event.target.value })} />
         </div>
-        <Button icon={<ClearOutlined />} disabled={!hasFilters} onClick={resetFilters}>清空筛选</Button>
+        <div className="pms-project-config__actions">
+          <Button icon={<ClearOutlined />} disabled={!hasFilters} onClick={resetFilters}>清空筛选</Button>
+          {canManage ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewProjectOpen(true)}>新项目</Button> : null}
+        </div>
       </div>
       <Table<ProjectItem>
         className="pms-table"
