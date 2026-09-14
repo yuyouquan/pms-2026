@@ -3,7 +3,7 @@ import { isMachineProjectType } from '@/constants/projectTypes'
 import { getProjectInfoCreateFields } from '@/lib/projectInfoRules'
 import { buildProjectInfoValues, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
-import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
+import { getProjectAttribute, getRegistryProjectCategory, isFormalProject } from '@/types/projectRegistry'
 import type { ProjectInfoValues, ProjectItem } from '@/types/app'
 import type { WorkbenchTodo } from '@/lib/todoAggregation'
 
@@ -65,7 +65,9 @@ export function buildProjectInfoTodos({ projects, currentUser, canEditProjectInf
     if (!missing.length) return []
     return [{
       id: `basic-info:${project.id}`, source: 'basicInfo', title: '补全项目基础信息',
-      projectId: project.id, projectName: project.name, assignee: user,
+      projectId: project.id, projectName: project.name,
+      projectType: getRegistryProjectCategory(project), projectAttribute: getProjectAttribute(project),
+      assignee: user,
       generatedAt: project.createdAt?.slice(0, 10) || '', dueDate: '', status: 'pending',
       nodeLabel: '基础信息', taskContent: `待填写：${missing.map(field => field.label).join('、')}`,
       route: { kind: 'basicInfo' },

@@ -1,3 +1,4 @@
+import type { ProjectAttribute } from '@/types/projectRegistry'
 import { ALL_USERS } from '@/constants/permissions'
 import {
   getMarketCurrentVersion,
@@ -35,6 +36,8 @@ export interface WorkbenchTodo {
   title: string
   projectId: string
   projectName: string
+  projectType?: string
+  projectAttribute?: ProjectAttribute
   assignee: string
   dueDate: string
   generatedAt: string

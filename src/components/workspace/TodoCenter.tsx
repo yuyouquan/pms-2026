@@ -24,6 +24,8 @@ import {
   type WorkbenchTodo,
 } from '@/lib/todoAggregation'
 
+import { PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
+
 const { RangePicker } = DatePicker
 
 export interface TodoCenterProps {
@@ -259,7 +261,7 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                   setPageSize(nextPageSize)
                 },
               }}
-              scroll={{ x: 1320, y: 460 }}
+              scroll={{ x: source === 'basicInfo' ? 1580 : 1320, y: 460 }}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyDescription} /> }}
               columns={[
                 {
@@ -282,6 +284,23 @@ export default function TodoCenter({ todos, loading = false, error, onRetry, onO
                   ellipsis: true,
                   render: (projectName: string) => projectName || '未关联项目',
                 },
+                ...(source === 'basicInfo' ? [
+                  {
+                    title: '项目类型',
+                    dataIndex: 'projectType',
+                    key: 'projectType',
+                    width: 150,
+                    render: (projectType: WorkbenchTodo['projectType']) => projectType || '—',
+                  },
+                  {
+                    title: '项目属性',
+                    dataIndex: 'projectAttribute',
+                    key: 'projectAttribute',
+                    width: 110,
+                    render: (projectAttribute: WorkbenchTodo['projectAttribute']) => projectAttribute
+                      ? <Tag>{PROJECT_ATTRIBUTE_LABELS[projectAttribute]}</Tag> : '—',
+                  },
+                ] : []),
                 {
                   title: '状态',
                   dataIndex: 'status',
