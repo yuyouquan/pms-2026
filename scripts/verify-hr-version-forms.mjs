@@ -40,7 +40,7 @@ await check('All category creation payloads retain manual dates, reuse source se
   for (let i = 1; i < 4; i++) {
     const milestones = i === 1 ? { planningKO: '2028-01-02', conceptStart: '2028-02-02', str1: '2028-03-02', str3: '2028-04-02', str5: '2028-05-02', marketIteration: '2028-06-02', maintenanceEnd: '2028-07-02' } : { planningStart: '2028-01-02', charterDCP: '2028-02-02', tdr1: '2028-03-02', pdcp: '2028-04-02', tdcpx: '2028-05-02', edcp: '2028-06-02' }
     stores[i].getState().addVersion(getRecord(i).id, { budgetType: 'annual', departmentInvestments: [dept], milestones, projectStartTime: '2028-01-02', projectEndTime: '2028-12-02' })
-    assert.deepEqual(i === 3 ? { start: getRecord(i).versions[0].projectStartTime, end: getRecord(i).versions[0].projectEndTime } : getRecord(i).versions[0].milestones, i === 3 ? { start: '2028-01-02', end: '2028-12-02' } : i === 2 ? { ...milestones, tdr2: null, tdr3x: null, tdr4: null } : milestones)
+    assert.deepEqual(i === 3 ? { start: getRecord(i).versions[0].projectStartTime, end: getRecord(i).versions[0].projectEndTime } : getRecord(i).versions[0].milestones, i === 3 ? { start: '2028-01-02', end: '2028-12-02' } : i === 2 ? { ...milestones, tdr2: null, tdr3x: null, tdr4: null } : { ...milestones, cdcp: null, str2: null, str4: null, str4a: null })
   }
   for (let i = 0; i < 4; i++) {
     const before = structuredClone(getRecord(i).versions)

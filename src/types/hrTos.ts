@@ -13,15 +13,20 @@ export type ProjectStatus = 'active' | 'cancelled' | 'paused'
 export interface TosMilestoneNodes {
   /** 规划KO */
   planningKO: string | null
+  /** CDCP（旧版本可能未填写） */
+  cdcp?: string | null
   /** 概念启动 */
   conceptStart: string | null
   /** STR1 */
   str1: string | null
+  str2?: string | null
   /** STR3 */
   str3: string | null
+  str4?: string | null
+  str4a?: string | null
   /** STR5 */
   str5: string | null
-  /** 上市迭代 */
+  /** 上市迭代结束 */
   marketIteration: string | null
   /** 维护结束 */
   maintenanceEnd: string | null

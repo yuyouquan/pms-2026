@@ -1,3 +1,4 @@
+import { mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
 import { RESOURCE_FORMAL_IDS, RESOURCE_BUDGET_IDS } from '@/mock/projectRegistry'
 import { useProjectStore } from '@/stores/project'
 import { resolveHrFormalSource, getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
@@ -67,7 +68,13 @@ function dates(scenario: number, minor: number): (string | null)[] {
 }
 const midpointDate = (start: string, end: string) => new Date((Date.parse(start) + Date.parse(end)) / 2).toISOString().slice(0, 10)
 const machineDates = (d: (string | null)[]): MilestoneNodes => ({ conceptStart: d[0], str1: d[1], str2: d[1] && d[2] ? midpointDate(d[1], d[2]) : null, str3: d[2], str4: d[3], str4a: d[3] && d[4] ? midpointDate(d[3], d[4]) : null, str5: d[4], productLaunch: d[5] })
-const tosDates = (d: (string | null)[]): TosMilestoneNodes => ({ planningKO: d[0], conceptStart: d[1], str1: d[2], str3: d[3], str5: d[4], marketIteration: d[5], maintenanceEnd: d[6] })
+const tosDates = (d: (string | null)[]): TosMilestoneNodes => ({
+  planningKO: d[0], cdcp: d[0] && d[1] ? midpointDate(d[0], d[1]) : null,
+  conceptStart: d[1], str1: d[2], str2: d[2] && d[3] ? midpointDate(d[2], d[3]) : null,
+  str3: d[3], str4: d[3] && d[4] ? midpointDate(d[3], d[4]) : null,
+  str4a: d[3] && d[4] ? midpointDate(midpointDate(d[3], d[4]), d[4]) : null,
+  str5: d[4], marketIteration: d[5], maintenanceEnd: d[6],
+})
 const techDates = (d: (string | null)[]): TechMilestoneNodes => ({
   planningStart: d[0], charterDCP: d[1], tdr1: d[2],
   tdr2: d[2] && d[3] ? midpointDate(d[2], d[3]) : null,
@@ -162,9 +169,10 @@ function resourceProjects<T extends ResourceProject>(category: Category, templat
       if (index === 2) { d[0] = '2026-11-01'; d[1] = '2026-12-01' }
       if (version.minorVersion === 1) { d[4] = '2027-08-01'; d[5] = '2027-10-01' }
       if (category === 'tos' && index === 2 && version.minorVersion > 1) d[6] = null
+      const manualMilestones = category === 'machine' ? machineDates(d) : category === 'tos' ? tosDates(d) : techDates(d)
       const dates = category === 'capability'
         ? { projectStartTime: source?.projectStartTime ?? d[0], projectEndTime: source?.projectEndTime ?? d[5] }
-        : { milestones: source?.milestones ?? (category === 'machine' ? machineDates(d) : category === 'tos' ? tosDates(d) : techDates(d)) }
+        : { milestones: source?.milestones ? mergeHrFormalMilestones(category, source.milestones, manualMilestones) : manualMilestones }
       return { ...version, id: versionId, projectId: recordId, createdBy, createdAt, ...dates,
         ...('departmentInvestments' in version ? {
           departmentInvestments: version.departmentInvestments.map((department, i) => ({ ...department, id: `${versionId}-department-${i + 1}` })),

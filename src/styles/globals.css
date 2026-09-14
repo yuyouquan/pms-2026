@@ -8904,6 +8904,7 @@ input.ant-input,
 /* Shared HR creation fields; department tables stay outside this grid. */
 .pms-hr-version-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 20px; }
 .pms-hr-version-form--technical { grid-template-columns: repeat(5, minmax(0, 1fr)); column-gap: 12px; }
+.pms-hr-version-form--tos { grid-template-columns: repeat(6, minmax(0, 1fr)); column-gap: 12px; }
 @media (max-width: 700px) { .pms-hr-version-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .pms-hr-version-form { grid-template-columns: minmax(0, 1fr); } }
 
@@ -8977,6 +8978,10 @@ input.ant-input,
 .pms-modal.pms-hr-version-modal .ant-modal-body { padding-top: 12px; max-height: calc(100vh - 180px); overflow-y: auto; }
 .pms-hr-version-modal .ant-form-item { margin-bottom: 12px; min-width: 0; }
 .pms-hr-version-modal .ant-form-item-label { padding-bottom: 4px; }
+.pms-hr-readonly-field, .pms-hr-readonly-field input { cursor: not-allowed; }
+.pms-hr-readonly-field__icon { opacity: 0; color: var(--pms-text-secondary); }
+.pms-hr-readonly-field:hover .pms-hr-readonly-field__icon,
+.pms-hr-readonly-field:focus-within .pms-hr-readonly-field__icon { opacity: 1; }
 .pms-hr-version-row { display: grid; gap: 0 12px; }
 .pms-hr-version-row--metadata { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 .pms-hr-version-row--model { grid-template-columns: repeat(3, minmax(0, 1fr)); }

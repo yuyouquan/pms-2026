@@ -31,7 +31,7 @@ export const CONFIG_MODULES: ConfigModuleMeta[] = [
       { key: 'developmentPhase', label: '开发阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
       { key: 'validationPhase', label: '验证阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
       { key: 'launchPhase', label: '上市阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
-      { key: 'lifecycle', label: '生命周期', width: 100, editable: true, inputType: 'number', align: 'right' },
+      { key: 'lifecycle', label: '生命周期阶段', width: 120, editable: true, inputType: 'number', align: 'right' },
     ],
   },
 
@@ -144,7 +144,7 @@ export function resolveConfigModule(leafKey: string): ConfigModuleKey | null {
 /* ── 配置中心 → 整机产品项目联动函数 ───────────────────────────────── */
 
 /** 配置中心阶段字段 key 列表 */
-export const HR_MODEL_PHASE_FIELDS = ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期'].map((label, index) => ({ label, key: ['conceptPhase', 'planningPhase', 'developmentPhase', 'validationPhase', 'launchPhase', 'lifecycle'][index] }))
+export const HR_MODEL_PHASE_FIELDS = ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'].map((label, index) => ({ label, key: ['conceptPhase', 'planningPhase', 'developmentPhase', 'validationPhase', 'launchPhase', 'lifecycle'][index] }))
 const HR_MODEL_PHASE_KEYS = ['conceptPhase', 'planningPhase', 'developmentPhase', 'validationPhase', 'launchPhase', 'lifecycle'] as const
 
 /**
@@ -248,7 +248,7 @@ const PHASE_DEFS: PhaseDef[] = [
   { label: '开发阶段', startField: 'str3', endField: 'str4', configKey: 'developmentPhase' },
   { label: '验证阶段', startField: 'str4', endField: 'str5', configKey: 'validationPhase' },
   { label: '上市阶段', startField: 'str5', endField: 'productLaunch', configKey: 'launchPhase' },
-  { label: '生命周期', startField: 'productLaunch', endField: 'productLaunch', configKey: 'lifecycle', isLifecycle: true },
+  { label: '生命周期阶段', startField: 'productLaunch', endField: 'productLaunch', configKey: 'lifecycle', isLifecycle: true },
 ]
 
 /** 计算两个日期之间的天数（包含首尾，+1） */

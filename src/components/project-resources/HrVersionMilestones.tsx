@@ -9,6 +9,8 @@ import { TECH_MILESTONE_FIELDS } from '@/constants/hrTechnical'
 import { isHrFormalRecord } from '@/lib/hrProjectRegistry'
 import { resolveHrFormalSource, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import { getHrVersionSeed, type HrVersionIdentity } from '@/lib/hrVersionRules'
+import { HR_MANUAL_MILESTONE_KEYS, mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
+import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 
 const fieldsByCategory = { machine: MILESTONE_FIELDS, tos: TOS_MILESTONE_FIELDS, technical: TECH_MILESTONE_FIELDS,
   capability: [{ key: 'projectStartTime', label: '项目开始时间' }, { key: 'projectEndTime', label: '项目结束时间' }] }
@@ -24,7 +26,7 @@ export function useHrVersionMilestones(category: Exclude<HrProjectCategory, 'cap
   }, [open, project?.id, budgetType])
   const readOnly = isHrFormalRecord(project)
   const values = readOnly
-    ? resolveHrFormalSource(category, project?.ipmProjectCode ?? null, project?.pmsProjectId).milestones as Dates
+    ? mergeHrFormalMilestones(category, resolveHrFormalSource(category, project?.ipmProjectCode ?? null, project?.pmsProjectId).milestones, manual) as Dates
     : manual
   return { values, readOnly, onChange: (key: string, value: string | null) => setManual(previous => ({ ...previous, [key]: value })) }
 }
@@ -33,9 +35,15 @@ export function HrVersionMilestoneFields({ category, values, readOnly, onChange 
   category: HrProjectCategory; values: object; readOnly: boolean; onChange: (key: string, value: string | null) => void
 }) {
   const dates = values as Dates
-  return <>{fieldsByCategory[category].map(field => <Form.Item key={field.key} label={field.label} tooltip={readOnly ? '来源于本项目最新已发布一级计划，空日期等待计划发布' : '预算项目独立维护，绑定正式项目后仍保留手工日期'}>
-    <DatePicker aria-label={field.label} style={{ width: '100%' }} value={dates[field.key] ? dayjs(dates[field.key]) : null} disabled={readOnly} onChange={value => onChange(field.key, value?.format('YYYY-MM-DD') ?? null)} />
-  </Form.Item>)}</>
+  return <>{fieldsByCategory[category].map(field => {
+    const locked = readOnly && !HR_MANUAL_MILESTONE_KEYS[category].includes(field.key)
+    const reason = locked ? '来源于本项目最新已发布一级计划，空日期等待计划发布' : readOnly
+      ? '手工维护，不随一级计划同步' : '预算项目独立维护，绑定正式项目后仍保留手工日期'
+    return <Form.Item key={field.key} label={field.label} tooltip={reason}>
+      {locked ? <HrReadonlyField label={field.label} value={dates[field.key]} reason={reason} />
+        : <DatePicker aria-label={field.label} style={{ width: '100%' }} value={dates[field.key] ? dayjs(dates[field.key]) : null} onChange={value => onChange(field.key, value?.format('YYYY-MM-DD') ?? null)} />}
+    </Form.Item>
+  })}</>
 }
 
 export function HrVersionMilestoneDetails({ category, values }: { category: HrProjectCategory; values: object }) {

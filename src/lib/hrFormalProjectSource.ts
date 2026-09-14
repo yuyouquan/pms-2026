@@ -60,10 +60,10 @@ export function resolveHrFormalSource(category: HrProjectCategory, code: string 
     tdr1: dateOf(tasks, ['TDR1']), tdr2: dateOf(tasks, ['TDR2']), pdcp: dateOf(tasks, ['PDCP']),
     tdr3x: dateOf(tasks, ['TDR3_X']), tdcpx: dateOf(tasks, ['TDCP_X']), tdr4: dateOf(tasks, ['TDR4']), edcp: dateOf(tasks, ['EDCP']),
   } : category === 'tos' ? {
-    planningKO: dateOf(tasks, ['规划KO']), conceptStart: dateOf(tasks, ['概念启动']),
-    str1: dateOf(tasks, ['STR1']), str3: dateOf(tasks, ['STR3']), str5: dateOf(tasks, ['STR5']),
-    marketIteration: dateOf(stages, ['上市迭代', '上市迭代阶段'], 'planStartDate'),
-    maintenanceEnd: dateOf(tasks, ['维护结束']) || dateOf(stages, ['维护阶段']),
+    planningKO: dateOf(tasks, ['规划KO']), cdcp: dateOf(tasks, ['CDCP']), conceptStart: dateOf(tasks, ['概念启动']),
+    str1: dateOf(tasks, ['STR1']), str2: dateOf(tasks, ['STR2']), str3: dateOf(tasks, ['STR3']),
+    str4: dateOf(tasks, ['STR4']), str4a: dateOf(tasks, ['STR4A']), str5: dateOf(tasks, ['STR5']),
+    marketIteration: null, maintenanceEnd: null,
   } : {
     conceptStart: dateOf(tasks, ['概念启动']), str1: dateOf(tasks, ['STR1']), str3: dateOf(tasks, ['STR3']),
     str2: dateOf(tasks, ['STR2']), str4: dateOf(tasks, ['STR4']), str4a: dateOf(tasks, ['STR4A']), str5: dateOf(tasks, ['STR5']),

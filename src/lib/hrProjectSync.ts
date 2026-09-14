@@ -1,5 +1,6 @@
 import { isHrFormalRecord, synchronizeHrRegistryRecord } from '@/lib/hrProjectRegistry'
 import { resolveHrFormalSource, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
+import { mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
 import { HR_BUDGET_TYPES, getLatestHrVersion, getMachineProjectYear, isLatestHrVersion, normalizeHrVersionSequence, type HrVersionIdentity } from '@/lib/hrVersionRules'
 
 interface SyncVersion extends HrVersionIdentity {
@@ -23,7 +24,7 @@ interface SyncProject {
   projectYear?: string
 }
 
-/** Machine, tOS and technical nonannual latest versions follow the formal plan; capability dates, annual planning and historical snapshots keep manual values. */
+/** Latest formal plan milestones follow published plans, except version-owned end dates; budgets, capability dates and historical snapshots stay independent. */
 export function synchronizeHrProjects<T extends SyncProject>(
   projects: readonly T[], category: HrProjectCategory,
   calculateMachineInvestment?: (level: string, model: string, coefficient: number) => number,
@@ -36,7 +37,7 @@ export function synchronizeHrProjects<T extends SyncProject>(
       if (!isLatestHrVersion(normalized, version)) return version
       const next = { ...version }
       if (source?.project && category !== 'capability' && version.budgetType !== 'annual') {
-        next.milestones = source.milestones
+        next.milestones = mergeHrFormalMilestones(category, source.milestones, version.milestones)
         if (category === 'machine') next.projectLevel = source.projectLevel
       }
       if (category === 'machine' && calculateMachineInvestment) {

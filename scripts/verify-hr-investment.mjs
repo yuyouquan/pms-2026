@@ -84,11 +84,11 @@ for(let index=0;index<stores.length;index++) {
  current=store.getState().projects[0]
  const latest=current.versions.find(v=>v.budgetType==='projectEstimate')
  eq(JSON.stringify(store.getState().projects.find(p=>p.id===annualSource.id).versions[0].milestones ?? [store.getState().projects.find(p=>p.id===annualSource.id).versions[0].projectStartTime,store.getState().projects.find(p=>p.id===annualSource.id).versions[0].projectEndTime]),historical,category+' binding preserves historical snapshot')
- eq(index===3?latest.projectStartTime:index===2?latest.milestones.planningStart:latest.milestones.conceptStart,index===2?'2027-04-01':'2026-03-01',category+' uses latest published main plan')
- store.getState().updateVersion(project.id,latest.id,index===3?{projectStartTime:'2044-01-01',batch:3}:{milestones:index===2?{planningStart:'2044-01-01'}:{conceptStart:'2044-01-01'},projectLevel:'C',batch:3})
+ eq(index===3?latest.projectStartTime:index===2?latest.milestones.planningStart:latest.milestones.conceptStart,index===2?'2027-04-01':'2026-03-01',category+' uses published plan or independent capability dates')
+ store.getState().updateVersion(project.id,latest.id,index===3?{projectStartTime:'2026-04-01',batch:3}:{milestones:index===2?{planningStart:'2044-01-01'}:{conceptStart:'2044-01-01'},projectLevel:'C',batch:3})
  current=store.getState().projects[0]
  const now=current.versions.find(v=>v.id===latest.id)
- eq(index===3?now.projectStartTime:index===2?now.milestones.planningStart:now.milestones.conceptStart,index===2?'2027-04-01':'2026-03-01',category+' bound dates guarded')
+ eq(index===3?now.projectStartTime:index===2?now.milestones.planningStart:now.milestones.conceptStart,index===3?'2026-04-01':index===2?'2027-04-01':'2026-03-01',category+' formal date ownership enforced')
  eq(now.batch,3,category+' latest batch editable')
  if(index===0){
   eq(now.projectLevel,'S','bound machine level');eq(current.projectYear,'26年立项27年结项','machine year derived')
@@ -109,8 +109,8 @@ for(let index=0;index<stores.length;index++) {
 }
 eq(rules.getMachineProjectYear({versions:[{createdAt:'2026-09-09T01:00:00Z',milestones:{conceptStart:'2025-01-01',str5:'2026-01-01'}},{createdAt:'2026-09-09T02:00:00Z',milestones:{conceptStart:'2027-01-01',str5:'2028-01-01'}}]}),'27年立项28年结项','year chooses full newest timestamp')
 eq(rules.formatHrBatch(20),'第20批','batch label')
-eq(formal.resolveHrFormalSource('tos','FORMAL-tos').milestones.marketIteration,'2027-04-01','tOS stage start derives from published child business period')
-eq(formal.resolveHrFormalSource('tos','FORMAL-tos').milestones.maintenanceEnd,'2027-04-01','tOS maintenance end derives from published child business period')
+eq(formal.resolveHrFormalSource('tos','FORMAL-tos').milestones.marketIteration,null,'tOS iteration ending is independently entered, never pulled from plan')
+eq(formal.resolveHrFormalSource('tos','FORMAL-tos').milestones.maintenanceEnd,null,'tOS maintenance ending is independently entered, never pulled from plan')
 const configMath=load('src/constants/hrConfig.ts')
 const partialDepartment={...dept,estimatedInvestment:60,planningPhase:10,conceptPhase:10,planningPhase2:10,developmentValidationPhase:10,marketIterationPhase:10,maintenancePhase:10}
 const partialTos=configMath.calcTosDepartmentMonthlySplit([partialDepartment],{planningKO:null,conceptStart:'2026-01-01',str1:'2026-01-31',str3:null,str5:null,marketIteration:null,maintenanceEnd:null})[0]

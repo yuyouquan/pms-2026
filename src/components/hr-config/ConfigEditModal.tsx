@@ -75,23 +75,24 @@ export default function ConfigEditModal({
 
   return (
     <Modal
+      className={isHrModel ? 'pms-modal pms-hr-version-modal pms-hr-model-modal' : 'pms-modal'}
       title={`${isEdit ? '编辑' : '新增'}${moduleMeta.label}`}
       open={open && canEdit}
       onOk={handleOk}
       onCancel={onCancel}
       destroyOnHidden
-      width={isHrModel ? 860 : 560}
+      width={isHrModel ? 1120 : 560}
       okText="确定"
       cancelText="取消"
     >
-      <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
-        <Row gutter={16}>
-          {moduleMeta.columns.map(col => {
+      <Form form={form} layout="vertical" style={isHrModel ? undefined : { marginTop: 16 }}>
+        {(isHrModel ? [moduleMeta.columns.slice(0, 4), moduleMeta.columns.slice(4)] : [moduleMeta.columns]).map((columns, groupIndex) => <Row key={groupIndex} gutter={12}>
+          {columns.map(col => {
             const isPrimaryDepartment = isHrModel && col.key === 'primaryDepartment'
             const isSecondaryDepartment = isHrModel && col.key === 'secondaryDepartment'
             const isSelection = col.inputType === 'select' || isPrimaryDepartment || isSecondaryDepartment
             return (
-              <Col key={col.key} xs={24} sm={isHrModel ? 12 : 24} md={isHrModel ? 8 : 24}>
+              <Col key={col.key} xs={24} sm={isHrModel ? 12 : 24} md={isHrModel ? 8 : 24} lg={isHrModel ? (groupIndex === 0 ? 6 : 4) : 24}>
                 <Form.Item
                   name={col.key}
                   label={col.label}
@@ -148,7 +149,7 @@ export default function ConfigEditModal({
               </Col>
             )
           })}
-        </Row>
+        </Row>)}
       </Form>
     </Modal>
   )

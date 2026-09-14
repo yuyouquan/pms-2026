@@ -1,6 +1,7 @@
 'use client'
 
 import { canAccessHrProject, getHrAllowedBudgetTypes, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
+import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
@@ -246,14 +247,13 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       width: 160,
       fixed: 'left' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
-        <Select
+        !record.primaryDepartment ? <HrReadonlyField label="二级部门" placeholder="请先选择一级部门" reason="选择一级部门后可编辑" /> : <Select
           showSearch
           aria-label="二级部门"
           value={record.secondaryDepartment || undefined}
           placeholder="请选择二级部门"
           style={{ width: '100%' }}
           options={getSecondaryOptions(record.primaryDepartment)}
-          disabled={!record.primaryDepartment}
           onChange={value => updateRow(record.id, 'secondaryDepartment', value)}
         />
       ),

@@ -1,5 +1,7 @@
 'use client'
 
+import { HR_MANUAL_MILESTONE_KEYS } from '@/lib/hrMilestoneOwnership'
+
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import HrSourceLink from '@/components/project-resources/HrSourceLink'
 import { canEditHrInScope, isHrFormalRecord } from '@/lib/hrProjectRegistry'
@@ -194,8 +196,8 @@ export default function HistoryVersionSpace() {
       align: 'center',
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
-          value={record.milestones[field.key]}
-          editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
+          value={record.milestones[field.key] ?? null}
+          editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.tos.includes(field.key))}
           onSave={(v) =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<TosMilestoneNodes>,

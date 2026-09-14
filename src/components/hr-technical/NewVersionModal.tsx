@@ -1,6 +1,7 @@
 'use client'
 
 import { canAccessHrProject, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
+import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
@@ -226,14 +227,13 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       width: 140,
       fixed: 'left' as const,
       render: (_value: unknown, record: TechDepartmentInvestment) => (
-        <Select
+        !record.primaryDepartment ? <HrReadonlyField label="二级部门" placeholder="请先选择一级部门" reason="选择一级部门后可编辑" /> : <Select
           showSearch
           aria-label="二级部门"
           value={record.secondaryDepartment || undefined}
           placeholder="请选择二级部门"
           style={{ width: '100%' }}
           options={getSecondaryOptions(record.primaryDepartment)}
-          disabled={!record.primaryDepartment}
           onChange={value => updateRow(record.id, 'secondaryDepartment', value)}
         />
       ),
@@ -325,7 +325,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         {/* 表单字段 */}
         <Form layout="vertical" className="pms-hr-version-form pms-hr-version-form--technical">
           <Form.Item label="项目" required>
-            {scopeId ? <Input readOnly value={project?.tdtName ?? ''} title={project?.tdtName} /> : (<Select
+            {scopeId ? <HrReadonlyField label="项目" value={project?.tdtName} reason="当前项目空间的项目，不可切换" /> : (<Select
                 showSearch
                 aria-label="选择项目"
                 placeholder="请选择项目"
