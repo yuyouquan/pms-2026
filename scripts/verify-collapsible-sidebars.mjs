@@ -21,7 +21,7 @@ assert.match(configContainer, /configSidebarCollapsed/, 'configuration tabs shar
 assert.match(transferModule, /转维材料/, 'transfer configuration exposes the material navigation item')
 assert.match(transferModule, /评审要素/, 'transfer configuration exposes the review navigation item')
 assert.doesNotMatch(transferModule, /管理转维CheckList模板/, 'transfer configuration removes the launcher-card homepage')
-assert.match(enumConfig, /<ConfigWorkspaceShell/, 'enum configuration uses the shared workspace shell')
+assert.doesNotMatch(enumConfig, /<ConfigWorkspaceShell/, 'enum content uses the configuration center shared sidebar')
 assert.match(projectSpace, /projectSpaceSidebarCollapsed/, 'project-space navigation uses its independent state')
 assert.match(projectSpace, /inlineCollapsed=\{projectSpaceSidebarCollapsed\}/, 'project-space menu switches to icon-only mode')
 assert.match(styles, /\.pms-config-workspace[\s\S]*align-items:\s*stretch/, 'configuration columns stretch to equal height')

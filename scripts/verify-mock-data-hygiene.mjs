@@ -138,9 +138,10 @@ check('projects and external pool use fictional brands and device identifiers', 
   walk(samples, (key, value, at) => {
     if (typeof value !== 'string' || !value) return
     const historicalUnassignedBrand = /^\.roadmap\.changeLogs\.\d+\.snapshot\.brand$/.test(at) && value === '待定'
+    const fictionalChipLabel = ['chipCode', 'chipModel'].includes(key) && /^示例.+$/.test(value)
     if (key === 'brand' && !/^示例品牌[A-Z]$/.test(value) && !historicalUnassignedBrand) invalid.push(at)
     if (['projectCode', 'model', 'mainboard', 'mainboardName', 'chipCode', 'chipModel', 'cpu', 'platform'].includes(key)
-      && !/^DEMO[A-Z0-9_-]+$/.test(value)) invalid.push(at)
+      && !/^DEMO[A-Z0-9_-]+$/.test(value) && !fictionalChipLabel) invalid.push(at)
   })
   assert.deepEqual(invalid, [], 'brand/device fields must use the example namespaces')
   for (const entry of external.EXTERNAL_PROJECT_POOL) {

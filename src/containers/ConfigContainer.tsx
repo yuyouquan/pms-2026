@@ -1,11 +1,10 @@
 'use client'
 
 import HrConfigContent from '@/components/hr-config/ConfigContent'
-import { CONFIG_MODULE_MAP } from '@/constants/hrConfig'
 import type { ConfigModuleKey } from '@/types/hrConfig'
 import { useState, useMemo, useEffect } from 'react'
 import {
-  Card, Tabs, Table, Row, Col, Space, Divider, Tag, Menu, Button, Select, Segmented, Empty,
+  Card, Tabs, Table, Row, Col, Space, Divider, Tag, Button, Select, Empty,
   Input, Tooltip, Modal, Form, Checkbox, message, Progress, Popconfirm,
   DatePicker, Avatar, Dropdown,
 } from 'antd'
@@ -14,7 +13,7 @@ import {
   CalendarOutlined, PlusOutlined, SaveOutlined,
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
   PlusSquareOutlined, MinusSquareOutlined,
-  DeleteOutlined, CaretDownOutlined, StopOutlined, SettingOutlined,
+  DeleteOutlined, CaretDownOutlined, StopOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -26,10 +25,13 @@ import { useProjectStore } from '@/stores/project'
 import { useHasGlobalPermission } from '@/stores/permission'
 import { TransferConfig } from '@/components/transfer/TransferModule'
 import MrTemplateTable from '@/components/plans/MrTemplateTable'
-import { PROJECT_CATEGORY_TECH, PROJECT_TEMPLATE_TYPES, PROJECT_TYPE_TOS_VERSION, getProjectTypeFamilyKey } from '@/constants/projectTypes'
+import { PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION, getProjectTypeFamilyKey } from '@/constants/projectTypes'
 import { DHTMLXGantt, DragHandle, SortableRow, DragHandleContext, ClickToEditDate, getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds, type DHTMLXGanttColumn } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import { ConfigWorkspaceShell } from '@/components/shared/CollapsibleWorkspace'
+import ConfigNavigation from '@/components/config/ConfigNavigation'
+import { useEnumStore } from '@/stores/enums'
+import { type ConfigMenuTarget } from '@/lib/configNavigation'
 import {
   getDefaultColumnSettings,
   normalizeColumnSettings,
@@ -215,6 +217,8 @@ export default function ConfigContainer() {
     showColumnModal, setShowColumnModal, showAddCustomType, setShowAddCustomType,
     setPendingNavigation, setShowLeaveConfirm,
   } = useUiStore()
+  const selectedEnumType = useEnumStore(state => state.selectedType)
+  const setSelectedEnumType = useEnumStore(state => state.setSelectedType)
   const selectedHrConfigModule = HR_CONFIG_CENTER_MODULES.includes(hrConfigModule) ? hrConfigModule : 'hrModel'
 
   const {
@@ -329,12 +333,12 @@ export default function ConfigContainer() {
 
   // 修订版本自动进入编辑状态，已发布版本退出编辑
   useEffect(() => {
-    if (isCurrentDraft && canEditPlanTemplate) {
+    if (configTab === 'plan' && isCurrentDraft && canEditPlanTemplate) {
       setIsEditMode(true)
     } else {
       setIsEditMode(false)
     }
-  }, [canEditPlanTemplate, currentVersion, isCurrentDraft, setIsEditMode])
+  }, [configTab, templateVersionScope, canEditPlanTemplate, currentVersion, isCurrentDraft, setIsEditMode])
 
   // View columns
   const getViewKey = () => `config-${planLevel}-${viewMode}`
@@ -694,6 +698,29 @@ export default function ConfigContainer() {
     return (<Space>{canEditPlanTemplate && !hasDraftVersion && <Dropdown menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }} trigger={['click']} placement="bottomLeft"><Button type="primary" icon={<PlusOutlined />}>创建修订</Button></Dropdown>}<Button icon={<HistoryOutlined />} onClick={() => setShowVersionCompare(true)}>历史版本对比</Button></Space>)
   }
 
+  const selectedConfigMenuKey = configTab === 'enum' ? `enum:${selectedEnumType}`
+    : configTab === 'transfer' ? `transfer:${transferConfigView === 'review' ? 'review' : 'checklist'}`
+      : configTab === 'hrPipeline' ? `hrPipeline:${selectedHrConfigModule}`
+        : `plan:${selectedTemplateType}`
+
+  const handleConfigMenuSelect = (target: ConfigMenuTarget, key: string) => {
+    if (key === selectedConfigMenuKey) return
+    navigateWithEditGuard(() => {
+      if (target.module === 'plan') {
+        setSelectedProjectType(target.projectType)
+        setPlanLevel(target.projectType === PROJECT_CATEGORY_TECH ? 'tdt' : 'level1')
+      } else if (target.module === 'enum') {
+        setSelectedEnumType(target.enumType)
+      } else if (target.module === 'transfer') {
+        setTransferConfigView(target.view)
+      } else {
+        setHrConfigModule(target.moduleKey)
+      }
+      setIsEditMode(false)
+      setConfigTab(target.module)
+    })
+  }
+
   // Build transferProps for TransferConfig
   const transferProps = {
     selectedProject, currentUser: transferCurrentUser,
@@ -815,71 +842,19 @@ export default function ConfigContainer() {
 
   return (
     <div className="pms-admin-workspace pms-page-shell pms-config-center">
-      <header className="pms-workbench-header pms-config-center-header pms-glass-surface">
-        <h1>配置中心</h1>
-        <Segmented
-          className="pms-workbench-switch pms-config-center-switch"
-          aria-label="配置中心模块"
-          value={configTab}
-          onChange={(key) => {
-            const nextKey = String(key)
-            setConfigTab(nextKey)
-            if (nextKey === 'transfer' && transferConfigView === 'home') setTransferConfigView('checklist')
-          }}
-          options={[
-            { value: 'plan', label: '计划模板配置' },
-            { value: 'transfer', label: '转维材料模板配置' },
-            { value: 'enum', label: '枚举值配置' },
-            { value: 'hrPipeline', label: '人力资源管道' },
-          ]}
-        />
-      </header>
-
-      {configTab === 'hrPipeline' && (
-        <ConfigWorkspaceShell
-          collapsed={configSidebarCollapsed}
-          onCollapsedChange={setConfigSidebarCollapsed}
-          expandedWidth={288}
-          title={`配置项（${HR_CONFIG_CENTER_MODULES.length}）`}
-          ariaLabel="人力资源管道配置项"
-          content={<HrConfigContent key={selectedHrConfigModule} moduleKey={selectedHrConfigModule} />}
-        >
-          <Menu
-            className="pms-config-sidebar-menu"
-            mode="inline"
-            inlineCollapsed={configSidebarCollapsed}
-            selectedKeys={[selectedHrConfigModule]}
-            items={HR_CONFIG_CENTER_MODULES.map(key => ({
-              key,
-              icon: <SettingOutlined />,
-              label: CONFIG_MODULE_MAP[key].label,
-              title: CONFIG_MODULE_MAP[key].label,
-              onClick: () => navigateWithEditGuard(() => setHrConfigModule(key)),
-            }))}
-          />
-        </ConfigWorkspaceShell>
-      )}
-
-      {/* Transfer config */}
-      {configTab === 'transfer' && <TransferConfig {...transferProps} />}
-
-      {/* Fixed tOS enum value config */}
-      {configTab === 'enum' && (
-        <EnumConfig
-          collapsed={configSidebarCollapsed}
-          onCollapsedChange={setConfigSidebarCollapsed}
-          currentLoginUser={currentLoginUser}
-        />
-      )}
-
-      {/* Plan config */}
-      {configTab === 'plan' && (
-        <ConfigWorkspaceShell
-          collapsed={configSidebarCollapsed}
-          onCollapsedChange={setConfigSidebarCollapsed}
-          title="项目分类"
-          ariaLabel="计划模板项目分类"
-          content={(
+      <ConfigWorkspaceShell
+        collapsed={configSidebarCollapsed}
+        onCollapsedChange={setConfigSidebarCollapsed}
+        expandedWidth={288}
+        title="配置分类"
+        ariaLabel="配置分类"
+        className="pms-config-navigation-sidebar"
+        content={(
+          <>
+            {configTab === 'hrPipeline' && <HrConfigContent key={selectedHrConfigModule} moduleKey={selectedHrConfigModule} />}
+            {configTab === 'transfer' && <TransferConfig {...transferProps} />}
+            {configTab === 'enum' && <EnumConfig currentLoginUser={currentLoginUser} />}
+            {configTab === 'plan' && (
             <div className="pms-config-workspace-card">
             {/* Config header */}
             <Card className="pms-glass-surface pms-config-template-header-card" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: 0 } }}>
@@ -1003,26 +978,16 @@ export default function ConfigContainer() {
               </Card>
             )}
             </div>
-          )}
-        >
-          <Menu
-            className="pms-config-sidebar-menu"
-            mode="inline"
-            inlineCollapsed={configSidebarCollapsed}
-            selectedKeys={[selectedTemplateType]}
-            items={PROJECT_TEMPLATE_TYPES.map(t => ({
-              key: t,
-              icon: <AppstoreOutlined />,
-              label: <span style={{ fontWeight: selectedTemplateType === t ? 500 : 400 }}>{t}</span>,
-              title: t,
-              onClick: () => navigateWithEditGuard(() => {
-                setSelectedProjectType(t)
-                setPlanLevel(t === PROJECT_CATEGORY_TECH ? 'tdt' : 'level1')
-              }),
-            }))}
-          />
-        </ConfigWorkspaceShell>
-      )}
+            )}
+          </>
+        )}
+      >
+        <ConfigNavigation
+          collapsed={configSidebarCollapsed}
+          selectedKey={selectedConfigMenuKey}
+          onSelect={handleConfigMenuSelect}
+        />
+      </ConfigWorkspaceShell>
 
       {/* Custom type modal */}
       <Modal className="pms-modal"

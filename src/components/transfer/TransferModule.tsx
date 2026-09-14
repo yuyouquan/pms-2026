@@ -74,7 +74,6 @@ import {
   type TMTeamMember,
 } from '@/mock/transfer-maintenance'
 import { matchesTransferProject, canEnterTransferItem, canReviewTransferItem, canSqaReviewTransfer, createTransferMaterials, getMissingTransferTeamRoles, syncTransferPipeline } from '@/lib/transferWorkflow'
-import { ConfigWorkspaceShell } from '@/components/shared/CollapsibleWorkspace'
 
 const { Option } = Select
 const { TextArea } = Input
@@ -337,8 +336,6 @@ function useTransferDialogScope(props: TransferModuleProps) {
 
 // ========== TransferConfig ==========
 export function TransferConfig(props: TransferModuleProps) {
-  const configSidebarCollapsed = props.configSidebarCollapsed ?? false
-  const setConfigSidebarCollapsed = props.setConfigSidebarCollapsed ?? (() => undefined)
   const effectiveView = props.transferConfigView === 'review' ? 'review' : 'checklist'
   const isChecklist = effectiveView === 'checklist'
   const title = isChecklist ? '转维材料配置' : '评审要素配置'
@@ -372,12 +369,7 @@ export function TransferConfig(props: TransferModuleProps) {
   ]
 
   return (
-    <ConfigWorkspaceShell
-      collapsed={configSidebarCollapsed}
-      onCollapsedChange={setConfigSidebarCollapsed}
-      title="配置类型"
-      ariaLabel="转维材料模板配置类型"
-      content={(
+    <>
         <Card
         className="pms-config-workspace-card pms-solid-surface"
         title={<span style={{ fontWeight: 600 }}>{title}</span>}
@@ -398,19 +390,6 @@ export function TransferConfig(props: TransferModuleProps) {
         </div>
         <Table dataSource={filtered as any[]} columns={columns} rowKey="id" size="small" pagination={false} scroll={{ x: 900 }} />
         </Card>
-      )}
-    >
-      <Menu
-        className="pms-config-sidebar-menu"
-        mode="inline"
-        inlineCollapsed={configSidebarCollapsed}
-        selectedKeys={[effectiveView]}
-        items={[
-          { key: 'checklist', icon: <FileTextOutlined />, label: '转维材料', title: '转维材料' },
-          { key: 'review', icon: <AuditOutlined />, label: '评审要素', title: '评审要素' },
-        ]}
-        onClick={({ key }) => props.setTransferConfigView(key as 'checklist' | 'review')}
-      />
       <Modal title="版本对比" open={props.tmConfigDiffOpen} onCancel={() => props.setTmConfigDiffOpen(false)} width={800} footer={<Button onClick={() => props.setTmConfigDiffOpen(false)}>关闭</Button>}>
         <Space style={{ marginBottom: 16 }}>
           <span>从</span>
@@ -425,7 +404,7 @@ export function TransferConfig(props: TransferModuleProps) {
           { title: '变更内容', dataIndex: 'change', ellipsis: true },
         ]} />
       </Modal>
-    </ConfigWorkspaceShell>
+    </>
   )
 }
 

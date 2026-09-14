@@ -2416,6 +2416,32 @@
   box-shadow: inset 3px 0 0 #6366f1;
 }
 
+.pms-config-navigation-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 12px;
+  background: #fff;
+}
+
+.pms-config-navigation-menu .ant-menu-submenu-title {
+  margin: 4px 0 !important;
+  width: 100% !important;
+  border-radius: 9px;
+  font-weight: 500;
+}
+
+.pms-config-navigation-menu:not(.ant-menu-inline-collapsed) .ant-menu-item {
+  height: auto;
+  line-height: 20px;
+  padding-block: 10px;
+}
+
+.pms-config-navigation-menu:not(.ant-menu-inline-collapsed) .ant-menu-title-content {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .pms-enum-type-list {
   display: flex;
   flex-direction: column;
