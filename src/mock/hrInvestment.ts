@@ -164,7 +164,8 @@ function resourceProjects<T extends ResourceProject>(category: Category, templat
     const source = formal ? resolveHrFormalSource(category, null, id) : null
     const versions = id.includes('-incomplete-') ? [] : template.versions.filter(version => formal ? version.budgetType !== 'annual' : version.budgetType === 'annual').map((version, versionIndex) => {
       const versionId = `${recordId}-${version.budgetType}-${version.minorVersion}`
-      const createdBy = canonical.responsiblePersons![0]
+      // Older persisted formal projects predate registry responsibility metadata.
+      const createdBy = canonical.responsiblePersons?.[0] || canonical.createdBy || version.createdBy
       const createdAt = `2026-09-${String(versionIndex + 1).padStart(2, '0')}T09:00:00.000Z`
       // Budget dates deliberately differ from formal published plans and span two calendar years.
       const d: (string | null)[] = ['2027-01-10', '2027-02-01', '2027-04-01', '2027-06-01', '2027-09-01', '2027-11-01', '2028-03-01']
