@@ -7265,7 +7265,8 @@ input.ant-input,
   white-space: nowrap;
 }
 
-.pms-roadmap-view-mode-row {
+.pms-roadmap-view-mode-row,
+.pms-project-management__view-mode {
   display: flex;
   align-items: center;
   min-height: 40px;
@@ -7284,14 +7285,17 @@ input.ant-input,
   border: 0 !important;
 }
 
-.pms-roadmap-view-mode-row .ant-segmented {
+.pms-roadmap-view-mode-row .ant-segmented,
+.pms-project-management__view-mode .ant-segmented {
   padding: 2px;
   border-radius: 7px;
   background: #f3f3f5;
 }
 
 .pms-roadmap-view-mode-row .ant-segmented-item,
-.pms-roadmap-view-mode-row .ant-segmented-item-label {
+.pms-roadmap-view-mode-row .ant-segmented-item-label,
+.pms-project-management__view-mode .ant-segmented-item,
+.pms-project-management__view-mode .ant-segmented-item-label {
   min-height: 28px;
   line-height: 28px;
   border-radius: 6px;
