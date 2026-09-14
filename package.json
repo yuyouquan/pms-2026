@@ -21,6 +21,7 @@
     "verify:workbench-list": "node scripts/verify-workbench-project-list.mjs",
     "verify:workbench-split": "node scripts/verify-workbench-split.mjs",
     "verify:todo-center": "node scripts/verify-todo-center.mjs",
+    "verify:fan-trial": "node scripts/verify-fan-trial.mjs",
     "verify:project-info-todos": "node scripts/verify-project-info-todos.mjs",
     "verify:tos-project-status": "node scripts/verify-tos-project-status.mjs",
     "verify:project-roadmap": "node scripts/verify-project-roadmap.mjs",

@@ -21,6 +21,7 @@ const expectedEnumDefinitions = [
   ['kernel-version', 'Kernel版本', '整机产品项目', 'single'],
   ['chip-mapping', '芯片编码/芯片型号/芯片平台', '整机产品项目', 'chip-map'],
   ['memory-size', '内存大小', '整机产品项目', 'single'],
+  ['fan-trial-country', '粉丝试用国家', '整机产品项目', 'single'],
   ['project-category-mapping', '项目分类', '整机产品项目 / tOS版本项目 / 技术项目 / 能力建设项目', 'project-category-map'],
   ['build-option', '编译选项', '整机产品项目', 'single'],
   ['build-market', '编译市场', '整机产品项目', 'single'],
@@ -53,7 +54,7 @@ const expectedColumnsByKind = {
   ],
 }
 
-console.log('[registry-contract] verifying 24-type flat enum registry')
+console.log('[registry-contract] verifying 25-type flat enum registry')
 const values = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 assert.deepEqual(values.ENUM_TYPE_KEYS, expectedEnumTypeKeys, 'enum type keys are exported in the exact approved order')
 assert.deepEqual(Object.keys(values.ENUM_DEFINITIONS), expectedEnumTypeKeys, 'registry preserves the exact approved key order')
@@ -67,8 +68,8 @@ assert.deepEqual(
     counts[definition.kind] = (counts[definition.kind] ?? 0) + 1
     return counts
   }, {}),
-  { single: 20, 'chip-map': 1, 'project-category-map': 1, 'tmg-map': 1, 'package-map': 1 },
-  'registry has exactly 20 single types and one of each mapping kind',
+  { single: 21, 'chip-map': 1, 'project-category-map': 1, 'tmg-map': 1, 'package-map': 1 },
+  'registry has exactly 21 single types and one of each mapping kind',
 )
 for (const definition of Object.values(values.ENUM_DEFINITIONS)) {
   assert.deepEqual(definition.columns, expectedColumnsByKind[definition.kind](definition), `${definition.key} exposes the exact columns for ${definition.kind}`)
@@ -244,7 +245,7 @@ const expectedProjectCategorySeeds = [
   ...capabilityProjectCategorySeeds.map(ipmProjectCategory => ({ ipmProjectCategory, pmsProjectCategory: '能力建设项目', pmsSecondaryCategory: '' })),
 ]
 const initialRows = values.createInitialEnumRows()
-assert.deepEqual(Object.keys(initialRows), expectedEnumTypeKeys, 'initial rows contain arrays for all 22 keys in registry order')
+assert.deepEqual(Object.keys(initialRows), expectedEnumTypeKeys, 'initial rows contain arrays for all 25 keys in registry order')
 for (const type of expectedEnumTypeKeys) {
   assert.ok(Array.isArray(initialRows[type]), `${type} seed is an array`)
   initialRows[type].forEach((row, index) => assert.equal(row.id, `seed-${type}-${index + 1}`, `${type} seed IDs are deterministic`))
@@ -598,7 +599,7 @@ assert.match(enumUi, /rowsByType/, 'the UI reads the v2 row registry')
 assert.match(enumUi, /addEnumRow/, 'the UI adds complete dynamic rows')
 assert.match(enumUi, /updateEnumRow/, 'the UI updates rows by stable ID')
 assert.match(enumUi, /deleteEnumRow/, 'the UI deletes rows by stable ID')
-assert.match(enumUi, /配置项（24）/, 'flat left panel exposes the exact approved title')
+assert.match(enumUi, /配置项（\$\{ENUM_TYPE_KEYS\.length\}）/, 'flat left panel exposes the exact approved title')
 assert.match(enumUi, /ENUM_TYPE_KEYS\.filter[\s\S]*definition\.label[\s\S]*(?:includes|indexOf)/, 'search matches Chinese registry labels while filtering the ordered key list')
 assert.match(enumUi, /rowsByType\[type\]\.length/, 'each flat type item displays its current row count')
 assert.match(enumUi, /pms-enum-type-item--active/, 'the selected flat type item exposes the active class')

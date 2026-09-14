@@ -1,3 +1,4 @@
+import { readFanTrialRows } from '@/lib/fanTrial'
 import { isFormalProject } from '@/types/projectRegistry'
 import { normalizeProjectResponsibleMembers } from '@/lib/projectResponsibility'
 import type { ProjectItem } from '@/types/app'
@@ -134,6 +135,7 @@ export const getProjectInfoValue = (project: ProjectInfoProject, key: string): P
     if (derivedStartingRam) return derivedStartingRam
   }
 
+  if (key === 'fanTrialEnabled' && isMachineProjectType(project.type) && project.fieldValues?.[key] == null) return '否'
   const stored = project.fieldValues?.[key]
   if (stored !== undefined) {
     if (key === 'versionType' && typeof stored === 'string' && stored.toUpperCase() === 'GO') return 'GO'
@@ -319,6 +321,7 @@ export const formatProjectInfoValue = (value: ProjectInfoValue | undefined): str
   if (Array.isArray(value)) {
     if (value.length === 0) return '-'
     if (typeof value[0] === 'string') return (value as string[]).join('、')
+    if (readFanTrialRows(value).length === value.length) return readFanTrialRows(value).map(row => `${row.country}：${row.quantity ?? '-'}台`).join('、')
     return `${value.length} 个项目`
   }
   if (typeof value === 'object') return Object.values(value).filter(Boolean).join('、') || '-'

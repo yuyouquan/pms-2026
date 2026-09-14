@@ -4884,7 +4884,7 @@ body {
   }
 
   .pms-project-info-form-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
 }
@@ -8856,3 +8856,44 @@ input.ant-input,
 .pms-hr-version-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 20px; }
 @media (max-width: 700px) { .pms-hr-version-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .pms-hr-version-form { grid-template-columns: minmax(0, 1fr); } }
+
+/* Shared country allocation editor and project-space summary. */
+.pms-fan-trial {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.pms-fan-trial > .ant-select { width: 100%; }
+.pms-fan-trial-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: left;
+  font-size: var(--pms-table-font-size-body);
+  line-height: var(--pms-line-height-body);
+}
+.pms-fan-trial-table th, .pms-fan-trial-table td {
+  padding: var(--pms-table-cell-padding);
+  border-bottom: 1px solid var(--pms-project-surface-border);
+  overflow-wrap: anywhere;
+}
+.pms-fan-trial-table th {
+  height: var(--pms-table-head-height);
+  padding: var(--pms-table-head-padding);
+  color: var(--pms-text-primary);
+  background: var(--pms-brand-surface);
+  font-size: var(--pms-table-font-size-header);
+  font-weight: 600;
+}
+.pms-fan-trial-table td { height: var(--pms-table-row-height); font-weight: 400; }
+.pms-fan-trial-table .ant-input-number { width: 100%; }
+.pms-fan-trial-table .ant-input-number-input { font-size: var(--pms-table-font-size-body) !important; }
+.pms-fan-trial-table .pms-fan-trial-action { width: 64px; text-align: center; }
+.pms-fan-trial-retired { color: #64748b; }
+.pms-fan-trial-total {
+  color: #64748b;
+  font-size: var(--pms-table-font-size-body);
+  text-align: right;
+  font-weight: 400;
+}

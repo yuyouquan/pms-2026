@@ -16,6 +16,7 @@ export const ENUM_TYPE_KEYS = [
   'kernel-version',
   'chip-mapping',
   'memory-size',
+  'fan-trial-country',
   'project-category-mapping',
   'build-option',
   'build-market',

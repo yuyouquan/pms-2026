@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { Avatar, Collapse, Space, Tag, message } from 'antd'
 import { InfoCircleOutlined, LinkOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons'
+import { FanTrialCountrySummary } from '@/components/project-info/FanTrialCountries'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import {
   getProjectInfoGroups,
@@ -40,6 +41,7 @@ const isJiraArray = (value: unknown): value is JiraProjectConfig[] => (
 )
 
 const renderNormalValue = (value: ReturnType<typeof getProjectInfoValue>, inputType: string, fieldKey: string) => {
+  if (inputType === 'fanTrial') return <FanTrialCountrySummary value={value} />
   if (inputType === 'jira' && isJiraArray(value)) {
     if (!value.length) return <span className="pms-project-info-empty">-</span>
     return (
@@ -140,7 +142,7 @@ function ProjectInfoGroupPanel({
             <div className="pms-project-info-display-rows">
               <div className="pms-project-info-display-grid">
                 {visibleFields.map(field => (
-                  <div key={field.key} className={`pms-project-info-display-item${field.key === 'jiraProjects' ? ' pms-project-info-display-item--full-row pms-project-info-jira-horizontal' : ''}`}>
+                  <div key={field.key} className={`pms-project-info-display-item${field.key === 'jiraProjects' ? ' pms-project-info-display-item--full-row pms-project-info-jira-horizontal' : field.inputType === 'fanTrial' ? ' pms-project-info-display-item--full-row' : ''}`}>
                     <div className="pms-project-info-display-label">{field.label}</div>
                     <div className="pms-project-info-display-value">{renderNormalValue(getProjectInfoValue(project, field.key), field.inputType, field.key)}</div>
                   </div>

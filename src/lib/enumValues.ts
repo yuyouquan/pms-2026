@@ -55,6 +55,7 @@ export const ENUM_DEFINITIONS = {
     ],
   },
   'memory-size': singleDefinition('memory-size', '内存大小', '整机产品项目'),
+  'fan-trial-country': singleDefinition('fan-trial-country', '粉丝试用国家', '整机产品项目'),
   'project-category-mapping': {
     key: 'project-category-mapping',
     label: '项目分类',
@@ -286,6 +287,7 @@ export function createInitialEnumRows(): EnumRowsByType {
     'kernel-version': singleSeedRows('kernel-version', ['5.10', '5.15', '6.1', '6.6']),
     'chip-mapping': [],
     'memory-size': singleSeedRows('memory-size', ['2GB', '3GB', '4GB', '6GB', '8GB', '12GB', '16GB']),
+    'fan-trial-country': singleSeedRows('fan-trial-country', ['尼日利亚', '肯尼亚', '印度', '印度尼西亚', '巴基斯坦']),
     'project-category-mapping': seededRows('project-category-mapping', [
       { ipmProjectCategory: '整机产品-基线IPD', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-手机' },
       { ipmProjectCategory: '整机产品-模块化IPD', pmsProjectCategory: '整机产品项目', pmsSecondaryCategory: '整机-手机' },

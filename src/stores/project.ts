@@ -1,3 +1,4 @@
+import { validateFanTrial } from '@/lib/fanTrial'
 import { MACHINE_BUDGET_METADATA_KEYS, hasBoundMachineBudgetMetadataOverride, isBoundMachineBudget, retainBoundMachineBudgetMetadata, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
 import { validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
 import { getProjectAttribute, isFormalProject, type ProjectRegistryHistoryEntry } from '@/types/projectRegistry'
@@ -644,6 +645,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       let projectToAdd = sourceBid && newProject.sourceBid !== sourceBid
         ? { ...newProject, sourceBid }
         : newProject
+      if (isMachineProjectType(projectToAdd.type) && validateFanTrial(projectToAdd.fieldValues || {}, useEnumStore.getState().rowsByType['fan-trial-country'].map(row => row.value))) return false
       projectToAdd = withEosTransitionTime(projectToAdd)
       if (hasDuplicateProjectSourceBid(get().projects, projectToAdd)) return false
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
@@ -736,6 +738,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         if (!isValidMachineProjectMutation(projectToSave, options, existing)) return null
         machineResolution = resolution
       }
+      if (!registryUpdate && isMachineProjectType(projectToSave.type) && validateFanTrial(projectToSave.fieldValues || {}, useEnumStore.getState().rowsByType['fan-trial-country'].map(row => row.value), existing.fieldValues?.fanTrialCountries)) return null
       const completionBaseline = withBoundMachineBudgetMetadata(isBoundMachineBudget(projectToSave)
         ? { ...existing, boundFormalProjectId: projectToSave.boundFormalProjectId } : existing, previousProjects)
       if (!isFormalProject(projectToSave) && validateManualProjectCompletion(projectToSave, completionBaseline, useEnumStore.getState().rowsByType)) return null

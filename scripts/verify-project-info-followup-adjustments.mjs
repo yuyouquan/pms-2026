@@ -1,3 +1,4 @@
+import { loadTypeScriptModule, resolveTypeScriptModule } from './lib/typescript-module-loader.mjs'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import vm from 'node:vm'
@@ -56,6 +57,7 @@ const jiraProjectModule = evaluateTypeScriptModule('src/lib/jiraProject.ts')
 const rulesModule = evaluateTypeScriptModule(
   'src/lib/projectInfoRules.ts',
   id => {
+    if (id === '@/lib/fanTrial') return loadTypeScriptModule(resolveTypeScriptModule(id))
     if (id === '@/constants/projectInfoSchema') return schemaModule
     if (id === '@/constants/projectTypes') return projectTypes
     if (id === '@/lib/projectInfoValues') {
@@ -146,9 +148,10 @@ for (const basicKey of Object.keys(historicalBasicValues)) {
 const projectInfoValuesModule = evaluateTypeScriptModule(
   'src/lib/projectInfoValues.ts',
   id => {
+    if (id === '@/lib/fanTrial') return loadTypeScriptModule(resolveTypeScriptModule(id))
     if (id === '@/constants/projectInfoSchema') return schemaModule
     if (id === '@/constants/projectTypes') return projectTypes
-    throw new Error(`Unexpected project-info values module: ${id}`)
+    return loadTypeScriptModule(resolveTypeScriptModule(id))
   },
 )
 const mergedTosProject = projectInfoValuesModule.mergeProjectInfoValues({

@@ -11,6 +11,8 @@ import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag } from 'antd'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
+import { FanTrialCountryEditor } from '@/components/project-info/FanTrialCountries'
+import { readFanTrialRows, validateFanTrial } from '@/lib/fanTrial'
 import { JiraProjectEditor } from '@/components/project-info/JiraProjectEditor'
 import TechnicalProjectCreateFields from '@/components/technical-project/TechnicalProjectCreateFields'
 import {
@@ -248,7 +250,7 @@ export default function ProjectInfoModal({
     || projectType === PROJECT_CATEGORY_CAPABILITY
     || projectType === PROJECT_TYPE_TOS_VERSION
   const completionFields = (definitions: ProjectInfoFieldDefinition[]) => manualCompletion
-    ? definitions.map(field => ({ ...field, required: false, requiredOnCreate: false,
+    ? definitions.map(field => ({ ...field, required: field.key.startsWith('fanTrial'), requiredOnCreate: field.key.startsWith('fanTrial'),
         readOnly: ['projectModel', 'projectName', 'chipModel', 'chipPlatform', 'firstLaunchProjectChips', 'applicableBrands', 'applicableProductLines', 'applicableChipPlatforms', 'newProductProjectList', 'legacyProductProjectList'].includes(field.key),
       }))
     : definitions
@@ -1165,8 +1167,11 @@ export default function ProjectInfoModal({
           getValueFromEvent: (rowId: string) => resolveChipRow(rowsByType, rowId)?.chipCode || '',
         } : {})}
         extra={field.conditionalHint}
-        className={field.inputType === 'jira' ? 'pms-project-info-form-span' : undefined}
-        rules={isRequired
+        className={['jira', 'fanTrial'].includes(field.inputType) ? 'pms-project-info-form-span' : undefined}
+        rules={field.inputType === 'fanTrial' ? [{ required: true, validator: async (_, value) => {
+          const error = validateFanTrial({ fanTrialEnabled: form.getFieldValue('fanTrialEnabled'), fanTrialCountries: value }, rowsByType['fan-trial-country'].map(row => row.value), project?.fieldValues?.fanTrialCountries)
+          if (error) throw new Error(error.message)
+        } }] : isRequired
           ? [{ required: true, message: `请填写${renderedField.label}` }]
           : undefined}
       >
@@ -1192,6 +1197,8 @@ export default function ProjectInfoModal({
               })
             }}
           />
+        ) : field.inputType === 'fanTrial' ? (
+          <FanTrialCountryEditor options={buildEnumOptions(rowsByType, 'fan-trial-country', readFanTrialRows(project?.fieldValues?.fanTrialCountries).map(row => row.country))} />
         ) : field.inputType === 'jira' ? (
           <JiraProjectEditor
             rows={Array.isArray(watchedValues.jiraProjects) ? watchedValues.jiraProjects as JiraProjectConfig[] : []}

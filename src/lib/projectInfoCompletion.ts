@@ -1,3 +1,5 @@
+import { validateFanTrial } from '@/lib/fanTrial'
+import { isMachineProjectType } from '@/constants/projectTypes'
 import { getProjectInfoCreateFields } from '@/lib/projectInfoRules'
 import { buildProjectInfoValues, getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
@@ -40,10 +42,13 @@ export function getMissingProjectInfoFields(project: ProjectItem): MissingProjec
   const source = project as unknown as ProjectInfoProject
   // Conditional requirements can depend on a legacy root field (e.g. developMode).
   const values = buildProjectInfoValues(source, getProjectInfoCreateFields(project.type).map(field => field.key))
-  return fields.filter(field => (
+  const missing = fields.filter(field => (
     (!field.visibleWhen || field.visibleWhen(values))
     && isMissing(getProjectInfoValue(source, field.key))
   )).map(({ key, label }) => ({ key, label }))
+  const fanTrialError = isMachineProjectType(project.type) ? validateFanTrial(values) : null
+  if (fanTrialError && !missing.some(field => field.key === fanTrialError.fieldKey)) missing.push({ key: fanTrialError.fieldKey, label: fanTrialError.fieldKey === 'fanTrialEnabled' ? '是否粉丝试用' : '粉丝试用国家及试用台数' })
+  return missing
 }
 
 export function buildProjectInfoTodos({ projects, currentUser, canEditProjectInfo }: {

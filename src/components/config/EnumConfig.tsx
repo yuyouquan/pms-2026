@@ -598,7 +598,7 @@ export default function EnumConfig({
         collapsed={collapsed}
         onCollapsedChange={onCollapsedChange}
         expandedWidth={288}
-        title="配置项（24）"
+        title={`配置项（${ENUM_TYPE_KEYS.length}）`}
         ariaLabel="枚举配置项"
         className="pms-enum-sidebar"
         content={(

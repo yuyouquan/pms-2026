@@ -14,12 +14,20 @@ function project(id: string, name: string, type: ProjectItem['type'], attribute:
     status: type === types.machine ? '待立项' : type === types.technical ? '进行中' : '在研',
     progress: 0, healthStatus: 'normal', markets: [], androidVersion: '', chipPlatform: '', tosVersion: '', planStartDate: '', planEndDate: '', developCycle: 0,
     brand: '', productLine: '', marketName: '',
-    fieldValues: type === types.machine ? { machineSpm: [owner] } : type === types.tos ? { tosVersionProjectManager: [owner] }
+    fieldValues: type === types.machine ? { machineSpm: [owner], fanTrialEnabled: '否' } : type === types.tos ? { tosVersionProjectManager: [owner] }
       : type === types.technical ? { technicalLead: [owner] } : {},
   }
 }
 
 export const RESOURCE_REGISTRY_PROJECTS: ProjectItem[] = [
+  ...([false, true] as const).map(multiple => ({
+    ...project(`mock-budget-fan-trial-${multiple ? 'multiple' : 'single'}`, `示例整机-粉丝试用${multiple ? '多国' : '单国'}`, types.machine, 'budget'),
+    projectCode: `DEMOB-FAN-${multiple ? 'MULTIPLE' : 'SINGLE'}`,
+    projectDescription: '粉丝试用国家与台数示例；进入空间扩展信息可查看、编辑。',
+    fieldValues: { machineSpm: ['演示用户01'], fanTrialEnabled: '是', fanTrialCountries: multiple
+      ? [{ country: '尼日利亚', quantity: 30 }, { country: '肯尼亚', quantity: 20 }, { country: '印度', quantity: 15 }]
+      : [{ country: '尼日利亚', quantity: 20 }] },
+  })),
   ...([false, true] as const).map(complete => ({
     ...project(`mock-budget-technical-info-${complete ? 'complete' : 'pending'}`, `示例技术-基础信息${complete ? '已完整' : '待补一项'}`, types.technical, 'budget'),
     projectCode: `DEMOB-INFO-${complete ? 'COMPLETE' : 'PENDING'}`,

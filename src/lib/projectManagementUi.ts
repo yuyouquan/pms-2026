@@ -1,3 +1,4 @@
+import { formatProjectInfoValue } from '@/lib/projectInfoValues'
 import { sameManualInfoValue } from '@/lib/manualProjectCompletion'
 import type { ProjectItem } from '@/types/app'
 import {
@@ -88,6 +89,7 @@ function readableValue(value: unknown, projects: readonly Pick<ProjectItem, 'id'
   if (field === 'boundFormalProjectId' && typeof value === 'string') {
     return projects.find(project => project.id === value)?.name ?? '已删除的正式项目'
   }
+  if (field === 'fanTrialCountries' && Array.isArray(value)) return formatProjectInfoValue(value)
   if (Array.isArray(value)) return value.map(item => typeof item === 'object' ? '已配置' : String(item)).join('、') || '—'
   if (typeof value === 'object') return Object.keys(value as object).length ? '已配置' : '—'
   return String(value)
