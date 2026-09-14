@@ -28,7 +28,6 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import { canCreateHrVersion, isLatestHrVersion } from '@/lib/hrVersionRules'
-import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import {
   CAPABILITY_IPM_REQUIRED_TIP,
@@ -52,7 +51,6 @@ interface FlatVersionRow extends HrCapabilityVersion {
   canEdit: boolean
   isLatest: boolean
   isBound: boolean
-  sourceHint: string
   projectTarget: string
   projectStatus: HrCapabilityProject['status']
 }
@@ -150,16 +148,12 @@ export default function HistoryVersionSpace() {
   const allFlatVersions = useMemo<FlatVersionRow[]>(() => {
     const rows: FlatVersionRow[] = []
     for (const project of projects) {
-      const source = isHrFormalRecord(project) ? resolveHrFormalSource('capability', project.ipmProjectCode, project.pmsProjectId) : null
       for (const version of project.versions) {
         rows.push({
           ...version,
           canEdit: canEditHrInScope(project, scopeId),
           isLatest: isLatestHrVersion(project, version),
           isBound: isHrFormalRecord(project),
-          sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
-            ? !source.project ? '请重新绑定正式项目' : !source.planVersion ? '等待本项目一级计划发布' : ''
-            : '',
           projectName: project.name,
           projectTarget: project.projectTarget,
           projectStatus: project.status,
@@ -205,9 +199,7 @@ export default function HistoryVersionSpace() {
         fixed: 'left',
         render: (_value: unknown, record: FlatVersionRow) => (
           <div>
-            <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600 }}>{record.projectName}</span>
-            <HrSourceLink project={projects.find(project => project.id === record.projectId)} />
-            {record.sourceHint && <div style={{ color: 'var(--pms-text-secondary)', fontSize: 12 }}>{record.sourceHint}</div>}
+            <HrSourceLink name={record.projectName} project={projects.find(project => project.id === record.projectId)} />
           </div>
         ),
       },
@@ -261,7 +253,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableDateCell
             value={record.projectStartTime}
-            editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
+            editable={record.canEdit && record.isLatest}
             onSave={(v) =>
               updateVersion(record.projectId, record.id, {
                 projectStartTime: v ?? '',
@@ -278,7 +270,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableDateCell
             value={record.projectEndTime}
-            editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
+            editable={record.canEdit && record.isLatest}
             onSave={(v) =>
               updateVersion(record.projectId, record.id, {
                 projectEndTime: v ?? '',

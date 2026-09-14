@@ -213,8 +213,7 @@ export default function HistoryVersionSpace() {
         fixed: 'left',
         render: (_value: unknown, record: FlatVersionRow) => (
           <div>
-            <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600 }}>{record.projectName}</span>
-            <HrSourceLink project={projects.find(project => project.id === record.projectId)} />
+            <HrSourceLink name={record.projectName} project={projects.find(project => project.id === record.projectId)} />
             {record.sourceHint && <div style={{ color: 'var(--pms-text-secondary)', fontSize: 12 }}>{record.sourceHint}</div>}
           </div>
         ),

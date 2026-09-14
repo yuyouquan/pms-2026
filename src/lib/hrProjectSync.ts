@@ -23,7 +23,7 @@ interface SyncProject {
   projectYear?: string
 }
 
-/** Nonannual latest versions follow the formal plan; annual planning and historical snapshots keep manual values. */
+/** Machine, tOS and technical nonannual latest versions follow the formal plan; capability dates, annual planning and historical snapshots keep manual values. */
 export function synchronizeHrProjects<T extends SyncProject>(
   projects: readonly T[], category: HrProjectCategory,
   calculateMachineInvestment?: (level: string, model: string, coefficient: number) => number,
@@ -35,13 +35,8 @@ export function synchronizeHrProjects<T extends SyncProject>(
     const versions = normalized.versions.map(version => {
       if (!isLatestHrVersion(normalized, version)) return version
       const next = { ...version }
-      if (source?.project && version.budgetType !== 'annual') {
-        if (category === 'capability') {
-          next.projectStartTime = source.projectStartTime
-          next.projectEndTime = source.projectEndTime
-        } else {
-          next.milestones = source.milestones
-        }
+      if (source?.project && category !== 'capability' && version.budgetType !== 'annual') {
+        next.milestones = source.milestones
         if (category === 'machine') next.projectLevel = source.projectLevel
       }
       if (category === 'machine' && calculateMachineInvestment) {

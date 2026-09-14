@@ -65,7 +65,8 @@ function dates(scenario: number, minor: number): (string | null)[] {
   const endYear = startYear + 1
   return [`${startYear}-11-01`, `${startYear}-12-01`, `${endYear}-01-15`, `${endYear}-02-20`, `${endYear}-04-10`, `${endYear}-0${minor > 1 ? 6 : 5}-15`, `${endYear}-10-31`]
 }
-const machineDates = (d: (string | null)[]): MilestoneNodes => ({ conceptStart: d[0], str1: d[1], str3: d[2], str4: d[3], str5: d[4], productLaunch: d[5] })
+const midpointDate = (start: string, end: string) => new Date((Date.parse(start) + Date.parse(end)) / 2).toISOString().slice(0, 10)
+const machineDates = (d: (string | null)[]): MilestoneNodes => ({ conceptStart: d[0], str1: d[1], str2: d[1] && d[2] ? midpointDate(d[1], d[2]) : null, str3: d[2], str4: d[3], str4a: d[3] && d[4] ? midpointDate(d[3], d[4]) : null, str5: d[4], productLaunch: d[5] })
 const tosDates = (d: (string | null)[]): TosMilestoneNodes => ({ planningKO: d[0], conceptStart: d[1], str1: d[2], str3: d[3], str5: d[4], marketIteration: d[5], maintenanceEnd: d[6] })
 const techDates = (d: (string | null)[]): TechMilestoneNodes => ({ planningStart: d[0], charterDCP: d[1], tdr1: d[2], pdcp: d[3], tdcpx: d[4], edcp: d[5] })
 

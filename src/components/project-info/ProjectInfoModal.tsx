@@ -1243,7 +1243,7 @@ export default function ProjectInfoModal({
       cancelButtonProps={{ disabled: isDraftInteractionLocked }}
       okButtonProps={{ disabled: !enumReady || isCreateDraftInteractionBlocked || isIpmClassificationMissing }}
       destroyOnHidden
-      className="pms-modal pms-project-info-modal pms-project-info-modal-surface"
+      className={`pms-modal pms-project-info-modal pms-project-info-modal-surface${mode === 'edit' ? ' pms-project-space-editor' : ''}`}
       styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 24 } }}
     >
       {!hasHydrated ? (

@@ -29,10 +29,14 @@ export interface MilestoneNodes {
   conceptStart: string | null
   /** STR1 */
   str1: string | null
+  /** STR2; absent in legacy snapshots */
+  str2?: string | null
   /** STR3 */
   str3: string | null
   /** STR4 */
   str4: string | null
+  /** STR4A; absent in legacy snapshots */
+  str4a?: string | null
   /** STR5 */
   str5: string | null
   /** 产品上市 */

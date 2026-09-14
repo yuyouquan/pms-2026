@@ -1,9 +1,8 @@
 'use client'
 
-import { canAccessHrProject, getHrAllowedBudgetTypes, isHrFormalRecord, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
+import { canAccessHrProject, getHrAllowedBudgetTypes, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -62,12 +61,6 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   )
 
   const canCreateVersion = canCreateHrVersion(project, budgetType)
-  const followsFormalPlan = isHrFormalRecord(project)
-  const formalSource = followsFormalPlan ? resolveHrFormalSource('capability', project?.ipmProjectCode ?? null, project?.pmsProjectId) : null
-  const boundStart = formalSource?.projectStartTime
-  const boundEnd = formalSource?.projectEndTime
-  const effectiveStart = followsFormalPlan ? (boundStart ? dayjs(boundStart) : null) : startTime
-  const effectiveEnd = followsFormalPlan ? (boundEnd ? dayjs(boundEnd) : null) : endTime
 
   useEffect(() => {
     if (open) {
@@ -189,11 +182,11 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       message.error('请选择预算类型')
       return
     }
-    if (!followsFormalPlan && (!effectiveStart || !effectiveEnd)) {
+    if (!startTime || !endTime) {
       message.error('请选择项目起止时间')
       return
     }
-    if (effectiveEnd && effectiveStart && effectiveEnd.isBefore(effectiveStart)) {
+    if (endTime && startTime && endTime.isBefore(startTime)) {
       message.error('项目结束时间不能早于开始时间')
       return
     }
@@ -212,8 +205,8 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
     addVersion(project.id, {
       budgetType,
-      projectStartTime: effectiveStart?.format('YYYY-MM-DD') ?? '',
-      projectEndTime: effectiveEnd?.format('YYYY-MM-DD') ?? '',
+      projectStartTime: startTime?.format('YYYY-MM-DD') ?? '',
+      projectEndTime: endTime?.format('YYYY-MM-DD') ?? '',
       departmentInvestments: editData,
     })
     message.success('版本创建成功')
@@ -301,7 +294,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
   return (
     <Modal
-      className="pms-modal"
+      className="pms-modal pms-hr-version-modal"
       title="新建版本"
       open={open}
       onOk={handleOk}
@@ -311,7 +304,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       width={900}
       okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
     >
-      <div style={{ marginTop: 16 }}>
+      <div>
         {/* 项目信息 */}
         <div
           style={{
@@ -330,7 +323,6 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
         </div>
 
         {project && budgetType && <div style={{ marginBottom: 12 }}>将创建版本：<strong>V0.{nextHrMinorVersion(project.versions, budgetType)}</strong></div>}
-        {followsFormalPlan && <Alert type="info" showIcon style={{ marginBottom: 12 }} title={formalSource?.project ? '项目起止时间取自正式项目最新已发布一级计划的概念启动和 STR5；尚无已发布计划时无需填写，等待计划发布。' : '当前正式项目编码未找到对应项目，保留已有快照，请在项目列表重新绑定。'} />}
 
         {/* 表单区 */}
         <Form form={form} layout="vertical">
@@ -347,32 +339,27 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
                 }))}
               />
             </Form.Item>
-            <Form.Item label="项目开始时间" required={!followsFormalPlan}>
+            <Form.Item label="项目开始时间" required>
               <DatePicker
                 style={{ width: '100%' }}
                 placeholder="选择开始时间"
-                value={effectiveStart}
-                disabled={followsFormalPlan}
+                value={startTime}
                 onChange={setStartTime}
               />
             </Form.Item>
-            <Form.Item label="项目结束时间" required={!followsFormalPlan}>
+            <Form.Item label="项目结束时间" required>
               <DatePicker
                 style={{ width: '100%' }}
                 placeholder="选择结束时间"
-                value={effectiveEnd}
-                disabled={followsFormalPlan}
+                value={endTime}
                 onChange={setEndTime}
               />
             </Form.Item>
-            <Form.Item label="预估投入合计">
-              <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--pms-brand-strong)' }}>
-                {formatPersonMonth(editTotal)}
-              </span>
-              <span style={{ marginLeft: 4, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>人月</span>
-            </Form.Item>
+
           </div>
         </Form>
+
+        <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`} />
 
         {/* 操作按钮 */}
         <div style={{ marginBottom: 8 }}>
@@ -404,28 +391,6 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
           locale={{ emptyText: '暂无部门预估投入数据，请点击「添加部门」或「导入」' }}
         />
 
-        {/* 合计汇总条 */}
-        <div
-          style={{
-            marginTop: 12,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-            <span style={{ color: 'var(--pms-text-secondary)' }}>
-              编辑各部门预估投入，合计将自动更新
-            </span>
-            <span>
-              <span style={{ color: 'var(--pms-text-tertiary)' }}>合计：</span>
-              <strong style={{ color: 'var(--pms-brand-strong)', fontSize: 14 }}>
-                {formatPersonMonth(editTotal)}
-              </strong>
-              <span style={{ marginLeft: 4, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>人月</span>
-            </span>
-          </div>
-        </div>
       </div>
     </Modal>
   )

@@ -8939,3 +8939,25 @@ input.ant-input,
 .pms-roadmap-project-info__remark { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
 @media (max-width: 900px) { .pms-roadmap-project-info__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .pms-roadmap-project-info__fields, .pms-roadmap-project-info__dates { grid-template-columns: minmax(0, 1fr); } }
+
+/* Compact resource version forms, with explicit machine metadata/model/milestone rows. */
+.pms-modal.pms-hr-version-modal { top: 24px; }
+.pms-modal.pms-hr-version-modal .ant-modal-header { margin-bottom: 0; }
+.pms-modal.pms-hr-version-modal .ant-modal-body { padding-top: 12px; max-height: calc(100vh - 180px); overflow-y: auto; }
+.pms-hr-version-modal .ant-form-item { margin-bottom: 12px; min-width: 0; }
+.pms-hr-version-modal .ant-form-item-label { padding-bottom: 4px; }
+.pms-hr-version-row { display: grid; gap: 0 12px; }
+.pms-hr-version-row--metadata { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.pms-hr-version-row--model { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pms-hr-version-row--milestones { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.pms-hr-version-row .ant-picker-input > input { min-width: 0; }
+.pms-project-space-editor .pms-project-info-form-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0 14px; }
+.pms-roadmap-space-editor .ant-form-item { margin-bottom: 12px; }
+.pms-roadmap-space-editor .ant-picker-input > input { min-width: 0; }
+@media (max-width: 1000px) {
+  .pms-project-space-editor .pms-project-info-form-grid, .pms-hr-version-row--metadata { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pms-hr-version-row--milestones { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .pms-project-space-editor .pms-project-info-form-grid, .pms-hr-version-row--metadata, .pms-hr-version-row--model, .pms-hr-version-row--milestones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

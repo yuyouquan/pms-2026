@@ -33,8 +33,10 @@ function emptyMilestones(): MilestoneNodes {
   return {
     conceptStart: null,
     str1: null,
+    str2: null,
     str3: null,
     str4: null,
+    str4a: null,
     str5: null,
     productLaunch: null,
   }

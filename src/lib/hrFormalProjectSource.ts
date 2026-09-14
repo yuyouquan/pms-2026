@@ -65,7 +65,7 @@ export function resolveHrFormalSource(category: HrProjectCategory, code: string 
     maintenanceEnd: dateOf(tasks, ['维护结束']) || dateOf(stages, ['维护阶段']),
   } : {
     conceptStart: dateOf(tasks, ['概念启动']), str1: dateOf(tasks, ['STR1']), str3: dateOf(tasks, ['STR3']),
-    str4: dateOf(tasks, ['STR4']), str5: dateOf(tasks, ['STR5']),
+    str2: dateOf(tasks, ['STR2']), str4: dateOf(tasks, ['STR4']), str4a: dateOf(tasks, ['STR4A']), str5: dateOf(tasks, ['STR5']),
     productLaunch: dateOf(tasks, ['产品上市', '上市']) || dateOf(stages, ['上市阶段'], 'planStartDate'),
   }
   const level = project ? getProjectInfoValue(project, 'softwareProjectLevel') : ''

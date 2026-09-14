@@ -1,4 +1,5 @@
-import { canAccessHrProject, getHrAllowedBudgetTypes, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { canAccessHrProject, getHrAllowedBudgetTypes, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { PROJECT_CATEGORY_CAPABILITY } from '@/constants/projectTypes'
 /** Shared HR version rules. Legacy lock fields remain readable only for data migration. */
 export const HR_BUDGET_TYPES = ['annual', 'projectEstimate', 'projectBudget'] as const
 export const HR_BATCH_OPTIONS = Array.from({ length: 20 }, (_, index) => ({ value: index + 1, label: `第${index + 1}批` }))
@@ -79,10 +80,11 @@ export function allowedHrVersionUpdates<T extends object>(
 ): Partial<T> {
   if (!canAccessHrProject(project, true)) return {}
   const allowed = { ...updates } as Record<string, unknown>
+  const manualCapabilityDates = getHrRegistryProject(project)?.type === PROJECT_CATEGORY_CAPABILITY
   for (const key of Object.keys(allowed)) {
     if (key === 'batch') {
       if (allowed.batch !== null && !isHrBatch(allowed.batch)) delete allowed.batch
-    } else if (!isLatestHrVersion(project, version) || (isHrFormalRecord(project) && version.budgetType !== 'annual' && ['milestones', 'projectStartTime', 'projectEndTime', 'projectLevel'].includes(key))) {
+    } else if (!isLatestHrVersion(project, version) || (isHrFormalRecord(project) && version.budgetType !== 'annual' && ['milestones', 'projectLevel', ...(manualCapabilityDates ? [] : ['projectStartTime', 'projectEndTime'])].includes(key))) {
       delete allowed[key]
     }
   }

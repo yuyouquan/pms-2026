@@ -322,7 +322,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
 
   return (
     <Modal
-      className="pms-modal"
+      className="pms-modal pms-hr-version-modal"
       title="新增版本"
       open={open}
       onCancel={onCancel}
@@ -333,11 +333,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       cancelText="取消"
       width={1280}
     >
-      <div style={{ marginTop: 16 }}>
+      <div>
         {/* 项目信息 */}
         <div
           style={{
-            marginBottom: 16,
+            marginBottom: 8,
             padding: '8px 12px',
             background: 'var(--pms-brand-surface)',
             borderRadius: 8,
@@ -395,7 +395,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          title={`各阶段预估投入合计：${formatPersonMonth(editTotal)}`}
+          title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`}
         />
 
         {/* 操作按钮 */}
@@ -434,49 +434,6 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           }}
         />
 
-        {/* 合计汇总条 */}
-        <div
-          style={{
-            marginTop: 12,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-            <span style={{ color: 'var(--pms-text-secondary)' }}>
-              编辑各阶段预估投入，合计将自动更新
-            </span>
-            <span>
-              <span style={{ color: 'var(--pms-text-tertiary)' }}>合计：</span>
-              <strong style={{ color: 'var(--pms-brand-strong)', fontSize: 14 }}>
-                {formatPersonMonth(editTotal)}
-              </strong>
-            </span>
-          </div>
-        </div>
-
-        {/* 版本规则说明 */}
-        <div
-          style={{
-            marginTop: 12,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-            fontSize: 12,
-            color: 'var(--pms-text-tertiary)',
-          }}
-        >
-          <p style={{ margin: 0, fontWeight: 500, color: 'var(--pms-text-secondary)' }}>
-            版本规则：
-          </p>
-          <ul style={{ margin: '4px 0 0', paddingLeft: 16, lineHeight: '1.8' }}>
-            <li>同一项目、同一预算类型从 V0.1 开始递增</li>
-            <li>仅最新版本可编辑，历史版本保留原有日期和投入数据</li>
-            <li>正式项目最新版本里程碑只读并跟随本项目最新已发布一级计划；预算项目里程碑手工维护，绑定后仍独立</li>
-            <li>预估投入合计由各部门各阶段投入自动汇总</li>
-          </ul>
-        </div>
       </div>
 
       <style jsx global>{`
