@@ -16,9 +16,10 @@ import { hasDerivedMachineResponsibilityRoles } from '@/stores/permission'
  * This is the LARGEST container, reading from ALL 5 stores.
  */
 
+import RoadmapProjectInfoModal from '@/components/project-info/RoadmapProjectInfoModal'
 import ProjectResources from '@/components/project-resources/ProjectResources'
 import { buildManualProjectSpaceUpdate } from '@/lib/manualProjectCompletion'
-import { isFormalProject } from '@/types/projectRegistry'
+import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
 import { useState, useMemo, useEffect, useRef, type CSSProperties } from 'react'
 import {
   Card, Tabs, Table, Button, Progress, Tag, Space, Row, Col, Badge,
@@ -3060,7 +3061,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const saveTargetProjectInfo = async (payload: ProjectInfoSubmitPayload) => {
-    if (!selectedProject || !canEditBasicInfo) return
+    if (!selectedProject || !canEditBasicInfo) return false
     const previousResponsiblePersons = getProjectResponsiblePersons(selectedProject)
     const responsiblePersonsChanged = haveProjectResponsiblePersonsChanged(
       previousResponsiblePersons,
@@ -4992,7 +4993,17 @@ export default function ProjectSpaceContainer() {
             </Descriptions>
           </Card>
         )}
-        {(isTargetProject || isTech || p.type === '能力建设项目') && (
+        {getProjectAttribute(p) === 'roadmap' ? (
+          <RoadmapProjectInfoModal
+            key={`${p.id}:${currentLoginUser}`}
+            open={showProjectInfoEditor}
+            project={p}
+            currentUser={currentLoginUser}
+            canEdit={canEditBasicInfo}
+            onCancel={() => setShowProjectInfoEditor(false)}
+            onSubmit={saveTargetProjectInfo}
+          />
+        ) : (isTargetProject || isTech || p.type === '能力建设项目') && (
           <ProjectInfoModal
             mode="edit"
             open={showProjectInfoEditor}

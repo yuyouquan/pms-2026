@@ -68,7 +68,9 @@ interface PlannedProjectModalProps {
   tosVersions: readonly TosVersionConfig[]
   currentUser: string
   canEdit: boolean
-  onDeletePlannedProject: (projectId: string) => void
+  onDeletePlannedProject?: (projectId: string) => void
+  projectSpace?: boolean
+  onSaveProject?: (input: PlannedRoadmapProjectInput) => Promise<boolean>
   onChanged?: () => void
 }
 
@@ -88,6 +90,8 @@ export default function PlannedProjectModal({
   canEdit,
   onDeletePlannedProject,
   onChanged,
+  projectSpace = false,
+  onSaveProject,
 }: PlannedProjectModalProps) {
   const [form] = Form.useForm<PlannedProjectFormValues>()
   const [submitting, setSubmitting] = useState(false)
@@ -141,13 +145,13 @@ export default function PlannedProjectModal({
     [allRows, editingProject?.id, projectCode],
   )
   const duplicateExists = useMemo(() => {
-    if (!projectCode.trim() || !androidVersion || !productType) return false
+    if (projectSpace || !projectCode.trim() || !androidVersion || !productType) return false
     const candidateKey = buildRoadmapDuplicateKey(projectCode, androidVersion, productType)
     return allRows.some(row => (
       !(row.source === 'planned' && row.id === editingProject?.id)
       && buildRoadmapDuplicateKey(row.projectCode, row.androidVersion, row.productType) === candidateKey
     ))
-  }, [allRows, androidVersion, editingProject?.id, projectCode, productType])
+  }, [allRows, androidVersion, editingProject?.id, projectCode, productType, projectSpace])
 
   useEffect(() => {
     if (!open) {
@@ -160,9 +164,9 @@ export default function PlannedProjectModal({
     const nextValues: Partial<PlannedProjectFormValues> = editingProject
       ? {
         ...editingProject,
-        str5Date: dayjs(editingProject.str5Date),
+        str5Date: editingProject.str5Date && dayjs(editingProject.str5Date).isValid() ? dayjs(editingProject.str5Date) : undefined,
         str5Estimated: editingProject.str5Estimated === true,
-        launchDate: dayjs(editingProject.launchDate),
+        launchDate: editingProject.launchDate && dayjs(editingProject.launchDate).isValid() ? dayjs(editingProject.launchDate) : undefined,
         launchEstimated: editingProject.launchEstimated === true,
       }
       : {
@@ -256,6 +260,10 @@ export default function PlannedProjectModal({
         launchDate: values.launchDate.format('YYYY-MM-DD'),
         actor: currentUser,
       }
+      if (onSaveProject) {
+        if (await onSaveProject(input)) clearDraftAndClose()
+        return
+      }
       const comparison = { allRows }
       const result = editingProject
         ? updatePlannedProject(editingProject.id, input, comparison)
@@ -322,14 +330,14 @@ export default function PlannedProjectModal({
 
   const handleDelete = () => {
     if (!canEdit || !editingProject) return
-    onDeletePlannedProject(editingProject.id)
+    onDeletePlannedProject?.(editingProject.id)
   }
 
   return (
     <Modal
       className="pms-modal"
       classNames={{ header: 'pms-glass-surface', body: 'pms-solid-surface', footer: 'pms-glass-surface' }}
-      title={editingProject ? '编辑待规划项目' : '创建待规划项目'}
+      title={projectSpace ? '编辑路标项目' : editingProject ? '编辑待规划项目' : '创建待规划项目'}
       open={open}
       onCancel={requestClose}
       width={960}
@@ -340,7 +348,7 @@ export default function PlannedProjectModal({
       footer={(
         <Flex justify="space-between" align="center" gap={16} wrap>
           <div>
-            {editingProject && canEdit ? (
+            {!projectSpace && editingProject && canEdit && onDeletePlannedProject ? (
               <Button danger onClick={handleDelete} disabled={submitting}>
                 删除待规划项目
               </Button>
@@ -409,7 +417,7 @@ export default function PlannedProjectModal({
               </Col>
               <Col xs={24} md={8}>
                 <Form.Item label="项目名" name="projectCode" rules={[{ required: true, whitespace: true, message: '请输入项目名' }]}>
-                  <Input placeholder="例如 DEMO017" maxLength={80} autoComplete="off" />
+                  <Input disabled={projectSpace} placeholder="例如 DEMO017" maxLength={80} autoComplete="off" />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
@@ -439,7 +447,7 @@ export default function PlannedProjectModal({
                 ) : null}
               </Col>
             </Row>
-            {projectCode.trim() ? (
+            {!projectSpace && projectCode.trim() ? (
               <div aria-live="polite">
                 <Flex justify="space-between" align="center" gap={8} style={{ marginBottom: 8 }}>
                   <strong>历史同名项目</strong>
@@ -556,7 +564,14 @@ export default function PlannedProjectModal({
               <Col xs={24} md={8}>
                 <Form.Item label="上市时间" required>
                   <Flex align="center" gap={8} wrap={false}>
-                    <Form.Item name="launchDate" noStyle rules={[{ required: true, message: '请选择上市时间' }]}>
+                    <Form.Item name="launchDate" noStyle dependencies={['str5Date']} rules={[
+                      { required: true, message: '请选择上市时间' },
+                      ({ getFieldValue }) => ({ validator: (_, value: Dayjs | undefined) => {
+                        const str5 = getFieldValue('str5Date') as Dayjs | undefined
+                        return value && str5 && value.isBefore(str5, 'day')
+                          ? Promise.reject(new Error('上市时间不能早于 STR5 时间')) : Promise.resolve()
+                      } }),
+                    ]}>
                       <DatePicker format="YYYY-MM-DD" style={{ flex: 1, minWidth: 0 }} placeholder="请选择具体日期" />
                     </Form.Item>
                     <Form.Item name="launchEstimated" valuePropName="checked" noStyle>

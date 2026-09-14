@@ -59,6 +59,7 @@ export function buildProjectInfoTodos({ projects, currentUser, canEditProjectInf
   const user = currentUser.trim()
   if (!user) return []
   return projects.flatMap(project => {
+    if (getProjectAttribute(project) === 'budget') return []
     if (!getProjectResponsiblePersons(project).some(owner => owner.trim() === user) || !canEditProjectInfo(project.id)) return []
     const missing = getMissingProjectInfoFields(project)
     if (!missing.length) return []

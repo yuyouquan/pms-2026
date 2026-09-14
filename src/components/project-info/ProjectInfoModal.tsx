@@ -2,7 +2,7 @@
 
 import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachineBudget, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
 
-import { isFormalProject } from '@/types/projectRegistry'
+import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
 import type { ProjectItem } from '@/types/app'
 import { changedManualInfoValues, resolveManualCompletionResponsibility, validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
 import { getMissingProjectInfoFields } from '@/lib/projectInfoCompletion'
@@ -196,7 +196,7 @@ export default function ProjectInfoModal({
   onAfterCreate,
 }: ProjectInfoModalProps) {
   const manualCompletion = mode === 'edit' && Boolean(project && !isFormalProject(project as unknown as ProjectItem))
-  const missingSavedFields = mode === 'edit' && project ? getMissingProjectInfoFields(project as unknown as ProjectItem) : []
+  const missingSavedFields = mode === 'edit' && project && getProjectAttribute(project as unknown as ProjectItem) !== 'budget' ? getMissingProjectInfoFields(project as unknown as ProjectItem) : []
   const boundMachineMetadataReadonly = Boolean(project && isBoundMachineBudget(project as unknown as ProjectItem))
   const followedMetadata = project ? withBoundMachineBudgetMetadata(project as unknown as ProjectItem, existingProjects as unknown as ProjectItem[]) : undefined
   const [form] = Form.useForm<ProjectInfoFormState>()

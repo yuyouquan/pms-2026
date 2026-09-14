@@ -36,6 +36,13 @@ assert.equal(build([]).length, 0, 'deleted project has no stale task')
 assert.equal(build([{ ...base, responsiblePersons: ['演示用户02'] }]).length, 0, 'reassignment removes former owner task')
 console.log('PASS ownership, permissions, deletion and reassignment')
 
+for (const type of ['整机产品项目', 'tOS版本项目', '技术项目', '能力建设项目']) {
+  assert.equal(build([{ ...base, type, projectAttribute: 'budget', fieldValues: {} }]).length, 0, `${type} budget never appears in basic-info todos`)
+  assert.equal(build([{ ...base, type, projectAttribute: 'budget', boundFormalProjectId: 'formal', fieldValues: { fanTrialEnabled: '是' } }]).length, 0, 'binding and missing fan-trial details do not create budget todos')
+}
+assert.equal(build([roadmap]).length, 1, 'incomplete roadmaps retain their tasks')
+console.log('PASS budget exclusion across all types; formal and roadmap tasks remain')
+
 const items = build([base])
 assert.equal(items[0].route.kind, 'basicInfo')
 assert.equal(items[0].generatedAt, '2026-09-14')
@@ -53,15 +60,18 @@ const pendingSample = RESOURCE_REGISTRY_PROJECTS.find(project => project.id === 
 const completedSample = RESOURCE_REGISTRY_PROJECTS.find(project => project.id === 'mock-budget-technical-info-complete')
 assert.deepEqual(getMissingProjectInfoFields(pendingSample).map(field => field.key), ['projectValue'])
 assert.deepEqual(getMissingProjectInfoFields(completedSample), [])
+assert.equal(build([pendingSample, completedSample]).length, 0, 'both incomplete and complete budget mocks are excluded')
+const roadmapSample = RESOURCE_REGISTRY_PROJECTS.find(project => project.id === 'mock-roadmap-incomplete')
+assert.deepEqual(getMissingProjectInfoFields(roadmapSample).map(field => field.key), ['str5Date', 'launchDate'])
 const { buildManualProjectSpaceUpdate } = loadTypeScriptModule(root, 'src/lib/manualProjectCompletion.ts')
-const saved = buildManualProjectSpaceUpdate(pendingSample, {
-  infoValues: { projectValue: '人无我有' }, responsiblePersons: pendingSample.responsiblePersons,
-  healthStatus: pendingSample.healthStatus, projectStatus: pendingSample.status, projectSecondaryCategory: '',
+const saved = buildManualProjectSpaceUpdate(roadmapSample, {
+  infoValues: { str5Date: '2026-10-01', launchDate: '2026-11-01' }, responsiblePersons: roadmapSample.responsiblePersons,
+  healthStatus: roadmapSample.healthStatus, projectStatus: roadmapSample.status, projectSecondaryCategory: roadmapSample.secondaryCategory,
 })
 assert.equal(build([saved]).length, 0, 'the actual manual save payload completes the task')
-const partial = buildManualProjectSpaceUpdate(pendingSample, {
-  infoValues: { projectYear: '2027' }, responsiblePersons: pendingSample.responsiblePersons,
-  healthStatus: pendingSample.healthStatus, projectStatus: pendingSample.status, projectSecondaryCategory: '',
+const partial = buildManualProjectSpaceUpdate(roadmapSample, {
+  infoValues: { str5Date: '2026-10-01' }, responsiblePersons: roadmapSample.responsiblePersons,
+  healthStatus: roadmapSample.healthStatus, projectStatus: roadmapSample.status, projectSecondaryCategory: roadmapSample.secondaryCategory,
 })
 assert.equal(build([partial]).length, 1, 'saving another field cannot complete missing information')
 assert.ok(getMissingProjectInfoFields({ ...base, type: 'tOS版本项目', projectAttribute: 'budget', fieldValues: {} }).some(field => field.key === 'firstLaunchProjects'))
