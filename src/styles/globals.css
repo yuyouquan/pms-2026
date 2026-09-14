@@ -5237,22 +5237,26 @@ body {
 
 .pms-project-info-display-item--horizontal,
 .pms-project-info-jira-horizontal {
-  flex-direction: row;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: start;
+  padding-inline: 0;
 }
 
 .pms-project-info-display-item--horizontal .pms-project-info-display-label,
 .pms-project-info-jira-horizontal .pms-project-info-display-label {
-  flex: 0 0 120px;
-  min-width: 120px;
-  text-align: left;
+  grid-column: 1;
+  min-width: 0;
+  padding-inline: 14px;
+  text-align: center;
 }
 
 .pms-project-info-display-item--horizontal .pms-project-info-display-value,
 .pms-project-info-jira-horizontal .pms-project-info-display-value {
-  flex: 1;
+  grid-column: 2 / -1;
   min-width: 0;
   margin-top: 0;
+  padding-inline: 14px;
   text-align: left;
 }
 
@@ -5579,6 +5583,12 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .pms-project-info-display-item--horizontal .pms-project-info-display-value,
+  .pms-project-info-jira-horizontal .pms-project-info-display-value {
+    grid-column: 1 / -1;
+    margin-top: 8px;
+  }
+
   .pms-project-info-core-card .ant-card-head-wrapper {
     align-items: flex-start;
     flex-wrap: wrap;
@@ -5609,18 +5619,6 @@ body {
 }
 
 @media (max-width: 480px) {
-  .pms-project-info-display-item--horizontal,
-  .pms-project-info-jira-horizontal {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .pms-project-info-display-item--horizontal .pms-project-info-display-label,
-  .pms-project-info-jira-horizontal .pms-project-info-display-label {
-    flex: 0 0 auto;
-    min-width: 0;
-  }
-
   .pms-project-info-display-item--horizontal .pms-project-info-display-value,
   .pms-project-info-jira-horizontal .pms-project-info-display-value {
     width: 100%;
@@ -8301,6 +8299,11 @@ input.ant-input,
   min-height: 68px;
   padding: 12px 16px;
   border-color: color-mix(in srgb, var(--pms-project-surface-border) 76%, #fff);
+}
+
+.pms-project-information-surface .pms-project-info-display-item--horizontal,
+.pms-project-information-surface .pms-project-info-jira-horizontal {
+  padding-inline: 0;
 }
 
 .pms-project-information-surface :where(button, [tabindex='0'], .ant-collapse-header):focus-visible {
