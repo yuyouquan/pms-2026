@@ -8916,3 +8916,26 @@ input.ant-input,
   text-align: right;
   font-weight: 400;
 }
+
+/* Project-space follow-ups: shared tags and the compact roadmap information surface. */
+.pms-project-info-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; max-width: 100%; vertical-align: middle; }
+.pms-project-info-tags > .ant-tag { margin-inline-end: 0; }
+.pms-project-info-tags--compact { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pms-project-info-tags--compact > .ant-tag { margin-inline-end: 6px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+.pms-fan-trial-table-scroll { max-width: 100%; overflow-x: auto; }
+.pms-fan-trial-table { table-layout: auto; }
+.pms-fan-trial-table th:first-child { width: 92px; min-width: 92px; white-space: nowrap; }
+.pms-fan-trial-table td { min-width: 170px; }
+.pms-fan-trial-country-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; white-space: nowrap; }
+.pms-roadmap-project-info { display: grid; gap: 24px; max-width: 1400px; margin: 0 auto; }
+.pms-roadmap-project-info__title { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.pms-roadmap-project-info__dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.pms-roadmap-project-info__date { padding: 16px; background: var(--pms-brand-surface); border-radius: var(--radius-lg); }
+.pms-roadmap-project-info__date > span, .pms-roadmap-project-info__fields dt { color: var(--pms-text-secondary); font-size: 12px; }
+.pms-roadmap-project-info__date > div { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.pms-roadmap-project-info__date strong { font-size: 20px; font-weight: 600; }
+.pms-roadmap-project-info__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 24px; margin: 0; }
+.pms-roadmap-project-info__fields dd { margin: 6px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+.pms-roadmap-project-info__remark { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; }
+@media (max-width: 900px) { .pms-roadmap-project-info__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .pms-roadmap-project-info__fields, .pms-roadmap-project-info__dates { grid-template-columns: minmax(0, 1fr); } }

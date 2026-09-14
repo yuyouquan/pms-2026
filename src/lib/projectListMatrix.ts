@@ -310,7 +310,8 @@ const STATIC_COLUMNS: Record<Exclude<ProjectListVariant, 'capability'>, ProjectL
     listField('confidentialityLevel', '保密级别', false, 112), listField('androidVersion', '安卓版本', false, 112),
     listField('targetMarket', '目标市场', false, 112), listField('memorySize', '内存大小', false, 112),
     listField('startingRam', '起步RAM', false, 112), listField('isTwoStage', '是否二段式', false, 120),
-    listField('isOutsourcedMini', '是否外研Mini版本', false, 148), listField('jiraProjects', 'JIRA项目', false, 140),
+    listField('isOutsourcedMini', '是否外研Mini版本', false, 148),
+    listField('fanTrialEnabled', '是否粉丝试用', true, 180), listField('jiraProjects', 'JIRA项目', false, 180),
     listField('spm', 'SPM', true, 112), listField('spmDepartment', 'SPM部门（二级部门）', true, 180),
   ],
   tos: [

@@ -1,3 +1,5 @@
+import { useProjectStore } from '@/stores/project'
+import { resolveProjectSpaceModule } from '@/lib/projectSpaceNavigation'
 import { create } from 'zustand'
 import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
 import type { AnyFilterCondition } from '@/lib/filterConditions'
@@ -210,6 +212,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   setProjectListTablePage: (v) => set({ projectListTablePage: v }),
   enterProjectSpace: (origin) => set({
     activeModule: 'projectSpace',
+    projectSpaceModule: resolveProjectSpaceModule(useProjectStore.getState().selectedProject, get().projectSpaceModule),
     projectSpaceOrigin: origin.module === 'workbench'
       ? { module: 'workbench', workbenchTab: origin.workbenchTab ?? get().workbenchTab }
       : origin.module === 'projectManagement'
@@ -245,7 +248,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     hrSidebarCollapsed: typeof v === 'function' ? v(s.hrSidebarCollapsed) : v,
   })),
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
-  setProjectSpaceModule: (v) => set({ projectSpaceModule: v }),
+  setProjectSpaceModule: (v) => set({ projectSpaceModule: resolveProjectSpaceModule(useProjectStore.getState().selectedProject, v) }),
   setPlanNavigationIntent: (v) => set({ planNavigationIntent: v }),
   setProjectInfoNavigationIntent: (v) => set({ projectInfoNavigationIntent: v }),
   setMrPlanNavigationIntent: (v) => set({ mrPlanNavigationIntent: v }),

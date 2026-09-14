@@ -1,5 +1,6 @@
 'use client'
 
+import { useUiStore } from '@/stores/ui'
 import { useCallback } from 'react'
 import { useProjectStore, type ProjectState } from '@/stores/project'
 import { useTransferStore } from '@/stores/transfer'
@@ -27,6 +28,7 @@ export function useActivateProject() {
     useProjectStore.getState().setBasicInfoEditMode(false)
     useProjectStore.getState().setEditingProjectFields({})
     setSelectedProject(project)
+    useUiStore.getState().setProjectSpaceModule('basic')
 
     const projectMarkets: readonly string[] = project.markets || []
     if (projectMarkets.length) {

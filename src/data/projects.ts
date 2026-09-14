@@ -583,6 +583,9 @@ export const initialProjects: ProjectSeed[] = [
   ...formalProjectSeeds.slice(1),
 ].map((project, index) => ({
   ...project, projectAttribute: project.projectAttribute || 'formal',
+  ...(['1', '3'].includes(project.id) ? { fieldValues: { ...project.fieldValues, fanTrialEnabled: '是', fanTrialCountries: project.id === '1'
+    ? [{ country: '尼日利亚', quantity: 20 }]
+    : [{ country: '尼日利亚', quantity: 30 }, { country: '肯尼亚', quantity: 20 }, { country: '印度', quantity: 15 }] } } : {}),
   createdBy: project.createdBy || '演示用户01',
   createdAt: project.createdAt || `2026-08-${String(index % 28 + 1).padStart(2, '0')}T08:00:00.000Z`,
   responsiblePersons: project.responsiblePersons?.length ? project.responsiblePersons : [project.leader],

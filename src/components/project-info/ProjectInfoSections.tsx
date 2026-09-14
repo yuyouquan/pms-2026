@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react'
 import { Avatar, Collapse, Space, Tag, message } from 'antd'
-import { InfoCircleOutlined, LinkOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons'
+import { InfoCircleOutlined, TeamOutlined, ToolOutlined } from '@ant-design/icons'
+import { JiraProjectTags } from '@/components/project-info/ProjectInfoTags'
 import { FanTrialSummary } from '@/components/project-info/FanTrialCountries'
 import FieldVisibilityPicker from '@/components/project-info/FieldVisibilityPicker'
 import {
@@ -12,7 +13,7 @@ import {
   type ProjectInfoGroupKey,
 } from '@/constants/projectInfoSchema'
 import { useProjectFieldVisibility } from '@/hooks/useProjectFieldVisibility'
-import { formatJiraProjectTag, getJiraProjectUrl, type JiraProjectConfig } from '@/lib/jiraProject'
+import { type JiraProjectConfig } from '@/lib/jiraProject'
 import {
   buildProjectInfoValues,
   formatProjectInfoValue,
@@ -42,16 +43,7 @@ const isJiraArray = (value: unknown): value is JiraProjectConfig[] => (
 
 const renderNormalValue = (value: ReturnType<typeof getProjectInfoValue>, inputType: string, fieldKey: string) => {
   if (inputType === 'jira' && isJiraArray(value)) {
-    if (!value.length) return <span className="pms-project-info-empty">-</span>
-    return (
-      <Space size={[4, 6]} wrap>
-        {value.map(item => (
-          <Tag key={item.id} color="blue" icon={<LinkOutlined />}>
-            <a href={getJiraProjectUrl(item)} target="_blank" rel="noreferrer">{formatJiraProjectTag(item)}</a>
-          </Tag>
-        ))}
-      </Space>
-    )
+    return <JiraProjectTags value={value} />
   }
   const text = ['firstSaleTosVersion', 'currentTosVersion'].includes(fieldKey)
     ? formatTosSnapshot(value) || '-'

@@ -1053,6 +1053,20 @@ const initialResourcePublishedSnapshots = Object.fromEntries(VERSION_DATA.filter
     buildProjectListMockPlanTasks('5', getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_CAPABILITY, true), { projectType: PROJECT_CATEGORY_CAPABILITY, projectName: 'DEMO015_DEMOBOARD015' })],
 ]))
 
+const shareHydratedPlanValues = <T,>(previous: T, incoming: T): T => {
+  if (JSON.stringify(previous) === JSON.stringify(incoming)) return previous
+  if (!previous || !incoming || typeof previous !== 'object' || typeof incoming !== 'object') return incoming
+  if (Array.isArray(incoming)) return Array.isArray(previous)
+    ? incoming.map((value, index) => shareHydratedPlanValues(previous[index], value)) as T
+    : incoming
+  if (Array.isArray(previous)) return incoming
+  return Object.fromEntries(Object.entries(incoming).map(([key, value]) => [
+    key, shareHydratedPlanValues((previous as Record<string, unknown>)[key], value),
+  ])) as T
+}
+
+let planStoreHasHydrated = false
+
 export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get) => ({
   // Config-center plan
   planLevel: 'level1',
@@ -1247,6 +1261,33 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   version: PLAN_STORE_VERSION,
   storage: createJSONStorage(() => pmsLocalStorage),
   migrate: migratePlanStoreState,
+  merge: (persisted, current) => {
+    const merged = { ...current, ...(persisted as Partial<PlanState>) }
+    if (!planStoreHasHydrated) return merged
+    const hasVersion = (versions: readonly { id: string }[], id: string) => versions.some(version => version.id === id)
+    const preserveScopedSelections = (local: Record<string, string>, incoming: Record<string, string>, scopedVersions: Record<string, readonly { id: string }[]>) => ({
+      ...incoming,
+      ...Object.fromEntries(Object.entries(local).filter(([scope, id]) => hasVersion(scopedVersions[scope] ?? merged.versions, id))),
+    })
+    // A different tab may publish plan data, but its version picker is not navigation here.
+    if (hasVersion(merged.versions, current.currentVersion)) merged.currentVersion = current.currentVersion
+    merged.marketCurrentVersionByKey = preserveScopedSelections(current.marketCurrentVersionByKey, merged.marketCurrentVersionByKey, merged.marketVersionsByKey)
+    merged.tosTypeCurrentVersionByKey = preserveScopedSelections(current.tosTypeCurrentVersionByKey, merged.tosTypeCurrentVersionByKey, merged.tosTypeVersionsByKey)
+    merged.configTemplateVersionScopes = Object.fromEntries(Object.entries(merged.configTemplateVersionScopes).map(([scope, incoming]) => {
+      const selected = current.configTemplateVersionScopes[scope]?.currentVersion
+      return [scope, selected && hasVersion(incoming.versions, selected) ? { ...incoming, currentVersion: selected } : incoming]
+    }))
+    merged.configTemplateCompareScopes = Object.fromEntries(Object.entries(merged.configTemplateCompareScopes).map(([scope, incoming]) => {
+      const local = current.configTemplateCompareScopes[scope]
+      const versions = merged.configTemplateVersionScopes[scope]?.versions ?? merged.versions
+      return [scope, !local ? incoming : {
+        versionA: hasVersion(versions, local.versionA) ? local.versionA : incoming.versionA,
+        versionB: hasVersion(versions, local.versionB) ? local.versionB : incoming.versionB,
+      }]
+    }))
+    return shareHydratedPlanValues(current, merged)
+  },
+  onRehydrateStorage: () => state => { if (state) planStoreHasHydrated = true },
   partialize: state => ({
     versions: state.versions,
     currentVersion: state.currentVersion,

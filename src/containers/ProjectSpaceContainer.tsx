@@ -16,6 +16,8 @@ import { hasDerivedMachineResponsibilityRoles } from '@/stores/permission'
  * This is the LARGEST container, reading from ALL 5 stores.
  */
 
+import RoadmapProjectInformationView from '@/components/project-info/RoadmapProjectInformationView'
+import { getProjectSpaceModules } from '@/lib/projectSpaceNavigation'
 import RoadmapProjectInfoModal from '@/components/project-info/RoadmapProjectInfoModal'
 import ProjectResources from '@/components/project-resources/ProjectResources'
 import { buildManualProjectSpaceUpdate } from '@/lib/manualProjectCompletion'
@@ -4566,6 +4568,11 @@ export default function ProjectSpaceContainer() {
     if (!selectedProject) return null
     const p = withBoundMachineBudgetMetadata(selectedProject, projects)
     const isWholeMachine = isMachineProjectType(p.type)
+    if (getProjectAttribute(p) === 'roadmap') return <>
+      <RoadmapProjectInformationView project={p} canEdit={canEditBasicInfo} onEdit={() => setShowProjectInfoEditor(true)} />
+      <RoadmapProjectInfoModal key={`${p.id}:${currentLoginUser}`} open={showProjectInfoEditor} project={p}
+        currentUser={currentLoginUser} canEdit={canEditBasicInfo} onCancel={() => setShowProjectInfoEditor(false)} onSubmit={saveTargetProjectInfo} />
+    </>
     const isTargetProject = isWholeMachine || p.type === PROJECT_TYPE_TOS_VERSION
     const isSoftware = isSoftwareProjectType(p.type)
     const isTech = p.type === '技术项目'
@@ -4758,46 +4765,12 @@ export default function ProjectSpaceContainer() {
         </Card>
       )
     }
-    const anchorSections = [
-      { id: 'section-header', label: isTargetProject ? '项目名称' : '项目概览', icon: <ProjectOutlined /> },
-      { id: 'section-plan', label: '计划信息', icon: <CalendarOutlined /> },
-      { id: 'section-basic', label: isTargetProject ? '项目信息' : '基本信息', icon: <SettingOutlined /> },
-      ...(isWholeMachine && canDo('basicInfo:transferView') && currentProjectTransferApps.length > 0 ? [{ id: 'section-transfer', label: '转维信息', icon: <DeploymentUnitOutlined /> }] : []),
-      ...(!isTargetProject && (isSoftware || isTech) ? [{ id: 'section-config', label: '配置信息', icon: <SettingOutlined /> }] : []),
-    ]
-    const scrollToSection = (id: string) => {
-      const container = document.getElementById('basic-info-scroll-container')
-      const target = document.getElementById(id)
-      if (container && target) {
-        const containerRect = container.getBoundingClientRect()
-        const targetRect = target.getBoundingClientRect()
-        const offset = targetRect.top - containerRect.top + container.scrollTop - 16
-        container.scrollTo({ top: offset, behavior: 'smooth' })
-      }
-    }
     return (
       <div
         className={!isTargetProject ? 'pms-project-information-surface pms-project-information-surface--legacy' : undefined}
-        style={{ maxWidth: 1200, margin: '0 auto', paddingRight: 170 }}
+        style={{ maxWidth: 1400, margin: '0 auto' }}
       >
         {isBoundMachineBudget(p) && <Alert type="info" showIcon title={BOUND_MACHINE_METADATA_HINT} style={{ marginBottom: 12 }} />}
-        {/* Anchor navigation */}
-        <div style={{ position: 'fixed', right: 32, top: 130, zIndex: 50, width: 150 }}>
-          <div className="pms-glass-surface" style={{ padding: '16px 0 12px' }}>
-            <div style={{ padding: '0 16px 10px', fontSize: 10, fontWeight: 700, color: '#a5b4fc', letterSpacing: 3, textTransform: 'uppercase' as const }}>导航</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {anchorSections.map((section) => (
-                <div key={section.id} onClick={() => scrollToSection(section.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 12, color: '#64748b', transition: 'all 0.25s cubic-bezier(0.4,0,0.2,1)', borderLeft: '2px solid transparent' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'color-mix(in srgb, var(--pms-brand-surface) 72%, transparent)'; e.currentTarget.style.color = 'var(--pms-brand)'; e.currentTarget.style.borderLeftColor = 'var(--pms-brand)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#64748b'; e.currentTarget.style.borderLeftColor = 'transparent' }}
-                >
-                  <span style={{ fontSize: 13, opacity: 0.7 }}>{section.icon}</span>
-                  <span style={{ fontWeight: 500 }}>{section.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
         {isTargetProject ? (
           <TargetProjectInformationView
             project={p as unknown as ProjectInfoProject}
@@ -5669,7 +5642,7 @@ export default function ProjectSpaceContainer() {
           className="pms-sidebar pms-project-space-sidebar pms-glass-surface"
           collapsed={projectSpaceSidebarCollapsed}
           onCollapsedChange={setProjectSpaceSidebarCollapsed}
-          title="项目导航"
+          title={null}
           ariaLabel="项目空间导航"
           expandedWidth={200}
           collapsedWidth={64}
@@ -5679,7 +5652,7 @@ export default function ProjectSpaceContainer() {
             inlineCollapsed={projectSpaceSidebarCollapsed}
             selectedKeys={[projectSpaceModule]}
             style={{ border: 'none', fontSize: 13, width: '100%', background: 'transparent' }}
-            items={menuItems.map(item => ({
+            items={menuItems.filter(item => !getProjectSpaceModules(selectedProject) || getProjectSpaceModules(selectedProject)!.includes(item.key)).map(item => ({
               ...item,
               title: item.label,
               label: <span style={{ fontWeight: projectSpaceModule === item.key ? 500 : 400 }}>{item.label}</span>,

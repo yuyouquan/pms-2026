@@ -694,6 +694,7 @@ export default function ProjectListContainer() {
                     matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
                     providedRows={technicalStatusRows}
+                    providedExportRows={technicalActiveRows}
                     storageNamespace={`project-list-technical-${technicalActiveType}`}
                     onViewProject={() => undefined}
                     onViewRow={enterSummaryRow}
@@ -791,6 +792,7 @@ export default function ProjectListContainer() {
                     matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
                     providedRows={technicalStatusRows}
+                    providedExportRows={technicalActiveRows}
                     storageNamespace={`project-list-technical-${technicalActiveType}`}
                     onViewProject={() => undefined}
                     onViewRow={enterSummaryRow}
@@ -843,6 +845,7 @@ export default function ProjectListContainer() {
                     matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
                     providedRows={technicalStatusRows}
+                    providedExportRows={technicalActiveRows}
                     storageNamespace={`project-list-technical-${technicalActiveType}`}
                     onViewProject={() => undefined}
                     onViewRow={enterSummaryRow}

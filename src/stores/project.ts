@@ -858,10 +858,15 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     storage: createJSONStorage(() => safeProjectStorage),
     migrate: migrateProjectState,
     partialize: partializeProjectState,
-    merge: (persistedState, currentState) => ({
-      ...currentState,
-      ...migrateProjectState(persistedState, PROJECT_STORE_VERSION),
-    }),
+    merge: (persistedState, currentState) => {
+      const saved = migrateProjectState(persistedState, PROJECT_STORE_VERSION)
+      const selected = currentState.selectedProject ? saved.projects.find(project => project.id === currentState.selectedProject?.id) ?? null : null
+      return {
+        ...currentState,
+        ...saved,
+        selectedProject: JSON.stringify(selected) === JSON.stringify(currentState.selectedProject) ? currentState.selectedProject : selected,
+      }
+    },
     onRehydrateStorage: () => (state) => {
       if (state) usePermissionStore.getState().ensureProjectPermissions(state.projects)
     },

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { App, Modal, Form, Input, InputNumber, Select, Row, Col } from 'antd'
 import type { ConfigModuleMeta, ConfigFormValues } from '@/types/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
@@ -37,7 +37,12 @@ export default function ConfigEditModal({
     return (data[moduleMeta.key] ?? []).find(r => r.id === recordId) ?? null
   }, [recordId, data, moduleMeta.key])
 
+  const initializedEditor = useRef('')
   useEffect(() => {
+    if (!open) { initializedEditor.current = ''; return }
+    const editorKey = `${moduleMeta.key}:${recordId ?? 'new'}`
+    if (initializedEditor.current === editorKey) return
+    initializedEditor.current = editorKey
     if (open) {
       if (editingRecord) {
         const formValues: ConfigFormValues = {}
@@ -49,10 +54,11 @@ export default function ConfigEditModal({
         form.resetFields()
       }
     }
-  }, [open, editingRecord, form, moduleMeta.columns])
+  }, [open, recordId, editingRecord, form, moduleMeta.key, moduleMeta.columns])
 
   const handleOk = async () => {
     if (!canEdit) return
+    if (isEdit && !editingRecord) { message.warning('该配置已被移除，请关闭弹窗后刷新列表'); return }
     try {
       const values = await form.validateFields()
       if (isEdit && recordId) {
