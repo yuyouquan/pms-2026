@@ -260,6 +260,11 @@
   text-align: left;
 }
 
+.pms-project-config__name.ant-btn,
+.pms-project-config__editable-value.ant-btn {
+  justify-content: flex-start;
+}
+
 /* Configuration fixed cells must cover horizontally scrolled content.
    Keep default/even rows solid and composite the shared hover tint onto white. */
 .pms-project-config > .pms-table .ant-table-tbody > tr > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
