@@ -7048,6 +7048,16 @@ input.ant-input,
   min-width: 116px;
 }
 
+.pms-config-center-switch.ant-segmented {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.pms-config-center-switch .ant-segmented-group {
+  width: max-content;
+  min-width: 100%;
+}
+
 .pms-project-list-table-actions {
   min-width: auto;
   gap: 8px;

@@ -1,6 +1,8 @@
 'use client'
 
 import HrConfigContent from '@/components/hr-config/ConfigContent'
+import { CONFIG_MODULE_MAP } from '@/constants/hrConfig'
+import type { ConfigModuleKey } from '@/types/hrConfig'
 import { useState, useMemo, useEffect } from 'react'
 import {
   Card, Tabs, Table, Row, Col, Space, Divider, Tag, Menu, Button, Select, Segmented, Empty,
@@ -12,7 +14,7 @@ import {
   CalendarOutlined, PlusOutlined, SaveOutlined,
   HistoryOutlined, SearchOutlined, AppstoreOutlined, EditOutlined,
   PlusSquareOutlined, MinusSquareOutlined,
-  DeleteOutlined, CaretDownOutlined, StopOutlined,
+  DeleteOutlined, CaretDownOutlined, StopOutlined, SettingOutlined,
 } from '@ant-design/icons'
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
@@ -58,6 +60,7 @@ import type { MrTemplateChangeLog } from '@/types/mrVersionPlan'
 import dayjs from 'dayjs'
 
 const { Option } = Select
+const HR_CONFIG_CENTER_MODULES: ConfigModuleKey[] = ['hrModel']
 const PLAN_TEMPLATE_ROLE_OPTIONS = [
   { label: 'SPM', value: 'SPM' },
   { label: '技术项目负责人', value: '技术项目负责人' },
@@ -206,11 +209,13 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
 export default function ConfigContainer() {
   const {
     configTab, setConfigTab, configSidebarCollapsed, setConfigSidebarCollapsed,
+    hrConfigModule, setHrConfigModule,
     selectedProjectType, setSelectedProjectType,
     isEditMode, setIsEditMode, showVersionCompare, setShowVersionCompare,
     showColumnModal, setShowColumnModal, showAddCustomType, setShowAddCustomType,
     setPendingNavigation, setShowLeaveConfirm,
   } = useUiStore()
+  const selectedHrConfigModule = HR_CONFIG_CENTER_MODULES.includes(hrConfigModule) ? hrConfigModule : 'hrModel'
 
   const {
     planLevel, setPlanLevel, selectedPlanType, setSelectedPlanType,
@@ -830,7 +835,30 @@ export default function ConfigContainer() {
         />
       </header>
 
-      {configTab === 'hrPipeline' && <HrConfigContent moduleKey="hrModel" />}
+      {configTab === 'hrPipeline' && (
+        <ConfigWorkspaceShell
+          collapsed={configSidebarCollapsed}
+          onCollapsedChange={setConfigSidebarCollapsed}
+          expandedWidth={288}
+          title={`配置项（${HR_CONFIG_CENTER_MODULES.length}）`}
+          ariaLabel="人力资源管道配置项"
+          content={<HrConfigContent key={selectedHrConfigModule} moduleKey={selectedHrConfigModule} />}
+        >
+          <Menu
+            className="pms-config-sidebar-menu"
+            mode="inline"
+            inlineCollapsed={configSidebarCollapsed}
+            selectedKeys={[selectedHrConfigModule]}
+            items={HR_CONFIG_CENTER_MODULES.map(key => ({
+              key,
+              icon: <SettingOutlined />,
+              label: CONFIG_MODULE_MAP[key].label,
+              title: CONFIG_MODULE_MAP[key].label,
+              onClick: () => navigateWithEditGuard(() => setHrConfigModule(key)),
+            }))}
+          />
+        </ConfigWorkspaceShell>
+      )}
 
       {/* Transfer config */}
       {configTab === 'transfer' && <TransferConfig {...transferProps} />}

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
 import type { AnyFilterCondition } from '@/lib/filterConditions'
+import type { ConfigModuleKey } from '@/types/hrConfig'
 
 export type MainModule =
   | 'workbench'
@@ -51,6 +52,7 @@ export interface UiState {
   projectListTablePage: number
   projectSpaceOrigin: ProjectSpaceOrigin
   configTab: string
+  hrConfigModule: ConfigModuleKey
   configSidebarCollapsed: boolean
   projectSpaceSidebarCollapsed: boolean
   hrSidebarCollapsed: boolean
@@ -86,6 +88,7 @@ export interface UiActions {
   enterProjectSpace: (origin: NonNullable<ProjectSpaceOrigin>) => void
   returnFromProjectSpace: () => void
   setConfigTab: (v: string) => void
+  setHrConfigModule: (v: ConfigModuleKey) => void
   setConfigSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setProjectSpaceSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
   setHrSidebarCollapsed: (v: boolean | ((prev: boolean) => boolean)) => void
@@ -130,6 +133,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   projectListTablePage: 1,
   projectSpaceOrigin: null,
   configTab: 'plan',
+  hrConfigModule: 'hrModel',
   configSidebarCollapsed: false,
   projectSpaceSidebarCollapsed: false,
   hrSidebarCollapsed: false,
@@ -212,6 +216,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     })
   },
   setConfigTab: (v) => set({ configTab: v }),
+  setHrConfigModule: (v) => set({ hrConfigModule: v }),
   setConfigSidebarCollapsed: (v) => set((s) => ({
     configSidebarCollapsed: typeof v === 'function' ? v(s.configSidebarCollapsed) : v,
   })),

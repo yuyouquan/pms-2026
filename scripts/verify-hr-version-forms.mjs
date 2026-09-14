@@ -151,7 +151,9 @@ await check('Forms and navigation wire shared readonly milestones, three-column 
     assert.match(source(`src/components/hr-${category}/${category === 'machine' ? 'MachineVersionDetailModal' : 'VersionDetailModal'}.tsx`), /HrVersionMilestoneDetails/)
   }
   assert.doesNotMatch(source('src/constants/hrPipeline.ts'), /key: 'config\/hr-model'/)
-  assert.match(source('src/containers/ConfigContainer.tsx'), /HrConfigContent moduleKey="hrModel"/)
+  assert.match(source('src/containers/ConfigContainer.tsx'), /HR_CONFIG_CENTER_MODULES: ConfigModuleKey\[\] = \['hrModel'\]/)
+  assert.match(source('src/containers/ConfigContainer.tsx'), /ariaLabel="人力资源管道配置项"/)
+  assert.match(source('src/containers/ConfigContainer.tsx'), /HrConfigContent key=\{selectedHrConfigModule\} moduleKey=\{selectedHrConfigModule\}/)
   assert.match(source('src/components/hr-config/ConfigTablePanel.tsx'), /canEdit \? actionColumn : \[\]/)
 })
 console.log(`HR version forms and model permissions passed (${checks} groups).`)
