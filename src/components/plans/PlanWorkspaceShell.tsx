@@ -35,8 +35,8 @@ export function PlanWorkspaceShell({
       <Card
         className="pms-plan-toolbar pms-toolbar"
         size="small"
-        style={{ marginBottom: 16, borderRadius: 8 }}
-        styles={{ body: { padding: '12px 16px' } }}
+        style={{ marginBottom: 8, borderRadius: 8 }}
+        styles={{ body: { padding: '8px 16px' } }}
       >
         <Row justify="space-between" align="middle" gutter={[12, 8]}>
           <Col>

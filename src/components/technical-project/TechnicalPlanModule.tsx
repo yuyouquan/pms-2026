@@ -4,7 +4,7 @@ import { getTechnicalLevel1MaintainerUsers } from '@/lib/projectSpaceLevel1Rules
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Alert, App, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
-  Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography,
+  Select, Space, Table, Tag, Tooltip, Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
@@ -17,6 +17,7 @@ import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import SubprojectConfigModal from '@/components/technical-project/SubprojectConfigModal'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
+import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
@@ -803,38 +804,37 @@ export default function TechnicalPlanModule({
     <div className="technical-project-space pms-plan-workspace" aria-label="技术项目计划">
       <PlanWorkspaceShell
         scopeTabs={(
-          <Card className="technical-space-card technical-plan-scope-card pms-glass-surface" aria-label={FIXED_TDT_LABEL} styles={{ body: { padding: '4px 16px 12px' } }}>
-            <Row justify="space-between" align="middle" wrap={false}>
-              <Tabs
-                activeKey={tab?.key}
-                onChange={handleScopeChange}
-                items={tabs.map(item => ({
-                  key: item.key,
-                  label: (
-                    <Space size={5}>
-                      <span>{item.label}</span>
-                      {item.subproject && (
-                        <Tooltip title="子项目信息配置">
-                          <Button
-                            type="text"
-                            size="small"
-                            aria-label={`配置子项目 ${item.subproject.name}`}
-                            icon={<SettingOutlined />}
-                            onClick={event => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              setConfigTrigger(event.currentTarget)
-                              setConfiguringChild(item.subproject!)
-                            }}
-                          />
-                        </Tooltip>
-                      )}
-                    </Space>
-                  ),
-                }))}
-              />
-            </Row>
-          </Card>
+          <ProjectSpaceTabs
+            className="technical-plan-scope-card"
+            aria-label={FIXED_TDT_LABEL}
+            navigationOnly
+            activeKey={tab?.key}
+            onChange={handleScopeChange}
+            items={tabs.map(item => ({
+              key: item.key,
+              label: (
+                <Space size={5}>
+                  <span>{item.label}</span>
+                  {item.subproject && (
+                    <Tooltip title="子项目信息配置">
+                      <Button
+                        type="text"
+                        size="small"
+                        aria-label={`配置子项目 ${item.subproject.name}`}
+                        icon={<SettingOutlined />}
+                        onClick={event => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setConfigTrigger(event.currentTarget)
+                          setConfiguringChild(item.subproject!)
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                </Space>
+              ),
+            }))}
+          />
         )}
         notices={(
           <>

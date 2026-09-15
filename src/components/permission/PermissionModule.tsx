@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
 import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Empty, Tooltip, message } from 'antd'
 import { TeamOutlined, SafetyCertificateOutlined, PlusOutlined, CheckSquareFilled, CloseOutlined } from '@ant-design/icons'
 import {
@@ -149,15 +150,16 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
   const maxProjectPermissionColumns = Math.max(...PROJECT_PERMISSION_GROUPS.map(group => group.permissions.length))
 
   return (
-    <Card className="pms-permission-workspace pms-solid-surface" style={{ borderRadius: 8 }}>
-      <Tabs className="pms-toolbar" activeKey={permConfigTab} onChange={(k) => setPermConfigTab(k as any)} items={[
+    <div className="pms-permission-workspace pms-project-permission-workspace">
+      <ProjectSpaceTabs navigationOnly activeKey={permConfigTab} onChange={(k) => setPermConfigTab(k as 'roles' | 'perms')} items={[
         { key: 'roles', label: <Space><TeamOutlined />角色人员配置</Space> },
         { key: 'perms', label: <Space><SafetyCertificateOutlined />权限配置</Space> },
       ]} />
 
+      <Card className="pms-project-permission-content pms-solid-surface" styles={{ body: { padding: '12px 16px' } }}>
       {permConfigTab === 'roles' && (
         <div>
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 14, color: '#4b5563' }}>共 {roles.length} 个角色（{roles.filter(role => role.isFixed).length} 个固定角色）</span>
             <Button type="primary" icon={<PlusOutlined />} disabled={!canManageRoles} onClick={() => setShowAddRoleModal(true)}>新增角色</Button>
           </div>
@@ -245,7 +247,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                 onChange={setPermissionActiveRole}
                 type="card"
                 size="small"
-                style={{ marginBottom: 16 }}
+                style={{ marginBottom: 8 }}
                 items={roles.map(role => ({ key: role.name, label: role.name }))}
               />
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'auto' }}>
@@ -256,7 +258,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                   <tbody>
                     {PROJECT_PERMISSION_GROUPS.map(group => (
                       <tr key={group.module}>
-                        <td style={{ width: 130, padding: '18px 16px', fontWeight: 600, fontSize: 14, color: '#1f2937', borderRight: '1px solid #edf0f5', borderBottom: '1px solid #edf0f5', background: '#fbfcff', verticalAlign: 'middle' }}>
+                        <td style={{ width: 130, padding: '12px 16px', fontWeight: 600, fontSize: 14, color: '#1f2937', borderRight: '1px solid #edf0f5', borderBottom: '1px solid #edf0f5', background: '#fbfcff', verticalAlign: 'middle' }}>
                           {group.module}
                         </td>
                         {group.permissions.map(permission => {
@@ -265,7 +267,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                             <td
                               key={`${selectedPermissionRole}-${permission.key}`}
                               style={{
-                                padding: '16px 14px',
+                                padding: '10px 14px',
                                 textAlign: 'center',
                                 borderRight: '1px solid #edf0f5',
                                 borderBottom: '1px solid #edf0f5',
@@ -316,7 +318,8 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
           )}
         </div>
       )}
-    </Card>
+      </Card>
+    </div>
   )
 }
 

@@ -1,5 +1,6 @@
 'use client'
-import { Empty, Tabs } from 'antd'
+import { Empty } from 'antd'
+import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
 import { getProjectAttribute } from '@/types/projectRegistry'
 import { matchesHrCategory } from '@/lib/hrFormalProjectSource'
 import { hasPermission } from '@/stores/permission'
@@ -17,7 +18,7 @@ export default function ProjectResources({ project }: { project: ProjectItem }) 
     : matchesHrCategory(project, 'machine') ? <MachineProjectContent />
       : matchesHrCategory(project, 'tos') ? <TosProjectContent />
         : matchesHrCategory(project, 'technical') ? <TechnicalProjectContent /> : <CapabilityProjectContent />
-  return <HrResourceScope key={project.id} projectId={project.id}><Tabs defaultActiveKey="estimate" items={[
+  return <HrResourceScope key={project.id} projectId={project.id}><ProjectSpaceTabs className="pms-project-resource-tabs" defaultActiveKey="estimate" items={[
     { key: 'estimate', label: '项目预估投入', children: content },
     { key: 'dashboard', label: '项目资源看板', children: <Empty description="暂无项目资源看板" /> },
   ]} /></HrResourceScope>

@@ -9015,3 +9015,44 @@ input.ant-input,
 .pms-non-labor-range { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
 .pms-non-labor-section > .ant-btn { margin-top: 8px; }
 @media (max-width: 800px) { .pms-non-labor-toolbar { align-items: stretch; flex-direction: column; gap: 8px; } }
+
+
+/* Keep project-space section navigation aligned with the first sidebar item. */
+#basic-info-scroll-container.pms-project-section--compact {
+  padding: 8px 16px 16px !important;
+}
+
+.pms-project-space-tabs > .ant-tabs-nav {
+  min-height: 40px;
+  margin: 0 0 8px;
+  padding: 0 16px;
+  border: 1px solid var(--pms-border);
+  border-radius: var(--pms-radius-surface);
+  background: var(--pms-surface-solid);
+}
+
+.pms-project-space-tabs > .ant-tabs-nav::before {
+  border-bottom: 0;
+}
+
+.pms-project-space-tabs > .ant-tabs-nav .ant-tabs-tab {
+  padding: 8px 0;
+  font-weight: 500;
+}
+
+.pms-project-space-tabs > .ant-tabs-nav .ant-tabs-extra-content {
+  margin-left: 16px;
+}
+
+.pms-project-space-tabs--navigation-only > .ant-tabs-content-holder {
+  display: none;
+}
+
+/* A Card already provides body padding; avoid adding toolbar padding twice. */
+.pms-project-section--compact .pms-toolbar.ant-card {
+  padding: 0;
+}
+
+.pms-project-resource-tabs :is(.pms-hr-machine-tab-bar, .pms-hr-tos-tab-bar, .pms-hr-tech-tab-bar):empty {
+  display: none;
+}
