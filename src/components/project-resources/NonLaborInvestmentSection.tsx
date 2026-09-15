@@ -69,7 +69,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
             if (subject) update(item.id, { subjectId: id, tertiarySubject: String(subject.tertiarySubject) })
           }} />
       } },
-    ...months.map(month => ({ title: dayjs(month + '-01').format('YYYY年MM月'), key: month, width: 126, align: 'right' as const,
+    ...months.map(month => ({ title: dayjs(month + '-01').format('YYYY年MM月'), key: month, width: 126, align: 'left' as const,
       render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? (item.monthlyAmounts[month] ?? 0) : <InputNumber
         aria-label={item.tertiarySubject + ' ' + month + ' 非人力投入'} min={0} precision={2} step={0.1}
         style={{ width: '100%' }} value={item.monthlyAmounts[month] ?? 0}
@@ -81,8 +81,8 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
   ]
   return <section className="pms-non-labor-section" aria-label="非人力投入">
     <h3>非人力投入</h3>
-    <div className="pms-non-labor-toolbar">
-      <Alert type="info" showIcon title={'预估非人力投入合计：' + nonLaborTotal(value) + ' 人月。'} />
+    <Alert className="pms-non-labor-summary" type="info" showIcon title={<div className="pms-non-labor-toolbar">
+      <span>{'预估非人力投入合计：' + nonLaborTotal(value) + ' 人月。'}</span>
       <div className="pms-non-labor-range">
         <span>投入时间范围</span>
         {readOnly ? <span>{value.startMonth && value.endMonth ? dayjs(value.startMonth + '-01').format('YYYY年MM月') + '～' + dayjs(value.endMonth + '-01').format('YYYY年MM月') : '—'}</span>
@@ -91,13 +91,13 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
             value={value.startMonth && value.endMonth ? [dayjs(value.startMonth + '-01'), dayjs(value.endMonth + '-01')] : null}
             onChange={dates => changeRange(dates?.[0]?.format('YYYY-MM') ?? null, dates?.[1]?.format('YYYY-MM') ?? null)} />}
       </div>
-    </div>
+    </div>} />
     <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={value.items}
       pagination={false} size="small" scroll={{ x: Math.max(600, 404 + months.length * 126) }}
       locale={{ emptyText: months.length ? '暂无非人力投入' : '请选择投入时间范围' }}
       summary={() => value.items.length > 0 ? <Table.Summary.Row>
         <Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>
-        {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 2} align="right">
+        {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 2} align="left">
           {Math.round(value.items.reduce((sum, item) => sum + (item.monthlyAmounts[month] ?? 0), 0) * 100) / 100}
         </Table.Summary.Cell>)}
         {!readOnly && <Table.Summary.Cell index={months.length + 2} />}
