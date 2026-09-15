@@ -78,7 +78,7 @@ export default function MachineVersionDetailModal({
       title: f.label,
       key: f.key,
       width: 100,
-      align: 'left',
+      align: 'center',
       render: (_v: unknown, record: DeptPhaseRow) => (
         <span style={{ fontWeight: 500 }}>{formatPersonMonth(record.phases[f.key])}</span>
       ),
@@ -106,7 +106,7 @@ export default function MachineVersionDetailModal({
         title: '预估投入合计',
         key: 'total',
         width: 120,
-        align: 'left',
+        align: 'center',
         render: (_v: unknown, r: DeptPhaseRow) => (
           <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>
             {formatPersonMonth(r.total)}
@@ -180,7 +180,7 @@ export default function MachineVersionDetailModal({
                     <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>合计</span>
                   </Table.Summary.Cell>
                   {PHASE_FIELDS.map((f) => (
-                    <Table.Summary.Cell key={f.key} index={2 + PHASE_FIELDS.indexOf(f)} align="left">
+                    <Table.Summary.Cell key={f.key} index={2 + PHASE_FIELDS.indexOf(f)} align="center">
                       <span style={{ fontWeight: 600 }}>
                         {formatPersonMonth(
                           Math.round(
@@ -190,7 +190,7 @@ export default function MachineVersionDetailModal({
                       </span>
                     </Table.Summary.Cell>
                   ))}
-                  <Table.Summary.Cell index={8} align="left">
+                  <Table.Summary.Cell index={8} align="center">
                     <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>
                       {formatPersonMonth(grandTotal)}
                     </span>

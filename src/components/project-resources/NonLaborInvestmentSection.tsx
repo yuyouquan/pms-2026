@@ -69,7 +69,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
             if (subject) update(item.id, { subjectId: id, tertiarySubject: String(subject.tertiarySubject) })
           }} />
       } },
-    ...months.map(month => ({ title: dayjs(month + '-01').format('YYYY年MM月'), key: month, width: 126, align: 'left' as const,
+    ...months.map(month => ({ title: dayjs(month + '-01').format('YYYY年MM月'), key: month, width: 126, align: 'center' as const,
       render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? (item.monthlyAmounts[month] ?? 0) : <InputNumber
         aria-label={item.tertiarySubject + ' ' + month + ' 非人力投入'} min={0} precision={2} step={0.1}
         style={{ width: '100%' }} value={item.monthlyAmounts[month] ?? 0}
@@ -97,7 +97,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
       locale={{ emptyText: months.length ? '暂无非人力投入' : '请选择投入时间范围' }}
       summary={() => value.items.length > 0 ? <Table.Summary.Row>
         <Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>
-        {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 2} align="left">
+        {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 2} align="center">
           {Math.round(value.items.reduce((sum, item) => sum + (item.monthlyAmounts[month] ?? 0), 0) * 100) / 100}
         </Table.Summary.Cell>)}
         {!readOnly && <Table.Summary.Cell index={months.length + 2} />}

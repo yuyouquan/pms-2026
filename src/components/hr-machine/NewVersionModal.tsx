@@ -64,8 +64,8 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
   const columns = [
     { title: '一级部门', dataIndex: 'primaryDepartment', width: 140 },
     { title: '二级部门', dataIndex: 'secondaryDepartment', width: 140 },
-    ...HR_MODEL_PHASE_FIELDS.map(field => ({ title: field.label, key: field.key, width: 120, render: (_: unknown, row: typeof departments[number]) => row.phases[field.key] })),
-    { title: '预估投入合计', dataIndex: 'estimatedTotal', width: 130 },
+    ...HR_MODEL_PHASE_FIELDS.map(field => ({ title: field.label, key: field.key, width: 120, align: 'center' as const, render: (_: unknown, row: typeof departments[number]) => row.phases[field.key] })),
+    { title: '预估投入合计', dataIndex: 'estimatedTotal', width: 130, align: 'center' as const },
   ]
   const budgetOptions = BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value))
   const productLines = PRODUCT_LINES_BY_BRAND[metadata.brand as keyof typeof PRODUCT_LINES_BY_BRAND] ?? []

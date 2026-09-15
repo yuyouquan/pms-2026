@@ -247,7 +247,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       title: f.label,
       key: f.key,
       width: 130,
-      align: 'left' as const,
+      align: 'center' as const,
       render: (_value: unknown, record: TosDepartmentInvestment) => (
         <InputNumber
           value={record[f.key] as number}
@@ -263,7 +263,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       title: '预估投入合计',
       key: 'estimatedInvestment',
       width: 120,
-      align: 'left' as const,
+      align: 'center' as const,
       render: (_value: unknown, record: TosDepartmentInvestment) => (
         <span style={{ fontWeight: 600 }}>
           {formatPersonMonth(Number(record.estimatedInvestment) || 0)}

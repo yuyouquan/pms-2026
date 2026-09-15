@@ -269,7 +269,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       title: '预估投入（人月）',
       key: 'estimatedInvestment',
       width: 150,
-      align: 'left' as const,
+      align: 'center' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
         <InputNumber
           value={record.estimatedInvestment}

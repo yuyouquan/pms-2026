@@ -8981,6 +8981,7 @@ input.ant-input,
 .pms-modal.pms-hr-version-modal .ant-modal-footer { padding-block: 12px !important; }
 .pms-hr-version-modal .ant-descriptions-header { margin-bottom: 8px; }
 .pms-hr-investment-section-title { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.pms-hr-version-modal .pms-hr-investment-table .ant-input-number-input { text-align: center; }
 .pms-hr-readonly-field, .pms-hr-readonly-field input { cursor: not-allowed; }
 .pms-hr-readonly-field__icon { opacity: 0; color: var(--pms-text-secondary); }
 .pms-hr-readonly-field:hover .pms-hr-readonly-field__icon,
