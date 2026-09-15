@@ -9,7 +9,8 @@ import { canCreateHrVersion, allowedHrVersionUpdates, getLatestHrVersion, isLate
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import type {
   HrCapabilityProject,
   HrCapabilityVersion,
@@ -426,6 +427,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         set((state) => ({ historyVersionFilters: { ...state.historyVersionFilters, ...v } })),
     }),
     {
+      storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-capability',
       version: 2,
       migrate: (persistedState: unknown, fromVersion: number) => {

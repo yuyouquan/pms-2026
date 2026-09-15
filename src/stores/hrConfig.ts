@@ -1,7 +1,8 @@
 import { hasGlobalPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import type { ConfigModuleKey, ConfigRecord, ConfigFormValues } from '@/types/hrConfig'
 import { MOCK_CONFIG_DATA } from '@/constants/hrConfig'
 
@@ -134,6 +135,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       setEditingId: (id) => set({ editingId: id }),
     }),
     {
+      storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-config', version: 2,
       partialize: state => ({ data: state.data }),
       merge: (persisted, current) => {

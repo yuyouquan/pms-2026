@@ -1,10 +1,15 @@
 /** Bump only when replacing the complete prototype dataset, not for normal schema changes. */
-export const MOCK_DATASET_VERSION = '2026-09-08-v1'
+export const MOCK_DATASET_VERSION = '2026-09-15-v1'
 export const MOCK_DATASET_VERSION_STORAGE_KEY = 'pms:mock-dataset-version'
 
 // Explicit ownership prevents this refresh from deleting other apps on the same origin.
 const LOCAL_STORAGE_KEYS = new Set([
   'pms-projects',
+  'pms-hr-config',
+  'pms-hr-machine',
+  'pms-hr-tos',
+  'pms-hr-technical',
+  'pms-hr-capability',
   'pms-project-permissions',
   'pms-plan-store',
   'pms-enum-values',
