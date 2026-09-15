@@ -1,14 +1,16 @@
 'use client'
 
+import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
+
 import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
 
-import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
+import { HrVersionMilestoneDetails, HrVersionMilestoneRow, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
 
 import { canEditHrInScope } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { isLatestHrVersion } from '@/lib/hrVersionRules'
-import { Modal, Table, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
+import { Modal, Table, Form, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import * as XLSX from 'xlsx'
@@ -49,6 +51,7 @@ export default function VersionDetailModal({
   const scopeId = useHrResourceScope()
   const readOnly = !canEditHrInScope(project, scopeId) || requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
   const nonLabor = useNonLaborDraft(open, versionId ?? '', version?.nonLaborInvestment)
+  const milestoneForm = useHrVersionMilestones('tos', project ?? undefined, version?.budgetType ?? 'annual', open, versionId ?? undefined)
   const versionRef = useRef(version)
   versionRef.current = version
 
@@ -197,7 +200,7 @@ export default function VersionDetailModal({
   const handleOk = () => {
     if (!project || !version || readOnly) return
     try {
-      updateVersionDepartmentInvestments(project.id, version.id, editData, nonLabor.value)
+      updateVersionDepartmentInvestments(project.id, version.id, editData, nonLabor.value, milestoneForm.values)
       onCancel()
       message.success('版本预估投入已更新')
     } catch (error) { message.warning(error instanceof Error ? error.message : '版本保存失败') }
@@ -296,7 +299,7 @@ export default function VersionDetailModal({
   return (
     <Modal
       className="pms-modal pms-hr-version-modal"
-      title={readOnly ? '版本详情' : '版本详情 - 部门预估投入'}
+      title={readOnly ? '版本详情' : <HrVersionModalTitle title="编辑版本" projectName={project.name} />}
       open={open}
       onCancel={handleCancel}
       onOk={handleOk}
@@ -312,7 +315,7 @@ export default function VersionDetailModal({
             ]
           : undefined
       }
-      width={1280}
+      width={1560}
     >
       <div>
         {/* 版本信息头部 */}
@@ -326,10 +329,10 @@ export default function VersionDetailModal({
             flexWrap: 'wrap',
           }}
         >
-          <span>
+          {readOnly && <span>
             项目名称：
             <strong style={{ color: 'var(--pms-text-primary)' }}>{project.name}</strong>
-          </span>
+          </span>}
           <span>
             预算类型：
             <strong style={{ color: 'var(--pms-text-primary)' }}>
@@ -348,7 +351,8 @@ export default function VersionDetailModal({
           </span>
         </div>
 
-        <HrVersionMilestoneDetails category="tos" values={version.milestones} />
+        {readOnly ? <HrVersionMilestoneDetails category="tos" values={version.milestones} />
+          : <Form layout="vertical"><HrVersionMilestoneRow category="tos" {...milestoneForm} /></Form>}
 
         {/* 合计提示 */}
         <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>

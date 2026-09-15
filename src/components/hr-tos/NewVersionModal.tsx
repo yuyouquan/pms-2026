@@ -1,5 +1,7 @@
 'use client'
 
+import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
+
 import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
 
 import { canAccessHrProject, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
@@ -8,7 +10,7 @@ import { useHrResourceScope } from '@/components/project-resources/HrResourceSco
 import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
-import { HrVersionMilestoneFields, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
+import { HrVersionMilestoneRow, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
 import { useState, useEffect, useMemo } from 'react'
 import {
   Modal,
@@ -319,7 +321,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   return (
     <Modal
       className="pms-modal pms-hr-version-modal"
-      title="新增版本"
+      title={<HrVersionModalTitle title="新增版本" projectName={project?.name} />}
       open={open}
       onCancel={onCancel}
       onOk={handleOk}
@@ -327,7 +329,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
       okText="创建"
       cancelText="取消"
-      width={1280}
+      width={1560}
     >
       <div>
         {/* 表单字段 */}
@@ -351,8 +353,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               options={budgetOptions}
             />
           </Form.Item>
-          <HrVersionMilestoneFields category="tos" {...milestoneForm} />
         </Form>
+        <Form layout="vertical"><HrVersionMilestoneRow category="tos" {...milestoneForm} /></Form>
 
         {/* 合计提示 */}
         <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
