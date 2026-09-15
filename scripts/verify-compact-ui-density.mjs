@@ -10,6 +10,7 @@ const projectListSource = read('src/containers/ProjectListContainer.tsx')
 const projectSummarySource = read('src/components/project-summary/ProjectSummaryTable.tsx')
 const columnSettingsSource = read('src/components/shared/SortableColumnSettings.tsx')
 const configSource = read('src/containers/ConfigContainer.tsx')
+const configNavigationSource = read('src/components/config/ConfigNavigation.tsx')
 const projectDataSource = read('src/data/projects.ts')
 const globalStyles = read('src/styles/globals.css')
 
@@ -27,8 +28,10 @@ assert.match(projectSummarySource, /showTotal:\s*total => `共 \$\{total\} 个�
 assert.match(projectDataSource, /ADDITIONAL_MACHINE_PROJECTS/, 'mock data includes a dedicated pagination fixture set')
 assert.match(projectDataSource, /示例系列B 40[\s\S]*示例系列C 60[\s\S]*示例系列A 60/, 'mock projects cover multiple product series across pages')
 
-assert.match(configSource, /<h1>配置中心<\/h1>/, 'config center exposes the same left-aligned title structure as workbench')
-assert.match(configSource, /className="pms-workbench-switch pms-config-center-switch"/, 'config modules use the shared capsule switch')
+assert.match(configSource, /<ConfigWorkspaceShell\b[\s\S]*?title="配置分类"/, 'config center uses the compact left category sidebar')
+assert.match(configSource, /<ConfigNavigation\b/, 'config modules share the category navigation')
+assert.match(configNavigationSource, /aria-label="搜索配置菜单"/, 'category navigation keeps its searchable menu')
+assert.doesNotMatch(configSource, /<h1>配置中心<\/h1>|pms-config-center-switch/, 'config center does not restore the removed duplicate title or top-level switch')
 assert.doesNotMatch(configSource, /Config tab navigation[\s\S]{0,500}<Tabs/, 'legacy top-level config tabs are removed')
 
 assert.match(columnSettingsSource, /const commitDraft =/, 'field configuration centralizes immediate commits')
@@ -53,7 +56,7 @@ assert.match(globalStyles, /\.pms-project-list-card-column/, 'card columns expos
 assert.match(globalStyles, /\.pms-active-filter-conditions\s*\{[^}]*display:\s*flex/s, 'active filters use a compact shared condition rail')
 assert.match(globalStyles, /\.pms-active-filter-chip\s*\{[^}]*height:\s*var\(--pms-control-height\)/s, 'interactive filter chips use the shared control height')
 assert.match(globalStyles, /\.pms-workbench-header h1\s*\{[^}]*font-size:\s*var\(--pms-font-size-title\)/s, 'workspace titles follow the shared 20px scale')
-assert.match(globalStyles, /\.pms-workbench-switch\.ant-segmented\s*\{[^}]*height:\s*var\(--pms-control-height\)/s, 'workbench and config capsules match the project-list switch height')
+assert.match(globalStyles, /\.pms-workbench-switch\.ant-segmented\s*\{[^}]*height:\s*var\(--pms-control-height\)/s, 'workbench capsules match the project-list switch height')
 assert.match(globalStyles, /\.pms-workbench-switch \.ant-segmented-group,[\s\S]{0,120}display:\s*flex/s, 'shared capsule items remain on one line')
 
 console.log('shared ui density contract passed')

@@ -38,7 +38,7 @@ const versions = () => machine.getState().projects.find(p => p.id === mp.id).ver
 const first = structuredClone(versions().at(-1))
 machine.getState().addVersion(mp.id, 'annual', meta)
 const configRow = config.getState().data.hrModel.find(row => row.projectLevel === 'S' && row.modelVersion === 'V2026.1')
-config.getState().updateRecord('hrModel', configRow.id, { conceptPhase: Number(configRow.conceptPhase) + 10 })
+config.getState().updateRecord('hrModel', configRow.id, { conceptToStr1: Number(configRow.conceptToStr1) + 10 })
 machine.getState().refreshFormalProjects()
 await machine.persist.rehydrate()
 const history = versions().find(v => v.id === first.id), latest = versions().at(-1)

@@ -329,7 +329,8 @@ registerAssertion('workbench summary keeps option projects and plan tasks indepe
 
   assert.match(
     workspaceSource,
-    /const visibleProjects\s*=\s*projects/,
+    /const visibleProjects\s*=\s*useMemo\(\(\) => filterFormalRegistryProjects\(projects\), \[projects\]\)/,
+    'summary options start from formal registry projects before view filters',
   )
   assert.match(
     workspaceSource,
@@ -488,7 +489,9 @@ registerAssertion('shared summary table composes only the approved reusable cont
     /aria-label=\{`快捷筛选-\$\{definition\.label\}`\}/,
     'quick filters must expose the stable browser label prefix',
   )
-  assert.doesNotMatch(source, /导出|分享|全屏|savedProjectView|calendar/)
+  assert.doesNotMatch(source, /分享|全屏|savedProjectView|calendar/)
+  assert.match(source, /key: 'all', label: '导出全部'/, 'the shared table exposes all-project export')
+  assert.match(source, /key: 'current', label: '导出当前'/, 'the shared table exposes filtered export')
 })
 
 registerAssertion('legacy shared milestone rows migrate safely to stable template keys', () => {

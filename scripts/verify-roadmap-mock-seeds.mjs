@@ -110,7 +110,8 @@ if (validPeriod?.periodStartDate !== '2026-01-01' || validPeriod.periodEndDate !
 }
 
 const planned = initial.plannedProjects.find(project => project.id === 'planned-mock-demo017-android16-new')
-if (!planned) throw new Error('missing planned DEMO017 roadmap mock')
+if (!planned) throw new Error('missing planned roadmap mock with its stable legacy migration id')
+if (planned.projectCode !== 'DEMOR001') throw new Error('the independent roadmap mock must use the canonical DEMOR001 code')
 if (planned.firstSaleTosVersionId !== '16.3') {
   throw new Error(`Android 16 planned mock must use 16.3, got ${planned.firstSaleTosVersionId}`)
 }
@@ -122,13 +123,20 @@ const plannedRow = adapter.adaptPlannedProject(planned)
 if (!normalRow) throw new Error('normal DEMO017 mock does not adapt to a roadmap row')
 
 const conflicts = adapter.deriveRoadmapPlanningConflicts([normalRow], [plannedRow])
+if (conflicts.length !== 0) {
+  throw new Error(`independent DEMO017 and DEMOR001 fixtures must not conflict: ${JSON.stringify(conflicts)}`)
+}
+// The registry fixture is now an independent project. Keep a positive conflict
+// case using an explicit duplicate so conflict detection remains covered.
+const duplicatePlannedRow = adapter.adaptPlannedProject({ ...planned, projectCode: normal.projectCode })
+const duplicateConflicts = adapter.deriveRoadmapPlanningConflicts([normalRow], [duplicatePlannedRow])
 if (
-  conflicts.length !== 1
-  || conflicts[0].key !== 'DEMO017|Android 16|新品'
-  || conflicts[0].normalProjects[0]?.id !== '1'
-  || conflicts[0].plannedProjects[0]?.id !== planned.id
+  duplicateConflicts.length !== 1
+  || duplicateConflicts[0].key !== 'DEMO017|Android 16|新品'
+  || duplicateConflicts[0].normalProjects[0]?.id !== '1'
+  || duplicateConflicts[0].plannedProjects[0]?.id !== planned.id
 ) {
-  throw new Error(`DEMO017 conflict was not derived from canonical sources: ${JSON.stringify(conflicts)}`)
+  throw new Error(`duplicate DEMO017 conflict was not derived from its source rows: ${JSON.stringify(duplicateConflicts)}`)
 }
 
 if (initial.changeLogs.length !== 4) {
@@ -176,10 +184,10 @@ const legacyHydrated = roadmapStore.mergeRoadmapPersistedState(
   roadmapStore.useRoadmapStore.getState(),
 )
 if (
-  !legacyHydrated.plannedProjects.some(project => project.id === planned.id)
-  || legacyHydrated.changeLogs.length !== initial.changeLogs.length
+  legacyHydrated.plannedProjects.length !== 0
+  || legacyHydrated.changeLogs.length !== 0
 ) {
-  throw new Error('legacy empty persisted state hid the visible roadmap mocks')
+  throw new Error('explicitly empty persisted roadmap state must not resurrect seed projects or logs')
 }
 
 function hydrateActualRoadmapStore(envelope) {
@@ -196,13 +204,13 @@ function hydrateActualRoadmapStore(envelope) {
   }
 }
 
-for (const [label, envelope] of [
-  ['fresh browser', null],
-  ['persisted empty state', { version: 1, state: roadmapStore.createInitialRoadmapState() }],
+for (const [label, envelope, projectCount, logCount] of [
+  ['fresh browser', null, 1, 4],
+  ['persisted empty state', { version: 1, state: roadmapStore.createInitialRoadmapState() }, 0, 0],
 ]) {
   const state = hydrateActualRoadmapStore(envelope)
-  if (state.plannedProjects.length !== 1 || state.changeLogs.length !== 4) {
-    throw new Error(`${label} did not receive visible mocks through Zustand hydration`)
+  if (state.plannedProjects.length !== projectCount || state.changeLogs.length !== logCount) {
+    throw new Error(`${label} did not preserve its expected project and audit-log counts through Zustand hydration`)
   }
 }
 
@@ -225,14 +233,12 @@ const legacyCatalogHydrated = hydrateActualRoadmapStore({
     tosVersions: [legacyVersion],
   },
 })
-const legacyPlanned = legacyCatalogHydrated.plannedProjects.find(project => project.id === planned.id)
 if (
-  !legacyPlanned
-  || legacyPlanned.firstSaleTosVersionId !== '16.3'
-  || legacyCatalogHydrated.changeLogs.length !== 4
-  || legacyCatalogHydrated.changeLogs.some(log => log.source === 'planned' && log.tosVersionName !== 'tOS16.3')
+  legacyCatalogHydrated.plannedProjects.length !== 0
+  || legacyCatalogHydrated.changeLogs.length !== 0
+  || legacyCatalogHydrated.tosVersions[0]?.id !== '16.3'
 ) {
-  throw new Error('legacy tOS catalog did not receive a fully resolvable planned mock and history')
+  throw new Error('legacy tOS catalog must normalize its version without inventing projects or history')
 }
 
 const logOnlyLegacyHydrated = hydrateActualRoadmapStore({
@@ -244,10 +250,10 @@ const logOnlyLegacyHydrated = hydrateActualRoadmapStore({
   },
 })
 if (
-  logOnlyLegacyHydrated.plannedProjects[0]?.id !== planned.id
-  || logOnlyLegacyHydrated.plannedProjects[0]?.firstSaleTosVersionId !== '16.3'
+  logOnlyLegacyHydrated.plannedProjects.length !== 0
+  || JSON.stringify(logOnlyLegacyHydrated.changeLogs) !== JSON.stringify(initial.changeLogs)
 ) {
-  throw new Error('a prior logs-only seed prevented the missing planned mock from being repaired')
+  throw new Error('logs-only persisted state must preserve history without resurrecting deleted projects')
 }
 
 const oldVersionPlanned = {
@@ -273,16 +279,12 @@ const oldMockHydrated = hydrateActualRoadmapStore({
     changeLogs: oldVersionLogs,
   },
 })
-const refreshedPlanned = oldMockHydrated.plannedProjects.find(project => project.id === planned.id)
+const retainedPlanned = oldMockHydrated.plannedProjects.find(project => project.id === planned.id)
 if (
-  refreshedPlanned?.firstSaleTosVersionId !== '16.3'
-  || oldMockHydrated.changeLogs.length !== 4
-  || /tOS\s*17\./i.test(JSON.stringify({
-    planned: refreshedPlanned,
-    changeLogs: oldMockHydrated.changeLogs,
-  }))
+  retainedPlanned?.firstSaleTosVersionId !== '17.2'
+  || JSON.stringify(oldMockHydrated.changeLogs) !== JSON.stringify(oldVersionLogs)
 ) {
-  throw new Error('persisted tOS 17.2 mock records were not refreshed to canonical tOS 16.3')
+  throw new Error('persisted historical project versions and audit snapshots must not be overwritten by current demo seeds')
 }
 
 const userPlanned = {
@@ -314,4 +316,4 @@ if (
   throw new Error('hydration re-added a deleted mock or lost user-created planned data')
 }
 
-console.log('Roadmap mock seed verification passed (1 derived conflict, 4 audit logs).')
+console.log('Roadmap mock seed verification passed (independent seeds, duplicate conflict detection, 4 audit logs).')

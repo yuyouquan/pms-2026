@@ -54,7 +54,8 @@ assert.equal(countMarkup(frameMarkup, 'id="section-plan"'), 1, 'a Fragment plan 
 assert.equal(countMarkup(frameMarkup, 'id="section-basic"'), 1, 'a Fragment information slot receives one real section-basic DOM anchor')
 assert.equal(countMarkup(frameMarkup, 'id="caller-plan-content"'), 1, 'the frame preserves caller-owned IDs inside the plan slot')
 assert.equal(countMarkup(frameMarkup, 'id="caller-information-content"'), 1, 'the frame preserves caller-owned IDs inside the information slot')
-assert.match(frameMarkup, /aria-label="项目信息导航"/, 'the complete frame renders its anchor navigation by default')
+assert.doesNotMatch(frameMarkup, /aria-label="项目信息导航"/, 'the frame keeps the removed side anchor navigation hidden')
+assert.doesNotMatch(frameMarkup, /padding-right:/, 'the complete frame does not reserve width for the removed side navigation')
 assert.match(frameMarkup, /pms-project-info-core-item--full-width[^>]*style="[^"]*grid-column:1 \/ -1/, 'full-width core fields expose a stable DOM class and span style')
 
 const embeddedMarkup = renderToStaticMarkup(React.createElement(ProjectInformationFrame, {

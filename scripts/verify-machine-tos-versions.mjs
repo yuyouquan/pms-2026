@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
+import { createCurrentDatasetStorage } from './lib/mock-dataset-storage.mjs'
 
+globalThis.window = { localStorage: createCurrentDatasetStorage() }
 const root = projectRoot(import.meta.url)
 const rules = loadTypeScriptModule(root, 'src/lib/machineTosVersions.ts')
 const projectInfoRules = loadTypeScriptModule(root, 'src/lib/projectInfoRules.ts')
 const projectStore = loadTypeScriptModule(root, 'src/stores/project.ts')
+const enumStore = loadTypeScriptModule(root, 'src/stores/enums.ts')
+enumStore.useEnumStore.setState({ hasHydrated: true, hydrationError: null })
 const roadmapStore = loadTypeScriptModule(root, 'src/stores/roadmap.ts')
 const roadmapAdapter = loadTypeScriptModule(root, 'src/lib/roadmapProjectAdapter.ts')
 
@@ -239,8 +243,12 @@ const deleteFixture = (projects, projectId, selectedProject = null) => {
   projectStore.useProjectStore.setState({ projects, selectedProject })
   const auditLogs = roadmapStore.useRoadmapStore.getState().changeLogs
   let projectStoreNotifications = 0
-  const unsubscribe = projectStore.useProjectStore.subscribe(() => {
+  const unsubscribe = projectStore.useProjectStore.subscribe(state => {
     projectStoreNotifications += 1
+    if (!state.projects.some(project => project.id === projectId)) {
+      assert.ok(state.registryHistory.some(entry => entry.projectId === projectId && entry.action === 'delete'),
+        'subscribers never observe a deleted project without its deletion history')
+    }
   })
   const deleted = projectStore.useProjectStore.getState().deleteProject(projectId, '演示用户01')
   unsubscribe()
@@ -346,6 +354,10 @@ assert.equal(arbitraryHistoryDelete.projectStoreNotifications, 1, 'arbitrary-his
 
 const validMachineFields = {
   type: '整机产品项目',
+  projectAttribute: 'formal',
+  responsiblePersons: ['演示用户01'],
+  createdBy: '演示用户01',
+  createdAt: '2026-09-15T00:00:00.000Z',
   secondaryCategory: '整机-手机',
   status: '待立项',
   androidVersion: 'Android 18',
@@ -357,9 +369,9 @@ const validMachineFields = {
 const validSourceNew = {
   ...validMachineFields,
   id: 'source-new',
-  sourceBid: 'BID-NEW',
-  name: 'SOURCE-X',
-  projectCode: 'SOURCE-X',
+  sourceBid: 'EXT-010',
+  name: 'DEMO014',
+  projectCode: 'DEMO014',
   productType: '新品',
   firstSaleTosVersion: '14.0.0',
   currentTosVersion: '14.0.0',
@@ -367,9 +379,9 @@ const validSourceNew = {
 const validSourceLegacy = {
   ...validMachineFields,
   id: 'source-old',
-  sourceBid: 'BID-OLD',
-  name: 'SOURCE-X',
-  projectCode: 'SOURCE-X',
+  sourceBid: 'EXT-011',
+  name: 'DEMO014',
+  projectCode: 'DEMO014',
   productType: '老品',
   firstSaleTosVersion: '14.0.0',
   currentTosVersion: '15.0.0',
@@ -422,7 +434,7 @@ const updateBidFixture = {
 projectStore.useProjectStore.setState({ projects: [validSourceNew, updateBidFixture], selectedProject: updateBidFixture })
 const beforeDuplicateBidUpdate = projectStore.useProjectStore.getState().projects
 assert.equal(
-  projectStore.useProjectStore.getState().updateProject(updateBidFixture.id, { sourceBid: 'BID-NEW' }, '演示用户01', { allowedFirstSaleTosValues: ['14.0.0'] }),
+  projectStore.useProjectStore.getState().updateProject(updateBidFixture.id, { sourceBid: 'EXT-010' }, '演示用户01', { allowedFirstSaleTosValues: ['14.0.0'] }),
   null,
   'updateProject rejects another project source BID',
 )
@@ -444,9 +456,6 @@ assert.equal(duplicateFamilyDelete.projectStoreNotifications, 0, 'duplicate-new 
 const configurableSnapshotProject = {
   ...validSourceNew,
   id: 'configurable-snapshot-project',
-  sourceBid: 'BID-CONFIG-SNAPSHOT',
-  name: 'CONFIG-X',
-  projectCode: 'CONFIG-X',
   versionType: '配置版本型',
   developMode: '实验室联合开发',
 }
@@ -519,9 +528,6 @@ for (const [index, configuredDevelopMode] of ['联合开发', '外研'].entries(
   const exactDevelopModeProject = {
     ...configurableSnapshotProject,
     id: `exact-develop-mode-${index}`,
-    sourceBid: `BID-EXACT-DEVELOP-${index}`,
-    name: `EXACT-DEVELOP-${index}`,
-    projectCode: `EXACT-DEVELOP-${index}`,
     developMode: configuredDevelopMode,
   }
   assert.equal(
@@ -567,7 +573,7 @@ assert.match(modalSource, /projectType\s*!==\s*PROJECT_TYPE_TOS_VERSION[\s\S]*!i
 assert.match(addSource, /deriveProjectResponsiblePersons/, 'create derives responsibility from category fields')
 assert.match(addSource, /deriveProjectTosVersion/, 'tOS create reads version from project name')
 assert.match(storeSource, /resolveMachineTosUpdate/, 'project store resolves machine families before committing')
-assert.match(storeSource, /set\(state\s*=>[\s\S]*resolution\.updates/, 'candidate and related new-machine patches share one state transaction')
+assert.match(storeSource, /set\(state\s*=>[\s\S]*applyMachineTosResolution\(state\.projects, machineResolution/, 'candidate and related new-machine patches share one state transaction')
 assert.match(fieldInputSource, /formatTosSnapshot/, 'read-only machine version fields display the tOS prefix')
 assert.match(infoSectionsSource, /formatTosSnapshot/, 'machine version information displays the tOS prefix')
 assert.match(addSource, /sourceBid:\s*payload\.bid/, 'created projects retain their external source identity')

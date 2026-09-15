@@ -660,33 +660,29 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         if (!isValidMachineProjectMutation(projectToAdd, options)) return false
         machineResolution = resolution
       }
-      if (machineResolution) {
-        const resolution = machineResolution
-        set(state => {
-          const projects = applyMachineTosResolution(state.projects, {
-            ...resolution,
-            updates: resolution.updates,
-          }, true)
-          return {
-            projects,
-            selectedProject: state.selectedProject
-              ? projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject
-              : null,
-          }
-        })
-      } else {
-        set(state => ({ projects: [...state.projects, projectToAdd] }))
-      }
+      set(state => {
+        const projects = machineResolution
+          ? applyMachineTosResolution(state.projects, machineResolution, true)
+          : [...state.projects, projectToAdd]
+        return {
+          projects,
+          selectedProject: state.selectedProject
+            ? projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject
+            : null,
+          projectMemberMap: projectToAdd.createdBy
+            ? { ...state.projectMemberMap, [projectToAdd.id]: [...(projectToAdd.responsiblePersons || [])] }
+            : state.projectMemberMap,
+          registryHistory: appendRegistryAudits(state.registryHistory, previousProjects, projects, actingUser),
+        }
+      })
       if (projectToAdd.createdBy) {
         usePermissionStore.getState().ensureProjectPermissions([projectToAdd])
-        set(state => ({ projectMemberMap: { ...state.projectMemberMap, [projectToAdd.id]: [...(projectToAdd.responsiblePersons || [])] } }))
       }
       if (projectToAdd.type === '技术项目' || projectToAdd.type === PROJECT_TYPE_TOS_VERSION) {
         const savedProject = get().projects.find(project => project.id === projectToAdd.id)
         if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
       }
       recordNormalProjectAudit('create', null, projectToAdd, actingUser)
-      set(state => ({ registryHistory: appendRegistryAudits(state.registryHistory, previousProjects, state.projects, actingUser) }))
       return true
     },
     updateProject: (projectId, update, actor, options) => {
@@ -742,33 +738,24 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       const completionBaseline = withBoundMachineBudgetMetadata(isBoundMachineBudget(projectToSave)
         ? { ...existing, boundFormalProjectId: projectToSave.boundFormalProjectId } : existing, previousProjects)
       if (!isFormalProject(projectToSave) && validateManualProjectCompletion(projectToSave, completionBaseline, useEnumStore.getState().rowsByType)) return null
-      if (machineResolution) {
-        const resolution = machineResolution
-        set(state => {
-          const projects = applyMachineTosResolution(state.projects, {
-            ...resolution,
-            updates: resolution.updates,
-          }, false)
-          return {
-            projects,
-            selectedProject: state.selectedProject
-              ? projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject
-              : null,
-          }
-        })
-      } else {
-        set(state => ({
-          projects: state.projects.map(project => project.id === projectId ? projectToSave : project),
-          selectedProject: state.selectedProject?.id === projectId ? projectToSave : state.selectedProject,
-        }))
-      }
+      set(state => {
+        const projects = machineResolution
+          ? applyMachineTosResolution(state.projects, machineResolution, false)
+          : state.projects.map(project => project.id === projectId ? projectToSave : project)
+        return {
+          projects,
+          selectedProject: state.selectedProject
+            ? projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject
+            : null,
+          registryHistory: appendRegistryAudits(state.registryHistory, previousProjects, projects, actingUser),
+        }
+      })
       if (projectToSave.type === '技术项目' || projectToSave.type === PROJECT_TYPE_TOS_VERSION
         || (hasDerivedMachineResponsibilityRoles(projectToSave) && JSON.stringify(existing.responsiblePersons || []) !== JSON.stringify(projectToSave.responsiblePersons || []))) {
         const savedProject = get().projects.find(project => project.id === projectId)
         if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)
       }
       recordNormalProjectAudit('update', existing, projectToSave, actingUser)
-      set(state => ({ registryHistory: appendRegistryAudits(state.registryHistory, previousProjects, state.projects, actingUser) }))
       return projectToSave
     },
     deleteProject: (projectId, actor) => {
@@ -807,9 +794,9 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         selectedProject: state.selectedProject?.id === projectId
           ? null
           : projects.find(project => project.id === state.selectedProject?.id) || state.selectedProject,
+        registryHistory: appendRegistryAudits(state.registryHistory, currentProjects, projects, actingUser),
       }))
       recordNormalProjectAudit('delete', existing, null, actingUser)
-      set(state => ({ registryHistory: appendRegistryAudits(state.registryHistory, currentProjects, state.projects, actingUser) }))
       return true
     },
     syncTechnicalTeamPermissionMembers: (projectId) => {

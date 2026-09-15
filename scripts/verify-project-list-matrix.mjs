@@ -143,7 +143,7 @@ assert.equal(collapsed[0].__productSeriesProjectCount, 2)
 const expected = {
   tos: ['tOS版本', '动态节点', '版本项目经理'],
   'technical-tdt': ['TDT项目名称', '子任务数', '技术赛道', 'TMG及技术领域', '子领域', '技术项目负责人', '技术项目经理', '质量代表', '产品代表', '标准化代表'],
-  'technical-subproject': ['子任务名称', '所属TDT项目名称', '核心价值', '开发模式', '首导tOS', '首导整机产品', '项目阶段', '第1版转测', '第2版转测', '第X版转测', 'TDR3'],
+  'technical-subproject': ['子任务名称', '所属TDT项目名称', '核心价值', '开发模式', '首导tOS', '首导整机产品', '第1版转测', '第2版转测', '第X版转测', 'TDR3', '动态节点'],
 }
 for (const [variant, labels] of Object.entries(expected)) {
   const columns = matrix.getProjectListMatrix(variant, { milestones: ['动态节点'] })
@@ -156,7 +156,7 @@ const machineFieldLabels = [
   '研发模式', '开发模式', '产品类型', '软件项目等级', '健康状态', '是否首发项目',
   '升级策略', '系统类型', 'Kernel版本', '是否大版本升级', '机型分类', '禁止生产时间',
   '保密级别', '安卓版本', '目标市场', '内存大小', '起步RAM', '是否二段式',
-  '是否外研Mini版本', 'JIRA项目', 'SPM', 'SPM部门（二级部门）',
+  '是否外研Mini版本', '是否粉丝试用', 'JIRA项目', 'SPM', 'SPM部门（二级部门）',
 ]
 const machineColumns = matrix.getProjectListMatrix('machine', {
   templateTasks: [
@@ -172,7 +172,7 @@ assert.deepEqual(
 assert.ok(machineColumns.every(column => column.hideable && column.reorderable))
 assert.deepEqual(
   machineColumns.filter(column => column.source !== 'templateTask' && column.defaultVisible).map(column => column.label),
-  ['品牌', '产品线', '产品系列', '项目数', '市场名', '项目名称', '项目状态', '下一个节点', '版本类型', '首销tOS版本', '当前tOS版本', '芯片编码', '研发模式', '开发模式', '软件项目等级', 'SPM', 'SPM部门（二级部门）'],
+  ['品牌', '产品线', '产品系列', '项目数', '市场名', '项目名称', '项目状态', '下一个节点', '版本类型', '首销tOS版本', '当前tOS版本', '芯片编码', '研发模式', '开发模式', '软件项目等级', '是否粉丝试用', 'SPM', 'SPM部门（二级部门）'],
 )
 const machineColumnsWithAliasedOptionalFields = matrix.getProjectListMatrix('machine', {
   templateTasks: machineColumns.filter(column => column.source === 'templateTask'),
@@ -221,7 +221,7 @@ const childMilestones = matrix.buildGroupedMilestoneColumns([
   { id: 'c2', taskName: 'TDR3', order: 2 },
 ], 'technical-subproject')
 assert.deepEqual(childMilestones.map(item => item.label), ['第1版转测', 'TDR3'])
-assert.ok(childMilestones.every(item => item.group?.color === '#f2e8ff'))
+assert.ok(childMilestones.every(item => !item.group), 'single-level child milestones remain flat without a synthetic phase header')
 
 const rows = matrix.buildTechnicalProjectListRows({
   projects: [{ id: '9', name: '端侧AI技术', type: '技术项目', status: '在研', technicalTrack: 'AI', tmg: '示例应用领域', subdomain: '示例智能技术', technicalLead: '演示用户01', technicalProjectManager: '演示用户02' }],

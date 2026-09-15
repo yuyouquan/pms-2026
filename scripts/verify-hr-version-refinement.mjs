@@ -25,9 +25,10 @@ eq(rules.allowedHrVersionUpdates({ ...project, pmsProjectId:'formal' }, versions
 eq(rules.allowedHrVersionUpdates(project, versions[2], changes), {}, 'historical annual remains read only')
 eq(rules.allowedHrVersionUpdates({ ...project, ipmProjectCode: null }, versions[1], changes), changes, 'unbound latest remains editable')
 const config = loadTypeScriptModule(root, 'src/constants/hrConfig.ts')
+const phaseValues = Object.fromEntries(config.HR_MODEL_PHASE_FIELDS.map(({ key }) => [key, 0]))
 const records = [
-  { id: 'old', projectLevel: 'S', modelVersion: 'DISABLED', enabled: false },
-  { id: 'new', projectLevel: 'A', modelVersion: 'ACTIVE', enabled: true },
+  { id: 'old', projectLevel: 'S', modelVersion: 'DISABLED', enabled: false, ...phaseValues },
+  { id: 'new', projectLevel: 'A', modelVersion: 'ACTIVE', enabled: true, ...phaseValues },
 ]
 eq(config.getAvailableHrModelSelection(records, { projectLevel: 'S', hrModelVersion: 'DISABLED' }), { projectLevel: 'A', hrModelVersion: 'ACTIVE' }, 'disabled seed falls back to an available level and model pair')
 eq(config.getAvailableHrModelSelection(records, { projectLevel: 'A', hrModelVersion: 'DELETED' }), { projectLevel: 'A', hrModelVersion: 'ACTIVE' }, 'deleted seed uses an enabled model for the retained level')

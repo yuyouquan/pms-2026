@@ -3,27 +3,26 @@
 import { useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
-  Card, Tag, Space, Input, Button, Tooltip, Empty, Segmented, Divider, Row, Col
+  Card, Tag, Space, Input, Button, Tooltip, Empty, Segmented, Divider, Row, Col, Table
 } from 'antd'
 import {
   SearchOutlined, BarChartOutlined, TableOutlined,
   UnorderedListOutlined, SettingOutlined
 } from '@ant-design/icons'
 import { PROJECT_TYPE_COLORS } from '@/data/projects'
-import {
-  TaskTable,
-  HorizontalTable,
-  GanttChart,
-  ALL_COLUMNS,
-  DEFAULT_PLAN_COLUMN_SETTINGS,
-} from '@/components/plan/PlanModule'
+import { HorizontalTable } from '@/components/plan/PlanModule'
+import { DHTMLXGantt } from '@/components/shared/PlanHelpers'
+import { buildSharedLevel1View, formatSharedPlanCell, getSharedLevel1Columns } from '@/lib/sharedPlanView'
+import { buildVisiblePlanGanttColumns } from '@/lib/planGanttRules'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import {
   getDefaultColumnSettings,
+  normalizeColumnSettings,
+  orderVisibleDefinitions,
   type SortableColumnDefinition,
   type SortableColumnSettingsValue,
 } from '@/lib/columnSettings'
-import { isMachineProjectType, PROJECT_TYPE_TECH } from '@/constants/projectTypes'
+import { isMachineProjectType, PROJECT_TYPE_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { resolveTechnicalSharePlan, useTechnicalPlanStore } from '@/stores/technicalPlan'
@@ -81,7 +80,7 @@ function SharePlanContent() {
     : (sharedPlan.ok ? sharedPlan.version : undefined)
   const [viewMode, setViewMode] = useState<'table' | 'horizontal' | 'gantt'>('table')
   const [searchText, setSearchText] = useState('')
-  const columnDefinitions: readonly SortableColumnDefinition<string>[] = ALL_COLUMNS
+  const columnDefinitions: readonly SortableColumnDefinition<string>[] = getSharedLevel1Columns(!isWholeMachine && project?.type !== PROJECT_TYPE_TOS_VERSION && project?.type !== PROJECT_TYPE_TECH)
   const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(
     () => getDefaultColumnSettings(columnDefinitions),
   )
@@ -91,6 +90,10 @@ function SharePlanContent() {
     if (isTechnicalShare) return technicalSharePlan.ok ? technicalSharePlan.version.tasks.map(task => ({ ...task })) : []
     return sharedPlan.ok ? sharedPlan.tasks : []
   }, [isTechnicalShare, technicalSharePlan, sharedPlan])
+
+  const sharedView = useMemo(() => buildSharedLevel1View(tasks, isTechnicalShare && technicalKind === 'subproject', searchText), [tasks, isTechnicalShare, technicalKind, searchText])
+  const visibleColumns = orderVisibleDefinitions(columnDefinitions, normalizeColumnSettings(columnDefinitions, columnSettings))
+  const ganttColumns = useMemo(() => buildVisiblePlanGanttColumns(visibleColumns), [visibleColumns])
 
   // Plan title
   const planTitle = isTechnicalShare
@@ -189,7 +192,7 @@ function SharePlanContent() {
                   )}
                   definitions={columnDefinitions}
                   value={columnSettings}
-                  defaultValue={DEFAULT_PLAN_COLUMN_SETTINGS}
+                  defaultValue={getDefaultColumnSettings(columnDefinitions)}
                   onCancel={() => setShowColumnModal(false)}
                   onApply={(nextSettings) => {
                     setColumnSettings(nextSettings)
@@ -217,26 +220,34 @@ function SharePlanContent() {
       <Card className="pms-solid-surface" style={{ borderRadius: 16 }} styles={{ body: { padding: 16 } }}>
         {!latestVersion && <Empty description="当前范围暂无可查看的已发布计划" />}
         {latestVersion && viewMode === 'table' && (
-          <TaskTable
-            tasks={tasks}
-            setTasks={() => {}}
-            isEditMode={false}
-            isCurrentDraft={false}
-            columnSettings={columnSettings}
-            searchText={searchText}
-            activeModule="share"
-            planLevel="level1"
-            projectPlanLevel="level1"
-            activeLevel2Plan=""
-            level2PlanTasks={[]}
-            setLevel2PlanTasks={() => {}}
+          <Table
+            className="pms-table"
+            aria-label="只读已发布计划"
+            dataSource={sharedView.rows}
+            rowKey="id"
+            pagination={false}
+            scroll={{ x: ganttColumns.reduce((width, column) => width + column.width, 0) }}
+            columns={visibleColumns.map((column, index) => ({
+              title: column.title,
+              key: column.key,
+              dataIndex: column.key,
+              fixed: column.fixed,
+              width: ganttColumns[index].width,
+              render: value => formatSharedPlanCell(column.key, value),
+            }))}
           />
         )}
         {latestVersion && viewMode === 'horizontal' && (
-          <HorizontalTable tasks={tasks} versions={[latestVersion]} />
+          <HorizontalTable tasks={sharedView.rows} versions={[latestVersion]} />
         )}
         {latestVersion && viewMode === 'gantt' && (
-          <GanttChart tasks={tasks} isEditMode={false} columnSettings={columnSettings} />
+          <DHTMLXGantt
+            tasks={sharedView.ganttTasks}
+            columns={ganttColumns}
+            readOnly
+            allowLightbox={false}
+            allowStandaloneUpdate={false}
+          />
         )}
       </Card>
     </div>

@@ -57,7 +57,7 @@ export interface HrConfigActions {
 export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
   persist(
     (set, get) => ({
-      data: { ...MOCK_CONFIG_DATA, refreshMachineModelFixtures },
+      data: { ...MOCK_CONFIG_DATA },
       editingId: null,
       showEditModal: false,
 

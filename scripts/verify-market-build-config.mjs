@@ -319,9 +319,20 @@ assert.match(legacyMarketBuildConfigSource, /buildOption:\s*legacyBuildFields\.b
 assert.match(legacyMarketBuildConfigSource, /buildMarket:\s*legacyBuildFields\.buildMarket/, 'the historical fallback must include the project build market')
 assert.doesNotMatch(legacyMarketBuildConfigSource, /\(selectedProject as any\)\.(buildOption|buildMarket)/, 'the historical fallback must avoid broad any casts')
 assert.match(projectSpaceSource, /buildMarketRowsFromMarkets\([\s\S]*legacyMarketBuildConfig[\s\S]*\)/, 'market rows must be hydrated with the historical project values')
-const wholeMachinePlanStart = projectSpaceSource.indexOf('const renderWholeMachinePlanInfo = () =>')
-const wholeMachinePlanEnd = projectSpaceSource.indexOf('const anchorSections = [', wholeMachinePlanStart)
-const wholeMachinePlanSource = projectSpaceSource.slice(wholeMachinePlanStart, wholeMachinePlanEnd)
+// Read the actual render function: unrelated cards after it may legitimately
+// contain build fields, and the old anchorSections boundary no longer exists.
+const projectSpaceAst = ts.createSourceFile(projectSpacePath, projectSpaceSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+const wholeMachinePlanDeclarations = []
+const findWholeMachinePlan = node => {
+  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === 'renderWholeMachinePlanInfo') {
+    wholeMachinePlanDeclarations.push(node)
+  }
+  ts.forEachChild(node, findWholeMachinePlan)
+}
+findWholeMachinePlan(projectSpaceAst)
+assert.equal(wholeMachinePlanDeclarations.length, 1, 'the whole-machine plan renderer must resolve to exactly one declaration')
+assert.ok(ts.isArrowFunction(wholeMachinePlanDeclarations[0].initializer), 'the whole-machine plan renderer must be a function')
+const wholeMachinePlanSource = wholeMachinePlanDeclarations[0].initializer.getText(projectSpaceAst)
 assert.match(wholeMachinePlanSource, /title=\{sectionTitle\([^\n]*'计划信息'/, 'whole-machine plan card must use the plan-information title')
 assert.doesNotMatch(wholeMachinePlanSource, /配置信息|构建信息|label="分支信息"|label="Jenkins构建"|label="版本地址"/, 'whole-machine plan view must not display build configuration')
 assert.match(projectSpaceSource, /<MarketEditorModal[\s\S]*rows=\{marketDraftRows\}/, 'market configuration editing must remain available')
@@ -339,7 +350,7 @@ assert.doesNotMatch(projectSpaceSource, /marketName:\s*selectedMarketTab/, 'leve
 assert.doesNotMatch(projectSpaceSource, /label="市场名"[\s\S]{0,120}value=\{selectedMarketTab\}/, 'the MR creation form must not display a phantom default market')
 assert.match(projectSpaceSource, /const draftDimension = isTosTypeScoped[\s\S]*isMarketScopedLevel1[\s\S]*configuredMarketName[\s\S]*isWholeMachineProject[\s\S]*'machine'/, 'machine level-two version initialization must use a stable non-market dimension')
 assert.match(projectSpaceSource, /projectPlanLevel === 'level1'[\s\S]*`market::\$\{configuredMarketName\}`[\s\S]*: 'machine'/, 'machine level-two collapse state must not be keyed by the default market tab')
-const planNavigationIndex = projectSpaceSource.indexOf('items={planTabItems.map')
+const planNavigationIndex = projectSpaceSource.indexOf('items={planTabItems}')
 const unavailableContentIndex = projectSpaceSource.indexOf('{currentPlanScopeUnavailable ? (')
 assert.equal(planNavigationIndex >= 0, true, 'the plan level navigation must remain rendered')
 assert.equal(unavailableContentIndex > planNavigationIndex, true, 'the empty-market decision must live below plan level navigation')
