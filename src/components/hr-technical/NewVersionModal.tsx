@@ -1,5 +1,7 @@
 'use client'
 
+import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
+
 import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
 
 import { canAccessHrProject, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
@@ -8,7 +10,7 @@ import { useHrResourceScope } from '@/components/project-resources/HrResourceSco
 import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
-import { HrVersionMilestoneFields, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
+import { HrVersionMilestoneRow, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
 import { useState, useEffect, useMemo } from 'react'
 import {
   Modal,
@@ -317,7 +319,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
   return (
     <Modal
       className="pms-modal pms-hr-version-modal"
-      title="新增版本"
+      title={<HrVersionModalTitle title="新增版本" projectName={project?.tdtName} />}
       open={open}
       onCancel={onCancel}
       onOk={handleOk}
@@ -325,13 +327,13 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       okButtonProps={{ disabled: !canCreateHrVersion(project, budgetType) }}
       okText="创建"
       cancelText="取消"
-      width={1280}
+      width={1560}
     >
       <div>
         {/* 表单字段 */}
         <Form layout="vertical" className="pms-hr-version-form pms-hr-version-form--technical">
-          <Form.Item label="项目" required>
-            {scopeId ? <HrReadonlyField label="项目" value={project?.tdtName} reason="当前项目空间的项目，不可切换" /> : (<Select
+          {!scopeId && <Form.Item label="项目" required>
+            <Select
                 showSearch
                 aria-label="选择项目"
                 placeholder="请选择项目"
@@ -339,8 +341,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
                 options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.tdtName }))}
                 optionFilterProp="label"
                 onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setEditData([]) }}
-              />)}
-          </Form.Item>
+              />
+          </Form.Item>}
           <Form.Item label="预算类型" required>
             <Select
               value={budgetType}
@@ -349,8 +351,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
               options={budgetOptions}
             />
           </Form.Item>
-          <HrVersionMilestoneFields category="technical" {...milestoneForm} />
         </Form>
+        <Form layout="vertical"><HrVersionMilestoneRow category="technical" {...milestoneForm} /></Form>
 
         {/* 合计提示 */}
         <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>

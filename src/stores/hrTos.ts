@@ -206,6 +206,7 @@ export interface HrTosActions {
     versionId: string,
     departmentInvestments: TosDepartmentInvestment[],
     nonLaborInvestment?: NonLaborInvestment,
+    milestones?: Partial<TosMilestoneNodes>,
   ) => void
 
   refreshFormalProjects: () => void
@@ -428,7 +429,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         }
       }),
 
-      updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments, nonLaborInvestment) => set((s) => {
+      updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments, nonLaborInvestment, milestones) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         // 计算所有部门预估投入合计
         const newEstimatedTotal = departmentInvestments.reduce(
@@ -438,14 +439,17 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
             if (v.id !== versionId || !isLatestHrVersion(p, v)) return v
+            const permittedMilestones = allowedHrVersionUpdates(p, v, { milestones }).milestones
+            const milestonesChanged = permittedMilestones && Object.entries(permittedMilestones).some(([key, value]) => v.milestones[key as keyof TosMilestoneNodes] !== value)
             return {
               ...v,
+              milestones: permittedMilestones ? { ...v.milestones, ...permittedMilestones } : v.milestones,
               nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
               estimatedInvestment: Math.round(newEstimatedTotal * 10) / 10,
               departmentInvestments,
               operationLogs: [
                 ...v.operationLogs,
-                makeLog('deptUpdated', `更新部门预估投入（共${departmentInvestments.length}条）`),
+                makeLog('deptUpdated', `更新部门预估投入（共${departmentInvestments.length}条）${milestonesChanged ? '、里程碑时间' : ''}`),
               ],
             }
           })

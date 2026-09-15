@@ -1,5 +1,7 @@
 'use client'
 
+import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
+
 import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
 
 import { canAccessHrProject, getHrAllowedBudgetTypes, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
@@ -302,7 +304,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   return (
     <Modal
       className="pms-modal pms-hr-version-modal"
-      title="新建版本"
+      title={<HrVersionModalTitle title="新建版本" projectName={project?.name} />}
       open={open}
       onOk={handleOk}
       onCancel={handleCancel}

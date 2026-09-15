@@ -18,13 +18,13 @@ const fieldsByCategory = { machine: MILESTONE_FIELDS, tos: TOS_MILESTONE_FIELDS,
 type Dates = Record<string, string | null | undefined>
 type Project = { id: string; pmsProjectId?: string; ipmProjectCode: string | null; versions: (HrVersionIdentity & { milestones?: object })[] }
 
-export function useHrVersionMilestones(category: Exclude<HrProjectCategory, 'capability'>, project: Project | undefined, budgetType: string, open: boolean) {
+export function useHrVersionMilestones(category: Exclude<HrProjectCategory, 'capability'>, project: Project | undefined, budgetType: string, open: boolean, versionId?: string) {
   const [manual, setManual] = useState<Dates>({})
   useEffect(() => {
     if (!open) return
-    const seed = project ? getHrVersionSeed(project.versions, budgetType) : undefined
+    const seed = project ? (versionId ? project.versions.find(version => version.id === versionId) : getHrVersionSeed(project.versions, budgetType)) : undefined
     setManual({ ...seed?.milestones } as Dates)
-  }, [open, project?.id, budgetType])
+  }, [open, project?.id, budgetType, versionId])
   const readOnly = isHrFormalRecord(project)
   const values = readOnly
     ? mergeHrFormalMilestones(category, resolveHrFormalSource(category, project?.ipmProjectCode ?? null, project?.pmsProjectId).milestones, manual) as Dates
@@ -46,6 +46,14 @@ export function HrVersionMilestoneFields({ category, values, readOnly, onChange 
         : <DatePicker aria-label={field.label} style={{ width: '100%' }} value={dates[field.key] ? dayjs(dates[field.key]) : null} onChange={value => onChange(field.key, value?.format('YYYY-MM-DD') ?? null)} />}
     </Form.Item>
   })}</>
+}
+
+export function HrVersionMilestoneRow(props: Parameters<typeof HrVersionMilestoneFields>[0]) {
+  return <div className="pms-hr-version-milestone-scroll" role="group" aria-label="里程碑时间">
+    <div className="pms-hr-version-row pms-hr-version-row--milestones" style={{ gridTemplateColumns: `repeat(${fieldsByCategory[props.category].length}, minmax(128px, 1fr))` }}>
+      <HrVersionMilestoneFields {...props} />
+    </div>
+  </div>
 }
 
 export function HrVersionMilestoneDetails({ category, values }: { category: HrProjectCategory; values: object }) {

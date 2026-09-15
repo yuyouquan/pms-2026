@@ -1,5 +1,7 @@
 'use client'
 
+import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
+
 import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -7,7 +9,7 @@ import { App, Form, Input, InputNumber, Modal, Select, Table, Alert } from 'antd
 import { machinePhaseFields } from '@/lib/hrMachinePeriods'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
-import { HrVersionMilestoneFields, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
+import { HrVersionMilestoneRow, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
 import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { canEditHrInScope, canAccessHrProject, getHrAllowedBudgetTypes, getHrRegistryProject, isHrFormalRecord, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
@@ -81,7 +83,7 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
     } catch (error) { message.warning(error instanceof Error ? error.message : '版本创建失败') }
   }
 
-  return <Modal className="pms-modal pms-hr-version-modal" title={editing ? "编辑版本" : "新增版本"} open={open} onCancel={onCancel} onOk={handleOk} okText={editing ? "保存" : "创建"} cancelText="取消" width={1560} okButtonProps={{ disabled: !canSave }}>
+  return <Modal className="pms-modal pms-hr-version-modal" title={<HrVersionModalTitle title={editing ? "编辑版本" : "新增版本"} projectName={project?.name} />} open={open} onCancel={onCancel} onOk={handleOk} okText={editing ? "保存" : "创建"} cancelText="取消" width={1560} okButtonProps={{ disabled: !canSave }}>
     {bound && Object.values(effectiveMetadata).some(value => !value.trim()) && <Alert type="info" showIcon style={{ marginBottom: 8 }} title="来源正式项目的品牌信息尚未补充完整，可在正式项目空间完善；仍可创建年度预算版本。" />}
     <Form layout="vertical">
       <div className="pms-hr-version-row pms-hr-version-row--metadata">
@@ -96,10 +98,8 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
       <Form.Item label="等级系数" required><InputNumber style={{ width: '100%' }} min={0} precision={2} step={0.1} value={levelCoefficient} onChange={value => setLevelCoefficient(value ?? 1)} /></Form.Item>
       <Form.Item label="人力模型版本号" required><Select value={hrModelVersion || undefined} options={getConfigModelVersions(records).map(value => ({ value, label: value }))} onChange={setHrModelVersion} /></Form.Item>
       </div>
-      <div className="pms-hr-version-row pms-hr-version-row--milestones">
-      <Form.Item label="项目">{scopeId || editing ? <HrReadonlyField label="项目" value={project?.name} reason="当前项目空间的项目，不可切换" /> : <Select showSearch aria-label="选择项目" value={localProjectId || undefined} optionFilterProp="label" options={projects.filter(item => canAccessHrProject(item, true) && getHrAllowedBudgetTypes(item).length > 0).map(item => ({ value: item.id, label: item.name, disabled: item.status !== 'active' }))} onChange={id => { setLocalProjectId(id); setBudgetType(getHrAllowedBudgetTypes(projects.find(item => item.id === id))[0] ?? 'annual') }} />}</Form.Item>
-        <HrVersionMilestoneFields category="machine" {...milestoneForm} />
-      </div>
+      {!scopeId && !editing && <div className="pms-hr-version-form"><Form.Item label="项目" required><Select showSearch aria-label="选择项目" value={localProjectId || undefined} optionFilterProp="label" options={projects.filter(item => canAccessHrProject(item, true) && getHrAllowedBudgetTypes(item).length > 0).map(item => ({ value: item.id, label: item.name, disabled: item.status !== 'active' }))} onChange={id => { setLocalProjectId(id); setBudgetType(getHrAllowedBudgetTypes(projects.find(item => item.id === id))[0] ?? 'annual') }} /></Form.Item></div>}
+      <HrVersionMilestoneRow category="machine" {...milestoneForm} />
     </Form>
     <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
     <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`预估人力投入合计：${total} 人月。`} />

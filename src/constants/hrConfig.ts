@@ -35,7 +35,7 @@ export const CONFIG_MODULES: ConfigModuleMeta[] = [
       { key: 'modelVersion', label: '模型版本号', width: 120, editable: true, inputType: 'text' },
       { key: 'primaryDepartment', label: '一级部门', width: 120, editable: true, inputType: 'text' },
       { key: 'secondaryDepartment', label: '二级部门', width: 120, editable: true, inputType: 'text' },
-      ...MACHINE_INVESTMENT_PERIODS.map(({ key, label }) => ({ key, label, width: 135, editable: true, inputType: 'number' as const, align: 'right' as const })),
+      ...MACHINE_INVESTMENT_PERIODS.map(({ key, label }) => ({ key, label, width: 135, editable: true, inputType: 'number' as const, align: 'center' as const })),
     ],
   },
 
