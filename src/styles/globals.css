@@ -420,8 +420,8 @@
   opacity: 0;
 }
 
-.pms-project-list-column-resize-handle:hover::after,
-.pms-project-list-is-resizing .pms-project-list-column-resize-handle::after {
+/* The table shell provides the single moving guide while resizing. */
+body:not(.pms-project-list-is-resizing) .pms-project-list-column-resize-handle:hover::after {
   opacity: 1;
 }
 
