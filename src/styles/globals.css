@@ -2553,7 +2553,7 @@
 
 .pms-enum-table-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: var(--pms-card-padding);
@@ -2565,15 +2565,40 @@
 }
 
 .pms-enum-table-heading .ant-typography {
-  margin: 0 0 8px !important;
+  margin: 0 !important;
   color: var(--pms-text-primary);
 }
 
-.pms-enum-row-count {
-  color: #64748b;
-  font-size: var(--pms-font-size-aux);
-  font-variant-numeric: tabular-nums;
-  line-height: var(--pms-line-height-aux);
+.pms-enum-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 12px var(--pms-card-padding);
+}
+
+.pms-enum-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pms-enum-filter-field > label {
+  flex-shrink: 0;
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-enum-filter-field > .ant-input-affix-wrapper {
+  width: 160px;
+  min-width: 100px;
+  flex: 1 1 160px;
+}
+
+.pms-enum-filter-field .ant-input-prefix {
+  color: var(--pms-text-secondary);
 }
 
 .pms-enum-table .pms-enum-sequence {
