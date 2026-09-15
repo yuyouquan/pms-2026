@@ -1,3 +1,6 @@
+import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
+import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
+import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import { canAccessHrProject, getHrRegistryProject, isHrFormalRecord, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalMachineProjects, createResourceMachineProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
@@ -160,7 +163,7 @@ export interface HrMachineActions {
   /** 绑定IPM正式项目编码 */
   bindIpmProject: (projectId: string, ipmCode: string) => void
 
-  addVersion: (projectId: string, budgetType: BudgetType, versionMeta: { projectLevel: string; levelCoefficient: number; hrModelVersion: string; milestones?: Partial<MilestoneNodes>; metadata?: { brand: string; productLine: string; marketName: string } }) => void
+  addVersion: (projectId: string, budgetType: BudgetType, versionMeta: { nonLaborInvestment?: NonLaborInvestment; projectLevel: string; levelCoefficient: number; hrModelVersion: string; milestones?: Partial<MilestoneNodes>; metadata?: { brand: string; productLine: string; marketName: string } }) => void
   deleteVersion: (projectId: string, versionId: string) => void
 
   /** 行内编辑版本数据（预估投入、里程碑、项目等级、等级系数、人力模型版本号） */
@@ -168,6 +171,8 @@ export interface HrMachineActions {
     projectId: string,
     versionId: string,
     updates: {
+      metadata?: { brand: string; productLine: string; marketName: string }
+      nonLaborInvestment?: NonLaborInvestment
       batch?: number | null
       estimatedInvestment?: number
       milestones?: Partial<MilestoneNodes>
@@ -249,6 +254,13 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       addVersion: (projectId, budgetType, versionMeta) => {
         // Validate the complete form before writing canonical metadata. Canonical writes
         // synchronously refresh HR stores, so acquire the version state only afterwards.
+        const sourceProject = get().projects.find(p => p.id === projectId)
+        if (!sourceProject || !canCreateHrVersion(sourceProject, budgetType)) {
+          if (versionMeta.metadata) throw new Error('当前项目无新建版本权限')
+          return
+        }
+        const seed = getHrVersionSeed(sourceProject.versions, budgetType)?.nonLaborInvestment
+        const nonLaborInvestment = validateNonLaborInvestment(versionMeta.nonLaborInvestment ?? cloneNonLaborInvestment(seed), useHrConfigStore.getState().data.nonLaborSubject ?? [], seed)
         if (versionMeta.metadata) {
           const project = get().projects.find(item => item.id === projectId)
           const canonical = getHrRegistryProject(project)
@@ -305,6 +317,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
             hrModelVersion: versionMeta.hrModelVersion,
             milestones,
             estimatedInvestment,
+            nonLaborInvestment,
             createdAt: new Date().toISOString(),
             lockedAt: null,
           }
@@ -333,7 +346,29 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       }),
 
 
-      updateVersion: (projectId, versionId, updates) => set((s) => {
+      updateVersion: (projectId, versionId, updates) => {
+        const project = get().projects.find(item => item.id === projectId)
+        const version = project?.versions.find(item => item.id === versionId)
+        if (!project || !version || !canAccessHrProject(project, true)) return
+        const allowed = allowedHrVersionUpdates(project, version, updates)
+        if (allowed.nonLaborInvestment) validateNonLaborInvestment(allowed.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment)
+        if (allowed.projectLevel !== undefined || allowed.levelCoefficient !== undefined || allowed.hrModelVersion !== undefined) {
+          const coefficient = allowed.levelCoefficient ?? version.levelCoefficient
+          if (!Number.isFinite(coefficient) || coefficient < 0 || !isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], allowed.projectLevel ?? version.projectLevel, allowed.hrModelVersion ?? version.hrModelVersion)) throw new Error('请选择有效的项目等级、人力模型版本号和等级系数')
+        }
+        const canonical = getHrRegistryProject(project)
+        if (allowed.metadata && canonical && !isHrFormalRecord(project) && !canonical.boundFormalProjectId) {
+          const metadata = Object.fromEntries(Object.entries(allowed.metadata).map(([key, value]) => [key, value.trim()])) as typeof allowed.metadata
+          if (Object.values(metadata).some(value => !value)) throw new Error('请填写品牌、产品线和市场名')
+          const lines = PRODUCT_LINES_BY_BRAND[metadata.brand as keyof typeof PRODUCT_LINES_BY_BRAND]
+          const retained = metadata.brand === project.brand && metadata.productLine === project.productLine
+          if (!retained && (!lines || !(lines as readonly string[]).includes(metadata.productLine))) throw new Error('请选择有效的品牌和对应产品线')
+          if (Object.entries(metadata).some(([key, value]) => canonical[key as keyof typeof metadata] !== value)) {
+            const saved = useProjectStore.getState().updateProject(canonical.id, previous => ({ ...previous, ...metadata, fieldValues: { ...previous.fieldValues, ...metadata } }))
+            if (!saved) throw new Error('项目信息保存失败，请检查字段或编辑权限')
+          }
+        }
+        set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const configRecords = useHrConfigStore.getState().data.hrModel ?? []
 
@@ -346,6 +381,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
             const updated: HrMachineVersion = {
               ...v,
+              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment) : v.nonLaborInvestment,
               batch: permitted.batch === undefined ? v.batch : permitted.batch,
               estimatedInvestment: permitted.estimatedInvestment ?? v.estimatedInvestment,
               milestones: permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones,
@@ -376,7 +412,8 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           projects: synchronizeProjects(newProjects),
           monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
         }
-      }),
+      })
+      },
 
       refreshFormalProjects: () => set((s) => {
         const reconciled = reconcileHrRegistry(s.projects, s.monthlyInvestments, 'machine', s.registryMigrationComplete)
@@ -421,7 +458,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
-        const projects = synchronizeProjects(merged.projects)
+        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects))
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
       version: 12,

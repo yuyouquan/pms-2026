@@ -151,7 +151,7 @@ await check('Forms and navigation wire shared milestones, category layouts, perm
     assert.match(source(`src/components/hr-${category}/${category === 'machine' ? 'MachineVersionDetailModal' : 'VersionDetailModal'}.tsx`), /HrVersionMilestoneDetails/)
   }
   assert.doesNotMatch(source('src/constants/hrPipeline.ts'), /key: 'config\/hr-model'/)
-  assert.match(source('src/containers/ConfigContainer.tsx'), /HR_CONFIG_CENTER_MODULES: ConfigModuleKey\[\] = \['hrModel'\]/)
+  assert.match(source('src/containers/ConfigContainer.tsx'), /HR_CONFIG_CENTER_MODULES: ConfigModuleKey\[\] = \['hrModel', 'nonLaborSubject'\]/)
   assert.match(source('src/containers/ConfigContainer.tsx'), /ariaLabel="配置分类"/)
   assert.match(source('src/containers/ConfigContainer.tsx'), /HrConfigContent key=\{selectedHrConfigModule\} moduleKey=\{selectedHrConfigModule\}/)
   assert.match(source('src/components/hr-config/ConfigTablePanel.tsx'), /canEdit \? actionColumn : \[\]/)

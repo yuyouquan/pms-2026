@@ -479,9 +479,9 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     { name: '查看组', members: ['演示用户05', '演示用户06', '演示用户08'], isFixed: true },
   ],
   globalRolePerms: {
-    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:hrModelEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'configCenter:enumEdit': true, 'permissionCenter:manageRoles': true },
-    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:hrModelEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
-    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:hrModelEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
+    '管理组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': true, 'roadmap:export': true, 'configCenter:planEdit': true, 'configCenter:hrModelEdit': true, 'configCenter:nonLaborSubjectEdit': true, 'configCenter:planPublish': true, 'configCenter:transferEdit': true, 'configCenter:enumEdit': true, 'permissionCenter:manageRoles': true },
+    '编辑组': { 'roadmap:view': true, 'roadmap:edit': true, 'roadmap:baseline': true, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:hrModelEdit': false, 'configCenter:nonLaborSubjectEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
+    '查看组': { 'roadmap:view': true, 'roadmap:edit': false, 'roadmap:baseline': false, 'roadmap:share': false, 'roadmap:export': false, 'configCenter:planEdit': false, 'configCenter:hrModelEdit': false, 'configCenter:nonLaborSubjectEdit': false, 'configCenter:planPublish': false, 'configCenter:transferEdit': false, 'configCenter:enumEdit': false, 'permissionCenter:manageRoles': false },
   },
   globalPermTab: 'roles',
   showGlobalAddRole: false,

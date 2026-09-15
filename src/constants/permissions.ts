@@ -60,6 +60,7 @@ export const GLOBAL_PERMISSION_GROUPS = [
     permissions: [
       { key: 'configCenter:planEdit', name: '计划编辑' },
       { key: 'configCenter:hrModelEdit', name: '整机人力模型编辑' },
+      { key: 'configCenter:nonLaborSubjectEdit', name: '非人力资源科目编辑' },
       { key: 'configCenter:planPublish', name: '计划发布' },
       { key: 'configCenter:transferEdit', name: '转维编辑' },
       { key: 'configCenter:enumEdit', name: '枚举值新增、修改、删除' },

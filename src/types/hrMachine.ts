@@ -1,3 +1,4 @@
+import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 /* ── HR Machine Project Types ──────────────────────────────────────── */
 
 /** 品牌 */
@@ -47,6 +48,7 @@ export interface MilestoneNodes {
 
 /** 单项目版本 */
 export interface HrMachineVersion {
+  nonLaborInvestment?: NonLaborInvestment
   id: string
   projectId: string
   /** 预算类型 */

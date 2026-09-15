@@ -7,7 +7,7 @@ export type ConfigMenuTarget =
   | { module: 'plan'; projectType: (typeof PROJECT_TEMPLATE_TYPES)[number] }
   | { module: 'transfer'; view: 'checklist' | 'review' }
   | { module: 'enum'; enumType: EnumTypeKey }
-  | { module: 'hrPipeline'; moduleKey: 'hrModel' }
+  | { module: 'hrPipeline'; moduleKey: 'hrModel' | 'nonLaborSubject' }
 
 export interface ConfigMenuLeaf {
   key: string
@@ -43,7 +43,7 @@ export const CONFIG_MENU_GROUPS: ConfigMenuGroup[] = [
   },
   {
     key: 'hrPipeline', label: '人力资源管道',
-    children: [{ key: 'hrPipeline:hrModel', label: CONFIG_MODULE_MAP.hrModel.label, target: { module: 'hrPipeline', moduleKey: 'hrModel' } }],
+    children: (['hrModel', 'nonLaborSubject'] as const).map(moduleKey => ({ key: `hrPipeline:${moduleKey}`, label: CONFIG_MODULE_MAP[moduleKey].label, target: { module: 'hrPipeline', moduleKey } })),
   },
 ]
 

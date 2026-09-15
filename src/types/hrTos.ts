@@ -1,3 +1,4 @@
+import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 /* ── HR Pipeline - tOS Project Types ───────────────────────────────── */
 
 /** 预算类型 */
@@ -91,6 +92,7 @@ export interface TosVersionOperationLog {
 
 /** 单项目版本 */
 export interface HrTosVersion {
+  nonLaborInvestment?: NonLaborInvestment
   id: string
   projectId: string
   /** 预算类型 */
@@ -201,6 +203,7 @@ export interface TosNewProjectForm {
 
 /** 新建版本表单 */
 export interface TosNewVersionForm {
+  nonLaborInvestment?: NonLaborInvestment
   milestones?: Partial<TosMilestoneNodes>
   budgetType: BudgetType
   departmentInvestments: TosDepartmentInvestment[]

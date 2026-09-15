@@ -2,6 +2,7 @@
 
 /** 配置中心模块类型 */
 export type ConfigModuleKey =
+  | 'nonLaborSubject'    // 非人力资源科目
   | 'hrModel'            // 人力模型
   | 'tosPhaseRatio'      // tOS项目阶段投入比
   | 'tosBrandAllocation' // 品牌&产品线分摊比

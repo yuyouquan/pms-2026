@@ -9002,3 +9002,12 @@ input.ant-input,
 @media (max-width: 640px) {
   .pms-project-space-editor .pms-project-info-form-grid, .pms-hr-version-row--metadata, .pms-hr-version-row--model, .pms-hr-version-row--milestones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Shared version-level non-labor investment editor. */
+.pms-non-labor-section { margin-top: 20px; }
+.pms-non-labor-section h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+.pms-non-labor-toolbar { display: flex; align-items: center; gap: 16px; justify-content: space-between; margin-bottom: 12px; }
+.pms-non-labor-toolbar > .ant-alert { flex: 1; }
+.pms-non-labor-range { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
+.pms-non-labor-section > .ant-btn { margin-top: 8px; }
+@media (max-width: 800px) { .pms-non-labor-toolbar { align-items: stretch; flex-direction: column; gap: 8px; } }

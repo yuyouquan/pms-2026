@@ -1,5 +1,7 @@
 'use client'
 
+import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
+
 import { canAccessHrProject, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
@@ -57,6 +59,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     () => projects.find(p => p.id === localProjectId),
     [projects, localProjectId],
   )
+
+  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType, project && budgetType ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined)
 
   const milestoneForm = useHrVersionMilestones('tos', project, budgetType, open)
 
@@ -300,9 +304,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
     try {
       setSubmitting(true)
-      addVersion(project.id, { budgetType, departmentInvestments: editData, milestones: milestoneForm.values })
+      addVersion(project.id, { budgetType, nonLaborInvestment: nonLabor.value, departmentInvestments: editData, milestones: milestoneForm.values })
       message.success('版本创建成功')
       onCancel()
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : '版本创建失败')
     } finally {
       setSubmitting(false)
     }
@@ -392,6 +398,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           }}
         />
 
+        <NonLaborInvestmentSection {...nonLabor} />
       </div>
 
       <style jsx global>{`

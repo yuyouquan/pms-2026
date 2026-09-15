@@ -1,11 +1,16 @@
 'use client'
 
+import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
+import { useHrConfigStore } from '@/stores/hrConfig'
+import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
+import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
+
 import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalCapabilityProjects, createResourceCapabilityProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
-import { canCreateHrVersion, allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, getHrVersionSeed, allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -138,6 +143,7 @@ interface HrCapabilityState {
   addVersion: (
     projectId: string,
     form: {
+      nonLaborInvestment?: NonLaborInvestment
       budgetType: BudgetType
       projectStartTime: string
       projectEndTime: string
@@ -149,12 +155,13 @@ interface HrCapabilityState {
   updateVersion: (
     projectId: string,
     versionId: string,
-    updates: Partial<Pick<HrCapabilityVersion, 'projectStartTime' | 'projectEndTime' | 'batch'>>,
+    updates: Partial<Pick<HrCapabilityVersion, 'projectStartTime' | 'projectEndTime' | 'batch' | 'nonLaborInvestment'>>,
   ) => void
   updateVersionDepartmentInvestments: (
     projectId: string,
     versionId: string,
     deptInvestments: CapabilityDepartmentInvestment[],
+    nonLaborInvestment?: NonLaborInvestment,
   ) => void
   refreshFormalProjects: () => void
   updateMonthlyInvestment: (monthlyId: string, monthlyData: Record<string, number>) => void
@@ -266,6 +273,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
           estimatedInvestment,
           projectStartTime: form.projectStartTime,
           projectEndTime: form.projectEndTime,
+          nonLaborInvestment: validateNonLaborInvestment(form.nonLaborInvestment ?? cloneNonLaborInvestment(getHrVersionSeed(project.versions, form.budgetType)?.nonLaborInvestment), useHrConfigStore.getState().data.nonLaborSubject ?? [], getHrVersionSeed(project.versions, form.budgetType)?.nonLaborInvestment),
           departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
           createdAt: nowISO(),
           lockedAt: null,
@@ -296,6 +304,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
 
         const newVersion: HrCapabilityVersion = {
           ...source,
+          nonLaborInvestment: cloneNonLaborInvestment(source.nonLaborInvestment),
           createdBy: useProjectStore.getState().currentLoginUser,
           id: uid('cap-ver'),
           versionNumber: `V0.${minorVersion}`,
@@ -353,18 +362,19 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
             if (version.id !== versionId) return version
             const permitted = allowedHrVersionUpdates(project, version, updates)
             if (Object.keys(permitted).length === 0) return version
+            if (permitted.nonLaborInvestment) permitted.nonLaborInvestment = validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment)
             return { ...version, ...permitted, operationLogs: [...version.operationLogs, makeLog('edited', useProjectStore.getState().currentLoginUser, permitted.batch !== undefined ? '更新批次' : '编辑版本信息')] }
           }) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
       },
 
-      updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments) => {
+      updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments, nonLaborInvestment) => {
         if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => version.id === versionId && isLatestHrVersion(project, version)
-            ? { ...version, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }
+            ? { ...version, nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment) : version.nonLaborInvestment, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }
             : version) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
@@ -440,7 +450,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
-        const projects = synchronizeProjects(merged.projects)
+        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects))
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
       onRehydrateStorage: () => (state) => {

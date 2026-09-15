@@ -1,3 +1,4 @@
+import { validateNonLaborSubjects } from '@/lib/nonLaborInvestment'
 import { hasGlobalPermission } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { create } from 'zustand'
@@ -20,7 +21,7 @@ function inheritModelVersionStatus(records: ConfigRecord[], record: ConfigRecord
   return { ...record, enabled: (group[0] ?? record).enabled !== false }
 }
 
-export const canEditHrConfig = (moduleKey: ConfigModuleKey) => moduleKey !== 'hrModel' || hasGlobalPermission(useProjectStore.getState().currentLoginUser, 'configCenter:hrModelEdit')
+export const canEditHrConfig = (moduleKey: ConfigModuleKey) => !['hrModel', 'nonLaborSubject'].includes(moduleKey) || hasGlobalPermission(useProjectStore.getState().currentLoginUser, moduleKey === 'hrModel' ? 'configCenter:hrModelEdit' : 'configCenter:nonLaborSubjectEdit')
 
 /* ── State / Actions interfaces ────────────────────────────────────── */
 
@@ -66,6 +67,11 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
           id: `cfg-${moduleKey}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           ...values,
         }
+        if (moduleKey === 'nonLaborSubject') {
+          record.secondarySubject = String(record.secondarySubject ?? '').trim()
+          record.tertiarySubject = String(record.tertiarySubject ?? '').trim()
+          validateNonLaborSubjects([...(s.data.nonLaborSubject ?? []), record])
+        }
         const newRecord = moduleKey === 'hrModel'
           ? inheritModelVersionStatus(s.data.hrModel ?? [], record)
           : record
@@ -82,6 +88,12 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       updateRecord: (moduleKey, recordId, values) => set((s) => {
         if (!canEditHrConfig(moduleKey)) return s
         const records = s.data[moduleKey] ?? []
+        if (moduleKey === 'nonLaborSubject') {
+          values = { ...values }
+          if ('secondarySubject' in values) values.secondarySubject = String(values.secondarySubject ?? '').trim()
+          if ('tertiarySubject' in values) values.tertiarySubject = String(values.tertiarySubject ?? '').trim()
+          validateNonLaborSubjects(records.map(record => record.id === recordId ? { ...record, ...values } : record))
+        }
         return {
           data: {
             ...s.data,
@@ -124,8 +136,11 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
         if (!canEditHrConfig(moduleKey)) return s
         const combined = [...(s.data[moduleKey] ?? [])]
         records.forEach(record => {
-          combined.push(moduleKey === 'hrModel' ? inheritModelVersionStatus(combined, record) : record)
+          const normalized = moduleKey === 'nonLaborSubject'
+            ? { ...record, secondarySubject: String(record.secondarySubject ?? '').trim(), tertiarySubject: String(record.tertiarySubject ?? '').trim() } : record
+          combined.push(moduleKey === 'hrModel' ? inheritModelVersionStatus(combined, normalized) : normalized)
         })
+        if (moduleKey === 'nonLaborSubject') validateNonLaborSubjects(combined)
         return { data: { ...s.data, [moduleKey]: combined } }
       }),
 
@@ -140,7 +155,8 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       partialize: state => ({ data: state.data }),
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<HrConfigState>
-        return { ...current, data: !saved.data || JSON.stringify(saved.data) === JSON.stringify(current.data) ? current.data : saved.data }
+        const data = { ...current.data, ...saved.data }
+        return { ...current, data: JSON.stringify(data) === JSON.stringify(current.data) ? current.data : data }
       },
     },
   ),

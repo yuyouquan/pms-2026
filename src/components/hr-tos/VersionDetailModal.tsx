@@ -1,5 +1,7 @@
 'use client'
 
+import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
+
 import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
 
 import { canEditHrInScope } from '@/lib/hrProjectRegistry'
@@ -46,6 +48,7 @@ export default function VersionDetailModal({
   }, [projects, projectId, versionId])
   const scopeId = useHrResourceScope()
   const readOnly = !canEditHrInScope(project, scopeId) || requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
+  const nonLabor = useNonLaborDraft(open, versionId ?? '', version?.nonLaborInvestment)
   const versionRef = useRef(version)
   versionRef.current = version
 
@@ -193,9 +196,11 @@ export default function VersionDetailModal({
   // ── 保存 ────────────────────────────────────────────────────────────
   const handleOk = () => {
     if (!project || !version || readOnly) return
-    updateVersionDepartmentInvestments(project.id, version.id, editData)
-    onCancel()
-    message.success('部门预估投入已更新')
+    try {
+      updateVersionDepartmentInvestments(project.id, version.id, editData, nonLabor.value)
+      onCancel()
+      message.success('版本预估投入已更新')
+    } catch (error) { message.warning(error instanceof Error ? error.message : '版本保存失败') }
   }
 
   const handleCancel = () => {
@@ -290,7 +295,7 @@ export default function VersionDetailModal({
 
   return (
     <Modal
-      className="pms-modal"
+      className="pms-modal pms-hr-version-modal"
       title={readOnly ? '版本详情' : '版本详情 - 部门预估投入'}
       open={open}
       onCancel={handleCancel}
@@ -309,7 +314,7 @@ export default function VersionDetailModal({
       }
       width={1280}
     >
-      <div style={{ marginTop: 16 }}>
+      <div>
         {/* 版本信息头部 */}
         <div
           style={{
@@ -350,7 +355,7 @@ export default function VersionDetailModal({
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          title={`各阶段预估投入合计：${formatPersonMonth(editTotal)}`}
+          title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`}
         />
 
         {/* 操作按钮：编辑模式下可用 添加部门 / 下载模板 / 导入 */}
@@ -393,34 +398,7 @@ export default function VersionDetailModal({
           }}
         />
 
-        {/* 合计汇总条 */}
-        <div
-          style={{
-            marginTop: 12,
-            padding: '8px 12px',
-            background: 'var(--pms-brand-surface)',
-            borderRadius: 8,
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-            <span style={{ color: 'var(--pms-text-secondary)' }}>
-              {readOnly
-                ? '部门预估投入列表合计'
-                : '编辑各阶段预估投入，合计将自动更新'}
-            </span>
-            <span>
-              <span style={{ color: 'var(--pms-text-tertiary)' }}>合计：</span>
-              <strong
-                style={{
-                  color: 'var(--pms-brand-strong)',
-                  fontSize: 14,
-                }}
-              >
-                {formatPersonMonth(editTotal)}
-              </strong>
-            </span>
-          </div>
-        </div>
+        <NonLaborInvestmentSection {...nonLabor} readOnly={readOnly} />
       </div>
 
       <style jsx global>{`

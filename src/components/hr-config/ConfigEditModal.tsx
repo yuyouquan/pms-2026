@@ -23,7 +23,7 @@ export default function ConfigEditModal({
 }: ConfigEditModalProps) {
   const actor = useProjectStore(state => state.currentLoginUser)
   const hasGlobalPermission = useHasGlobalPermission(actor)
-  const canEdit = moduleMeta.key !== 'hrModel' || hasGlobalPermission('configCenter:hrModelEdit')
+  const canEdit = !['hrModel', 'nonLaborSubject'].includes(moduleMeta.key) || hasGlobalPermission(moduleMeta.key === 'hrModel' ? 'configCenter:hrModelEdit' : 'configCenter:nonLaborSubjectEdit')
   const [form] = Form.useForm<ConfigFormValues>()
   const { message } = App.useApp()
   const { data, addRecord, updateRecord } = useHrConfigStore()
@@ -68,8 +68,9 @@ export default function ConfigEditModal({
         addRecord(moduleMeta.key, values as ConfigFormValues)
         message.success('配置已新增')
       }
-    } catch {
-      // validation error, keep modal open
+    } catch (error) {
+      if (error instanceof Error) message.warning(error.message)
+      // Form validation messages remain beside the relevant fields.
     }
   }
 
