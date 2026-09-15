@@ -8974,10 +8974,13 @@ input.ant-input,
 
 /* Compact resource version forms, with explicit machine metadata/model/milestone rows. */
 .pms-modal.pms-hr-version-modal { top: 24px; }
-.pms-modal.pms-hr-version-modal .ant-modal-header { margin-bottom: 0; }
-.pms-modal.pms-hr-version-modal .ant-modal-body { padding-top: 12px; max-height: calc(100vh - 180px); overflow-y: auto; }
-.pms-hr-version-modal .ant-form-item { margin-bottom: 12px; min-width: 0; }
+.pms-modal.pms-hr-version-modal .ant-modal-header { margin-bottom: 0; padding-block: 12px !important; }
+.pms-modal.pms-hr-version-modal.ant-modal .ant-modal-body { padding: 8px 24px 12px; max-height: calc(100vh - 180px); overflow-y: auto; }
+.pms-hr-version-modal .ant-form-item { margin-bottom: 8px; min-width: 0; }
 .pms-hr-version-modal .ant-form-item-label { padding-bottom: 4px; }
+.pms-modal.pms-hr-version-modal .ant-modal-footer { padding-block: 12px !important; }
+.pms-hr-version-modal .ant-descriptions-header { margin-bottom: 8px; }
+.pms-hr-investment-section-title { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
 .pms-hr-readonly-field, .pms-hr-readonly-field input { cursor: not-allowed; }
 .pms-hr-readonly-field__icon { opacity: 0; color: var(--pms-text-secondary); }
 .pms-hr-readonly-field:hover .pms-hr-readonly-field__icon,
@@ -9004,9 +9007,9 @@ input.ant-input,
 }
 
 /* Shared version-level non-labor investment editor. */
-.pms-non-labor-section { margin-top: 20px; }
-.pms-non-labor-section h3 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
-.pms-non-labor-summary { margin-bottom: 12px; }
+.pms-non-labor-section { margin-top: 12px; }
+.pms-non-labor-section h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.pms-non-labor-summary { margin-bottom: 8px; }
 .pms-non-labor-toolbar { display: flex; align-items: center; gap: 16px; justify-content: space-between; }
 .pms-non-labor-range { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
 .pms-non-labor-section > .ant-btn { margin-top: 8px; }

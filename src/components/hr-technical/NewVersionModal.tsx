@@ -246,7 +246,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       title: f.label,
       key: f.key,
       width: 130,
-      align: 'right' as const,
+      align: 'left' as const,
       render: (_value: unknown, record: TechDepartmentInvestment) => (
         <InputNumber
           value={record[f.key] as number}
@@ -262,7 +262,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       title: '预估投入合计',
       key: 'estimatedInvestment',
       width: 120,
-      align: 'right' as const,
+      align: 'left' as const,
       render: (_value: unknown, record: TechDepartmentInvestment) => (
         <span style={{ fontWeight: 600 }}>
           {formatPersonMonth(Number(record.estimatedInvestment) || 0)}
@@ -274,7 +274,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       key: 'action',
       fixed: 'right' as const,
       width: 80,
-      align: 'center' as const,
+      align: 'left' as const,
       render: (_value: unknown, record: TechDepartmentInvestment) => (
         <Button type="text" aria-label="删除" title="删除"
           danger
@@ -353,10 +353,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         </Form>
 
         {/* 合计提示 */}
+        <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 12 }}
+          style={{ marginBottom: 8 }}
           title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`}
         />
 

@@ -190,7 +190,7 @@ export default function VersionDetailModal({
         title: '预估投入（人月）',
         key: 'estimatedInvestment',
         width: 150,
-        align: 'right' as const,
+        align: 'left' as const,
         render: (_value: unknown, record: CapabilityDepartmentInvestment) =>
           readOnly ? (
             <span style={{ fontWeight: 600 }}>
@@ -215,7 +215,7 @@ export default function VersionDetailModal({
         key: 'action',
         fixed: 'right' as const,
         width: 80,
-        align: 'center' as const,
+        align: 'left' as const,
         render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
           <Button type="text" aria-label="删除" title="删除"
             danger
@@ -252,7 +252,7 @@ export default function VersionDetailModal({
         {/* 版本信息头部 */}
         <div
           style={{
-            marginBottom: 12,
+            marginBottom: 8,
             display: 'flex',
             gap: 24,
             fontSize: 12,
@@ -267,15 +267,16 @@ export default function VersionDetailModal({
           <span>预估投入：<strong style={{ color: 'var(--pms-text-primary)' }}>{formatPersonMonth(version.estimatedInvestment)}</strong></span>
         </div>
 
+        <HrVersionMilestoneDetails category="capability" values={version} />
+
         {/* 合计提示 */}
+        <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 12 }}
+          style={{ marginBottom: 8 }}
           title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`}
         />
-
-        <HrVersionMilestoneDetails category="capability" values={version} />
 
         {/* 操作按钮 */}
         {!readOnly && (

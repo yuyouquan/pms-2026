@@ -100,7 +100,8 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
         <HrVersionMilestoneFields category="machine" {...milestoneForm} />
       </div>
     </Form>
-    <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`预估人力投入合计：${total} 人月。`} />
+    <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
+    <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`预估人力投入合计：${total} 人月。`} />
     <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={departments} pagination={false} size="small" scroll={{ x: 1130 }} locale={{ emptyText: '当前项目等级与模型版本无可用部门配置' }} />
     <NonLaborInvestmentSection {...nonLabor} />
   </Modal>

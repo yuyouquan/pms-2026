@@ -78,7 +78,7 @@ export default function MachineVersionDetailModal({
       title: f.label,
       key: f.key,
       width: 100,
-      align: 'right',
+      align: 'left',
       render: (_v: unknown, record: DeptPhaseRow) => (
         <span style={{ fontWeight: 500 }}>{formatPersonMonth(record.phases[f.key])}</span>
       ),
@@ -106,7 +106,7 @@ export default function MachineVersionDetailModal({
         title: '预估投入合计',
         key: 'total',
         width: 120,
-        align: 'right',
+        align: 'left',
         render: (_v: unknown, r: DeptPhaseRow) => (
           <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>
             {formatPersonMonth(r.total)}
@@ -123,7 +123,7 @@ export default function MachineVersionDetailModal({
 
   return (
     <Modal
-      className="pms-modal"
+      className="pms-modal pms-hr-version-modal"
       open={open}
       title="版本预估投入详情"
       width={1280}
@@ -137,7 +137,7 @@ export default function MachineVersionDetailModal({
             size="small"
             column={4}
             bordered
-            style={{ marginBottom: 16 }}
+            style={{ marginBottom: 12 }}
             items={[
               { key: 'projectName', label: '项目名称', children: project.name },
               { key: 'versionNumber', label: '版本号', children: version.versionNumber },
@@ -163,6 +163,7 @@ export default function MachineVersionDetailModal({
 
         <HrVersionMilestoneDetails category="machine" values={version.milestones} />
 
+          <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
           {version.modelSnapshot ? <Table<DeptPhaseRow>
             className="pms-table pms-hr-investment-table"
             rowKey="id"
@@ -179,7 +180,7 @@ export default function MachineVersionDetailModal({
                     <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>合计</span>
                   </Table.Summary.Cell>
                   {PHASE_FIELDS.map((f) => (
-                    <Table.Summary.Cell key={f.key} index={2 + PHASE_FIELDS.indexOf(f)} align="right">
+                    <Table.Summary.Cell key={f.key} index={2 + PHASE_FIELDS.indexOf(f)} align="left">
                       <span style={{ fontWeight: 600 }}>
                         {formatPersonMonth(
                           Math.round(
@@ -189,7 +190,7 @@ export default function MachineVersionDetailModal({
                       </span>
                     </Table.Summary.Cell>
                   ))}
-                  <Table.Summary.Cell index={8} align="right">
+                  <Table.Summary.Cell index={8} align="left">
                     <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>
                       {formatPersonMonth(grandTotal)}
                     </span>

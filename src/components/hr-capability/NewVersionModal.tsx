@@ -269,7 +269,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       title: '预估投入（人月）',
       key: 'estimatedInvestment',
       width: 150,
-      align: 'right' as const,
+      align: 'left' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
         <InputNumber
           value={record.estimatedInvestment}
@@ -286,7 +286,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       key: 'action',
       fixed: 'right' as const,
       width: 80,
-      align: 'center' as const,
+      align: 'left' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
         <Button type="text" aria-label="删除" title="删除"
           danger
@@ -358,7 +358,8 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
           </div>
         </Form>
 
-        <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`} />
+        <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
+        <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`} />
 
         {/* 操作按钮 */}
         <div style={{ marginBottom: 8 }}>
