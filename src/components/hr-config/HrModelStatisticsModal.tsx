@@ -17,18 +17,18 @@ const columns: ColumnsType<HrModelStatistic> = [
   { title: '项目等级', dataIndex: 'projectLevel', key: 'projectLevel', width: 80, render: value => value || '-' },
   {
     title: '状态', dataIndex: 'status', key: 'status', width: 110,
-    render: (status: HrModelStatistic['status']) => (
+    render: (status: HrModelStatistic['status'], row: HrModelStatistic) => (
       <Tag color={status === 'enabled' ? 'green' : status === 'mixed' ? 'orange' : 'default'}>
-        {status === 'enabled' ? '启用' : status === 'disabled' ? '禁用' : '状态不一致'}
+        {row.hasLegacyModels ? '待配置新区间' : status === 'enabled' ? '启用' : status === 'disabled' ? '禁用' : '状态不一致'}
       </Tag>
     ),
   },
-  { title: '部门记录数', dataIndex: 'recordCount', key: 'recordCount', width: 100, align: 'right' },
+  { title: '部门记录数', dataIndex: 'recordCount', key: 'recordCount', width: 135, align: 'right' },
   ...HR_MODEL_STATISTIC_PHASES.map(({ key, label }) => ({
-    title: label, dataIndex: key, key, width: 100, align: 'right' as const,
-    render: (value: number) => value.toFixed(1),
+    title: label, dataIndex: key, key, width: 135, align: 'right' as const,
+    render: (value: number, row: HrModelStatistic) => row.hasLegacyModels ? '—' : value.toFixed(1),
   })),
-  { title: '合计', dataIndex: 'total', key: 'total', width: 100, align: 'right', render: (value: number) => <strong>{value.toFixed(1)}</strong> },
+  { title: '合计', dataIndex: 'total', key: 'total', width: 135, align: 'right', render: (value: number) => <strong>{value.toFixed(1)}</strong> },
 ]
 
 export default function HrModelStatisticsModal({ open, records, onCancel }: HrModelStatisticsModalProps) {
@@ -44,7 +44,7 @@ export default function HrModelStatisticsModal({ open, records, onCancel }: HrMo
         columns={columns}
         dataSource={summaries}
         size="small"
-        scroll={{ x: 1110 }}
+        scroll={{ x: 1400 }}
         pagination={{ pageSize: 10, showSizeChanger: true, showTotal: total => `共 ${total} 组` }}
       />
     </Modal>

@@ -4,6 +4,7 @@ import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/projec
 
 import { useEffect, useMemo, useState } from 'react'
 import { App, Form, Input, InputNumber, Modal, Select, Table, Alert } from 'antd'
+import { machinePhaseFields } from '@/lib/hrMachinePeriods'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { HrVersionMilestoneFields, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
@@ -14,7 +15,7 @@ import { canCreateHrVersion, isLatestHrVersion, getHrVersionSeed, nextHrMinorVer
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import { BUDGET_TYPES } from '@/constants/hrMachine'
-import { calcMachineDepartmentInvestments, isHrModelAvailable, getAvailableHrModelSelection, getConfigProjectLevels, getConfigModelVersions, HR_MODEL_PHASE_FIELDS } from '@/constants/hrConfig'
+import { calcMachineDepartmentInvestments, isHrModelAvailable, getAvailableHrModelSelection, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 import type { BudgetType } from '@/types/hrMachine'
 
 export default function NewVersionModal({ open, projectId, versionId, onCancel }: { open: boolean; projectId: string; versionId?: string; onCancel: () => void }) {
@@ -64,7 +65,7 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
   const columns = [
     { title: '一级部门', dataIndex: 'primaryDepartment', width: 140 },
     { title: '二级部门', dataIndex: 'secondaryDepartment', width: 140 },
-    ...HR_MODEL_PHASE_FIELDS.map(field => ({ title: field.label, key: field.key, width: 120, align: 'center' as const, render: (_: unknown, row: typeof departments[number]) => row.phases[field.key] })),
+    ...machinePhaseFields(previewRecords.filter(row => row.enabled !== false && String(row.projectLevel) === effectiveProjectLevel && String(row.modelVersion) === hrModelVersion)).map(field => ({ title: field.label, key: field.key, width: 145, align: 'center' as const, render: (_: unknown, row: typeof departments[number]) => row.phases[field.key] ?? '—' })),
     { title: '预估投入合计', dataIndex: 'estimatedTotal', width: 130, align: 'center' as const },
   ]
   const budgetOptions = BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value))
@@ -102,7 +103,7 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
     </Form>
     <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
     <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`预估人力投入合计：${total} 人月。`} />
-    <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={departments} pagination={false} size="small" scroll={{ x: 1130 }} locale={{ emptyText: '当前项目等级与模型版本无可用部门配置' }} />
+    <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={departments} pagination={false} size="small" scroll={{ x: columns.reduce((sum, column) => sum + column.width, 0) }} locale={{ emptyText: '当前项目等级与模型版本无可用部门配置' }} />
     <NonLaborInvestmentSection {...nonLabor} />
   </Modal>
 }

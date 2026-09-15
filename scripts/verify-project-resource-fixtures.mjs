@@ -48,8 +48,10 @@ for(let i=0;i<4;i++)check(`${categories[i]}: published own dates, annual history
    for(const [key,value] of Object.entries(formalSource.milestones)) {
     if(!manualKeys.includes(key)) assert.equal(v.milestones[key],value,'formal plan-owned mock dates match published source')
    }
-   assert.equal(v.milestones[manualKeys[0]],v.minorVersion===1?'2027-10-01':'2027-11-01','mock formal ending demonstrates manual version data')
-   assert.equal(v.milestones[manualKeys[1]],'2028-03-01')
+   if(cat==='tos') {
+    assert.equal(v.milestones[manualKeys[0]],v.minorVersion===1?'2027-10-01':'2027-11-01','mock formal ending demonstrates manual version data')
+    assert.equal(v.milestones[manualKeys[1]],'2028-03-01')
+   } else assert.equal(v.milestones.str5Plus6Months,load('src/lib/hrMachinePeriods.ts').withMachineDerivedMilestones(v.milestones).str5Plus6Months)
   } else assert.deepEqual(date(cat,v),cat==='capability'?[formalSource.projectStartTime,formalSource.projectEndTime]:formalSource.milestones)
  }
  if(cat==='tos') for(const v of b.versions) for(const key of ['cdcp','str2','str4','str4a']) assert.ok(v.milestones[key],'budget mocks include new milestones')

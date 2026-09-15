@@ -1,10 +1,27 @@
-import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
+import type { NonLaborInvestment, NonLaborInvestmentItem } from '@/types/nonLaborInvestment'
 import type { ConfigRecord } from '@/types/hrConfig'
 
 export const emptyNonLaborInvestment = (): NonLaborInvestment => ({ startMonth: null, endMonth: null, items: [] })
 export const cloneNonLaborInvestment = (value?: NonLaborInvestment): NonLaborInvestment => value
-  ? { ...value, items: value.items.map(item => ({ ...item, monthlyAmounts: { ...item.monthlyAmounts } })) }
+  ? { ...value, items: value.items.map(item => ({ ...item, secondaryDepartment: item.secondaryDepartment ?? '', tertiaryDepartment: item.tertiaryDepartment ?? '', monthlyAmounts: { ...item.monthlyAmounts } })) }
   : emptyNonLaborInvestment()
+
+export const nonLaborItemKey = (item: Pick<NonLaborInvestmentItem, 'secondaryDepartment' | 'tertiaryDepartment' | 'secondarySubject' | 'tertiarySubject'>): string =>
+  JSON.stringify([item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject].map(value => (value ?? '').trim()))
+
+export function nonLaborDepartmentPairs(records: readonly ConfigRecord[]) {
+  const pairs = new Map<string, { secondaryDepartment: string; tertiaryDepartment: string }>()
+  for (const row of records) {
+    const secondaryDepartment = String(row.secondaryDepartment ?? '').trim()
+    const tertiaryDepartment = String(row.tertiaryDepartment ?? '').trim()
+    if (row.enabled !== false && secondaryDepartment && tertiaryDepartment) {
+      pairs.set(JSON.stringify([secondaryDepartment, tertiaryDepartment]), { secondaryDepartment, tertiaryDepartment })
+    }
+  }
+  return [...pairs.values()]
+}
+
+export const formatNonLaborAmount = (amount: number): string => amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 function monthIndex(value: string | null): number | null {
   if (!value || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) return null
@@ -23,25 +40,37 @@ export const nonLaborTotal = (value: NonLaborInvestment): number => {
   const months = nonLaborMonths(value)
   return Math.round(value.items.reduce((sum, item) => sum + months.reduce((n, month) => n + (item.monthlyAmounts[month] ?? 0), 0), 0) * 100) / 100
 }
-export function validateNonLaborInvestment(value: NonLaborInvestment, subjects: readonly ConfigRecord[], previous?: NonLaborInvestment): NonLaborInvestment {
+export function validateNonLaborInvestment(value: NonLaborInvestment, subjects: readonly ConfigRecord[], previous?: NonLaborInvestment, departmentRecords: readonly ConfigRecord[] = []): NonLaborInvestment {
   const result = cloneNonLaborInvestment(value)
   if (!result.startMonth && !result.endMonth && result.items.length === 0) return result
   const months = nonLaborMonths(result)
   if (!months.length) throw new Error('请选择有效的非人力投入时间范围')
   const keys = new Set<string>(), ids = new Set<string>()
+  const departments = nonLaborDepartmentPairs(departmentRecords)
   for (const item of result.items) {
-    const key = item.secondarySubject.trim() + '\u0000' + item.tertiarySubject.trim()
-    if (keys.has(key)) throw new Error('同一版本中不能重复选择相同科目')
+    item.secondaryDepartment = item.secondaryDepartment.trim()
+    item.tertiaryDepartment = item.tertiaryDepartment.trim()
+    item.secondarySubject = item.secondarySubject.trim()
+    item.tertiarySubject = item.tertiarySubject.trim()
+    const key = nonLaborItemKey(item)
+    if (keys.has(key)) throw new Error('同一版本中的二级部门、三级部门、二级科目和三级科目组合不能重复')
     keys.add(key)
     if (!item.id || ids.has(item.id)) throw new Error('非人力投入行标识重复')
     ids.add(item.id)
+    const matchesDepartment = (row: Pick<NonLaborInvestmentItem, 'secondaryDepartment' | 'tertiaryDepartment'>) =>
+      row.secondaryDepartment === item.secondaryDepartment && row.tertiaryDepartment === item.tertiaryDepartment
+    const retainedDepartment = previous?.items.some(row => row.id === item.id && matchesDepartment(row))
+    if (!item.secondaryDepartment || !item.tertiaryDepartment || (!departments.some(matchesDepartment) && !retainedDepartment)) {
+      throw new Error('请选择有效的二级部门和对应三级部门')
+    }
     const matches = (row: { subjectId?: string; id: string; secondarySubject?: unknown; tertiarySubject?: unknown }) =>
       (row.subjectId ?? row.id) === item.subjectId && row.secondarySubject === item.secondarySubject && row.tertiarySubject === item.tertiarySubject
     const active = subjects.some(row => row.enabled !== false && matches(row))
     const retained = previous?.items.some(row => row.id === item.id && matches(row))
     if (!item.secondarySubject.trim() || !item.tertiarySubject.trim() || (!active && !retained)) throw new Error('请选择有效的二级科目和对应三级科目')
     for (const [month, amount] of Object.entries(item.monthlyAmounts)) {
-      if (!Number.isFinite(amount) || amount < 0) throw new Error('非人力投入必须为非负数')
+      if (!Number.isFinite(amount) || amount < 0) throw new Error('非人力投入金额必须为非负数')
+      if (Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) throw new Error('非人力投入金额最多保留两位小数')
       if (!months.includes(month)) throw new Error('投入月份不能超出所选时间范围')
     }
   }

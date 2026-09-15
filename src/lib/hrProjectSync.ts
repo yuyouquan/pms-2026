@@ -1,3 +1,4 @@
+import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import { isHrFormalRecord, synchronizeHrRegistryRecord } from '@/lib/hrProjectRegistry'
 import { resolveHrFormalSource, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import { mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
@@ -40,6 +41,7 @@ export function synchronizeHrProjects<T extends SyncProject>(
         next.milestones = mergeHrFormalMilestones(category, source.milestones, version.milestones)
         if (category === 'machine') next.projectLevel = source.projectLevel
       }
+      if (category === 'machine') next.milestones = withMachineDerivedMilestones(next.milestones ?? {})
       if (category === 'machine' && calculateMachineInvestment) {
         next.estimatedInvestment = calculateMachineInvestment(next.projectLevel || '', next.hrModelVersion || '', next.levelCoefficient ?? 1)
       }

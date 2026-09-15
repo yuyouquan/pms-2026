@@ -9091,7 +9091,7 @@ input.ant-input,
 .pms-hr-version-row { display: grid; gap: 0 12px; }
 .pms-hr-version-row--metadata { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .pms-hr-version-row--model { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.pms-hr-version-row--milestones { grid-template-columns: repeat(10, minmax(0, 1fr)); column-gap: 8px; }
+.pms-hr-version-row--milestones { grid-template-columns: repeat(9, minmax(0, 1fr)); column-gap: 8px; }
 .pms-hr-version-row--milestones .ant-form-item-label > label { font-size: 12px; white-space: nowrap; }
 .pms-hr-version-row--milestones .ant-form-item-label > label::after { display: none; }
 .pms-hr-version-row--milestones .ant-input-affix-wrapper,
@@ -9115,7 +9115,7 @@ input.ant-input,
 .pms-non-labor-summary { margin-bottom: 8px; }
 .pms-non-labor-toolbar { display: flex; align-items: center; gap: 16px; justify-content: space-between; }
 .pms-non-labor-range { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
-.pms-non-labor-section > .ant-btn { margin-top: 8px; }
+.pms-non-labor-actions { margin-bottom: 8px; }
 @media (max-width: 800px) { .pms-non-labor-toolbar { align-items: stretch; flex-direction: column; gap: 8px; } }
 
 
@@ -9162,3 +9162,12 @@ input.ant-input,
 .pms-project-resource-tabs :is(.pms-hr-machine-tab-bar, .pms-hr-tos-tab-bar, .pms-hr-tech-tab-bar):empty {
   display: none;
 }
+
+/* Version milestone labels and values share one centered, horizontally scrollable row. */
+.pms-hr-milestone-details { margin-bottom: 12px; }
+.pms-hr-milestone-details-scroll { overflow-x: auto; border: 1px solid var(--pms-brand-border); border-radius: 12px; }
+.pms-hr-milestone-details dl { display: grid; margin: 0; }
+.pms-hr-milestone-details dl > div { border-right: 1px solid var(--pms-brand-border); }
+.pms-hr-milestone-details dl > div:last-child { border-right: 0; }
+.pms-hr-milestone-details dt, .pms-hr-milestone-details dd { margin: 0; padding: 8px 6px; text-align: center; white-space: nowrap; }
+.pms-hr-milestone-details dt { background: var(--pms-brand-surface); color: var(--pms-text-secondary); }

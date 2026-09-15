@@ -1,3 +1,4 @@
+import { MACHINE_INVESTMENT_PERIODS, LEGACY_MACHINE_PHASES, isCurrentMachineModel, withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import { roundHrMonthlyAllocation } from '@/lib/hrMonthlyRounding'
 /* ── HR Pipeline Configuration Center Constants ─────────────────────── */
 
@@ -34,12 +35,7 @@ export const CONFIG_MODULES: ConfigModuleMeta[] = [
       { key: 'modelVersion', label: '模型版本号', width: 120, editable: true, inputType: 'text' },
       { key: 'primaryDepartment', label: '一级部门', width: 120, editable: true, inputType: 'text' },
       { key: 'secondaryDepartment', label: '二级部门', width: 120, editable: true, inputType: 'text' },
-      { key: 'conceptPhase', label: '概念阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
-      { key: 'planningPhase', label: '计划阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
-      { key: 'developmentPhase', label: '开发阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
-      { key: 'validationPhase', label: '验证阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
-      { key: 'launchPhase', label: '上市阶段', width: 100, editable: true, inputType: 'number', align: 'right' },
-      { key: 'lifecycle', label: '生命周期阶段', width: 120, editable: true, inputType: 'number', align: 'right' },
+      ...MACHINE_INVESTMENT_PERIODS.map(({ key, label }) => ({ key, label, width: 135, editable: true, inputType: 'number' as const, align: 'right' as const })),
     ],
   },
 
@@ -152,8 +148,8 @@ export function resolveConfigModule(leafKey: string): ConfigModuleKey | null {
 /* ── 配置中心 → 整机产品项目联动函数 ───────────────────────────────── */
 
 /** 配置中心阶段字段 key 列表 */
-export const HR_MODEL_PHASE_FIELDS = ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'].map((label, index) => ({ label, key: ['conceptPhase', 'planningPhase', 'developmentPhase', 'validationPhase', 'launchPhase', 'lifecycle'][index] }))
-const HR_MODEL_PHASE_KEYS = ['conceptPhase', 'planningPhase', 'developmentPhase', 'validationPhase', 'launchPhase', 'lifecycle'] as const
+export const HR_MODEL_PHASE_FIELDS = MACHINE_INVESTMENT_PERIODS
+const modelPhaseKeys = (row: ConfigRecord) => (isCurrentMachineModel(row) ? MACHINE_INVESTMENT_PERIODS : LEGACY_MACHINE_PHASES).map(field => field.key)
 
 /**
  * 从配置中心 hrModel 数据中提取去重的项目等级列表（仅启用记录）
@@ -161,7 +157,7 @@ const HR_MODEL_PHASE_KEYS = ['conceptPhase', 'planningPhase', 'developmentPhase'
 export function getConfigProjectLevels(records: ConfigRecord[]): string[] {
   const levels = new Set<string>()
   records.forEach(r => {
-    if (r.enabled === false) return
+    if (r.enabled === false || !isCurrentMachineModel(r)) return
     const level = r.projectLevel
     if (level !== null && level !== undefined && level !== '') {
       levels.add(String(level))
@@ -176,7 +172,7 @@ export function getConfigProjectLevels(records: ConfigRecord[]): string[] {
 export function getConfigModelVersions(records: ConfigRecord[]): string[] {
   const versions = new Set<string>()
   records.forEach(r => {
-    if (r.enabled === false) return
+    if (r.enabled === false || !isCurrentMachineModel(r)) return
     const ver = r.modelVersion
     if (ver !== null && ver !== undefined && ver !== '') {
       versions.add(String(ver))
@@ -187,16 +183,15 @@ export function getConfigModelVersions(records: ConfigRecord[]): string[] {
 
 /** 新建版本只能使用仍启用、且覆盖所选项目等级的模型。 */
 export function isHrModelAvailable(records: ConfigRecord[], projectLevel: string, modelVersion: string): boolean {
-  return Boolean(projectLevel && modelVersion) && records.some(record =>
-    record.enabled !== false && String(record.projectLevel) === projectLevel && String(record.modelVersion) === modelVersion,
-  )
+  const matched = records.filter(record => record.enabled !== false && String(record.projectLevel) === projectLevel && String(record.modelVersion) === modelVersion)
+  return Boolean(projectLevel && modelVersion) && matched.length > 0 && matched.every(isCurrentMachineModel)
 }
 
 export function getAvailableHrModelSelection(
   records: ConfigRecord[],
   seed?: { projectLevel: string; hrModelVersion: string },
 ): { projectLevel: string; hrModelVersion: string } {
-  const available = records.filter(record => record.enabled !== false && record.projectLevel && record.modelVersion)
+  const available = records.filter(record => record.enabled !== false && record.projectLevel && record.modelVersion && isHrModelAvailable(records, String(record.projectLevel), String(record.modelVersion)))
   const selected = available.find(record => String(record.projectLevel) === seed?.projectLevel && String(record.modelVersion) === seed?.hrModelVersion)
     ?? available.find(record => String(record.projectLevel) === seed?.projectLevel)
     ?? available[0]
@@ -216,7 +211,7 @@ export function calcModelSum(
   return records
     .filter(r => r.enabled !== false && String(r.projectLevel) === projectLevel && String(r.modelVersion) === modelVersion)
     .reduce((sum, r) => {
-      return sum + HR_MODEL_PHASE_KEYS.reduce((phaseSum, key) => phaseSum + (Number(r[key]) || 0), 0)
+      return sum + modelPhaseKeys(r).reduce((phaseSum, key) => phaseSum + (Number(r[key]) || 0), 0)
     }, 0)
 }
 
@@ -250,7 +245,7 @@ interface PhaseDef {
 }
 
 /** 六个阶段的定义 */
-const PHASE_DEFS: PhaseDef[] = [
+const LEGACY_PHASE_DEFS: PhaseDef[] = [
   { label: '概念阶段', startField: 'conceptStart', endField: 'str1', configKey: 'conceptPhase' },
   { label: '计划阶段', startField: 'str1', endField: 'str3', configKey: 'planningPhase' },
   { label: '开发阶段', startField: 'str3', endField: 'str4', configKey: 'developmentPhase' },
@@ -278,8 +273,8 @@ function addDays(dateStr: string, days: number): string {
 /** 某个阶段在指定月份内的天数 */
 function daysInMonth(monthKey: string, phaseStart: string, phaseEnd: string): number {
   const [year, month] = monthKey.split('-').map(Number)
-  const monthStart = new Date(year, month - 1, 1)
-  const monthEnd = new Date(year, month, 0) // last day of month
+  const monthStart = new Date(Date.UTC(year, month - 1, 1))
+  const monthEnd = new Date(Date.UTC(year, month, 0)) // last day of month
 
   const pStart = new Date(phaseStart)
   const pEnd = new Date(phaseEnd)
@@ -297,14 +292,15 @@ export function calcMachineDepartmentInvestments(records: ConfigRecord[], projec
   const matched = records.filter(record => record.enabled !== false
     && String(record.projectLevel) === projectLevel && String(record.modelVersion) === modelVersion)
   const rawTotals = Object.fromEntries(matched.map((record, index) => [String(index),
-    HR_MODEL_PHASE_KEYS.reduce((sum, key) => sum + (Number(record[key]) || 0), 0) * coefficient,
+    modelPhaseKeys(record).reduce((sum, key) => sum + (Number(record[key]) || 0), 0) * coefficient,
   ]))
   const totals = roundHrMonthlyAllocation(rawTotals, Object.values(rawTotals).reduce((sum, value) => sum + value, 0))
   return matched.map((record, index) => {
     const estimatedTotal = totals[String(index)] ?? 0
-    const rawPhases = Object.fromEntries(HR_MODEL_PHASE_KEYS.map(key => [key, (Number(record[key]) || 0) * coefficient]))
+    const rawPhases = Object.fromEntries(modelPhaseKeys(record).map(key => [key, (Number(record[key]) || 0) * coefficient]))
     return {
       id: record.id,
+      currentSchema: isCurrentMachineModel(record),
       primaryDepartment: String(record.primaryDepartment ?? ''),
       secondaryDepartment: String(record.secondaryDepartment ?? ''),
       phases: roundHrMonthlyAllocation(rawPhases, estimatedTotal),
@@ -351,8 +347,11 @@ export function calcDepartmentMonthlySplit(
     const monthlyData: Record<string, number> = {}
     let totalForDept = 0
 
-    for (const phase of PHASE_DEFS) {
-      const startVal = milestones[phase.startField]
+    const dates = department.currentSchema ? withMachineDerivedMilestones(milestones) : milestones
+    const phases: PhaseDef[] = department.currentSchema
+      ? MACHINE_INVESTMENT_PERIODS.map(period => ({ ...period, configKey: period.key })) : LEGACY_PHASE_DEFS
+    for (const phase of phases) {
+      const startVal = dates[phase.startField]
       if (!startVal) continue
 
       let phaseDays: number
@@ -365,7 +364,7 @@ export function calcDepartmentMonthlySplit(
         phaseStart = startVal
         phaseEnd = addDays(startVal, 179) // 180 days inclusive
       } else {
-        const endVal = milestones[phase.endField]
+        const endVal = dates[phase.endField]
         if (!endVal) continue
         phaseDays = calcDaysInclusive(startVal, endVal)
         if (phaseDays <= 0) continue
@@ -386,13 +385,13 @@ export function calcDepartmentMonthlySplit(
 
       let current = new Date(phaseStart)
       while (current <= new Date(phaseEnd)) {
-        const monthKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`
+        const monthKey = `${current.getUTCFullYear()}-${String(current.getUTCMonth() + 1).padStart(2, '0')}`
         const days = daysInMonth(monthKey, phaseStart, phaseEnd)
         if (days > 0) {
           monthlyData[monthKey] = (monthlyData[monthKey] || 0) + Math.round(dailyRate * days * 100) / 100
         }
         // Move to next month
-        current = new Date(current.getFullYear(), current.getMonth() + 1, 1)
+        current = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1))
       }
 
       totalForDept += phaseInvestment
@@ -419,6 +418,17 @@ function makeId(module: string, idx: number): string {
   return `cfg-${module}-${idx}`
 }
 
+export const LEGACY_MOCK_HR_MODELS: ConfigRecord[] = [
+    { id: makeId('hrModel', 1), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 8, developmentPhase: 18, validationPhase: 10, launchPhase: 8, lifecycle: 3 },
+    { id: makeId('hrModel', 2), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 3, planningPhase: 5, developmentPhase: 12, validationPhase: 7, launchPhase: 5, lifecycle: 2 },
+    { id: makeId('hrModel', 3), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '硬件部', secondaryDepartment: '结构部', conceptPhase: 2, planningPhase: 2, developmentPhase: 5, validationPhase: 3, launchPhase: 2, lifecycle: 0 },
+    { id: makeId('hrModel', 4), enabled: true, projectLevel: 'A', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 10, developmentPhase: 15, validationPhase: 13, launchPhase: 5, lifecycle: 3 },
+    { id: makeId('hrModel', 5), enabled: true, projectLevel: 'A', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 5, planningPhase: 10, developmentPhase: 15, validationPhase: 12, launchPhase: 5, lifecycle: 2 },
+    { id: makeId('hrModel', 6), enabled: true, projectLevel: 'B', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 8, planningPhase: 10, developmentPhase: 13, validationPhase: 13, launchPhase: 5, lifecycle: 3 },
+    { id: makeId('hrModel', 7), enabled: true, projectLevel: 'C', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 8, planningPhase: 13, developmentPhase: 13, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
+    { id: makeId('hrModel', 8), enabled: true, projectLevel: 'D', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 10, planningPhase: 13, developmentPhase: 10, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
+  ]
+
 export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
   nonLaborSubject: [
     { id: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票', enabled: true },
@@ -428,16 +438,14 @@ export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
     { id: 'non-labor-travel-meals', secondarySubject: '差旅费', tertiarySubject: '出差补贴', enabled: true },
     { id: 'non-labor-office-supplies', secondarySubject: '办公费', tertiarySubject: '办公耗材', enabled: true },
   ],
-  hrModel: [
-    { id: makeId('hrModel', 1), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 8, developmentPhase: 18, validationPhase: 10, launchPhase: 8, lifecycle: 3 },
-    { id: makeId('hrModel', 2), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 3, planningPhase: 5, developmentPhase: 12, validationPhase: 7, launchPhase: 5, lifecycle: 2 },
-    { id: makeId('hrModel', 3), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '硬件部', secondaryDepartment: '结构部', conceptPhase: 2, planningPhase: 2, developmentPhase: 5, validationPhase: 3, launchPhase: 2, lifecycle: 0 },
-    { id: makeId('hrModel', 4), enabled: true, projectLevel: 'A', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 10, developmentPhase: 15, validationPhase: 13, launchPhase: 5, lifecycle: 3 },
-    { id: makeId('hrModel', 5), enabled: true, projectLevel: 'A', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 5, planningPhase: 10, developmentPhase: 15, validationPhase: 12, launchPhase: 5, lifecycle: 2 },
-    { id: makeId('hrModel', 6), enabled: true, projectLevel: 'B', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 8, planningPhase: 10, developmentPhase: 13, validationPhase: 13, launchPhase: 5, lifecycle: 3 },
-    { id: makeId('hrModel', 7), enabled: true, projectLevel: 'C', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 8, planningPhase: 13, developmentPhase: 13, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
-    { id: makeId('hrModel', 8), enabled: true, projectLevel: 'D', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 10, planningPhase: 13, developmentPhase: 10, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
-  ],
+  hrModel: LEGACY_MOCK_HR_MODELS.map(row => ({
+    id: row.id, enabled: row.enabled, projectLevel: row.projectLevel, modelVersion: row.modelVersion,
+    primaryDepartment: row.primaryDepartment, secondaryDepartment: row.secondaryDepartment,
+    conceptToStr1: Number(row.conceptPhase), str1ToStr2: Number(row.planningPhase) / 2,
+    str2ToStr3: Number(row.planningPhase) / 2, str3ToStr4: Number(row.developmentPhase),
+    str4ToStr4a: Number(row.validationPhase) / 2, str4aToStr5: Number(row.validationPhase) / 2,
+    str5ToSixMonths: Number(row.launchPhase) + Number(row.lifecycle),
+  })),
   tosPhaseRatio: [
     { id: makeId('tosPhaseRatio', 1), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', planningPhase: 8, conceptPhase: 10, planningPhase2: 15, developmentValidationPhase: 50, marketIterationPhase: 10, maintenancePhase: 7 },
     { id: makeId('tosPhaseRatio', 2), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: '框架组', planningPhase: 5, conceptPhase: 6, planningPhase2: 10, developmentValidationPhase: 35, marketIterationPhase: 7, maintenancePhase: 5 },
@@ -667,4 +675,14 @@ export function calcTechDepartmentMonthlySplit(
   }
 
   return results
+}
+
+/** Refresh only untouched shipped models; manually configured values remain in their original schema. */
+export function refreshMachineModelFixtures(records: ConfigRecord[]): ConfigRecord[] {
+  return records.map(row => {
+    const original = LEGACY_MOCK_HR_MODELS.find(item => item.id === row.id)
+    if (isCurrentMachineModel(row) || !original || Object.keys(original).some(key => key !== 'enabled' && row[key] !== original[key])) return row
+    const refreshed = MOCK_CONFIG_DATA.hrModel.find(item => item.id === row.id)!
+    return { ...refreshed, enabled: row.enabled }
+  })
 }
