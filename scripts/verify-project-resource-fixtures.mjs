@@ -23,7 +23,7 @@ let checks=0
 const check=(label,fn)=>{fn();checks++;console.log('PASS '+label)}
 for(const store of stores) store.getState().refreshFormalProjects()
 check('fresh registry has deterministic provenance, four types, three attributes and valid single-source ownership',()=>{
- assert.equal(MOCK_DATASET_VERSION,'2026-09-08-v1')
+ assert.equal(MOCK_DATASET_VERSION,'2026-09-15-v1')
  const projects=registry.getState().projects
  assert.equal(new Set(projects.map(p=>p.id)).size,projects.length)
  for(const p of projects){assert.ok(p.createdBy&&p.createdAt&&p.responsiblePersons.length);assert.ok(types.includes(p.type));assert.ok(['formal','budget','roadmap'].includes(p.projectAttribute))}

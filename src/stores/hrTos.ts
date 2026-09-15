@@ -6,7 +6,8 @@ import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLates
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import type {
   HrTosProject,
   HrTosVersion,
@@ -480,6 +481,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       },
     }),
     {
+      storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-tos',
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>

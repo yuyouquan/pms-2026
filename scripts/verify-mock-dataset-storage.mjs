@@ -51,6 +51,11 @@ function load(window) {
 
 const localKeys = [
   'pms-projects',
+  'pms-hr-config',
+  'pms-hr-machine',
+  'pms-hr-tos',
+  'pms-hr-technical',
+  'pms-hr-capability',
   'pms-project-permissions',
   'pms-plan-store',
   'pms-enum-values',

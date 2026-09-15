@@ -6,7 +6,8 @@ import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLates
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import type {
   HrTechnicalProject,
   HrTechnicalVersion,
@@ -485,6 +486,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
       },
     }),
     {
+      storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-technical',
       migrate: (persistedState: unknown, fromVersion: number) => {
         const s = (persistedState ?? {}) as Record<string, unknown>

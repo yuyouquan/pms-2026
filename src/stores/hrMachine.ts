@@ -5,7 +5,8 @@ import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLates
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { createJSONStorage, persist } from 'zustand/middleware'
+import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import type {
   HrMachineProject,
   HrMachineVersion,
@@ -415,6 +416,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       },
     }),
     {
+      storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-machine',
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
