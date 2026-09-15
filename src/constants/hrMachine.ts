@@ -1,3 +1,4 @@
+import { MACHINE_INVESTMENT_PERIODS } from '@/lib/hrMachinePeriods'
 /* ── HR Machine Project Constants ──────────────────────────────────── */
 
 import type {
@@ -91,8 +92,7 @@ export const MILESTONE_FIELDS = [
   { key: 'str4', label: 'STR4' },
   { key: 'str4a', label: 'STR4A' },
   { key: 'str5', label: 'STR5' },
-  { key: 'productLaunch', label: '上市结束' },
-  { key: 'lifecycleEnd', label: '生命周期结束' },
+  { key: 'str5Plus6Months', label: 'STR5+6个月' },
 ] as const
 
 /** 项目列表列定义 */
@@ -125,8 +125,7 @@ export const VERSION_LIST_COLUMNS = [
   { key: 'str4', label: 'STR4', width: 120 },
   { key: 'str4a', label: 'STR4A', width: 120 },
   { key: 'str5', label: 'STR5', width: 120 },
-  { key: 'productLaunch', label: '上市结束', width: 120 },
-  { key: 'lifecycleEnd', label: '生命周期结束', width: 130 },
+  { key: 'str5Plus6Months', label: 'STR5+6个月', width: 130 },
   { key: 'budgetType', label: '预算类型', width: 100 },
   { key: 'versionNumber', label: '版本号', width: 100 },
   { key: 'versionLock', label: '版本锁定', width: 100 },
@@ -143,13 +142,7 @@ export const MONTHLY_INVESTMENT_COLUMNS = [
 ]
 
 /** 阶段拆分规则 */
-export const PHASE_SPLIT_RULES = [
-  { phase: 'concept', startField: 'conceptStart', endField: 'str1', label: '概念阶段' },
-  { phase: 'planning', startField: 'str1', endField: 'str3', label: '计划阶段' },
-  { phase: 'development', startField: 'str3', endField: 'str4', label: '开发阶段' },
-  { phase: 'validation', startField: 'str4', endField: 'str5', label: '验证阶段' },
-  { phase: 'launch', startField: 'str5', endField: 'productLaunch', label: '上市阶段' },
-] as const
+export const PHASE_SPLIT_RULES = MACHINE_INVESTMENT_PERIODS.map(({ key, ...period }) => ({ ...period, phase: key }))
 
 /** 默认筛选器（空数组表示不筛选） */
 export const DEFAULT_PROJECT_FILTERS = {

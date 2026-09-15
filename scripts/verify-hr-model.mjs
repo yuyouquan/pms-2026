@@ -1,15 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
-import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
-
-const root = projectRoot(import.meta.url)
-const memory = new Map()
-globalThis.localStorage = {
-  getItem: key => memory.get(key) ?? null,
-  setItem: (key, value) => memory.set(key, value),
-  removeItem: key => memory.delete(key),
-}
-const load = relative => loadTypeScriptModule(root, relative)
+import { createTypeScriptModuleLoader } from './lib/typescript-module-loader.mjs'
+import { createCurrentDatasetStorage } from './lib/mock-dataset-storage.mjs'
+globalThis.localStorage = createCurrentDatasetStorage()
+globalThis.window = { localStorage }
+const load = createTypeScriptModuleLoader()
 let assertions = 0
 const eq = (actual, expected, message) => { assert.deepEqual(actual, expected, message); assertions += 1 }
 const { useHrConfigStore: store } = load('src/stores/hrConfig.ts')
@@ -80,15 +75,15 @@ eq(options.getSecondaryOptions('不存在'), [], 'unknown primaries have no seco
 
 const { summarizeHrModels } = load('src/lib/hrModelStatistics.ts')
 const stats = summarizeHrModels([
-  { id: 's1', modelVersion: 'V1', projectLevel: 'S', enabled: true, conceptPhase: 0.1, planningPhase: 1.1, developmentPhase: 2.1, validationPhase: 3.1, launchPhase: 4.1, lifecycle: 5.1 },
-  { id: 's2', modelVersion: 'V1', projectLevel: 'S', enabled: true, conceptPhase: 0.2, planningPhase: 1.2, developmentPhase: 2.2, validationPhase: 3.2, launchPhase: 4.2, lifecycle: 5.2 },
-  { id: 'a1', modelVersion: 'V1', projectLevel: 'A', enabled: true, conceptPhase: 1, planningPhase: 2, developmentPhase: 3, validationPhase: 4, launchPhase: 5, lifecycle: 6 },
-  { id: 'v2s', modelVersion: 'V2', projectLevel: 'S', enabled: false, conceptPhase: 10, planningPhase: 20, developmentPhase: 30, validationPhase: 40, launchPhase: 50, lifecycle: 60 },
+  { id: 's1', modelVersion: 'V1', projectLevel: 'S', enabled: true, conceptToStr1: 0.1, str1ToStr2: 1.1, str2ToStr3: 2.1, str3ToStr4: 3.1, str4ToStr4a: 4.1, str4aToStr5: 5.1, str5ToSixMonths: 6.1 },
+  { id: 's2', modelVersion: 'V1', projectLevel: 'S', enabled: true, conceptToStr1: 0.2, str1ToStr2: 1.2, str2ToStr3: 2.2, str3ToStr4: 3.2, str4ToStr4a: 4.2, str4aToStr5: 5.2, str5ToSixMonths: 6.2 },
+  { id: 'a1', modelVersion: 'V1', projectLevel: 'A', enabled: true, conceptToStr1: 1, str1ToStr2: 2, str2ToStr3: 3, str3ToStr4: 4, str4ToStr4a: 5, str4aToStr5: 6, str5ToSixMonths: 7 },
+  { id: 'v2s', modelVersion: 'V2', projectLevel: 'S', enabled: false, conceptToStr1: 10, str1ToStr2: 20, str2ToStr3: 30, str3ToStr4: 40, str4ToStr4a: 50, str4aToStr5: 60, str5ToSixMonths: 70 },
 ])
 eq(stats.map(row => [row.modelVersion, row.projectLevel]), [['V1', 'S'], ['V1', 'A'], ['V2', 'S']], 'statistics group by model version and project level')
-eq([stats[0].conceptPhase, stats[0].planningPhase, stats[0].developmentPhase, stats[0].validationPhase, stats[0].launchPhase, stats[0].lifecycle, stats[0].total], [0.3, 2.3, 4.3, 6.3, 8.3, 10.3, 31.8], 'all six phases and total sum every department without floating artifacts')
-eq(stats[1].total, 21, 'another project level has an independent total')
-eq([stats[2].status, stats[2].total], ['disabled', 210], 'disabled model versions remain included with their status')
+eq([stats[0].conceptToStr1, stats[0].str1ToStr2, stats[0].str2ToStr3, stats[0].str3ToStr4, stats[0].str4ToStr4a, stats[0].str4aToStr5, stats[0].str5ToSixMonths, stats[0].total], [0.3, 2.3, 4.3, 6.3, 8.3, 10.3, 12.3, 44.1], 'all seven periods and total sum every department without floating artifacts')
+eq(stats[1].total, 28, 'another project level has an independent total')
+eq([stats[2].status, stats[2].total], ['disabled', 280], 'disabled model versions remain included with their status')
 eq(stats[0].recordCount, 2, 'statistics expose the full department row count')
 const unnamedStats = summarizeHrModels([{ id: 'legacy-1', modelVersion: '', projectLevel: 'S', conceptPhase: 1 }, { id: 'legacy-2', modelVersion: '', projectLevel: 'S', conceptPhase: 2 }])
 eq(unnamedStats.map(row => [row.modelVersion, row.projectLevel, row.total]), [['', 'S', 3]], 'statistics group legacy empty values by the same version and level fields')

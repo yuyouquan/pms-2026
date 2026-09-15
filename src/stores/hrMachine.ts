@@ -1,3 +1,4 @@
+import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
@@ -24,7 +25,7 @@ import {
   DEFAULT_PROJECT_FILTERS,
   DEFAULT_HISTORY_VERSION_FILTERS,
 } from '@/constants/hrMachine'
-import { calcEstimatedInvestment, calcDepartmentMonthlySplit, type DepartmentMonthlySplit } from '@/constants/hrConfig'
+import { calcEstimatedInvestment, refreshMachineModelFixtures, calcDepartmentMonthlySplit, type DepartmentMonthlySplit } from '@/constants/hrConfig'
 import { useProjectStore } from '@/stores/project'
 import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import { isHrModelAvailable } from '@/constants/hrConfig'
@@ -42,6 +43,7 @@ function emptyMilestones(): MilestoneNodes {
     str4: null,
     str4a: null,
     str5: null,
+    str5Plus6Months: null,
     productLaunch: null,
     lifecycleEnd: null,
   }
@@ -105,7 +107,9 @@ function getLatestVersions(project: HrMachineProject): HrMachineVersion[] {
 
 function synchronizeProjects(projects: HrMachineProject[]): HrMachineProject[] {
   const records = useHrConfigStore.getState().data.hrModel ?? []
-  return synchronizeHrProjects(projects, 'machine', (level, model, coefficient) => calcEstimatedInvestment(records, level, model, coefficient))
+  const prepared = projects.map(project => ({ ...project, versions: project.versions.map(version => version.modelSnapshot
+    ? { ...version, modelSnapshot: refreshMachineModelFixtures(version.modelSnapshot) } : version) }))
+  return synchronizeHrProjects(prepared, 'machine', (level, model, coefficient) => calcEstimatedInvestment(records, level, model, coefficient))
     .map(project => ({ ...project, versions: project.versions.map(version => isLatestHrVersion(project, version)
       ? { ...version, modelSnapshot: records.filter(row => row.enabled !== false
         && String(row.projectLevel) === version.projectLevel && String(row.modelVersion) === version.hrModelVersion).map(row => ({ ...row })) }
@@ -259,6 +263,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           if (versionMeta.metadata) throw new Error('当前项目无新建版本权限')
           return
         }
+        if (!isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], versionMeta.projectLevel, versionMeta.hrModelVersion)) throw new Error('请选择已配置七个区间的启用整机人力模型')
         const seed = getHrVersionSeed(sourceProject.versions, budgetType)?.nonLaborInvestment
         const nonLaborInvestment = validateNonLaborInvestment(versionMeta.nonLaborInvestment ?? cloneNonLaborInvestment(seed), useHrConfigStore.getState().data.nonLaborSubject ?? [], seed, useHrConfigStore.getState().data.techModuleDept ?? [])
         if (versionMeta.metadata) {
@@ -298,9 +303,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           const minorVersion = nextHrMinorVersion(p.versions, budgetType)
 
           // 里程碑：从最新版本复制，若无则空
-          const milestones: MilestoneNodes = { ...emptyMilestones(), ...latest?.milestones, ...versionMeta.milestones }
-          // Only existing legacy versions retain the missing-field allocation rule.
-          milestones.lifecycleEnd ??= null
+          const milestones: MilestoneNodes = withMachineDerivedMilestones({ ...emptyMilestones(), ...latest?.milestones, ...versionMeta.milestones })
 
           const newVersion: HrMachineVersion = {
             id: `${projectId}-${budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -384,7 +387,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
               nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
               batch: permitted.batch === undefined ? v.batch : permitted.batch,
               estimatedInvestment: permitted.estimatedInvestment ?? v.estimatedInvestment,
-              milestones: permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones,
+              milestones: withMachineDerivedMilestones(permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones),
               projectLevel: permitted.projectLevel ?? v.projectLevel,
               levelCoefficient: permitted.levelCoefficient ?? v.levelCoefficient,
               hrModelVersion: permitted.hrModelVersion ?? v.hrModelVersion,

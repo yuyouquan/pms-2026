@@ -5,7 +5,7 @@ import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import type { ConfigModuleKey, ConfigRecord, ConfigFormValues } from '@/types/hrConfig'
-import { MOCK_CONFIG_DATA } from '@/constants/hrConfig'
+import { MOCK_CONFIG_DATA, refreshMachineModelFixtures } from '@/constants/hrConfig'
 
 /** An empty version identifies only its own row, never an unnamed batch. */
 export function getHrModelVersionGroup(records: ConfigRecord[], record: ConfigRecord): ConfigRecord[] {
@@ -57,7 +57,7 @@ export interface HrConfigActions {
 export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
   persist(
     (set, get) => ({
-      data: { ...MOCK_CONFIG_DATA },
+      data: { ...MOCK_CONFIG_DATA, refreshMachineModelFixtures },
       editingId: null,
       showEditModal: false,
 
@@ -156,6 +156,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<HrConfigState>
         const data = { ...current.data, ...saved.data }
+        data.hrModel = refreshMachineModelFixtures(data.hrModel ?? [])
         return { ...current, data: JSON.stringify(data) === JSON.stringify(current.data) ? current.data : data }
       },
     },

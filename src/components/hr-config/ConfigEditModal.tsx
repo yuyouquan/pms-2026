@@ -1,5 +1,6 @@
 'use client'
 
+import { isCurrentMachineModel, LEGACY_MACHINE_PHASES } from '@/lib/hrMachinePeriods'
 import { useEffect, useMemo, useRef } from 'react'
 import { App, Modal, Form, Input, InputNumber, Select, Row, Col } from 'antd'
 import type { ConfigModuleMeta, ConfigFormValues } from '@/types/hrConfig'
@@ -82,10 +83,14 @@ export default function ConfigEditModal({
       onOk={handleOk}
       onCancel={onCancel}
       destroyOnHidden
-      width={isHrModel ? 1120 : 560}
+      width={isHrModel ? 1280 : 560}
       okText="确定"
       cancelText="取消"
     >
+      {isHrModel && editingRecord && !isCurrentMachineModel(editingRecord) && <details style={{ marginBottom: 12 }}>
+        <summary>原阶段投入（保留原值，供重新配置参考）</summary>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>{LEGACY_MACHINE_PHASES.map(field => <span key={field.key}>{field.label}：{String(editingRecord[field.key] ?? 0)}</span>)}</div>
+      </details>}
       <Form form={form} layout="vertical" style={isHrModel ? undefined : { marginTop: 16 }}>
         {(isHrModel ? [moduleMeta.columns.slice(0, 4), moduleMeta.columns.slice(4)] : [moduleMeta.columns]).map((columns, groupIndex) => <Row key={groupIndex} gutter={12}>
           {columns.map(col => {
@@ -93,7 +98,7 @@ export default function ConfigEditModal({
             const isSecondaryDepartment = isHrModel && col.key === 'secondaryDepartment'
             const isSelection = col.inputType === 'select' || isPrimaryDepartment || isSecondaryDepartment
             return (
-              <Col key={col.key} xs={24} sm={isHrModel ? 12 : 24} md={isHrModel ? 8 : 24} lg={isHrModel ? (groupIndex === 0 ? 6 : 4) : 24}>
+              <Col key={col.key} xs={24} sm={isHrModel ? 12 : 24} md={isHrModel ? 8 : 24} lg={isHrModel ? (groupIndex === 0 ? 6 : undefined) : 24} flex={isHrModel && groupIndex === 1 ? '1 1 0' : undefined}>
                 <Form.Item
                   name={col.key}
                   label={col.label}

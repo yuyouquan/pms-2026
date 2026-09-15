@@ -1,5 +1,7 @@
 'use client'
 
+import { withMachineDerivedMilestones, machinePhaseFields } from '@/lib/hrMachinePeriods'
+
 import NewVersionModal from '@/components/hr-machine/NewVersionModal'
 
 import { getMachineProjectYear } from '@/lib/hrVersionRules'
@@ -68,16 +70,6 @@ interface FlatVersionRow extends HrMachineVersion {
   projectStatus: HrMachineProject['status']
 }
 
-/** 配置中心人力模型阶段字段 */
-const PHASE_FIELDS = [
-  { key: 'conceptPhase', label: '概念阶段' },
-  { key: 'planningPhase', label: '计划阶段' },
-  { key: 'developmentPhase', label: '开发阶段' },
-  { key: 'validationPhase', label: '验证阶段' },
-  { key: 'launchPhase', label: '上市阶段' },
-  { key: 'lifecycle', label: '生命周期' },
-] as const
-
 /** Sheet2 行：配置中心人力模型数据 × 等级系数 */
 interface Sheet2Row {
   projectName: string
@@ -85,12 +77,7 @@ interface Sheet2Row {
   budgetTypeLabel: string
   primaryDepartment: string
   secondaryDepartment: string
-  conceptPhase: number
-  planningPhase: number
-  developmentPhase: number
-  validationPhase: number
-  launchPhase: number
-  lifecycle: number
+  phases: Record<string, number>
   total: number
 }
 
@@ -352,8 +339,8 @@ export default function HistoryVersionSpace() {
       align: 'center',
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
-          value={record.milestones[field.key] ?? null}
-          editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.machine.includes(field.key))}
+          value={withMachineDerivedMilestones(record.milestones)[field.key] ?? null}
+          editable={field.key !== 'str5Plus6Months' && record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.machine.includes(field.key))}
           onSave={(v) =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<MilestoneNodes>,
@@ -562,7 +549,7 @@ export default function HistoryVersionSpace() {
       ...MILESTONE_FIELDS.map((f) => ({
         key: f.key,
         title: f.label,
-        formatter: (_v: unknown, row: FlatVersionRow) => row.milestones[f.key] ?? '',
+        formatter: (_v: unknown, row: FlatVersionRow) => withMachineDerivedMilestones(row.milestones)[f.key] ?? '',
       })),
       {
         key: 'createdBy',
@@ -579,7 +566,7 @@ export default function HistoryVersionSpace() {
     // Sheet2: 配置中心人力模型数据 × 等级系数
     const sheet2Rows: Sheet2Row[] = []
     for (const version of filteredVersions) {
-      const departments = calcMachineDepartmentInvestments(hrModelRecords, version.projectLevel, version.hrModelVersion, version.levelCoefficient)
+      const departments = calcMachineDepartmentInvestments(version.modelSnapshot ?? [], version.projectLevel, version.hrModelVersion, version.levelCoefficient)
       for (const department of departments) {
         const { phases } = department
         sheet2Rows.push({
@@ -588,27 +575,23 @@ export default function HistoryVersionSpace() {
           budgetTypeLabel: BUDGET_TYPE_LABELS[version.budgetType],
           primaryDepartment: department.primaryDepartment,
           secondaryDepartment: department.secondaryDepartment,
-          conceptPhase: phases.conceptPhase,
-          planningPhase: phases.planningPhase,
-          developmentPhase: phases.developmentPhase,
-          validationPhase: phases.validationPhase,
-          launchPhase: phases.launchPhase,
-          lifecycle: phases.lifecycle,
+          phases,
           total: department.estimatedTotal,
         })
       }
     }
 
+    const exportPhases = [...new Map(filteredVersions.flatMap(version => machinePhaseFields(version.modelSnapshot ?? [])).map(field => [field.key, field])).values()]
     const sheet2Columns: ExportColumn[] = [
       { key: 'projectName', title: '项目名称', formatter: (_v, row: Sheet2Row) => row.projectName },
       { key: 'versionNumber', title: '版本号', formatter: (_v, row: Sheet2Row) => row.versionNumber },
       { key: 'budgetTypeLabel', title: '预算类型', formatter: (_v, row: Sheet2Row) => row.budgetTypeLabel },
       { key: 'primaryDepartment', title: '一级部门', formatter: (_v, row: Sheet2Row) => row.primaryDepartment },
       { key: 'secondaryDepartment', title: '二级部门', formatter: (_v, row: Sheet2Row) => row.secondaryDepartment },
-      ...PHASE_FIELDS.map((f) => ({
+      ...exportPhases.map((f) => ({
         key: f.key,
         title: f.label,
-        formatter: (_v: unknown, row: Sheet2Row) => row[f.key],
+        formatter: (_v: unknown, row: Sheet2Row) => row.phases[f.key] ?? '',
       })),
       { key: 'total', title: '预估投入合计', formatter: (_v, row: Sheet2Row) => row.total },
     ]

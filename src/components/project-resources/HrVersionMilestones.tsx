@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { DatePicker, Descriptions, Form } from 'antd'
+import { DatePicker, Form } from 'antd'
 import dayjs from 'dayjs'
+import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import { MILESTONE_FIELDS } from '@/constants/hrMachine'
 import { TOS_MILESTONE_FIELDS } from '@/constants/hrTos'
 import { TECH_MILESTONE_FIELDS } from '@/constants/hrTechnical'
@@ -34,10 +35,11 @@ export function useHrVersionMilestones(category: Exclude<HrProjectCategory, 'cap
 export function HrVersionMilestoneFields({ category, values, readOnly, onChange }: {
   category: HrProjectCategory; values: object; readOnly: boolean; onChange: (key: string, value: string | null) => void
 }) {
-  const dates = values as Dates
+  const dates = (category === 'machine' ? withMachineDerivedMilestones(values) : values) as Dates
   return <>{fieldsByCategory[category].map(field => {
-    const locked = readOnly && !HR_MANUAL_MILESTONE_KEYS[category].includes(field.key)
-    const reason = locked ? '来源于本项目最新已发布一级计划，空日期等待计划发布' : readOnly
+    const derived = category === 'machine' && field.key === 'str5Plus6Months'
+    const locked = derived || (readOnly && !HR_MANUAL_MILESTONE_KEYS[category].includes(field.key))
+    const reason = derived ? '根据 STR5 自动加 6 个自然月，不可编辑' : locked ? '来源于本项目最新已发布一级计划，空日期等待计划发布' : readOnly
       ? '手工维护，不随一级计划同步' : '预算项目独立维护，绑定正式项目后仍保留手工日期'
     return <Form.Item key={field.key} label={field.label} tooltip={reason}>
       {locked ? <HrReadonlyField label={field.label} value={dates[field.key]} reason={reason} />
@@ -47,6 +49,13 @@ export function HrVersionMilestoneFields({ category, values, readOnly, onChange 
 }
 
 export function HrVersionMilestoneDetails({ category, values }: { category: HrProjectCategory; values: object }) {
-  const dates = values as Dates
-  return <Descriptions title="里程碑信息" bordered size="small" column={3} style={{ marginBottom: 12 }} items={fieldsByCategory[category].map(field => ({ key: field.key, label: field.label, children: dates[field.key] || '—' }))} />
+  const dates = (category === 'machine' ? withMachineDerivedMilestones(values) : values) as Dates
+  return <section className="pms-hr-milestone-details" aria-label="里程碑信息">
+    <h3 className="pms-hr-investment-section-title">里程碑信息</h3>
+    <div className="pms-hr-milestone-details-scroll">
+      <dl style={{ gridTemplateColumns: `repeat(${fieldsByCategory[category].length}, minmax(94px, 1fr))` }}>
+        {fieldsByCategory[category].map(field => <div key={field.key}><dt>{field.label}</dt><dd>{dates[field.key] || '—'}</dd></div>)}
+      </dl>
+    </div>
+  </section>
 }

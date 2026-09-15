@@ -5,6 +5,7 @@ import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
 
 import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
 
+import { machinePhaseFields } from '@/lib/hrMachinePeriods'
 import { useMemo } from 'react'
 import { Alert, Modal, Table, Tag, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -15,16 +16,6 @@ import {
   BUDGET_TYPE_COLORS,
   formatPersonMonth,
 } from '@/constants/hrMachine'
-
-/** 配置中心阶段字段定义（与 hrConfig 中 HR_MODEL_PHASE_KEYS 一致） */
-const PHASE_FIELDS = [
-  { key: 'conceptPhase', label: '概念阶段' },
-  { key: 'planningPhase', label: '计划阶段' },
-  { key: 'developmentPhase', label: '开发阶段' },
-  { key: 'validationPhase', label: '验证阶段' },
-  { key: 'launchPhase', label: '上市阶段' },
-  { key: 'lifecycle', label: '生命周期阶段' },
-] as const
 
 /** 行数据：部门 + 各阶段系数后值 */
 interface DeptPhaseRow {
@@ -58,6 +49,8 @@ export default function MachineVersionDetailModal({
     return { version: null, project: null }
   }, [projects, versionId])
 
+  const phaseFields = machinePhaseFields(version?.modelSnapshot ?? [])
+
   // 历史详情仅使用该版本保存的模型，无法还原的旧明细不以当前配置冒充。
   const dataSource = useMemo<DeptPhaseRow[]>(() => {
     if (!version) return []
@@ -74,10 +67,10 @@ export default function MachineVersionDetailModal({
 
   // ── 列定义 ──────────────────────────────────────────────────────
   const columns = useMemo<ColumnsType<DeptPhaseRow>>(() => {
-    const phaseCols: ColumnsType<DeptPhaseRow> = PHASE_FIELDS.map((f) => ({
+    const phaseCols: ColumnsType<DeptPhaseRow> = phaseFields.map((f) => ({
       title: f.label,
       key: f.key,
-      width: 100,
+      width: 145,
       align: 'center',
       render: (_v: unknown, record: DeptPhaseRow) => (
         <span style={{ fontWeight: 500 }}>{formatPersonMonth(record.phases[f.key])}</span>
@@ -114,7 +107,7 @@ export default function MachineVersionDetailModal({
         ),
       },
     ]
-  }, [])
+  }, [phaseFields])
 
   // ── 合计行 ──────────────────────────────────────────────────────
   const grandTotal = useMemo(() => {
@@ -179,18 +172,18 @@ export default function MachineVersionDetailModal({
                   <Table.Summary.Cell index={0} colSpan={2}>
                     <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>合计</span>
                   </Table.Summary.Cell>
-                  {PHASE_FIELDS.map((f) => (
-                    <Table.Summary.Cell key={f.key} index={2 + PHASE_FIELDS.indexOf(f)} align="center">
+                  {phaseFields.map((f, index) => (
+                    <Table.Summary.Cell key={f.key} index={2 + index} align="center">
                       <span style={{ fontWeight: 600 }}>
                         {formatPersonMonth(
                           Math.round(
-                            dataSource.reduce((s, r) => s + r.phases[f.key], 0) * 10,
+                            dataSource.reduce((s, r) => s + (r.phases[f.key] ?? 0), 0) * 10,
                           ) / 10,
                         )}
                       </span>
                     </Table.Summary.Cell>
                   ))}
-                  <Table.Summary.Cell index={8} align="center">
+                  <Table.Summary.Cell index={2 + phaseFields.length} align="center">
                     <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>
                       {formatPersonMonth(grandTotal)}
                     </span>

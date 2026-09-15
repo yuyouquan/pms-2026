@@ -1,13 +1,8 @@
 import type { ConfigRecord } from '@/types/hrConfig'
 
-export const HR_MODEL_STATISTIC_PHASES = [
-  { key: 'conceptPhase', label: '概念阶段' },
-  { key: 'planningPhase', label: '计划阶段' },
-  { key: 'developmentPhase', label: '开发阶段' },
-  { key: 'validationPhase', label: '验证阶段' },
-  { key: 'launchPhase', label: '上市阶段' },
-  { key: 'lifecycle', label: '生命周期阶段' },
-] as const
+import { MACHINE_INVESTMENT_PERIODS, LEGACY_MACHINE_PHASES, isCurrentMachineModel } from '@/lib/hrMachinePeriods'
+
+export const HR_MODEL_STATISTIC_PHASES = MACHINE_INVESTMENT_PERIODS
 
 type HrModelPhase = typeof HR_MODEL_STATISTIC_PHASES[number]['key']
 
@@ -16,6 +11,7 @@ export type HrModelStatistic = Record<HrModelPhase, number> & {
   modelVersion: string
   projectLevel: string
   status: 'enabled' | 'disabled' | 'mixed'
+  hasLegacyModels: boolean
   recordCount: number
   total: number
 }
@@ -35,13 +31,16 @@ export function summarizeHrModels(records: readonly ConfigRecord[]): HrModelStat
     versionStatuses.set(versionKey, states)
 
     const group = groups.get(key) ?? {
-      key, modelVersion, projectLevel, status: 'enabled', recordCount: 0, total: 0,
-      conceptPhase: 0, planningPhase: 0, developmentPhase: 0, validationPhase: 0, launchPhase: 0, lifecycle: 0,
+      key, modelVersion, projectLevel, status: 'enabled', hasLegacyModels: false, recordCount: 0, total: 0,
+      conceptToStr1: 0, str1ToStr2: 0, str2ToStr3: 0, str3ToStr4: 0, str4ToStr4a: 0, str4aToStr5: 0, str5ToSixMonths: 0,
     }
     HR_MODEL_STATISTIC_PHASES.forEach(({ key: phase }) => {
       const value = Number(record[phase])
       if (Number.isFinite(value)) group[phase] += value
     })
+    const currentSchema = isCurrentMachineModel(record)
+    group.hasLegacyModels ||= !currentSchema
+    group.total += (currentSchema ? MACHINE_INVESTMENT_PERIODS : LEGACY_MACHINE_PHASES).reduce((sum, { key }) => sum + (Number(record[key]) || 0), 0)
     group.recordCount += 1
     groups.set(key, group)
   })
@@ -50,9 +49,8 @@ export function summarizeHrModels(records: readonly ConfigRecord[]): HrModelStat
     const [versionKey] = JSON.parse(group.key) as [string, string]
     const states = versionStatuses.get(versionKey)!
     group.status = states.size > 1 ? 'mixed' : states.has(false) ? 'disabled' : 'enabled'
-    const total = HR_MODEL_STATISTIC_PHASES.reduce((sum, { key }) => sum + group[key], 0)
     HR_MODEL_STATISTIC_PHASES.forEach(({ key }) => { group[key] = Number(group[key].toFixed(10)) })
-    group.total = Number(total.toFixed(10))
+    group.total = Number(group.total.toFixed(10))
     return group
   })
 }
