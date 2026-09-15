@@ -8804,6 +8804,22 @@ input.ant-input,
   border-radius: 8px;
 }
 
+/* Resource version cells follow their column alignment in both display modes. */
+:is(.pms-hr-machine-history-version, .pms-hr-tos-history-version, .pms-hr-tech-history-version, .pms-hr-capability-history-version) .pms-inline-editable {
+  display: block;
+  min-width: 0;
+  padding: 2px 0;
+  border-radius: 4px;
+  text-align: inherit;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+:is(.pms-hr-machine-history-version, .pms-hr-tos-history-version, .pms-hr-tech-history-version, .pms-hr-capability-history-version) .pms-inline-editable:hover {
+  background: var(--pms-brand-surface);
+  color: var(--pms-brand-strong);
+}
+
 /* ── Detail space header ──────────────────────────────────────────── */
 
 .pms-hr-detail-header {

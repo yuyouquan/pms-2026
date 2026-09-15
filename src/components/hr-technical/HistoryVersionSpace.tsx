@@ -496,19 +496,6 @@ export default function HistoryVersionSpace() {
         .pms-hr-tech-history-version .pms-table .ant-table-tbody > tr.hr-tech-budget-budget > td {
           background: #f6fcf3 !important;
         }
-        .pms-hr-tech-history-version .pms-inline-editable {
-          cursor: pointer;
-          padding: 2px 6px;
-          border-radius: 4px;
-          transition: background 0.2s, color 0.2s;
-          display: inline-block;
-          min-width: 24px;
-          text-align: center;
-        }
-        .pms-hr-tech-history-version .pms-inline-editable:hover {
-          background: var(--pms-brand-surface);
-          color: var(--pms-brand-strong);
-        }
         .pms-hr-tech-history-version .pms-table .ant-picker {
           width: 100%;
         }
