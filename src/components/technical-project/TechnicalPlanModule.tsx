@@ -4,7 +4,7 @@ import { getTechnicalLevel1MaintainerUsers } from '@/lib/projectSpaceLevel1Rules
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Alert, App, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
-  Row, Select, Space, Table, Tabs, Tag, Tooltip, Typography,
+  Select, Space, Table, Tag, Tooltip, Typography,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
@@ -17,6 +17,7 @@ import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import SubprojectConfigModal from '@/components/technical-project/SubprojectConfigModal'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
+import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
@@ -85,10 +86,10 @@ const { Text } = Typography
 const FIXED_TDT_LABEL = 'TDT项目计划'
 const TECHNICAL_STAGE_COLORS = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2'] as const
 const TECHNICAL_GANTT_COLUMNS: DHTMLXGanttColumn[] = [
-  { name: 'text', label: '任务名称', width: 180, tree: true },
-  { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
-  { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
-  { name: 'duration', label: '计划周期', align: 'center', width: 60, template: task => `${task.duration}天` },
+  { name: 'text', label: '阶段/节点', width: 180, tree: true },
+  { name: 'start_date', label: '计划开始时间', align: 'center', width: 120 },
+  { name: 'end_date', label: '计划完成时间', align: 'center', width: 120 },
+  { name: 'duration', label: '预估工期', align: 'center', width: 90, template: task => `${task.duration}天` },
   { name: 'progress', label: '进度', align: 'center', width: 60, template: task => `${Math.round(task.progress * 100)}%` },
 ]
 const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [
@@ -667,15 +668,15 @@ export default function TechnicalPlanModule({
     { title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 100, render: (value, row) => row.parentId ? <Tag color={value === '延期' ? 'error' : value === '按时' ? 'success' : 'default'}>{value || '-'}</Tag> : '-' },
   ]
   const subprojectColumns: ColumnsType<TechnicalPlanRow> = [
-    { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
-    { title: '活动名称', dataIndex: 'activityName', key: 'activityName', width: 180, fixed: 'left' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: value => value || '-' },
-    { title: '计划开始时间', dataIndex: 'planStartDate', key: 'planStartDate', width: 145, onCell: row => ({ className: dateErrors(row, 'planStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planStartDate', () => canMaintain) },
-    { title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'planEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planEndDate', () => canMaintain) },
-    { title: '计划周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 100, render: value => value == null ? '-' : `${value}天` },
-    { title: '实际开始时间', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualStartDate', () => canEditActualDates) },
-    { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualEndDate', () => canEditActualDates) },
-    { title: '实际周期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 88, fixed: 'left' },
+    { title: '阶段/节点', dataIndex: 'activityName', key: 'activityName', width: 250, fixed: 'left' },
+    { title: '计划开始时间', dataIndex: 'planStartDate', key: 'planStartDate', width: 150, onCell: row => ({ className: dateErrors(row, 'planStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planStartDate', () => canMaintain) },
+    { title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 150, onCell: row => ({ className: dateErrors(row, 'planEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planEndDate', () => canMaintain) },
+    { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '实际开始时间', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 150, onCell: row => ({ className: dateErrors(row, 'actualStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualStartDate', () => canEditActualDates) },
+    { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 150, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualEndDate', () => canEditActualDates) },
+    { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 100, render: value => <Tag color={value === '延期' ? 'error' : value === '按时' ? 'success' : 'default'}>{value || '-'}</Tag> },
   ]
   const columns: ColumnsType<TechnicalPlanRow> = [...subprojectColumns]
   if (hasDeletableCustomTask) columns.push({
@@ -803,38 +804,37 @@ export default function TechnicalPlanModule({
     <div className="technical-project-space pms-plan-workspace" aria-label="技术项目计划">
       <PlanWorkspaceShell
         scopeTabs={(
-          <Card className="technical-space-card technical-plan-scope-card pms-glass-surface" aria-label={FIXED_TDT_LABEL} styles={{ body: { padding: '4px 16px 12px' } }}>
-            <Row justify="space-between" align="middle" wrap={false}>
-              <Tabs
-                activeKey={tab?.key}
-                onChange={handleScopeChange}
-                items={tabs.map(item => ({
-                  key: item.key,
-                  label: (
-                    <Space size={5}>
-                      <span>{item.label}</span>
-                      {item.subproject && (
-                        <Tooltip title="子项目信息配置">
-                          <Button
-                            type="text"
-                            size="small"
-                            aria-label={`配置子项目 ${item.subproject.name}`}
-                            icon={<SettingOutlined />}
-                            onClick={event => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              setConfigTrigger(event.currentTarget)
-                              setConfiguringChild(item.subproject!)
-                            }}
-                          />
-                        </Tooltip>
-                      )}
-                    </Space>
-                  ),
-                }))}
-              />
-            </Row>
-          </Card>
+          <ProjectSpaceTabs
+            className="technical-plan-scope-card"
+            aria-label={FIXED_TDT_LABEL}
+            navigationOnly
+            activeKey={tab?.key}
+            onChange={handleScopeChange}
+            items={tabs.map(item => ({
+              key: item.key,
+              label: (
+                <Space size={5}>
+                  <span>{item.label}</span>
+                  {item.subproject && (
+                    <Tooltip title="子项目信息配置">
+                      <Button
+                        type="text"
+                        size="small"
+                        aria-label={`配置子项目 ${item.subproject.name}`}
+                        icon={<SettingOutlined />}
+                        onClick={event => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          setConfigTrigger(event.currentTarget)
+                          setConfiguringChild(item.subproject!)
+                        }}
+                      />
+                    </Tooltip>
+                  )}
+                </Space>
+              ),
+            }))}
+          />
         )}
         notices={(
           <>

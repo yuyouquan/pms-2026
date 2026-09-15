@@ -23,14 +23,14 @@ export const TECHNICAL_TDT_EXPORT_COLUMNS = [
 
 export const TECHNICAL_SUBPROJECT_EXPORT_COLUMNS = [
   { key: 'sequence', title: '序号' },
-  { key: 'activityName', title: '活动名称' },
-  { key: 'status', title: '状态' },
+  { key: 'activityName', title: '阶段/节点' },
   { key: 'planStartDate', title: '计划开始时间' },
   { key: 'planEndDate', title: '计划完成时间' },
-  { key: 'estimatedDays', title: '计划周期' },
+  { key: 'estimatedDays', title: '预估工期' },
   { key: 'actualStartDate', title: '实际开始时间' },
   { key: 'actualEndDate', title: '实际完成时间' },
-  { key: 'actualDays', title: '实际周期' },
+  { key: 'actualDays', title: '实际工期' },
+  { key: 'delayStatus', title: '是否延期' },
 ] as const
 
 export const TECHNICAL_TDT_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
@@ -46,14 +46,14 @@ export const TECHNICAL_TDT_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
 
 export const TECHNICAL_SUBPROJECT_FILTER_FIELDS: readonly FilterFieldDefinition[] = [
   { key: 'sequence', label: '序号', kind: 'text' },
-  { key: 'activityName', label: '活动名称', kind: 'text' },
-  { key: 'status', label: '状态', kind: 'enum' },
+  { key: 'activityName', label: '阶段/节点', kind: 'text' },
   { key: 'planStartDate', label: '计划开始时间', kind: 'date' },
   { key: 'planEndDate', label: '计划完成时间', kind: 'date' },
-  { key: 'estimatedDays', label: '计划周期', kind: 'text' },
+  { key: 'estimatedDays', label: '预估工期', kind: 'text' },
   { key: 'actualStartDate', label: '实际开始时间', kind: 'date' },
   { key: 'actualEndDate', label: '实际完成时间', kind: 'date' },
-  { key: 'actualDays', label: '实际周期', kind: 'text' },
+  { key: 'actualDays', label: '实际工期', kind: 'text' },
+  { key: 'delayStatus', label: '是否延期', kind: 'enum', options: ['-', '按时', '延期'].map(value => ({ label: value, value })) },
 ]
 
 export const TECHNICAL_PLAN_EXPORT_COLUMNS = [

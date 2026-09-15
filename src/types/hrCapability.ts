@@ -1,3 +1,4 @@
+import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 /* ── HR Pipeline - Capability Building Project Types ────────────────── */
 
 /** 预算类型 */
@@ -47,6 +48,7 @@ export interface CapabilityDepartmentInvestment {
 
 /** 单项目版本 */
 export interface HrCapabilityVersion {
+  nonLaborInvestment?: NonLaborInvestment
   id: string
   projectId: string
   /** 预算类型 */
@@ -160,6 +162,7 @@ export interface CapabilityNewProjectForm {
 
 /** 新建版本表单 */
 export interface CapabilityNewVersionForm {
+  nonLaborInvestment?: NonLaborInvestment
   budgetType: BudgetType
   projectStartTime: string
   projectEndTime: string

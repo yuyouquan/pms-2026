@@ -1,3 +1,4 @@
+import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 /* ── HR Pipeline - Technical Project Types ──────────────────────────── */
 
 /** 预算类型 */
@@ -87,6 +88,7 @@ export interface TechVersionOperationLog {
 
 /** 单项目版本 */
 export interface HrTechnicalVersion {
+  nonLaborInvestment?: NonLaborInvestment
   id: string
   projectId: string
   /** 预算类型 */
@@ -222,6 +224,7 @@ export interface TechNewProjectForm {
 
 /** 新建版本表单 */
 export interface TechNewVersionForm {
+  nonLaborInvestment?: NonLaborInvestment
   milestones?: Partial<TechMilestoneNodes>
   budgetType: BudgetType
   departmentInvestments: TechDepartmentInvestment[]

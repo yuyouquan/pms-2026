@@ -1,5 +1,8 @@
 'use client'
 
+import NonLaborInvestmentSection from '@/components/project-resources/NonLaborInvestmentSection'
+import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
+
 import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
 
 import { useMemo } from 'react'
@@ -20,7 +23,7 @@ const PHASE_FIELDS = [
   { key: 'developmentPhase', label: '开发阶段' },
   { key: 'validationPhase', label: '验证阶段' },
   { key: 'launchPhase', label: '上市阶段' },
-  { key: 'lifecycle', label: '生命周期' },
+  { key: 'lifecycle', label: '生命周期阶段' },
 ] as const
 
 /** 行数据：部门 + 各阶段系数后值 */
@@ -75,7 +78,7 @@ export default function MachineVersionDetailModal({
       title: f.label,
       key: f.key,
       width: 100,
-      align: 'right',
+      align: 'center',
       render: (_v: unknown, record: DeptPhaseRow) => (
         <span style={{ fontWeight: 500 }}>{formatPersonMonth(record.phases[f.key])}</span>
       ),
@@ -103,7 +106,7 @@ export default function MachineVersionDetailModal({
         title: '预估投入合计',
         key: 'total',
         width: 120,
-        align: 'right',
+        align: 'center',
         render: (_v: unknown, r: DeptPhaseRow) => (
           <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>
             {formatPersonMonth(r.total)}
@@ -120,7 +123,7 @@ export default function MachineVersionDetailModal({
 
   return (
     <Modal
-      className="pms-modal"
+      className="pms-modal pms-hr-version-modal"
       open={open}
       title="版本预估投入详情"
       width={1280}
@@ -134,7 +137,7 @@ export default function MachineVersionDetailModal({
             size="small"
             column={4}
             bordered
-            style={{ marginBottom: 16 }}
+            style={{ marginBottom: 12 }}
             items={[
               { key: 'projectName', label: '项目名称', children: project.name },
               { key: 'versionNumber', label: '版本号', children: version.versionNumber },
@@ -160,6 +163,7 @@ export default function MachineVersionDetailModal({
 
         <HrVersionMilestoneDetails category="machine" values={version.milestones} />
 
+          <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
           {version.modelSnapshot ? <Table<DeptPhaseRow>
             className="pms-table pms-hr-investment-table"
             rowKey="id"
@@ -176,7 +180,7 @@ export default function MachineVersionDetailModal({
                     <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>合计</span>
                   </Table.Summary.Cell>
                   {PHASE_FIELDS.map((f) => (
-                    <Table.Summary.Cell key={f.key} index={2 + PHASE_FIELDS.indexOf(f)} align="right">
+                    <Table.Summary.Cell key={f.key} index={2 + PHASE_FIELDS.indexOf(f)} align="center">
                       <span style={{ fontWeight: 600 }}>
                         {formatPersonMonth(
                           Math.round(
@@ -186,7 +190,7 @@ export default function MachineVersionDetailModal({
                       </span>
                     </Table.Summary.Cell>
                   ))}
-                  <Table.Summary.Cell index={8} align="right">
+                  <Table.Summary.Cell index={8} align="center">
                     <span style={{ fontWeight: 700, color: 'var(--pms-brand-strong)' }}>
                       {formatPersonMonth(grandTotal)}
                     </span>
@@ -199,6 +203,7 @@ export default function MachineVersionDetailModal({
           {version.modelSnapshot && <div style={{ marginTop: 8, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>
             数据来源：版本保存的整机人力模型（项目等级 {version.projectLevel || '-'} / 模型版本 {version.hrModelVersion || '-'}），各阶段值已乘以等级系数 {(version.levelCoefficient ?? 0).toFixed(2)}。
           </div>}
+          <NonLaborInvestmentSection value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly />
         </>
       ) : (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--pms-text-tertiary)' }}>

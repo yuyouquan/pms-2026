@@ -1,3 +1,4 @@
+import { mockNonLaborInvestment } from '@/mock/nonLaborInvestment'
 import { mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
 import { MOCK_CONFIG_DATA } from '@/constants/hrConfig'
 import { RESOURCE_FORMAL_IDS, RESOURCE_BUDGET_IDS } from '@/mock/projectRegistry'
@@ -176,7 +177,7 @@ function resourceProjects<T extends ResourceProject>(category: Category, templat
       const dates = category === 'capability'
         ? { projectStartTime: source?.projectStartTime ?? d[0], projectEndTime: source?.projectEndTime ?? d[5] }
         : { milestones: source?.milestones ? mergeHrFormalMilestones(category, source.milestones, manualMilestones) : manualMilestones }
-      return { ...version, id: versionId, projectId: recordId, createdBy, createdAt, ...dates,
+      return { ...version, id: versionId, projectId: recordId, createdBy, createdAt, ...dates, nonLaborInvestment: mockNonLaborInvestment(versionId, version.minorVersion),
         ...('departmentInvestments' in version ? {
           departmentInvestments: version.departmentInvestments.map((department, i) => ({ ...department, id: `${versionId}-department-${i + 1}` })),
           operationLogs: [{ id: `${versionId}-created`, operation: 'created', operator: createdBy, timestamp: createdAt, description: `创建${version.versionNumber}预估投入版本` }],

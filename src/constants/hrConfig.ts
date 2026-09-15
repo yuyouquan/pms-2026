@@ -9,6 +9,14 @@ import type { TechMilestoneNodes, TechDepartmentInvestment, TechPhaseKey } from 
 /* ── 模块元信息 & 列定义 ───────────────────────────────────────────── */
 
 export const CONFIG_MODULES: ConfigModuleMeta[] = [
+  {
+    key: 'nonLaborSubject', label: '非人力资源科目', category: '人力资源管道',
+    description: '配置非人力投入使用的二级科目及其三级科目',
+    columns: [
+      { key: 'secondarySubject', label: '二级科目', width: 220, editable: true, inputType: 'text' },
+      { key: 'tertiarySubject', label: '三级科目', width: 220, editable: true, inputType: 'text' },
+    ],
+  },
   /* ── 整机产品 ── */
   {
     key: 'hrModel',
@@ -412,6 +420,14 @@ function makeId(module: string, idx: number): string {
 }
 
 export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
+  nonLaborSubject: [
+    { id: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票', enabled: true },
+    { id: 'non-labor-transport-rail', secondarySubject: '交通费', tertiarySubject: '火车票', enabled: true },
+    { id: 'non-labor-transport-taxi', secondarySubject: '交通费', tertiarySubject: '市内交通', enabled: true },
+    { id: 'non-labor-travel-hotel', secondarySubject: '差旅费', tertiarySubject: '住宿费', enabled: true },
+    { id: 'non-labor-travel-meals', secondarySubject: '差旅费', tertiarySubject: '出差补贴', enabled: true },
+    { id: 'non-labor-office-supplies', secondarySubject: '办公费', tertiarySubject: '办公耗材', enabled: true },
+  ],
   hrModel: [
     { id: makeId('hrModel', 1), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 5, planningPhase: 8, developmentPhase: 18, validationPhase: 10, launchPhase: 8, lifecycle: 3 },
     { id: makeId('hrModel', 2), enabled: true, projectLevel: 'S', modelVersion: 'V2026.1', primaryDepartment: '研发中心', secondaryDepartment: '软件部', conceptPhase: 3, planningPhase: 5, developmentPhase: 12, validationPhase: 7, launchPhase: 5, lifecycle: 2 },

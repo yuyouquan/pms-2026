@@ -62,7 +62,7 @@ import type { MrTemplateChangeLog } from '@/types/mrVersionPlan'
 import dayjs from 'dayjs'
 
 const { Option } = Select
-const HR_CONFIG_CENTER_MODULES: ConfigModuleKey[] = ['hrModel']
+const HR_CONFIG_CENTER_MODULES: ConfigModuleKey[] = ['hrModel', 'nonLaborSubject']
 const PLAN_TEMPLATE_ROLE_OPTIONS = [
   { label: 'SPM', value: 'SPM' },
   { label: '技术项目负责人', value: '技术项目负责人' },

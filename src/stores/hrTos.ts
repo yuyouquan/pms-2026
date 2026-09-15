@@ -1,3 +1,7 @@
+import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
+import { useHrConfigStore } from '@/stores/hrConfig'
+import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
+import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
@@ -189,6 +193,7 @@ export interface HrTosActions {
     projectId: string,
     versionId: string,
     updates: {
+      nonLaborInvestment?: NonLaborInvestment
       batch?: number | null
       estimatedInvestment?: number
       milestones?: Partial<TosMilestoneNodes>
@@ -200,6 +205,7 @@ export interface HrTosActions {
     projectId: string,
     versionId: string,
     departmentInvestments: TosDepartmentInvestment[],
+    nonLaborInvestment?: NonLaborInvestment,
   ) => void
 
   refreshFormalProjects: () => void
@@ -298,6 +304,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             createdBy: useProjectStore.getState().currentLoginUser,
             estimatedInvestment: sumDepartmentInvestments(form.departmentInvestments),
             milestones,
+            nonLaborInvestment: validateNonLaborInvestment(form.nonLaborInvestment ?? cloneNonLaborInvestment(latest?.nonLaborInvestment), useHrConfigStore.getState().data.nonLaborSubject ?? [], latest?.nonLaborInvestment),
             departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
             createdAt: new Date().toISOString(),
             lockedAt: null,
@@ -340,6 +347,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
         const newVersion: HrTosVersion = {
           ...sourceVersion,
+          nonLaborInvestment: cloneNonLaborInvestment(sourceVersion.nonLaborInvestment),
           createdBy: useProjectStore.getState().currentLoginUser,
           id: `${projectId}-${sourceVersion.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           versionNumber: `V0.${minorVersion}`,
@@ -392,6 +400,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
             const updated: HrTosVersion = {
               ...v,
+              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment) : v.nonLaborInvestment,
               batch: permitted.batch === undefined ? v.batch : permitted.batch,
               estimatedInvestment: permitted.estimatedInvestment ?? v.estimatedInvestment,
               milestones: permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones,
@@ -399,6 +408,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
             // 添加编辑日志
             const logParts: string[] = []
+            if (permitted.nonLaborInvestment !== undefined) logParts.push('非人力投入')
             if (permitted.estimatedInvestment !== undefined) logParts.push('预估投入')
             if (permitted.milestones !== undefined) logParts.push('里程碑节点')
             if (logParts.length > 0) {
@@ -418,7 +428,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         }
       }),
 
-      updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments) => set((s) => {
+      updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments, nonLaborInvestment) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         // 计算所有部门预估投入合计
         const newEstimatedTotal = departmentInvestments.reduce(
@@ -430,6 +440,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             if (v.id !== versionId || !isLatestHrVersion(p, v)) return v
             return {
               ...v,
+              nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment) : v.nonLaborInvestment,
               estimatedInvestment: Math.round(newEstimatedTotal * 10) / 10,
               departmentInvestments,
               operationLogs: [
@@ -486,7 +497,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
-        const projects = synchronizeProjects(merged.projects)
+        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects))
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
       version: 5,

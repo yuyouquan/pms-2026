@@ -8974,10 +8974,14 @@ input.ant-input,
 
 /* Compact resource version forms, with explicit machine metadata/model/milestone rows. */
 .pms-modal.pms-hr-version-modal { top: 24px; }
-.pms-modal.pms-hr-version-modal .ant-modal-header { margin-bottom: 0; }
-.pms-modal.pms-hr-version-modal .ant-modal-body { padding-top: 12px; max-height: calc(100vh - 180px); overflow-y: auto; }
-.pms-hr-version-modal .ant-form-item { margin-bottom: 12px; min-width: 0; }
+.pms-modal.pms-hr-version-modal .ant-modal-header { margin-bottom: 0; padding-block: 12px !important; }
+.pms-modal.pms-hr-version-modal.ant-modal .ant-modal-body { padding: 8px 24px 12px; max-height: calc(100vh - 180px); overflow-y: auto; }
+.pms-hr-version-modal .ant-form-item { margin-bottom: 8px; min-width: 0; }
 .pms-hr-version-modal .ant-form-item-label { padding-bottom: 4px; }
+.pms-modal.pms-hr-version-modal .ant-modal-footer { padding-block: 12px !important; }
+.pms-hr-version-modal .ant-descriptions-header { margin-bottom: 8px; }
+.pms-hr-investment-section-title { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.pms-hr-version-modal .pms-hr-investment-table .ant-input-number-input { text-align: center; }
 .pms-hr-readonly-field, .pms-hr-readonly-field input { cursor: not-allowed; }
 .pms-hr-readonly-field__icon { opacity: 0; color: var(--pms-text-secondary); }
 .pms-hr-readonly-field:hover .pms-hr-readonly-field__icon,
@@ -9001,4 +9005,58 @@ input.ant-input,
 }
 @media (max-width: 640px) {
   .pms-project-space-editor .pms-project-info-form-grid, .pms-hr-version-row--metadata, .pms-hr-version-row--model, .pms-hr-version-row--milestones { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Shared version-level non-labor investment editor. */
+.pms-non-labor-section { margin-top: 12px; }
+.pms-non-labor-section h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.pms-non-labor-summary { margin-bottom: 8px; }
+.pms-non-labor-toolbar { display: flex; align-items: center; gap: 16px; justify-content: space-between; }
+.pms-non-labor-range { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12px; }
+.pms-non-labor-section > .ant-btn { margin-top: 8px; }
+@media (max-width: 800px) { .pms-non-labor-toolbar { align-items: stretch; flex-direction: column; gap: 8px; } }
+
+
+/* Keep project-space section navigation aligned with the first sidebar item. */
+#basic-info-scroll-container.pms-project-section--compact {
+  padding: 8px 16px 16px !important;
+}
+
+.pms-project-section--compact .pms-project-info-core-card > .ant-card-head {
+  min-height: 40px;
+}
+
+.pms-project-space-tabs > .ant-tabs-nav {
+  min-height: 40px;
+  margin: 0 0 8px;
+  padding: 0 16px;
+  border: 1px solid var(--pms-border);
+  border-radius: var(--pms-radius-surface);
+  background: var(--pms-surface-solid);
+}
+
+.pms-project-space-tabs > .ant-tabs-nav::before {
+  border-bottom: 0;
+}
+
+.pms-project-space-tabs > .ant-tabs-nav .ant-tabs-tab {
+  padding: 8px 0;
+  font-weight: 500;
+}
+
+.pms-project-space-tabs > .ant-tabs-nav .ant-tabs-extra-content {
+  margin-left: 16px;
+}
+
+.pms-project-space-tabs--navigation-only > .ant-tabs-content-holder {
+  display: none;
+}
+
+/* A Card already provides body padding; avoid adding toolbar padding twice. */
+.pms-project-section--compact .pms-toolbar.ant-card {
+  padding: 0;
+}
+
+.pms-project-resource-tabs :is(.pms-hr-machine-tab-bar, .pms-hr-tos-tab-bar, .pms-hr-tech-tab-bar):empty {
+  display: none;
 }

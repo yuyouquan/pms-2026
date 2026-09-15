@@ -1,5 +1,7 @@
 'use client'
 
+import NewVersionModal from '@/components/hr-machine/NewVersionModal'
+
 import { getMachineProjectYear } from '@/lib/hrVersionRules'
 
 import { HR_MANUAL_MILESTONE_KEYS } from '@/lib/hrMilestoneOwnership'
@@ -25,6 +27,7 @@ import {
   DeleteOutlined,
   ExportOutlined,
   EyeOutlined,
+  EditOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
@@ -270,6 +273,7 @@ export default function HistoryVersionSpace() {
   const deleteVersion = useHrMachineStore((s) => s.deleteVersion)
   const deleteProject = useHrMachineStore((s) => s.deleteProject)
   const updateVersion = useHrMachineStore((s) => s.updateVersion)
+  const [versionToEdit, setVersionToEdit] = useState<{ projectId: string; versionId: string } | null>(null)
   const setShowNewVersionModal = useHrMachineStore((s) => s.setShowNewVersionModal)
   const setShowVersionDetailModal = useHrMachineStore((s) => s.setShowVersionDetailModal)
   const setEditingVersionId = useHrMachineStore((s) => s.setEditingVersionId)
@@ -485,7 +489,7 @@ export default function HistoryVersionSpace() {
         title: '操作',
         key: 'action',
         fixed: 'right',
-        width: 100,
+        width: 132,
         align: 'center',
         render: (_value: unknown, record: FlatVersionRow) => {
           const project = projects.find((p) => p.id === record.projectId)
@@ -501,6 +505,9 @@ export default function HistoryVersionSpace() {
                   setShowVersionDetailModal(true)
                 }}
               />
+              {record.canEdit && project && isLatestHrVersion(project, record) && <Button
+                type="text" size="small" aria-label="编辑版本" title="编辑版本" icon={<EditOutlined />}
+                onClick={event => { event.stopPropagation(); setVersionToEdit({ projectId: record.projectId, versionId: record.id }) }} />}
               {record.canEdit && <Popconfirm
                 title="删除版本数据"
                 description="删除后不可恢复；项目档案将保留，可继续新增版本。"
@@ -734,6 +741,8 @@ export default function HistoryVersionSpace() {
         locale={{ emptyText: '当前筛选条件下暂无版本数据' }}
       />
 
+      <NewVersionModal open={Boolean(versionToEdit)} projectId={versionToEdit?.projectId ?? ''}
+        versionId={versionToEdit?.versionId} onCancel={() => setVersionToEdit(null)} />
       <style jsx global>{`
         .pms-hr-machine-history-version .pms-table .ant-table-tbody > tr.hr-machine-budget-annual > td {
           background: #f9f6fd !important;

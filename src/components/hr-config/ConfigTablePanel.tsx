@@ -41,7 +41,7 @@ interface ConfigTablePanelProps {
 export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTablePanelProps) {
   const actor = useProjectStore(state => state.currentLoginUser)
   const hasGlobalPermission = useHasGlobalPermission(actor)
-  const canEdit = moduleMeta.key !== 'hrModel' || hasGlobalPermission('configCenter:hrModelEdit')
+  const canEdit = !['hrModel', 'nonLaborSubject'].includes(moduleMeta.key) || hasGlobalPermission(moduleMeta.key === 'hrModel' ? 'configCenter:hrModelEdit' : 'configCenter:nonLaborSubjectEdit')
   const { message, modal } = App.useApp()
   const { data, deleteRecord, toggleRecordStatus, importRecords, setShowEditModal, setEditingId } = useHrConfigStore()
   const { isValidPair } = useHrDepartmentOptions()

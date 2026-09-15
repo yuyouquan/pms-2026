@@ -1,5 +1,7 @@
 'use client'
 
+import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
+
 import { canAccessHrProject, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
@@ -57,6 +59,8 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     () => projects.find(p => p.id === localProjectId),
     [projects, localProjectId],
   )
+
+  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType, project && budgetType ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined)
 
   const milestoneForm = useHrVersionMilestones('tos', project, budgetType, open)
 
@@ -243,7 +247,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       title: f.label,
       key: f.key,
       width: 130,
-      align: 'right' as const,
+      align: 'center' as const,
       render: (_value: unknown, record: TosDepartmentInvestment) => (
         <InputNumber
           value={record[f.key] as number}
@@ -259,7 +263,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       title: '预估投入合计',
       key: 'estimatedInvestment',
       width: 120,
-      align: 'right' as const,
+      align: 'center' as const,
       render: (_value: unknown, record: TosDepartmentInvestment) => (
         <span style={{ fontWeight: 600 }}>
           {formatPersonMonth(Number(record.estimatedInvestment) || 0)}
@@ -271,7 +275,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
       key: 'action',
       fixed: 'right' as const,
       width: 80,
-      align: 'center' as const,
+      align: 'left' as const,
       render: (_value: unknown, record: TosDepartmentInvestment) => (
         <Button type="text" aria-label="删除" title="删除"
           danger
@@ -300,9 +304,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     }
     try {
       setSubmitting(true)
-      addVersion(project.id, { budgetType, departmentInvestments: editData, milestones: milestoneForm.values })
+      addVersion(project.id, { budgetType, nonLaborInvestment: nonLabor.value, departmentInvestments: editData, milestones: milestoneForm.values })
       message.success('版本创建成功')
       onCancel()
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : '版本创建失败')
     } finally {
       setSubmitting(false)
     }
@@ -349,10 +355,11 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
         </Form>
 
         {/* 合计提示 */}
+        <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
         <Alert
           type="info"
           showIcon
-          style={{ marginBottom: 12 }}
+          style={{ marginBottom: 8 }}
           title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`}
         />
 
@@ -392,6 +399,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           }}
         />
 
+        <NonLaborInvestmentSection {...nonLabor} />
       </div>
 
       <style jsx global>{`

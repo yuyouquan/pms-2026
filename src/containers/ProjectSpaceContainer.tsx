@@ -51,6 +51,7 @@ import type { ColumnsType } from 'antd/es/table'
 import { compareVersionsForTable } from '@/lib/versionCompare'
 import { ensurePublishedComparisonSnapshots, resolveComparisonVersionTasks } from '@/lib/versionComparisonSnapshots'
 import { shouldShowLatestPublishedLevel1Summary } from '@/lib/projectBasicInfoPresentation'
+import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
@@ -2091,7 +2092,18 @@ export default function ProjectSpaceContainer() {
   // View columns
   const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode}`
   const currentViewMode = projectPlanViewMode
-  const currentViewColumns = getColumnsForView(currentViewMode)
+  const currentViewColumns = useMemo(() => {
+    const definitions = getColumnsForView(currentViewMode)
+    if (currentViewMode !== 'gantt') return definitions
+    // Keep the chart headers and column settings aligned with this scope's list.
+    const listColumns = projectPlanLevel === 'level1'
+      ? isWholeMachineProject || isTosVersionProject ? LEVEL1_TREE_EXPORT_COLUMNS : TABLE_COLUMNS
+      : [{ key: 'estimatedDays', title: '预估工期' }]
+    return definitions.map(definition => ({
+      ...definition,
+      title: listColumns.find(column => column.key === definition.key)?.title || definition.title,
+    }))
+  }, [currentViewMode, projectPlanLevel, isWholeMachineProject, isTosVersionProject])
   const currentViewKey = getViewKey()
   const storedColumnSettings = columnSettingsByView[currentViewKey]
   const columnSettings = useMemo(
@@ -5104,38 +5116,31 @@ export default function ProjectSpaceContainer() {
     const currentPlanScopeUnavailable = projectPlanLevel === 'level1' && machineMarketPlanUnavailable
     const usesSharedPlanWorkspace = projectPlanLevel === 'level1' && !machineMarketPlanUnavailable
     const planLevelTabs = (
-      <Card className="pms-project-plan-level-tabs" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
-        <Row align="middle" justify="space-between">
-          <Col>
-            <Tabs
-              activeKey={projectPlanLevel}
-              onChange={(key) => navigateWithEditGuard(() => {
-                setIsEditMode(false)
-                setProjectPlanLevel(key as string)
-              })}
-              style={{ marginBottom: 0 }}
-              items={planTabItems.map(item => ({ ...item, label: <span style={{ fontWeight: 500, padding: '0 4px' }}>{item.label}</span> }))}
-            />
-          </Col>
-          <Col>
-            {isWholeMachineProject ? (
-              <Tooltip title="编辑市场">
-                <Button data-plan-shared-market-editor size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openMarketEditor}>市场编辑</Button>
-              </Tooltip>
-            ) : (
-              <Tag color={projectPlanLevel === 'mr-version-plan' ? 'blue' : 'default'} style={{ fontSize: 11 }}>
-                {planTabItems.find(tab => tab.key === projectPlanLevel)?.label}
-              </Tag>
-            )}
-          </Col>
-        </Row>
-      </Card>
+      <ProjectSpaceTabs
+        className="pms-project-plan-level-tabs"
+        navigationOnly
+        activeKey={projectPlanLevel}
+        onChange={(key) => navigateWithEditGuard(() => {
+          setIsEditMode(false)
+          setProjectPlanLevel(key)
+        })}
+        items={planTabItems}
+        tabBarExtraContent={isWholeMachineProject ? (
+          <Tooltip title="编辑市场">
+            <Button data-plan-shared-market-editor size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openMarketEditor}>市场编辑</Button>
+          </Tooltip>
+        ) : (
+          <Tag color={projectPlanLevel === 'mr-version-plan' ? 'blue' : 'default'} style={{ fontSize: 11 }}>
+            {planTabItems.find(tab => tab.key === projectPlanLevel)?.label}
+          </Tag>
+        )}
+      />
     )
     const planWorkspacePrimaryScopeTabs = (
       <>
         {(isWholeMachineProject || isTosVersionProject) && planLevelTabs}
         {showTosTypeTabs && (
-          <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
+          <Card size="small" style={{ marginBottom: 8, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle" justify="space-between">
               <Col>
                 <Space size={4} align="center">
@@ -5161,7 +5166,7 @@ export default function ProjectSpaceContainer() {
           </Card>
         )}
         {showMarketControls && (
-          <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
+          <Card size="small" style={{ marginBottom: 8, borderRadius: 8 }} styles={{ body: { padding: '4px 16px' } }}>
             <Row align="middle">
               <Col>
                 <Space size={4} align="center">
@@ -5187,7 +5192,7 @@ export default function ProjectSpaceContainer() {
     const planWorkspaceSecondaryScopeTabs = (
       <>
         {projectPlanLevel === 'level2' && (
-          <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '4px 16px 4px 16px' } }}>
+          <Card size="small" style={{ marginBottom: 8, borderRadius: 8 }} styles={{ body: { padding: '4px 16px 4px 16px' } }}>
             <Row justify="space-between" align="middle">
               <Col>
                 <Tabs activeKey={activeLevel2Plan} onChange={(key) => navigateWithEditGuard(() => setActiveLevel2Plan(key))} style={{ marginBottom: 0 }}
@@ -5218,7 +5223,7 @@ export default function ProjectSpaceContainer() {
           </Card>
         )}
         {projectPlanLevel === 'level2' && activeLevel2Plan !== 'plan0' && activeLevel2Plan !== 'plan1' && level2PlanMeta[activeLevel2Plan]?.planType === '1+N MR版本火车计划' && (
-          <Card size="small" style={{ marginBottom: 16, borderRadius: 8, border: '1px solid var(--pms-brand-border)' }} styles={{ body: { padding: 0 } }}>
+          <Card size="small" style={{ marginBottom: 8, borderRadius: 8, border: '1px solid var(--pms-brand-border)' }} styles={{ body: { padding: 0 } }}>
             <div style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }} onClick={() => setPlanMetaCollapsed(!planMetaCollapsed)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 3, height: 16, background: 'var(--pms-brand)', borderRadius: 2 }} />
@@ -5669,7 +5674,7 @@ export default function ProjectSpaceContainer() {
         </CollapsibleSidebarShell>
 
         {/* Content area */}
-        <div id="basic-info-scroll-container" className="pms-project-section pms-solid-surface" style={{ flex: 1, minWidth: 0, padding: 24, overflow: 'auto' }}>
+        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 24, overflow: 'auto' }}>
           {transfer.transferView === 'apply' && <TransferApply {...transferProps} />}
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}

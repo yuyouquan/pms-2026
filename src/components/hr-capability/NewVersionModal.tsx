@@ -1,5 +1,7 @@
 'use client'
 
+import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
+
 import { canAccessHrProject, getHrAllowedBudgetTypes, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
@@ -60,6 +62,8 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
     () => projects.find((p) => p.id === localProjectId) ?? null,
     [projects, localProjectId],
   )
+
+  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType, project && budgetType ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined)
 
   const canCreateVersion = canCreateHrVersion(project, budgetType)
 
@@ -204,8 +208,10 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       return
     }
 
+    try {
     addVersion(project.id, {
       budgetType,
+      nonLaborInvestment: nonLabor.value,
       projectStartTime: startTime?.format('YYYY-MM-DD') ?? '',
       projectEndTime: endTime?.format('YYYY-MM-DD') ?? '',
       departmentInvestments: editData,
@@ -214,6 +220,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
     onCancel()
     resetState()
     setShowNewVersionModal(false)
+    } catch (error) { message.warning(error instanceof Error ? error.message : '版本创建失败') }
   }
 
   const handleCancel = () => {
@@ -262,7 +269,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       title: '预估投入（人月）',
       key: 'estimatedInvestment',
       width: 150,
-      align: 'right' as const,
+      align: 'center' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
         <InputNumber
           value={record.estimatedInvestment}
@@ -279,7 +286,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       key: 'action',
       fixed: 'right' as const,
       width: 80,
-      align: 'center' as const,
+      align: 'left' as const,
       render: (_value: unknown, record: CapabilityDepartmentInvestment) => (
         <Button type="text" aria-label="删除" title="删除"
           danger
@@ -351,7 +358,8 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
           </div>
         </Form>
 
-        <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`} />
+        <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
+        <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`} />
 
         {/* 操作按钮 */}
         <div style={{ marginBottom: 8 }}>
@@ -383,6 +391,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
           locale={{ emptyText: '暂无部门预估投入数据，请点击「添加部门」或「导入」' }}
         />
 
+        <NonLaborInvestmentSection {...nonLabor} />
       </div>
     </Modal>
   )

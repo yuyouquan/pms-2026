@@ -48,5 +48,5 @@ export function HrVersionMilestoneFields({ category, values, readOnly, onChange 
 
 export function HrVersionMilestoneDetails({ category, values }: { category: HrProjectCategory; values: object }) {
   const dates = values as Dates
-  return <Descriptions title="里程碑信息" bordered size="small" column={3} style={{ marginBottom: 16 }} items={fieldsByCategory[category].map(field => ({ key: field.key, label: field.label, children: dates[field.key] || '—' }))} />
+  return <Descriptions title="里程碑信息" bordered size="small" column={3} style={{ marginBottom: 12 }} items={fieldsByCategory[category].map(field => ({ key: field.key, label: field.label, children: dates[field.key] || '—' }))} />
 }

@@ -60,7 +60,7 @@ export default function CapabilityProjectContent() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 12 }}>
       {/* 工具栏 */}
-      <div
+      {!scopeId && <div
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -68,12 +68,12 @@ export default function CapabilityProjectContent() {
           flexShrink: 0,
         }}
       >
-        {!scopeId && <Segmented
+        <Segmented
           options={tabs}
           value={activeTab}
           onChange={(v) => setActiveTab(v as string)}
-        />}
-      </div>
+        />
+      </div>}
 
       {/* 内容区 */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>

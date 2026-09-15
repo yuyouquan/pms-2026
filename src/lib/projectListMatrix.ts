@@ -289,7 +289,6 @@ const listField = (
 const childMilestone = (label: string): ProjectListColumnDefinition => ({
   ...required(`milestone::${label}`, label),
   source: 'templateTask',
-  group: { key: 'subproject-plan', label: '子项目计划', color: '#f2e8ff' },
 })
 
 const STATIC_COLUMNS: Record<Exclude<ProjectListVariant, 'capability'>, ProjectListColumnDefinition[]> = {
@@ -330,7 +329,6 @@ const STATIC_COLUMNS: Record<Exclude<ProjectListVariant, 'capability'>, ProjectL
     required('projectName', '子任务名称', 200), required('parentProjectName', '所属TDT项目名称', 200),
     required('coreValue', '核心价值'), required('developmentMode', '开发模式'),
     required('firstTosVersion', '首导tOS'), required('firstMachineProject', '首导整机产品', 180),
-    required('projectStage', '项目阶段'),
     childMilestone('第1版转测'), childMilestone('第2版转测'),
     childMilestone('第X版转测'), childMilestone('TDR3'),
   ],
@@ -351,7 +349,6 @@ export function buildGroupedMilestoneColumns(
       ...required(`milestone::${getTaskName(task)}`, getTaskName(task)),
       source: 'templateTask' as const,
       taskId: String(task.id),
-      group: { key: 'subproject-plan', label: '子项目计划', color: '#f2e8ff' },
     }))
   }
 
@@ -395,46 +392,32 @@ export function getProjectListMatrix(
   if (variant === 'capability') return []
   const base = STATIC_COLUMNS[variant].map(column => ({ ...column }))
   const existingLabels = new Set(base.map(column => column.label))
-  const existingKeys = new Set(base.map(column => column.key))
   const dynamic = options.templateTasks?.length
     ? buildGroupedMilestoneColumns(options.templateTasks, variant)
     : [...(options.directLevel2Nodes || options.milestones || [])].map((label, index) => ({
         ...required(`milestone::${label}`, label),
         source: 'templateTask' as const,
-        group: variant === 'technical-subproject'
-          ? { key: 'subproject-plan', label: '子项目计划', color: '#f2e8ff' }
-          : undefined,
         taskId: `dynamic-${index}`,
       }))
-  const optional = (variant === 'technical-subproject' ? (options.optionalFields || []) : [])
-    .filter(field => !existingKeys.has(field.key) && !dynamic.some(item => item.key === field.key))
-    .map(field => ({
-      key: field.key,
-      label: field.label,
-      width: field.width ?? 140,
-      defaultVisible: field.defaultVisible ?? false,
-      required: false,
-      hideable: true,
-      reorderable: true,
-      source: 'projectInfo' as const,
-    }))
-  const beforeTail = variant === 'machine' ? base
-    : variant === 'tos' ? base.slice(0, 1)
-      : variant === 'technical-tdt' ? base
-        : base.slice(0, 7)
-  const tail = variant === 'machine' ? []
-    : variant === 'tos' ? base.slice(1)
-      : variant === 'technical-subproject' ? base.slice(7)
-        : []
+  if (variant === 'technical-subproject') {
+    // Subprojects expose their own six fields and a flat list of milestones.
+    // Published template order takes precedence over the legacy fallback nodes.
+    const milestones = options.templateTasks?.length
+      ? dynamic
+      : [...base.slice(6), ...dynamic.filter(column => !existingLabels.has(column.label))]
+    return [...base.slice(0, 6), ...milestones]
+  }
+  const beforeTail = variant === 'tos' ? base.slice(0, 1) : base
+  const tail = variant === 'tos' ? base.slice(1) : []
   const milestoneColumns = dynamic.filter(column => !existingLabels.has(column.label))
   // Legacy label-only callers are source-contract probes; real template tasks
   // carry grouping metadata and are placed at their visual position.
   if (!options.templateTasks?.length) {
     return variant === 'tos'
-      ? [...beforeTail, ...milestoneColumns, ...tail, ...optional]
-      : [...base, ...milestoneColumns, ...optional]
+      ? [...beforeTail, ...milestoneColumns, ...tail]
+      : [...base, ...milestoneColumns]
   }
-  return [...beforeTail, ...milestoneColumns, ...tail, ...optional]
+  return [...beforeTail, ...milestoneColumns, ...tail]
 }
 
 interface TechnicalPlanVersionLike {
