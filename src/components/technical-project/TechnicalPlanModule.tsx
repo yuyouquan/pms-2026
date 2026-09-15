@@ -668,15 +668,15 @@ export default function TechnicalPlanModule({
     { title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 100, render: (value, row) => row.parentId ? <Tag color={value === '延期' ? 'error' : value === '按时' ? 'success' : 'default'}>{value || '-'}</Tag> : '-' },
   ]
   const subprojectColumns: ColumnsType<TechnicalPlanRow> = [
-    { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 72, fixed: 'left' },
-    { title: '活动名称', dataIndex: 'activityName', key: 'activityName', width: 180, fixed: 'left' },
-    { title: '状态', dataIndex: 'status', key: 'status', width: 100, render: value => value || '-' },
-    { title: '计划开始时间', dataIndex: 'planStartDate', key: 'planStartDate', width: 145, onCell: row => ({ className: dateErrors(row, 'planStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planStartDate', () => canMaintain) },
-    { title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'planEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planEndDate', () => canMaintain) },
-    { title: '计划周期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 100, render: value => value == null ? '-' : `${value}天` },
-    { title: '实际开始时间', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualStartDate', () => canEditActualDates) },
-    { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 145, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualEndDate', () => canEditActualDates) },
-    { title: '实际周期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '序号', dataIndex: 'sequence', key: 'sequence', width: 88, fixed: 'left' },
+    { title: '阶段/节点', dataIndex: 'activityName', key: 'activityName', width: 250, fixed: 'left' },
+    { title: '计划开始时间', dataIndex: 'planStartDate', key: 'planStartDate', width: 150, onCell: row => ({ className: dateErrors(row, 'planStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planStartDate', () => canMaintain) },
+    { title: '计划完成时间', dataIndex: 'planEndDate', key: 'planEndDate', width: 150, onCell: row => ({ className: dateErrors(row, 'planEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('planEndDate', () => canMaintain) },
+    { title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '实际开始时间', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 150, onCell: row => ({ className: dateErrors(row, 'actualStartDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualStartDate', () => canEditActualDates) },
+    { title: '实际完成时间', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 150, onCell: row => ({ className: dateErrors(row, 'actualEndDate').length ? 'pms-cell-invalid' : '' }), render: renderDate('actualEndDate', () => canEditActualDates) },
+    { title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 100, render: value => value == null ? '-' : `${value}天` },
+    { title: '是否延期', dataIndex: 'delayStatus', key: 'delayStatus', width: 100, render: value => <Tag color={value === '延期' ? 'error' : value === '按时' ? 'success' : 'default'}>{value || '-'}</Tag> },
   ]
   const columns: ColumnsType<TechnicalPlanRow> = [...subprojectColumns]
   if (hasDeletableCustomTask) columns.push({
