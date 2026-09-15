@@ -324,7 +324,7 @@ const ROADMAP_MATERIAL_EXPECTATIONS = {
     { label: 'semantic saved-view active tab', pattern: /\.pms-project-view-tabs\s+\.ant-tabs-tab-active\s*\{[\s\S]{0,100}background:\s*var\(--pms-brand-surface\);/ },
   ],
   'src/components/roadmap/PlannedProjectModal.tsx': [
-    { label: 'shared planned-project modal material', pattern: /<Modal\s+[\s\S]{0,180}className=["']pms-modal["']/ },
+    { label: 'shared planned-project modal material', pattern: /<Modal\s+[\s\S]{0,180}className=(?:["']pms-modal["']|\{`pms-modal(?:\$\{|[ `]))/ },
     { label: 'solid planned-project form body', pattern: /<Form\s+[\s\S]{0,180}className=["'][^"']*pms-roadmap-overlay-body[^"']*pms-solid-surface[^"']*["']/ },
   ],
   'src/components/roadmap/TosTargetEditor.tsx': [
@@ -369,7 +369,7 @@ const PROJECT_SPACE_MATERIAL_EXPECTATIONS = {
   'src/containers/ProjectSpaceContainer.tsx': [
     { label: 'project-space root material', pattern: /className=["']pms-project-space pms-page-shell["']/ },
     { label: 'glass project-space sidebar', pattern: /className=["'][^"']*pms-sidebar[^"']*pms-glass-surface[^"']*["']/ },
-    { label: 'solid project-space content', pattern: /id=["']basic-info-scroll-container["'][^>]*className=["']pms-project-section pms-solid-surface["']/ },
+    { label: 'solid project-space content', pattern: /id=["']basic-info-scroll-container["'][^>]*className=(?:["']pms-project-section pms-solid-surface["']|\{`pms-project-section pms-solid-surface(?:\$\{|[ `]))/ },
   ],
   'src/components/plans/PlanWorkspaceShell.tsx': [
     { label: 'plan workspace shell', pattern: /className=["']pms-plan-workspace["']/ },
@@ -377,7 +377,7 @@ const PROJECT_SPACE_MATERIAL_EXPECTATIONS = {
     { label: 'solid plan data surface', pattern: /className=["']pms-plan-content pms-solid-surface["']/ },
   ],
   'src/components/project-info/ProjectInformationFrame.tsx': [
-    { label: 'project information glass navigation', pattern: /className=["']pms-project-info-anchor pms-glass-surface["']/ },
+    { label: 'project information core card after the side anchor navigation was removed', pattern: /<Card\s+[^>]*className=["']pms-project-info-core-card["']/ },
     { label: 'solid information section', pattern: /className=["']pms-project-information-slot pms-project-section pms-solid-surface["']/ },
   ],
   [CSS_SOURCE]: [

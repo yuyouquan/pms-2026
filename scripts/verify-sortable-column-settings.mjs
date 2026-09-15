@@ -316,6 +316,19 @@ function hasConfiguredOrder(expression, analysis, resolving = new Set()) {
   if (ts.isElementAccessExpression(expression)) {
     return hasConfiguredOrder(expression.expression, analysis, resolving)
   }
+  if (ts.isConditionalExpression(expression)) {
+    // Governed L1 tables have fixed columns; other scopes consume the saved
+    // list settings through the same alias. Accept only an explicit absence
+    // in the fixed branch, not an unrelated default/static settings object.
+    const isAbsent = branch => (
+      branch.kind === ts.SyntaxKind.NullKeyword
+      || (ts.isIdentifier(branch) && branch.text === 'undefined')
+    )
+    const trueConfigured = hasConfiguredOrder(expression.whenTrue, analysis, resolving)
+    const falseConfigured = hasConfiguredOrder(expression.whenFalse, analysis, resolving)
+    return (trueConfigured && (falseConfigured || isAbsent(expression.whenFalse)))
+      || (falseConfigured && isAbsent(expression.whenTrue))
+  }
   if (ts.isArrayLiteralExpression(expression)) {
     return expression.elements.some(element => (
       hasConfiguredOrder(ts.isSpreadElement(element) ? element.expression : element, analysis, resolving)
@@ -1214,6 +1227,45 @@ registerAssertion('ordered render analysis handles aliases, reachability, and co
   if (!returnedRenderHasOrderedColumns(projectSpaceHookAlias, 'Table')) {
     throw new Error('ProjectSpaceContainer hook-result destructuring was not traced to rendered columns')
   }
+
+  const scopedListSettingsSource = `
+    import { normalizeColumnSettings, orderVisibleDefinitions } from '@/lib/columnSettings'
+    import { buildVisiblePlanGanttColumns as projectGanttColumns } from '@/lib/planGanttRules'
+    function ScopedPlan() {
+      const { columnSettingsByView } = usePlanStore()
+      const storedColumnSettings = isFixedLevel1 ? undefined : columnSettingsByView[currentViewKey]
+      const columnSettings = useMemo(() => normalizeColumnSettings(definitions, storedColumnSettings), [storedColumnSettings])
+      const orderedColumns = useMemo(() => orderVisibleDefinitions(definitions, columnSettings), [columnSettings])
+      const ganttColumns = useMemo(() => projectGanttColumns(orderedColumns), [orderedColumns])
+      return <><Table columns={orderedColumns} /><DHTMLXGantt columns={ganttColumns} /></>
+    }
+  `
+  const scopedListSettings = fixture('scoped-list-settings.tsx', scopedListSettingsSource, 'ScopedPlan')
+  for (const element of ['Table', 'DHTMLXGantt']) {
+    assert.equal(returnedRenderHasOrderedColumns(scopedListSettings, element), true,
+      `fixed/configurable scope alias must preserve saved list order into ${element}`)
+  }
+
+  for (const [label, replacement] of [
+    ['absent-only', 'isFixedLevel1 ? undefined : undefined'],
+    ['default-only', 'isFixedLevel1 ? undefined : getDefaultColumnSettings(definitions)'],
+    ['unrelated-static-branch', 'isFixedLevel1 ? getDefaultColumnSettings(definitions) : columnSettingsByView[currentViewKey]'],
+  ]) {
+    const invalidScope = fixture(`${label}.tsx`, scopedListSettingsSource.replace(
+      'isFixedLevel1 ? undefined : columnSettingsByView[currentViewKey]', replacement,
+    ), 'ScopedPlan')
+    for (const element of ['Table', 'DHTMLXGantt']) {
+      assert.equal(returnedRenderHasOrderedColumns(invalidScope, element), false,
+        `${label} must not satisfy configured ${element} ordering`)
+    }
+  }
+
+  const disconnectedGantt = fixture('disconnected-gantt.tsx', scopedListSettingsSource.replace(
+    'projectGanttColumns(orderedColumns)', 'projectGanttColumns(definitions)',
+  ), 'ScopedPlan')
+  assert.equal(returnedRenderHasOrderedColumns(disconnectedGantt, 'Table'), true)
+  assert.equal(returnedRenderHasOrderedColumns(disconnectedGantt, 'DHTMLXGantt'), false,
+    'Gantt projection must consume the ordered alias, not the original definitions')
 
   const returnedJsxVariable = fixture('returned-jsx-variable.tsx', `
     ${helperImport}

@@ -59,6 +59,25 @@ assert.deepEqual(
 assert.equal(renamedGanttColumns[3].template({ duration: 12 }), '12天')
 assert.equal(renamedGanttColumns[4].template({ progress: 0.5 }), '50%')
 
+const listColumns = [
+  { key: 'id', title: '序号' }, { key: 'taskName', title: '阶段/节点' },
+  { key: 'planStartDate', title: '计划开始时间' }, { key: 'planEndDate', title: '计划完成时间' },
+  { key: 'estimatedDays', title: '预估工期' }, { key: 'actualStartDate', title: '实际开始时间' },
+  { key: 'actualEndDate', title: '实际完成时间' }, { key: 'actualDays', title: '实际工期' },
+  { key: 'delayStatus', title: '是否延期' },
+]
+const listGanttColumns = ganttRules.buildVisiblePlanGanttColumns(listColumns)
+assert.deepEqual(listGanttColumns.map(column => column.label), listColumns.map(column => column.title), 'gantt retains every list column in list order, including sequence and actual dates')
+const listMilestone = {
+  id: '1.1', taskName: '<里程碑>', planStartDate: '', planEndDate: '2026-09-03', estimatedDays: null,
+  actualStartDate: '', actualEndDate: '2026-09-05', actualDays: null, delayStatus: '延期',
+}
+const [gridMilestone] = ganttRules.withPlanGanttListRows([
+  { id: '1.1', start_date: '2026-09-03', end_date: '2026-09-03', duration: 0 },
+], [listMilestone])
+assert.deepEqual(listGanttColumns.map(column => column.template(gridMilestone)), ['1.1', '&lt;里程碑&gt;', '-', '2026-09-03', '-', '-', '2026-09-05', '-', '延期'], 'gantt cells use the list projection, not artificial milestone start/duration values from chart geometry')
+assert.equal(gridMilestone.start_date, '2026-09-03', 'list formatting does not change the gantt schedule used for rendering and drag validation')
+
 const machineTemplate = level1Rules.buildMachineLevel1Tasks(true)
 const machineProjection = level1Rules.projectLevel1Plan(machineTemplate, { mode: 'standard', today: '2026-08-27' })
 assert.equal(machineProjection.rows.length, machineTemplate.length, 'the nine-column tree projection preserves every whole-machine task')

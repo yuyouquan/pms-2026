@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
+import { createCurrentDatasetStorage } from './lib/mock-dataset-storage.mjs'
 const root = projectRoot(import.meta.url)
-const memory = new Map()
-globalThis.localStorage = { getItem: k => memory.get(k) ?? null, setItem: (k,v) => memory.set(k,v), removeItem: k => memory.delete(k) }
+globalThis.localStorage = createCurrentDatasetStorage()
+globalThis.window = { localStorage: globalThis.localStorage }
 const load = p => loadTypeScriptModule(root, p)
 const rules = load('src/lib/hrVersionRules.ts')
 const formal = load('src/lib/hrFormalProjectSource.ts')
@@ -134,7 +135,7 @@ eq(reordered.map(r=>r.isEdited),[true,false],'department reorder preserves sourc
 eq(reordered[0].monthlyData,{'2026-01':4,'2026-02':6},'department reorder keeps manual distribution')
 
 // Fractional machine coefficients must conserve totals across departments and months.
-const dates={conceptStart:'2026-01-01',str1:'2026-02-01',str3:'2026-03-01',str4:'2026-04-01',str5:'2026-05-01',productLaunch:'2026-06-01'}
+const dates={conceptStart:'2026-01-01',str1:'2026-02-01',str2:'2026-02-15',str3:'2026-03-01',str4:'2026-04-01',str4a:'2026-04-15',str5:'2026-05-01'}
 for(const coefficient of [1.25,0.15,1.333]){
  const records=model.getState().data.hrModel
  const rows=config.calcDepartmentMonthlySplit(records,'A','V2026.1',coefficient,dates)

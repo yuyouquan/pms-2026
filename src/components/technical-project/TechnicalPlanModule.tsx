@@ -50,7 +50,7 @@ import { formatPlanPublishedDate, type PlanRevisionKind } from '@/lib/planVersio
 import { getTemplateSnapshotForProjectType } from '@/lib/projectTemplateCompatibility'
 import { comparePublishedTechnicalPlanVersions } from '@/lib/technicalProjectRules'
 import { canMaintainLevel1Plan, canMutateLevel1TaskStructure, projectLevel1FlatMilestones, projectLevel1Plan, projectTechnicalSubprojectRows, sumLevel1EstimatedDays, type Level1FlatMilestoneRow } from '@/lib/level1PlanRules'
-import { applyPlanGanttDateChange, applyPlanTaskDatePatch, buildPlanGanttTasks } from '@/lib/planGanttRules'
+import { applyPlanGanttDateChange, applyPlanTaskDatePatch, buildPlanGanttTasks, buildVisiblePlanGanttColumns, withPlanGanttListRows } from '@/lib/planGanttRules'
 import {
   createFilterCondition,
   getDefaultFilterOperator,
@@ -85,13 +85,13 @@ import type { TechnicalSubproject } from '@/types/technicalProject'
 const { Text } = Typography
 const FIXED_TDT_LABEL = 'TDT项目计划'
 const TECHNICAL_STAGE_COLORS = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2'] as const
-const TECHNICAL_GANTT_COLUMNS: DHTMLXGanttColumn[] = [
-  { name: 'text', label: '阶段/节点', width: 180, tree: true },
-  { name: 'start_date', label: '计划开始时间', align: 'center', width: 120 },
-  { name: 'end_date', label: '计划完成时间', align: 'center', width: 120 },
-  { name: 'duration', label: '预估工期', align: 'center', width: 90, template: task => `${task.duration}天` },
-  { name: 'progress', label: '进度', align: 'center', width: 60, template: task => `${Math.round(task.progress * 100)}%` },
-]
+const TECHNICAL_GANTT_COLUMNS: Record<TechnicalTemplateKind, DHTMLXGanttColumn[]> = {
+  tdt: buildVisiblePlanGanttColumns(getTechnicalPlanExportColumns('subproject').map(column => ({
+    ...column,
+    key: column.key === 'sequence' ? 'id' : column.key === 'activityName' ? 'taskName' : column.key,
+  }))),
+  subproject: buildVisiblePlanGanttColumns(getTechnicalPlanExportColumns('subproject')),
+}
 const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [
   { key: 'gray', label: '创建非正式版本' },
   { key: 'formal', label: '创建正式版本' },
@@ -1048,11 +1048,14 @@ export default function TechnicalPlanModule({
           />
         ) : viewMode === 'gantt' ? (
           <DHTMLXGantt
-            tasks={buildPlanGanttTasks(filteredHierarchyTasks, {
-              mode: tab?.templateKind === 'subproject' ? 'technical-subproject' : 'hierarchical',
-              editable: canMaintain,
-            })}
-            columns={TECHNICAL_GANTT_COLUMNS}
+            tasks={withPlanGanttListRows(
+              buildPlanGanttTasks(filteredHierarchyTasks, {
+                mode: tab?.templateKind === 'subproject' ? 'technical-subproject' : 'hierarchical',
+                editable: canMaintain,
+              }),
+              tab?.templateKind === 'subproject' ? filteredTasks : projectLevel1Plan(filteredHierarchyTasks, { mode: 'standard' }).rows,
+            )}
+            columns={TECHNICAL_GANTT_COLUMNS[tab?.templateKind || 'tdt']}
             readOnly={!canMaintain}
             collapsedIds={collapsedIds}
             onCollapsedChange={updater => setCollapsed(scope, [...updater(collapsedIds)])}

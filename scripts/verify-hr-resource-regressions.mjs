@@ -23,7 +23,7 @@ for(const name of ['Capability','Tos','Technical','Machine']){
  if(name==='Machine'){
   model=get('src/stores/hrConfig.ts').useHrConfigStore;modelData=structuredClone(model.getState().data)
   const row=modelData.hrModel[0]
-  modelRows=[d1,d2].map(d=>({...row,id:d.id,primaryDepartment:d.primaryDepartment,secondaryDepartment:d.secondaryDepartment,projectLevel:'S',modelVersion:'REVIEW',enabled:true,conceptPhase:12,planningPhase:0,developmentPhase:0,validationPhase:0,launchPhase:0,lifecycle:0}))
+  modelRows=[d1,d2].map(d=>({...row,id:d.id,primaryDepartment:d.primaryDepartment,secondaryDepartment:d.secondaryDepartment,projectLevel:'S',modelVersion:'REVIEW',enabled:true,conceptToStr1:12,str1ToStr2:0,str2ToStr3:0,str3ToStr4:0,str4ToStr4a:0,str4aToStr5:0,str5ToSixMonths:0}))
   model.setState({data:{...modelData,hrModel:modelRows}})
   store.getState().addVersion(project.id,'annual',{projectLevel:'S',levelCoefficient:1,hrModelVersion:'REVIEW'})
  }else store.getState().addVersion(project.id,{budgetType:'annual',departmentInvestments:[d1,d2],projectStartTime:'2028-01-01',projectEndTime:'2028-12-01'})

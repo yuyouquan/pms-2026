@@ -38,17 +38,44 @@ export interface VisiblePlanGanttColumn {
   width: number
   align?: string
   tree?: boolean
-  template?: (task: { duration?: number; progress?: number }) => string
+  template?: (task: Record<string, any>) => string
+}
+
+/** Keep display values separate from the chart's normalized scheduling dates. */
+export const withPlanGanttListRows = <T extends { id: string }>(
+  tasks: readonly T[],
+  rows: readonly Record<string, any>[],
+): Array<T & { planGridValues?: Record<string, any> }> => {
+  const rowsById = new Map(rows.map(row => [String(row.id), row]))
+  return tasks.map(task => ({ ...task, planGridValues: rowsById.get(String(task.id)) }))
+}
+
+const escapeGanttCell = (value: unknown): string => String(value ?? '-')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+
+const listCell = (key: string, fallbackKey = key, suffix = '') => (task: Record<string, any>): string => {
+  const row = task.planGridValues
+  const value = row ? row[key] : task[fallbackKey]
+  if (value === undefined || value === null || value === '') return '-'
+  return `${escapeGanttCell(value)}${suffix}`
 }
 
 export const buildVisiblePlanGanttColumns = (
   definitions: readonly { key: string; title?: unknown }[],
 ): VisiblePlanGanttColumn[] => {
   const columnsByKey: Record<string, VisiblePlanGanttColumn> = {
-    taskName: { name: 'text', label: '任务名称', width: 180, tree: true },
-    planStartDate: { name: 'start_date', label: '计划开始', align: 'center', width: 120 },
-    planEndDate: { name: 'end_date', label: '计划完成', align: 'center', width: 120 },
-    estimatedDays: { name: 'duration', label: '计划周期', align: 'center', width: 90, template: task => `${task.duration ?? 0}天` },
+    id: { name: 'id', label: '序号', width: 70, align: 'center', template: listCell('id') },
+    sequence: { name: 'sequence', label: '序号', width: 70, align: 'center', template: listCell('sequence') },
+    taskName: { name: 'text', label: '任务名称', width: 180, tree: true, template: listCell('taskName', 'text') },
+    activityName: { name: 'text', label: '阶段/节点', width: 180, tree: true, template: listCell('activityName', 'text') },
+    planStartDate: { name: 'start_date', label: '计划开始', align: 'center', width: 120, template: listCell('planStartDate') },
+    planEndDate: { name: 'end_date', label: '计划完成', align: 'center', width: 120, template: listCell('planEndDate') },
+    estimatedDays: { name: 'duration', label: '计划周期', align: 'center', width: 90, template: task => task.planGridValues ? listCell('estimatedDays', 'duration', '天')(task) : `${task.duration ?? 0}天` },
+    actualStartDate: { name: 'actualStartDate', label: '实际开始时间', align: 'center', width: 120, template: listCell('actualStartDate') },
+    actualEndDate: { name: 'actualEndDate', label: '实际完成时间', align: 'center', width: 120, template: listCell('actualEndDate') },
+    actualDays: { name: 'actualDays', label: '实际工期', align: 'center', width: 90, template: listCell('actualDays', 'actualDays', '天') },
+    delayStatus: { name: 'delayStatus', label: '是否延期', align: 'center', width: 90, template: listCell('delayStatus') },
     progress: { name: 'progress', label: '进度', align: 'center', width: 60, template: task => `${Math.round((task.progress ?? 0) * 100)}%` },
   }
   return definitions

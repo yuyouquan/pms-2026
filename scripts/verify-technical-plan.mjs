@@ -68,7 +68,7 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
-assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 14, 'plan store preserves the technical-plan migrations together with the canonical MR snapshot backfill')
+assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 15, 'plan store preserves technical-plan and canonical MR migrations through the tOS planning-phase upgrade')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')
@@ -537,7 +537,17 @@ assert.doesNotMatch(technicalModuleSource, /isResponsibleForTechnicalPlanTasks/,
 assert.doesNotMatch(technicalModuleSource, /effectiveTasks|level2PlanTasks|projectPlanLevel/, 'technical plan never reads whole-machine or level-2 plan state')
 assert.match(technicalModuleSource, /visibleVersions/, 'all technical plan version surfaces share one visible-version selector')
 assert.match(technicalModuleSource, /navigateWithEditGuard\([^,]+,\s*Boolean\(isDraft\)\)/s, 'scope and version switches use the current draft state for edit guarding')
-assert.match(technicalModuleSource, /buildPlanGanttTasks[\s\S]{0,300}editable:\s*canMaintain[\s\S]{0,260}onTaskDateChange/, 'technical Gantt is typed and writes validated dates')
+const technicalPlanAst = ts.createSourceFile('TechnicalPlanModule.tsx', technicalModuleSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+const technicalGanttProps = []
+const visitTechnicalGantt = node => {
+  if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(technicalPlanAst) === 'DHTMLXGantt') technicalGanttProps.push(node.attributes.properties)
+  ts.forEachChild(node, visitTechnicalGantt)
+}
+visitTechnicalGantt(technicalPlanAst)
+assert.equal(technicalGanttProps.length, 1, 'technical plan has one Gantt surface')
+const ganttPropSource = name => technicalGanttProps[0].find(prop => ts.isJsxAttribute(prop) && prop.name.getText(technicalPlanAst) === name)?.initializer?.getText(technicalPlanAst) || ''
+assert.match(ganttPropSource('tasks'), /withPlanGanttListRows\(\s*buildPlanGanttTasks[\s\S]*editable:\s*canMaintain/, 'technical Gantt uses list display values and typed editability')
+assert.match(ganttPropSource('onTaskDateChange'), /applyPlanGanttDateChange[\s\S]*validateTechnicalSubprojectDates[\s\S]*validateTechnicalTdtMilestoneDates[\s\S]*updateCurrentTasks/, 'technical Gantt validates and persists dragged dates')
 assert.match(technicalModuleSource, /scrollIntoView/, 'publish validation moves focus to the first invalid row')
 assert.match(technicalModuleSource, /firstInvalidTaskId[\s\S]{0,320}setCollapsed\(scope, \[\]\)[\s\S]{0,320}requestAnimationFrame/, 'publish validation exposes the first invalid flat row')
 assert.match(technicalModuleSource, /const publishedVersions = useMemo\([\s\S]{0,160}canViewTechnicalPlan/, 'published versions remain inaccessible without technical-plan view permission')
@@ -557,7 +567,7 @@ assert.doesNotMatch(technicalModuleSource, /CopyOutlined|计划克隆|handleClon
 assert.doesNotMatch(technicalModuleSource, /aria-label="字段配置"|当前计划列固定，无法配置/, 'technical plan removes the disabled field-configuration placeholder')
 assert.match(technicalModuleSource, /icon=\{<SaveOutlined\s*\/>\}[^>]*aria-label="发布"[^>]*\/>/, 'technical plan publish uses the same icon-only draft action as whole-machine plans')
 assert.match(technicalModuleSource, /aria-label="分享计划"/, 'technical plan exposes the maintained share action')
-assert.match(technicalModuleSource, /columns=\{TECHNICAL_GANTT_COLUMNS\}/, 'technical Gantt uses its parity column set')
+assert.match(technicalModuleSource, /columns=\{TECHNICAL_GANTT_COLUMNS\[tab\?\.templateKind \|\| 'tdt'\]\}/, 'technical Gantt uses its parity column set')
 const technicalGanttColumnsStart = technicalModuleSource.indexOf('const TECHNICAL_GANTT_COLUMNS')
 const technicalGanttColumnsEnd = technicalModuleSource.indexOf('const PLAN_REVISION_KIND_OPTIONS', technicalGanttColumnsStart)
 assert.ok(technicalGanttColumnsStart >= 0 && technicalGanttColumnsEnd > technicalGanttColumnsStart, 'technical Gantt column configuration is present')
@@ -638,7 +648,7 @@ assert.deepEqual(
 )
 assert.deepEqual(
   technicalWorkspace.getTechnicalPlanFilterFields('subproject').map(field => field.key),
-  ['sequence', 'activityName', 'status', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays'],
+  ['sequence', 'activityName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'],
   'subproject filters expose exactly the nine visible flat columns',
 )
 assert.equal(technicalWorkspace.getTechnicalPlanRowKey({ id: '2', stableId: 'custom-transfer' }), 'custom-transfer', 'table and validation scrolling share the stable technical row key')
@@ -647,11 +657,9 @@ const tdtStatusOptions = technicalWorkspace.getTechnicalPlanFilterFields('tdt', 
   { status: '进行中' }, { status: '已完成' }, { status: '进行中' }, { status: '' },
 ]).find(field => field.key === 'status').options
 assert.deepEqual(tdtStatusOptions, [{ label: '进行中', value: '进行中' }, { label: '已完成', value: '已完成' }], 'TDT status filter options are current nonempty unique row statuses')
-const subprojectStatusOptions = technicalWorkspace.getTechnicalPlanFilterFields('subproject', [
-  { status: '未开始' }, { status: '进行中' },
-]).find(field => field.key === 'status').options
-assert.deepEqual(subprojectStatusOptions, [{ label: '未开始', value: '未开始' }, { label: '进行中', value: '进行中' }], 'subproject status filter options are current nonempty unique row statuses')
-assert.ok(technicalWorkspace.getTechnicalPlanFilterFields('subproject', []).find(field => field.key === 'status').options.length > 0, 'status filter has a nonempty fallback when the current projection has no status values')
+const subprojectDelayOptions = technicalWorkspace.getTechnicalPlanFilterFields('subproject').find(field => field.key === 'delayStatus').options
+assert.deepEqual(subprojectDelayOptions, ['-', '按时', '延期'].map(value => ({ label: value, value })), 'subproject delay filter exposes every displayed delay result')
+assert.ok(technicalWorkspace.getTechnicalPlanFilterFields('tdt', []).find(field => field.key === 'status').options.length > 0, 'TDT status filter has a nonempty fallback when the current projection has no status values')
 const tdtFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
   { id: 'row-1', sequence: 1, stageName: '规划阶段', milestoneName: '规划启动', status: '进行中', planEndDate: '2026-01-01', estimatedDays: 1, actualEndDate: '', actualDays: null },
   { id: 'row-2', sequence: 2, stageName: '概念阶段', milestoneName: 'TDR1', status: '已完成', planEndDate: '2026-02-01', estimatedDays: 2, actualEndDate: '2026-02-02', actualDays: 1 },
@@ -661,13 +669,14 @@ const tdtFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
   { id: 'filter-status', field: 'status', operator: 'equals', value: '进行中' },
 ], technicalWorkspace.getTechnicalPlanFilterFields('tdt'))
 assert.deepEqual(tdtFilteredRows.map(row => row.id), ['row-1'], 'TDT stage, milestone, and status filters share the flat row projection')
-const subprojectFilteredRows = planWorkspace.applyPlanWorkspaceFilters([
-  { id: 'activity-1', sequence: 1, activityName: '第1版转测', status: '未开始', planStartDate: '', planEndDate: '2026-01-01', estimatedDays: 1, actualStartDate: '', actualEndDate: '', actualDays: null },
-  { id: 'activity-2', sequence: 2, activityName: 'TDR3', status: '进行中', planStartDate: '2026-01-02', planEndDate: '2026-01-03', estimatedDays: 2, actualStartDate: '', actualEndDate: '', actualDays: null },
-], [{ id: 'filter-subproject-status', field: 'status', operator: 'equals', value: '进行中' }], technicalWorkspace.getTechnicalPlanFilterFields('subproject'))
-assert.deepEqual(subprojectFilteredRows.map(row => row.id), ['activity-2'], 'subproject status filtering uses the same dynamic visible-column definitions')
+const subprojectFilterRows = level1Rules.projectTechnicalSubprojectRows([
+  { id: 'activity-1', taskName: '第1版转测', order: 1, planStartDate: '2026-01-01', planEndDate: '2026-01-03', actualStartDate: '2026-01-01', actualEndDate: '2026-01-03' },
+  { id: 'activity-2', taskName: 'TDR3', order: 2, planStartDate: '2026-01-02', planEndDate: '2026-01-03', actualStartDate: '2026-01-02', actualEndDate: '2026-01-05' },
+], { today: '2026-02-01' })
+const subprojectFilteredRows = planWorkspace.applyPlanWorkspaceFilters(subprojectFilterRows, [{ id: 'filter-subproject-delay', field: 'delayStatus', operator: 'equals', value: '延期' }], technicalWorkspace.getTechnicalPlanFilterFields('subproject'))
+assert.deepEqual(subprojectFilteredRows.map(row => row.id), ['activity-2'], 'subproject delay filtering uses the same projected dates and visible-column definitions')
 assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('tdt').some(field => field.key === 'planStartDate' || field.key === 'actualStartDate' || field.key === 'delayStatus'), false, 'TDT filter menu excludes hidden start and delay fields')
-assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('subproject').some(field => field.key === 'stageName' || field.key === 'milestoneName' || field.key === 'delayStatus'), false, 'subproject filter menu excludes hidden stage, milestone, and delay fields')
+assert.equal(technicalWorkspace.getTechnicalPlanFilterFields('subproject').some(field => field.key === 'stageName' || field.key === 'milestoneName' || field.key === 'status'), false, 'subproject filter menu excludes hidden stage, milestone, and status fields')
 const technicalMutationOpening = { projectId: 'p1', tabId: 'p1:subproject:s1', scopeKey: 'p1:subproject:s1', versionId: 'v2-draft', user: '技术负责人' }
 const canConfirmTechnicalMutation = overrides => technicalWorkspace.canConfirmTechnicalSubprojectMutation({
   opening: technicalMutationOpening,

@@ -4,7 +4,7 @@ import path from 'node:path'
 import puppeteer from 'puppeteer'
 
 const baseUrl = process.env.PMS_BASE_URL || 'http://127.0.0.1:3017'
-const output = path.resolve('output/audit-20260907/transfer-browser')
+const output = path.resolve(process.env.PMS_BROWSER_OUTPUT || 'output/playwright/transfer-browser')
 fs.mkdirSync(output, { recursive: true })
 const browser = await puppeteer.launch({ headless: true, protocolTimeout: 20000, executablePath: process.env.PMS_CHROME_EXECUTABLE || process.env.PUPPETEER_EXECUTABLE_PATH || undefined, args: ['--no-sandbox', '--disable-gpu', '--disable-setuid-sandbox', '--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] })
 const page = await browser.newPage()
@@ -47,7 +47,7 @@ const chooseTeamMember = async (side, role, name) => {
   assert.ok(controls,'team selector controls a listbox')
   await page.waitForFunction(({controls,name}) => [...(document.getElementById(controls)?.closest('.ant-select-dropdown')?.querySelectorAll('.ant-select-item-option-content') || [])].some(element=>element.textContent?.trim()===name), {polling:100}, {controls,name})
   await page.evaluate(({controls,name}) => [...document.getElementById(controls).closest('.ant-select-dropdown').querySelectorAll('.ant-select-item-option-content')].find(element=>element.textContent?.trim()===name)?.click(),{controls,name})
-  await page.mouse.click(100,85)
+  await page.keyboard.press('Escape')
   await wait(250)
   const selected=await page.evaluate(({side,role,name})=>{
     const card=[...document.querySelectorAll('.ant-card')].find(card=>card.textContent?.trim().startsWith(side))
@@ -62,7 +62,7 @@ let screenshotsAvailable = process.env.PMS_BROWSER_SCREENSHOTS === '1'
 const screenshot = async name => { if (!screenshotsAvailable) return; console.log('Screenshot',name); try { await page.screenshot({ path: path.join(output,`${name}.png`), captureBeyondViewport: false }); observations.push({ screenshot:`${name}.png` }) } catch(error) { screenshotsAvailable = false; observations.push({screenshotError:name,message:error.message}); console.error('Screenshot failed',name,error.message) } }
 try {
   await page.goto(baseUrl, { waitUntil: 'networkidle0' })
-  await clickText('项目列表','[role="menuitem"]')
+  await clickText('项目管理','[role="menuitem"]')
   await page.waitForSelector('[aria-label="卡片视图"]')
   await page.$eval('[aria-label="卡片视图"]', element => element.click())
   await page.waitForSelector('[aria-label="打开项目 1"]')
@@ -110,7 +110,7 @@ try {
   await page.waitForSelector('.ant-modal textarea')
   await page.type('.ant-modal textarea','浏览器验证资料：本次申请独立录入。')
   await clickText('确认提交')
-  await page.waitForFunction(()=>!document.querySelector('.ant-modal-wrap:not([style*="display: none"]) textarea'),{polling:100})
+  await page.waitForFunction(()=>!document.querySelector('.ant-modal textarea')?.getBoundingClientRect().height,{polling:100})
   const savedRow=await page.$eval(`tr[data-row-key^="cl_${id}_"]`,row=>row.textContent)
   assert.ok(savedRow.includes('浏览器验证资料：本次申请独立录入。') && savedRow.includes('已录入') && savedRow.includes('通过'), 'UI row shows saved content and successful entry/AI states')
   observations.push({entrySubmittedViaUI:true,savedRow})

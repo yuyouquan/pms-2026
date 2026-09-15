@@ -216,6 +216,7 @@ import {
   applyPlanGanttDateChangeResult,
   applyPlanTaskDatePatch,
   buildVisiblePlanGanttColumns,
+  withPlanGanttListRows,
   buildPlanGanttTasks,
 } from '@/lib/planGanttRules'
 import {
@@ -2090,22 +2091,22 @@ export default function ProjectSpaceContainer() {
   const canViewDraft = canViewCurrentPlan && (canGovernLevel1Plan || canEditLevel2Plan)
 
   // View columns
-  const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode}`
+  const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode === 'gantt' ? 'vertical' : projectPlanViewMode}`
   const currentViewMode = projectPlanViewMode
   const currentViewColumns = useMemo(() => {
-    const definitions = getColumnsForView(currentViewMode)
-    if (currentViewMode !== 'gantt') return definitions
-    // Keep the chart headers and column settings aligned with this scope's list.
-    const listColumns = projectPlanLevel === 'level1'
-      ? isWholeMachineProject || isTosVersionProject ? LEVEL1_TREE_EXPORT_COLUMNS : TABLE_COLUMNS
-      : [{ key: 'estimatedDays', title: '预估工期' }]
+    const definitions = getColumnsForView(currentViewMode === 'gantt' ? 'vertical' : currentViewMode)
+    // Gantt uses the complete list schema and its saved order/visibility.
+    const listColumns = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
+      ? LEVEL1_TREE_EXPORT_COLUMNS : TABLE_COLUMNS
     return definitions.map(definition => ({
       ...definition,
       title: listColumns.find(column => column.key === definition.key)?.title || definition.title,
     }))
   }, [currentViewMode, projectPlanLevel, isWholeMachineProject, isTosVersionProject])
   const currentViewKey = getViewKey()
-  const storedColumnSettings = columnSettingsByView[currentViewKey]
+  const storedColumnSettings = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
+    ? undefined // The governed list has nine fixed columns and no field picker.
+    : columnSettingsByView[currentViewKey]
   const columnSettings = useMemo(
     () => normalizeColumnSettings(currentViewColumns, storedColumnSettings),
     [currentViewColumns, storedColumnSettings],
@@ -3598,7 +3599,10 @@ export default function ProjectSpaceContainer() {
       return (
         <div className="pms-level1-tree-gantt" style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
           <DHTMLXGantt
-            tasks={buildPlanGanttTasks(filteredHierarchy, { mode: 'hierarchical', editable: ganttEditable })}
+            tasks={withPlanGanttListRows(
+              buildPlanGanttTasks(filteredHierarchy, { mode: 'hierarchical', editable: ganttEditable }),
+              filteredRows,
+            )}
             columns={ganttColumns}
             onTaskClick={(task) => message.info(`点击任务: ${task.text}`)}
             readOnly={!ganttEditable}
@@ -3643,7 +3647,7 @@ export default function ProjectSpaceContainer() {
     }
     return (
       <div style={{ border: '1px solid #f3f4f6', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
-        <DHTMLXGantt tasks={ganttTasks} columns={ganttColumns} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode || followedTosLevel1ReadOnly || isFollowReadOnlyOverview} collapsedIds={collapsedSet}
+        <DHTMLXGantt tasks={withPlanGanttListRows(ganttTasks, projectPlanLevel === 'level1' && !customTasks ? projectLevel1Plan(ganttTasks, { mode: 'standard' }).rows : ganttTasks)} columns={ganttColumns} onTaskClick={(task) => message.info(`点击任务: ${task.text}`)} readOnly={!isEditMode || followedTosLevel1ReadOnly || isFollowReadOnlyOverview} collapsedIds={collapsedSet}
           scaleMode={!customTasks && projectPlanLevel === 'level1' ? projectPlanGanttScaleMode : 'month'}
           onCollapsedChange={(updater) => { if (!key) return; setCollapsedNodes(prev => { const c = prev[key] || new Set<string>(); return { ...prev, [key]: updater(c) } }) }}
         />

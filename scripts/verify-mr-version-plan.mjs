@@ -1878,8 +1878,8 @@ assert.deepEqual(
 assert.notEqual(machineAcceptanceSnapshot, secondMachineAcceptanceSnapshot)
 assert.deepEqual(
   tosAcceptanceSnapshot.filter(task => task.parentId == null).map(task => task.taskName),
-  ['概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
-  'MR acceptance seed must preserve all five tOS level-one stages',
+  ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
+  'MR acceptance seed must preserve all six tOS level-one stages, including planning before concept',
 )
 const fixedTosTopology = taskTopology(tosAcceptanceSnapshot.filter(task => !/^16\.3\.0\./.test(task.taskName)))
 assert.deepEqual(
@@ -1954,14 +1954,17 @@ const acceptanceVersionScopes = [
   {
     versions: acceptancePlanScopeA.marketVersionsByKey['project::1::OP::level1::versions'],
     snapshotKey: versionId => `project::1::OP::level1::${versionId}`,
+    stageNames: ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'],
   },
   {
     versions: acceptancePlanScopeA.marketVersionsByKey['project::3::OP::level1::versions'],
     snapshotKey: versionId => `project::3::OP::level1::${versionId}`,
+    stageNames: ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'],
   },
   {
     versions: acceptancePlanScopeA.tosTypeVersionsByKey['project::19::tos-type::Full::level1::versions'],
     snapshotKey: versionId => `project::19::tos-type::Full::level1::${versionId}::snapshot`,
+    stageNames: ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
   },
 ]
 const allAcceptanceSnapshots = []
@@ -1969,7 +1972,7 @@ for (const scope of acceptanceVersionScopes) {
   for (const version of scope.versions.filter(candidate => candidate.status === '已发布')) {
     const snapshot = acceptancePlanScopeA.publishedSnapshots[scope.snapshotKey(version.id)]
     assert.ok(snapshot, `every published acceptance version requires a matching snapshot: ${scope.snapshotKey(version.id)}`)
-    assert.equal(snapshot.filter(task => task.parentId == null).length, 5, 'every published acceptance snapshot preserves the complete five-stage topology')
+    assert.deepEqual(snapshot.filter(task => task.parentId == null).map(task => task.taskName), scope.stageNames, 'every published acceptance snapshot preserves its project-type stage topology and order')
     allAcceptanceSnapshots.push(snapshot)
   }
 }
@@ -2667,7 +2670,7 @@ legacyPlanFixture.publishedSnapshots['project::tos::tos-type::Full::level3::v1::
 legacyPlanFixture.publishedSnapshots['project::machine::level3::level1::v1'] = [{ id: 'literal-level3-market' }]
 legacyPlanFixture.publishedSnapshots['project::level3::level1::v1'] = [{ id: 'literal-level3-project' }]
 const planStore = loadTypeScriptModule(root, 'src/stores/plan.ts')
-assert.equal(planStore.PLAN_STORE_VERSION, 14)
+assert.equal(planStore.PLAN_STORE_VERSION, 15, 'MR migration composes with the later tOS planning-phase upgrade')
 const migratedPlanFixture = planStore.migratePlanStoreState(structuredClone(legacyPlanFixture), 9)
 assert.equal('level3TemplateTasksByType' in migratedPlanFixture, false)
 assert.equal('level3ScopesByKey' in migratedPlanFixture, false)

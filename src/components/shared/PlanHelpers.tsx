@@ -98,6 +98,10 @@ export function DHTMLXGantt({
 }) {
   const ganttContainer = useRef<HTMLDivElement>(null)
   const suppressFeedback = useRef(false)
+  const [gridViewportWidth, setGridViewportWidth] = useState(600)
+  const gridViewportWidthRef = useRef<number | null>(null)
+  const resizeGridRef = useRef<(width: number) => void>(() => {})
+  const resizingGrid = useRef(false)
   const onTaskClickRef = useRef(onTaskClick)
   const onTaskDateChangeRef = useRef(onTaskDateChange)
   const validateTaskDateChangeRef = useRef(validateTaskDateChange)
@@ -119,6 +123,32 @@ export function DHTMLXGantt({
 
     gantt.config.date_format = '%Y-%m-%d'
     gantt.config.columns = columns
+    const totalGridWidth = columns.reduce((width, column) => width + column.width, 0)
+    const clampGridWidth = (width: number) => {
+      const containerWidth = ganttContainer.current?.clientWidth || 1000
+      return Math.max(180, Math.min(width, totalGridWidth, containerWidth - 240))
+    }
+    const initialGridWidth = clampGridWidth(gridViewportWidthRef.current ?? (ganttContainer.current.clientWidth * 0.6))
+    gridViewportWidthRef.current = initialGridWidth
+    setGridViewportWidth(initialGridWidth)
+    // The Standard build has no native grid resizer. Keep the full table in an
+    // independently scrollable pane and reserve room for the timeline.
+    gantt.config.grid_width = totalGridWidth
+    gantt.config.layout = {
+      css: 'gantt_container',
+      cols: [
+        { width: initialGridWidth, rows: [
+          { view: 'grid', scrollX: 'planGridScroll', scrollY: 'scrollVer', scrollable: true },
+          { view: 'scrollbar', id: 'planGridScroll', group: 'horizontal' },
+        ] },
+        { width: 6 },
+        { rows: [
+          { view: 'timeline', scrollX: 'scrollHor', scrollY: 'scrollVer' },
+          { view: 'scrollbar', id: 'scrollHor', group: 'horizontal' },
+        ] },
+        { view: 'scrollbar', id: 'scrollVer' },
+      ],
+    }
     const scaleConfig = getGanttScaleConfig(scaleMode)
     const ganttConfig = gantt.config as any
     ganttConfig.scales = scaleConfig.scales
@@ -147,6 +177,20 @@ export function DHTMLXGantt({
     ].join(' ')
 
     gantt.init(ganttContainer.current)
+    resizeGridRef.current = (width: number) => {
+      const nextWidth = clampGridWidth(width)
+      if (nextWidth === gridViewportWidthRef.current) return
+      gridViewportWidthRef.current = nextWidth
+      setGridViewportWidth(nextWidth)
+      const scroll = gantt.getScrollState()
+      const gridScrollX = ganttContainer.current?.querySelector('.gantt_grid')?.scrollLeft || 0
+      gantt.config.layout.cols![0].width = nextWidth
+      gantt.resetLayout()
+      gantt.scrollTo(scroll.x, scroll.y)
+      gantt.scrollLayoutCell('grid', gridScrollX, scroll.y)
+    }
+    const resizeObserver = new ResizeObserver(() => resizeGridRef.current(gridViewportWidthRef.current ?? initialGridWidth))
+    resizeObserver.observe(ganttContainer.current)
 
     const ganttData = {
       data: tasks.map(t => ({
@@ -210,6 +254,8 @@ export function DHTMLXGantt({
       : null
 
     return () => {
+      resizeObserver.disconnect()
+      resizeGridRef.current = () => {}
       gantt.detachEvent(openHandler)
       gantt.detachEvent(closeHandler)
       detachInteractionLifecycle()
@@ -234,7 +280,33 @@ export function DHTMLXGantt({
     queueMicrotask(() => { suppressFeedback.current = false })
   }, [collapsedIds])
 
-  return <div className="pms-gantt" ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
+  return (
+    <div style={{ position: 'relative', width: '100%' }}>
+      <div className="pms-gantt" ref={ganttContainer} style={{ width: '100%', height: '500px' }} />
+      <div
+        role="separator"
+        aria-label="调整计划表格与甘特图宽度"
+        aria-orientation="vertical"
+        aria-valuemin={180}
+        aria-valuenow={Math.round(gridViewportWidth)}
+        tabIndex={0}
+        title="拖动调整表格与甘特图宽度"
+        onPointerDown={event => { resizingGrid.current = true; event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault() }}
+        onPointerMove={event => {
+          if (!resizingGrid.current || !ganttContainer.current) return
+          resizeGridRef.current(event.clientX - ganttContainer.current.getBoundingClientRect().left)
+        }}
+        onPointerUp={() => { resizingGrid.current = false }}
+        onLostPointerCapture={() => { resizingGrid.current = false }}
+        onKeyDown={event => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+          event.preventDefault()
+          resizeGridRef.current(gridViewportWidth + (event.key === 'ArrowLeft' ? -40 : 40))
+        }}
+        style={{ position: 'absolute', left: gridViewportWidth, top: 1, bottom: 1, width: 6, cursor: 'col-resize', touchAction: 'none', background: 'var(--pms-border, #d9d9d9)', zIndex: 2 }}
+      />
+    </div>
+  )
 }
 
 // ─── MiniPipeline ───────────────────────────────────────────────────

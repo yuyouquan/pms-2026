@@ -45,7 +45,7 @@ assert.equal(bv().milestones.str2,'2030-03-02');assert.equal(bv().milestones.str
 const source=get('src/lib/hrFormalProjectSource.ts').resolveHrFormalSource('machine',null,'3')
 assert.ok(source.milestones.str2);assert.ok(source.milestones.str4a)
 const fields=get('src/constants/hrMachine.ts').MILESTONE_FIELDS
-assert.deepEqual(fields.map(f=>f.key),['conceptStart','str1','str2','str3','str4','str4a','str5','productLaunch','lifecycleEnd'])
+assert.deepEqual(fields.map(f=>f.key),['conceptStart','str1','str2','str3','str4','str4a','str5','str5Plus6Months'])
 const formalMachine=machine.getState().projects.find(p=>p.pmsProjectId==='3')
 const formalVersion=formalMachine.versions.find(v=>v.budgetType==='projectBudget')
 if(formalVersion){

@@ -281,11 +281,17 @@ assert.match(plan, /import type \{ MarketYesNoValue \} from '@\/lib\/marketRules
 assert.match(plan, /isMadaControlled\?: MarketYesNoValue \| undefined[\s\S]*isSimLocked\?: MarketYesNoValue \| undefined[\s\S]*isCancelPaused\?: MarketYesNoValue \| undefined/, 'plan grid boolean props must use the market yes-no value type')
 assert.match(plan, /const displayBoolean = \(value: MarketYesNoValue \| undefined\)/, 'plan grid boolean display helper must use the market yes-no value type')
 
-const wholeMachinePlanInfoStart = projectSpace.indexOf('const renderWholeMachinePlanInfo = () => {')
-const wholeMachinePlanInfoEnd = projectSpace.indexOf('\n    const anchorSections', wholeMachinePlanInfoStart)
-assert.notEqual(wholeMachinePlanInfoStart, -1, 'whole-machine plan information renderer must exist')
-assert.notEqual(wholeMachinePlanInfoEnd, -1, 'whole-machine plan information renderer must have a bounded source section')
-const wholeMachinePlanInfo = projectSpace.slice(wholeMachinePlanInfoStart, wholeMachinePlanInfoEnd)
+// Locate the renderer structurally; the following anchor-navigation variable was removed.
+const projectSpaceAst = ts.createSourceFile('ProjectSpaceContainer.tsx', projectSpace, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX)
+let wholeMachinePlanInfo = ''
+const findWholeMachinePlanInfo = node => {
+  if (ts.isVariableDeclaration(node) && node.name.getText(projectSpaceAst) === 'renderWholeMachinePlanInfo') {
+    wholeMachinePlanInfo = node.initializer?.getText(projectSpaceAst) ?? ''
+  }
+  ts.forEachChild(node, findWholeMachinePlanInfo)
+}
+findWholeMachinePlanInfo(projectSpaceAst)
+assert.ok(wholeMachinePlanInfo, 'whole-machine plan information renderer must exist')
 assert.match(
   wholeMachinePlanInfo,
   /<ProjectPlanInfoGrid\s+visibleFieldKeys=\{visiblePlanInfoFieldKeys\}\s+buildOption=\{row\.buildOption\}\s+buildMarket=\{row\.buildMarket\}\s+googleLaunchDate=\{row\.googleLaunchDate\}\s+isMadaControlled=\{row\.isMadaControlled\}\s+isSimLocked=\{row\.isSimLocked\}\s+isCancelPaused=\{row\.isCancelPaused\}\s+cancelPauseDate=\{row\.isCancelPaused === '是' \? row\.cancelPauseDate : undefined\}\s+\/>/,
@@ -293,7 +299,7 @@ assert.match(
 )
 
 assert.match(projectSpace, /afterCore=\{canDo\('basicInfo:planConfigView'\) \? \(isWholeMachine \? renderWholeMachinePlanInfo\(\) : renderProjectPlanInfo\(\)\) : undefined\}/, 'authorized target project plan information remains directly below the core card; denied users receive no plan/config content')
-assert.match(projectSpace, /const anchorSections = \[[\s\S]*id: 'section-plan', label: '计划信息'/, 'the target project anchor must use the unified plan-information label')
+assert.match(wholeMachinePlanInfo, /<Card id="section-plan"[^\n]*'计划信息'/, 'the target project plan section keeps its stable ID and unified plan-information label')
 assert.match(projectSpace, /\{!isTargetProject && renderProjectPlanInfo\(\)\}/, 'only non-target projects may use the lower plan-information section')
 assert.match(projectSpace, /\{!isTargetProject && \(isSoftware \|\| isTech\) && \(/, 'target machine and tOS projects must not render the standalone configuration section')
 

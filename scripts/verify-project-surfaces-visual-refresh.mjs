@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import ts from 'typescript'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
 const root = projectRoot(import.meta.url)
@@ -164,7 +165,7 @@ const technicalCreateProjectName = schema.TECHNICAL_PROJECT_CREATE_FIELDS.find(f
 assert.equal(technicalCreateProjectName?.label, '子项目名称', 'technical create must retain the source subproject name field')
 assert.equal(technicalCreateProjectName?.readOnly, true, 'technical create must retain the read-only source subproject name')
 assert.match(createSource, /const fieldLabel[\s\S]{0,150}: field\.label/, 'technical create fields render their configured schema label')
-assert.match(projectInfoModalSource, /aria-label="IPM项目来源"[\s\S]{0,1000}<Form\.Item label="项目名" name="projectName"><Input disabled/, 'technical source project name remains read-only in the common IPM source area')
+assert.match(projectInfoModalSource, /aria-label=\{manualCompletion \? "项目档案" : "IPM项目来源"\}[\s\S]{0,1000}<Form\.Item label="项目名" name="projectName"><Input disabled/, 'technical source project name remains read-only in the common IPM source area, including the manual-completion variant')
 assert.match(technicalInformationSource, /visibleChildren\.map\(child => \(\{[\s\S]*?<span>\{child\.name\}<\/span>/, 'technical project-space tabs must retain subproject names')
 assert.equal(
   technicalProjectModule.INITIAL_TECHNICAL_SUBPROJECTS.length > 0,
@@ -238,12 +239,17 @@ const sliceBetween = (source, startMarker, endMarker, description) => {
   return source.slice(start, end)
 }
 
-const wholeMachineBasicInfo = sliceBetween(
-  projectSpaceSource,
-  'const renderWholeMachinePlanInfo = () =>',
-  'const anchorSections =',
-  'whole-machine basic-information market summary',
-)
+// The sidebar anchor list was removed; bound this renderer by its syntax node.
+const projectSpaceAst = ts.createSourceFile('ProjectSpaceContainer.tsx', projectSpaceSource, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TSX)
+let wholeMachineBasicInfo = ''
+const findWholeMachineBasicInfo = node => {
+  if (ts.isVariableDeclaration(node) && node.name.getText(projectSpaceAst) === 'renderWholeMachinePlanInfo') {
+    wholeMachineBasicInfo = node.initializer?.getText(projectSpaceAst) ?? ''
+  }
+  ts.forEachChild(node, findWholeMachineBasicInfo)
+}
+findWholeMachineBasicInfo(projectSpaceAst)
+assert.ok(wholeMachineBasicInfo, 'whole-machine basic-information market summary must exist')
 const tosBasicInfo = sliceBetween(
   projectSpaceSource,
   'const renderProjectPlanInfo = () =>',

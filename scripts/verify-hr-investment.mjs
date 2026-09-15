@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import { loadTypeScriptModule, projectRoot } from './lib/source-contract.mjs'
+import { createCurrentDatasetStorage } from './lib/mock-dataset-storage.mjs'
 const root = projectRoot(import.meta.url)
-const memory = new Map()
-globalThis.localStorage = { getItem: k => memory.get(k) ?? null, setItem: (k,v) => memory.set(k,v), removeItem: k => memory.delete(k) }
+globalThis.localStorage = createCurrentDatasetStorage()
+globalThis.window = { localStorage: globalThis.localStorage }
 const load = p => loadTypeScriptModule(root, p)
 const rules = load('src/lib/hrVersionRules.ts')
 const formal = load('src/lib/hrFormalProjectSource.ts')
@@ -21,7 +22,7 @@ const base = projectStore.getState().projects[0]
 const formalProjects = categories.map((category,index) => ({ ...base, id: `verify-${category}`, sourceBid: `FORMAL-${category}`, projectCode: `FORMAL-${category}`, name: `正式${category}`, type: formalTypes[index], markets: ['OP','TR'], versionTypes: ['Full','Slim'], fieldValues: { softwareProjectLevel:'S' }, projectLevel:'S' }))
 projectStore.setState({ projects:formalProjects, marketConfigsByProjectId:{ 'verify-machine': [{market:'OP',isMain:false},{market:'TR',isMain:true}] }, tosTypeConfigsByProjectId:{ 'verify-tos':[{type:'Full',isMain:true},{type:'Slim',isMain:false}] } })
 const task = (name,date) => ({id:name,taskName:name,order:0,nodeKind:'fixed-milestone',planStartDate:date,planEndDate:date})
-const milestones = ['概念启动','STR1','STR3','STR4','STR5','上市阶段','规划KO','上市迭代阶段','维护阶段','规划启动','charter DCP','TDR1','PDCP','TDCP_X','EDCP']
+const milestones = ['概念启动','STR1','STR2','STR3','STR4','STR4A','STR5','上市阶段','规划KO','上市迭代阶段','维护阶段','规划启动','charter DCP','TDR1','PDCP','TDCP_X','EDCP']
 const publishedTasks = milestones.map((name,index) => ({...task(name, name==='概念启动'?'2026-03-01':'2027-04-01'),order:index}))
 for(const name of ['上市阶段','上市迭代阶段','维护阶段']) {
  const stage=publishedTasks.find(t=>t.taskName===name)
@@ -135,7 +136,7 @@ const unboundVersionBefore = stores[0].getState().projects[0].versions.find(v=>v
 const historicalBeforeModel = JSON.stringify(stores[0].getState().projects[0].versions[0])
 let changedModel = false
 modelStore.setState({data:{...modelBefore,hrModel:modelBefore.hrModel.map(record=>{
- if(!changedModel && record.projectLevel==='S' && record.modelVersion==='V2026.1') { changedModel=true; return {...record,conceptPhase:Number(record.conceptPhase)+10} }
+ if(!changedModel && record.projectLevel==='S' && record.modelVersion==='V2026.1') { changedModel=true; return {...record,conceptToStr1:Number(record.conceptToStr1)+10} }
  return record
 })}})
 stores[0].getState().refreshFormalProjects()
@@ -175,9 +176,9 @@ eq(Math.round(Object.values(capMonths).reduce((sum,v)=>sum+v,0)*10),340,'capabil
 const cap=stores[3]
 const originalRecord=cap.getState().monthlyInvestments[0]
 cap.getState().updateMonthlyInvestment(originalRecord.id,originalRecord.monthlyData)
-const saved=JSON.parse(memory.get('pms-hr-capability'))
+const saved=JSON.parse(localStorage.getItem('pms-hr-capability'))
 cap.setState({monthlyInvestments:[]})
-memory.set('pms-hr-capability',JSON.stringify(saved))
+localStorage.setItem('pms-hr-capability',JSON.stringify(saved))
 await cap.persist.rehydrate()
 eq(cap.getState().monthlyInvestments.filter(row=>cap.getState().projects.some(p=>rules.getLatestHrVersion(p.versions,row.budgetType)?.id===row.versionId)).length,6,'rehydration retains every department and budget')
 eq(cap.getState().monthlyInvestments.find(r=>r.id===originalRecord.id).isEdited,true,'rehydration retains matching manual monthly edits')

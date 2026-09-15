@@ -27,7 +27,9 @@ const required = [
   ['src/components/roadmap/MRTrainView.tsx', 'isMachineProjectType(a.projectType)'],
   ['src/stores/plan.ts', 'PROJECT_TEMPLATE_TYPES'],
   ['src/stores/plan.ts', 'projectTemplateCompatibility'],
-  ['src/containers/ConfigContainer.tsx', 'PROJECT_TEMPLATE_TYPES'],
+  ['src/containers/ConfigContainer.tsx', 'ConfigNavigation'],
+  ['src/components/config/ConfigNavigation.tsx', 'CONFIG_MENU_GROUPS'],
+  ['src/lib/configNavigation.ts', 'children: PROJECT_TEMPLATE_TYPES.map(projectType =>'],
   ['src/containers/ProjectSpaceContainer.tsx', 'getProjectTypeFamilyKey(projectType)'],
 ]
 
