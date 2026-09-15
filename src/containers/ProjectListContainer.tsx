@@ -2,13 +2,13 @@
 
 import { pmsSessionStorage } from '@/lib/mockDatasetStorage'
 
-import { useEffect, useState, useMemo, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, useMemo, type CSSProperties } from 'react'
 import {
   App, Row, Col, Button, Card, Empty, Segmented, Pagination, Space, Tooltip,
 } from 'antd'
 import {
   AppstoreOutlined, CalendarOutlined, FullscreenExitOutlined, FullscreenOutlined,
-  TeamOutlined, UnorderedListOutlined, UserOutlined,
+  TeamOutlined, UnorderedListOutlined, UpOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -125,7 +125,9 @@ export default function ProjectListContainer() {
   const [projectListTableToolbarHost, setProjectListTableToolbarHost] = useState<HTMLDivElement | null>(null)
   const [projectListQuickFilterHost, setProjectListQuickFilterHost] = useState<HTMLDivElement | null>(null)
   const [projectListFilterSummaryHost, setProjectListFilterSummaryHost] = useState<HTMLDivElement | null>(null)
-  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [fullscreenPhase, setFullscreenPhase] = useState<'closed' | 'open' | 'closing'>('closed')
+  const isFullscreen = fullscreenPhase !== 'closed'
+  const [isFilterCollapsed, setIsFilterCollapsed] = useState(false)
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
   const statusEnumType = getProjectStatusEnumType(projectTypeFilter)
@@ -143,11 +145,25 @@ export default function ProjectListContainer() {
   const projectListPageSize = 15
   const fullscreenViewTitle = projectListView === 'calendar' ? '项目日历' : '项目列表'
 
+  const exitFullscreen = useCallback(() => {
+    setFullscreenPhase(phase => {
+      if (phase === 'closed') return phase
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'closed' : 'closing'
+    })
+  }, [])
+
+  useEffect(() => {
+    if (fullscreenPhase !== 'closing') return
+    // Also finish if the animation is interrupted or disabled by browser settings.
+    const timeout = window.setTimeout(() => setFullscreenPhase('closed'), 300)
+    return () => window.clearTimeout(timeout)
+  }, [fullscreenPhase])
+
   useEffect(() => {
     if (!isFullscreen) return
     const previousOverflow = document.body.style.overflow
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsFullscreen(false)
+      if (event.key === 'Escape') exitFullscreen()
     }
     document.body.style.overflow = 'hidden'
     document.addEventListener('keydown', handleKeyDown)
@@ -155,7 +171,7 @@ export default function ProjectListContainer() {
       document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [isFullscreen])
+  }, [exitFullscreen, isFullscreen])
 
   const workbenchListState = useMemo(
     () => getWorkbenchListState(projectTypeFilter),
@@ -444,7 +460,7 @@ export default function ProjectListContainer() {
         size="small"
         aria-label="全屏展示"
         icon={<FullscreenOutlined />}
-        onClick={() => setIsFullscreen(true)}
+        onClick={() => setFullscreenPhase('open')}
       />
     </Tooltip>
   ) : null
@@ -542,106 +558,135 @@ export default function ProjectListContainer() {
                   ]}
                 />
                 <div className="pms-project-list-table-actions" ref={setProjectListTableToolbarHost} />
+                <Tooltip title={isFilterCollapsed ? '展开筛选' : '收起筛选'}>
+                  <Button
+                    className="pms-project-list-icon-action pms-project-list-filter-toggle"
+                    size="small"
+                    aria-label={isFilterCollapsed ? '展开筛选' : '收起筛选'}
+                    aria-expanded={!isFilterCollapsed}
+                    aria-controls="project-list-filter-panel"
+                    icon={<UpOutlined />}
+                    onClick={() => setIsFilterCollapsed(collapsed => !collapsed)}
+                  />
+                </Tooltip>
               </div>
             </div>
 
-            {workbenchListState.kind !== 'select-category' && (workbenchListState.showSecondaryCategory || projectTypeFilter === PROJECT_TYPE_TOS_VERSION) && (
-              <div className="pms-project-list-secondary-row" aria-label="项目二级分类快捷筛选">
-                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>二级分类</span>
-                {secondaryCategoryOptions.map(item => {
-                  const isActive = projectSecondaryCategoryFilter === item.value
-                  return (
-                    <button
-                      type="button"
-                      key={item.value}
-                      onClick={() => { setProjectSecondaryCategoryFilter(item.value); setProjectCardPage(1) }}
-                      style={{
-                        ...WORKSPACE_FILTER_CHIP_STYLE,
-                        padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
-                        fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
-                        background: isActive ? '#fff' : 'transparent',
-                        color: isActive ? 'var(--pms-brand-strong)' : '#6b7280',
-                        boxShadow: isActive ? 'var(--pms-shadow-xs)' : 'none',
-                        border: 0,
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+          <div
+            id="project-list-filter-panel"
+            className={`pms-project-list-filter-panel${isFilterCollapsed ? ' is-collapsed' : ''}`}
+            aria-hidden={isFilterCollapsed}
+            ref={element => {
+              if (element) element.inert = isFilterCollapsed
+            }}
+          >
+            <div className="pms-project-list-filter-panel__clip">
+              <div className="pms-project-list-filter-panel__content">
+                {workbenchListState.kind !== 'select-category' && (workbenchListState.showSecondaryCategory || projectTypeFilter === PROJECT_TYPE_TOS_VERSION) && (
+                  <div className="pms-project-list-secondary-row" aria-label="项目二级分类快捷筛选">
+                    <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>二级分类</span>
+                    {secondaryCategoryOptions.map(item => {
+                      const isActive = projectSecondaryCategoryFilter === item.value
+                      return (
+                        <button
+                          type="button"
+                          key={item.value}
+                          onClick={() => { setProjectSecondaryCategoryFilter(item.value); setProjectCardPage(1) }}
+                          style={{
+                            ...WORKSPACE_FILTER_CHIP_STYLE,
+                            padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
+                            fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                            background: isActive ? '#fff' : 'transparent',
+                            color: isActive ? 'var(--pms-brand-strong)' : '#6b7280',
+                            boxShadow: isActive ? 'var(--pms-shadow-xs)' : 'none',
+                            border: 0,
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
 
-            {workbenchListState.kind !== 'select-category' && (workbenchListState.showStatusQuickFilter || projectTypeFilter === PROJECT_TYPE_TOS_VERSION || projectTypeFilter === PROJECT_CATEGORY_TECH) && (
-              <div aria-label="状态快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目状态</span>
-                {projectTypeFilter !== 'all' && !statusHasHydrated ? <span style={{ fontSize: 12, color: '#6b7280' }}>正在加载配置…</span> : null}
-                {statusHydrationError ? (
-                  <Button danger size="small" onClick={() => void retryStatusHydration()}>配置加载失败，重试</Button>
-                ) : null}
-                {statusOptions.map(item => {
-                  const isActive = projectStatusFilter === item.value
-                  return (
-                    <button
-                      type="button"
-                      key={item.value}
-                      onClick={() => { setProjectStatusFilter(item.value); setProjectCardPage(1) }}
-                      style={{
-                        ...WORKSPACE_FILTER_CHIP_STYLE,
-                        padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
-                        fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
-                        background: isActive ? 'var(--pms-brand)' : 'transparent',
-                        color: isActive ? '#fff' : '#6b7280',
-                        border: 0,
-                      }}
-                    >
-                      {item.label}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
+                {workbenchListState.kind !== 'select-category' && (workbenchListState.showStatusQuickFilter || projectTypeFilter === PROJECT_TYPE_TOS_VERSION || projectTypeFilter === PROJECT_CATEGORY_TECH) && (
+                  <div aria-label="状态快捷筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                    <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目状态</span>
+                    {projectTypeFilter !== 'all' && !statusHasHydrated ? <span style={{ fontSize: 12, color: '#6b7280' }}>正在加载配置…</span> : null}
+                    {statusHydrationError ? (
+                      <Button danger size="small" onClick={() => void retryStatusHydration()}>配置加载失败，重试</Button>
+                    ) : null}
+                    {statusOptions.map(item => {
+                      const isActive = projectStatusFilter === item.value
+                      return (
+                        <button
+                          type="button"
+                          key={item.value}
+                          onClick={() => { setProjectStatusFilter(item.value); setProjectCardPage(1) }}
+                          style={{
+                            ...WORKSPACE_FILTER_CHIP_STYLE,
+                            padding: '3px 12px', borderRadius: 16, cursor: 'pointer',
+                            fontSize: 12, fontWeight: 500, transition: 'all 0.2s',
+                            background: isActive ? 'var(--pms-brand)' : 'transparent',
+                            color: isActive ? '#fff' : '#6b7280',
+                            border: 0,
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
 
-            {projectTypeFilter === PROJECT_CATEGORY_TECH && (
-              <div className="pms-project-list-technical-type-row" aria-label="技术项目类型快捷筛选">
-                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目类型</span>
-                {TECHNICAL_PROJECT_TYPE_OPTIONS.map(item => (
-                  <button
-                    type="button"
-                    key={item.value}
-                    onClick={() => setTechnicalFilters(current => updateLinkedQuickFilterCondition(
-                      current,
-                      'technicalProjectType',
-                      [item.value],
+                {projectTypeFilter === PROJECT_CATEGORY_TECH && (
+                  <div className="pms-project-list-technical-type-row" aria-label="技术项目类型快捷筛选">
+                    <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目类型</span>
+                    {TECHNICAL_PROJECT_TYPE_OPTIONS.map(item => (
+                      <button
+                        type="button"
+                        key={item.value}
+                        onClick={() => setTechnicalFilters(current => updateLinkedQuickFilterCondition(
+                          current,
+                          'technicalProjectType',
+                          [item.value],
+                        ))}
+                        className={technicalActiveType === item.value
+                          ? 'pms-project-filter-chip is-active'
+                          : 'pms-project-filter-chip'}
+                      >{item.label}</button>
                     ))}
-                    className={technicalActiveType === item.value
-                      ? 'pms-project-filter-chip is-active'
-                      : 'pms-project-filter-chip'}
-                  >{item.label}</button>
-                ))}
-              </div>
-            )}
+                  </div>
+                )}
 
-            {workbenchListState.kind === 'table' && (
-              <div className="pms-project-list-quick-filter-row" aria-label="项目列表快捷筛选">
-                <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>快捷筛选</span>
-                <div ref={setProjectListQuickFilterHost} style={{ flex: 1, minWidth: 0 }} />
-              </div>
-            )}
+                {workbenchListState.kind === 'table' && (
+                  <div className="pms-project-list-quick-filter-row" aria-label="项目列表快捷筛选">
+                    <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>快捷筛选</span>
+                    <div ref={setProjectListQuickFilterHost} style={{ flex: 1, minWidth: 0 }} />
+                  </div>
+                )}
 
-            {hasActiveFilterConditions && (
-              <div
-                className="pms-project-list-filter-summary-row"
-                ref={setProjectListFilterSummaryHost}
-              />
-            )}
+                {hasActiveFilterConditions && (
+                  <div
+                    className="pms-project-list-filter-summary-row"
+                    ref={setProjectListFilterSummaryHost}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Project list content */}
       <section
-        className={`pms-project-list-content ${isFullscreen ? 'is-fullscreen pms-page-shell' : ''}`.trim()}
+        className={`pms-project-list-content ${isFullscreen ? 'is-fullscreen pms-page-shell' : ''}${fullscreenPhase === 'closing' ? ' is-fullscreen-closing' : ''}`.trim()}
         aria-label={isFullscreen ? `${fullscreenViewTitle}全屏展示` : undefined}
+        onAnimationEnd={event => {
+          if (event.target === event.currentTarget && event.animationName === 'pms-project-list-fullscreen-exit') {
+            setFullscreenPhase('closed')
+          }
+        }}
       >
         {isFullscreen && (
           <header className="pms-project-list-fullscreen__header pms-toolbar">
@@ -655,7 +700,7 @@ export default function ProjectListContainer() {
                 size="small"
                 aria-label="退出全屏"
                 icon={<FullscreenExitOutlined />}
-                onClick={() => setIsFullscreen(false)}
+                onClick={exitFullscreen}
               />
             </Tooltip>
           </header>

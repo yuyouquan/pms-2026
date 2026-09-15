@@ -960,7 +960,12 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
-  animation: pms-project-list-fullscreen-enter 180ms ease-out;
+  transform-origin: center top;
+  animation: pms-project-list-fullscreen-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.pms-project-list-content.is-fullscreen-closing {
+  animation: pms-project-list-fullscreen-exit 200ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .pms-project-list-fullscreen__header {
@@ -1001,8 +1006,13 @@
 }
 
 @keyframes pms-project-list-fullscreen-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pms-project-list-fullscreen-exit {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(12px) scale(0.985); }
 }
 
 .pms-project-list :where(.ant-btn, .ant-segmented-item, .pms-project-filter-chip),
@@ -2543,7 +2553,7 @@
 
 .pms-enum-table-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: var(--pms-card-padding);
@@ -2555,15 +2565,40 @@
 }
 
 .pms-enum-table-heading .ant-typography {
-  margin: 0 0 8px !important;
+  margin: 0 !important;
   color: var(--pms-text-primary);
 }
 
-.pms-enum-row-count {
-  color: #64748b;
-  font-size: var(--pms-font-size-aux);
-  font-variant-numeric: tabular-nums;
-  line-height: var(--pms-line-height-aux);
+.pms-enum-filters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 12px var(--pms-card-padding);
+}
+
+.pms-enum-filter-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pms-enum-filter-field > label {
+  flex-shrink: 0;
+  color: var(--pms-text-secondary);
+  font-size: var(--pms-font-size-compact);
+}
+
+.pms-enum-filter-field > .ant-input-affix-wrapper {
+  width: 160px;
+  min-width: 100px;
+  flex: 1 1 160px;
+}
+
+.pms-enum-filter-field .ant-input-prefix {
+  color: var(--pms-text-secondary);
 }
 
 .pms-enum-table .pms-enum-sequence {
@@ -7020,14 +7055,65 @@ input.ant-input,
   box-sizing: border-box;
   height: auto;
   min-height: 0;
-  gap: 8px !important;
+  gap: 0 !important;
   padding: 16px !important;
   border-radius: 8px !important;
 }
 
-.pms-project-list-filter-grid > [aria-label] {
+.pms-project-list-filter-grid > [aria-label],
+.pms-project-list-filter-panel__content > [aria-label] {
   min-height: var(--pms-control-height);
   line-height: var(--pms-line-height-body);
+}
+
+.pms-project-list-filter-panel {
+  display: grid;
+  grid-template-rows: 1fr;
+  min-width: 0;
+  opacity: 1;
+  visibility: visible;
+  transition: grid-template-rows 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease, visibility 0s;
+}
+
+.pms-project-list-filter-panel.is-collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: grid-template-rows 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease, visibility 0s 240ms;
+}
+
+.pms-project-list-filter-panel__clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pms-project-list-filter-panel__content {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.pms-project-list-filter-toggle .anticon {
+  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.pms-project-list-filter-toggle[aria-expanded='false'] .anticon {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pms-project-list-content.is-fullscreen {
+    animation: none;
+  }
+
+  .pms-project-list-filter-panel,
+  .pms-project-list-filter-panel.is-collapsed,
+  .pms-project-list-filter-toggle .anticon {
+    transition: none;
+  }
 }
 
 .pms-project-list-filter-grid .pms-project-filter-chip,
@@ -8791,6 +8877,22 @@ input.ant-input,
   font-size: 11px;
   margin-left: 6px;
   border-radius: 8px;
+}
+
+/* Resource version cells follow their column alignment in both display modes. */
+:is(.pms-hr-machine-history-version, .pms-hr-tos-history-version, .pms-hr-tech-history-version, .pms-hr-capability-history-version) .pms-inline-editable {
+  display: block;
+  min-width: 0;
+  padding: 2px 0;
+  border-radius: 4px;
+  text-align: inherit;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+:is(.pms-hr-machine-history-version, .pms-hr-tos-history-version, .pms-hr-tech-history-version, .pms-hr-capability-history-version) .pms-inline-editable:hover {
+  background: var(--pms-brand-surface);
+  color: var(--pms-brand-strong);
 }
 
 /* ── Detail space header ──────────────────────────────────────────── */

@@ -78,6 +78,25 @@ assert.equal(values.isEnumTypeKey('core-value'), true, 'registered enum keys are
 assert.equal(values.isEnumTypeKey('tos-2-part'), false, 'legacy tOS keys are absent from the flat registry guard')
 assert.equal(values.isEnumTypeKey('unknown'), false, 'unknown enum keys are rejected')
 
+console.log('[enum-filters] verifying field-based fuzzy search')
+const searchableTosRows = [
+  { id: 'tos-a', value: '16.1.0' },
+  { id: 'tos-b', value: '17.0.0' },
+]
+assert.deepEqual(values.filterEnumRows('first-sale-tos', searchableTosRows, { value: ' TOS16.1 ' }).map(row => row.id), ['tos-a'], 'search matches the displayed tOS prefix, ignores case, and trims the query')
+assert.deepEqual(values.filterEnumRows('first-sale-tos', searchableTosRows, { value: '17.0' }).map(row => row.id), ['tos-b'], 'partial version text matches')
+assert.equal(values.filterEnumRows('first-sale-tos', searchableTosRows, { value: 'missing' }).length, 0, 'unmatched queries return no rows')
+assert.deepEqual(values.filterEnumRows('first-sale-tos', searchableTosRows, { value: '  ', chipCode: 'unrelated' }), searchableTosRows, 'blank and unrelated field filters do not hide rows')
+const searchableChipRows = [
+  { id: 'chip-a', chipCode: 'DEMO001', chipModel: 'MODEL-A', chipPlatform: '平台甲' },
+  { id: 'chip-b', chipCode: 'DEMO002', chipModel: 'MODEL-B', chipPlatform: '平台甲' },
+  { id: 'chip-c', chipCode: 'DEMO003', chipModel: 'MODEL-A', chipPlatform: '平台乙' },
+]
+const originalChipRows = JSON.stringify(searchableChipRows)
+assert.deepEqual(values.filterEnumRows('chip-mapping', searchableChipRows, { chipModel: 'model-a', chipPlatform: '甲' }).map(row => row.id), ['chip-a'], 'mapping filters combine with AND across columns')
+assert.deepEqual(values.filterEnumRows('chip-mapping', searchableChipRows, {}).map(row => row.id), ['chip-a', 'chip-b', 'chip-c'], 'clearing filters restores every row in its original order')
+assert.equal(JSON.stringify(searchableChipRows), originalChipRows, 'filtering preserves source enum data')
+
 assert.equal(values.formatEnumCellValue('first-sale-tos', 'value', '18.0'), 'tOS18.0', 'first-sale tOS display adds the tOS prefix')
 assert.equal(values.formatEnumCellValue('first-sale-tos', 'value', ' tOS18.0 '), 'tOS18.0', 'display normalizes an existing tOS prefix exactly once')
 assert.equal(values.formatEnumCellValue('roadmap-tos', 'value', 'alpha'), 'tOSalpha', 'roadmap tOS display adds the tOS prefix')
@@ -606,9 +625,11 @@ assert.match(enumUi, /formatEnumCellValue/, 'table cells use the central formatt
 assert.match(enumUi, /canEditEnums[\s\S]*title:\s*['"]操作['"]/, 'the action column is appended only for users with enum-edit permission')
 assert.match(enumUi, /const hasGlobalPermission\s*=\s*useHasGlobalPermission\(currentLoginUser\)/, 'EnumConfig resolves global permissions for the current user')
 assert.match(enumUi, /hasGlobalPermission\(['"]configCenter:enumEdit['"]\)/, 'enum mutations use the dedicated enum-edit permission')
-for (const copy of ['新增枚举值', '加载枚举值失败', '暂无配置值', '单字段', '两列映射', '三列映射', '芯片编码', '芯片型号', '芯片平台', 'IPM项目分类', 'PMS项目分类', 'PMS二级项目分类', 'TMG及技术领域', '子领域', '安卓版本', '组包方式']) {
+for (const copy of ['新增枚举值', '加载枚举值失败', '暂无配置值', '枚举值筛选', '清空筛选', '暂无匹配的配置值', '芯片编码', '芯片型号', '芯片平台', 'IPM项目分类', 'PMS项目分类', 'PMS二级项目分类', 'TMG及技术领域', '子领域', '安卓版本', '组包方式']) {
   assert.ok(enumUi.includes(copy), `EnumConfig must include UI copy: ${copy}`)
 }
+assert.doesNotMatch(enumUi, /KIND_LABELS|selectedDefinition\.scopeLabel|pms-enum-row-count/, 'the enum metadata badge row is removed')
+assert.match(enumUi, /dataSource=\{filteredRows\}/, 'the displayed table uses the filtered enum rows')
 assert.match(enumUi, /editorDefinition\.kind\s*===\s*['"]package-map['"][\s\S]*rowsByType\[['"]android-version['"]\]/, 'package editor derives Android-version options from the configured single enum')
 assert.match(enumUi, /rowsByType\[['"]chip-mapping['"]\][\s\S]{0,500}chipModel/, 'package editor derives chip-model options from chip mappings')
 assert.match(enumUi, /showSearch[\s\S]{0,120}optionFilterProp=['"]label['"]/, 'package editor selects are searchable by label')

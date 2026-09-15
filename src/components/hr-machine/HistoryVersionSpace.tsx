@@ -753,19 +753,6 @@ export default function HistoryVersionSpace() {
         .pms-hr-machine-history-version .pms-table .ant-table-tbody > tr.hr-machine-budget-budget > td {
           background: #f4fcf7 !important;
         }
-        .pms-hr-machine-history-version .pms-inline-editable {
-          cursor: pointer;
-          padding: 2px 6px;
-          border-radius: 4px;
-          transition: background 0.2s, color 0.2s;
-          display: inline-block;
-          min-width: 24px;
-          text-align: center;
-        }
-        .pms-hr-machine-history-version .pms-inline-editable:hover {
-          background: var(--pms-brand-surface);
-          color: var(--pms-brand-strong);
-        }
         .pms-hr-machine-history-version .pms-table .ant-inputnumber {
           width: 100%;
         }

@@ -273,7 +273,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
               <ProjectOutlined style={{ color: '#fff', fontSize: 16 }} />
               <span style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>{selectedProject?.name}</span>
               <DownOutlined style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', transition: 'transform 0.2s', transform: showProjectSearch ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-              <Tag style={{ marginLeft: 4, fontSize: 11, background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff' }}>项目空间</Tag>
+              {selectedProject && <Tag aria-label="项目属性" style={{ marginLeft: 4, fontSize: 11, background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff' }}>{PROJECT_ATTRIBUTE_LABELS[getProjectAttribute(selectedProject)]}</Tag>}
             </div>
             {showProjectSearch && (
               <div style={{

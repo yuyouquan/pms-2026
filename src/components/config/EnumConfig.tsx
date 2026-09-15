@@ -15,14 +15,14 @@ import {
   Skeleton,
   Space,
   Table,
-  Tag,
   Tooltip,
   Typography,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import {
   ENUM_DEFINITIONS,
+  filterEnumRows,
   formatEnumCellValue,
   getEnumRowSummary,
 } from '@/lib/enumValues'
@@ -51,14 +51,6 @@ const PROJECT_CATEGORY_OPTIONS = [
   '技术项目',
   '能力建设项目',
 ] as const
-
-const KIND_LABELS = {
-  single: '单字段',
-  'tmg-map': '两列映射',
-  'chip-map': '三列映射',
-  'project-category-map': '三列映射',
-  'package-map': '三列映射',
-} as const
 
 function emptyDraft(type: EnumTypeKey): DraftValues {
   return Object.fromEntries(ENUM_DEFINITIONS[type].columns.map(column => [column.key, '']))
@@ -107,6 +99,10 @@ export default function EnumConfig({
   const [recoveryAction, setRecoveryAction] = useState<'retry' | 'reset' | null>(null)
   const [storageWriteContext, setStorageWriteContext] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [filterState, setFilterState] = useState<{ type: EnumTypeKey; values: DraftValues }>({
+    type: selectedType,
+    values: {},
+  })
   const { captureTrigger, restoreTriggerFocus, tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
 
   useEffect(() => {
@@ -116,6 +112,13 @@ export default function EnumConfig({
   const selectedDefinition = ENUM_DEFINITIONS[selectedType]
   const editorDefinition = editorType ? ENUM_DEFINITIONS[editorType] : null
   const rows = rowsByType[selectedType] as EnumRow[]
+  const filterValues = filterState.type === selectedType ? filterState.values : {}
+  const hasActiveFilters = Object.values(filterValues).some(value => value?.trim())
+  const filteredRows = filterEnumRows(selectedType, rows, filterValues)
+
+  useEffect(() => {
+    setFilterState({ type: selectedType, values: {} })
+  }, [selectedType])
 
   const setDraftField = (field: EnumFieldKey, value: string) => {
     setDraft(previous => ({ ...previous, [field]: value }))
@@ -585,11 +588,6 @@ export default function EnumConfig({
             <div className="pms-enum-table-header">
               <div className="pms-enum-table-heading">
                 <Typography.Title level={4}>{selectedDefinition.label}</Typography.Title>
-                <Space size={[6, 6]} wrap>
-                  <Tag color="purple">{KIND_LABELS[selectedDefinition.kind]}</Tag>
-                  <Tag>{selectedDefinition.scopeLabel}</Tag>
-                  <span className="pms-enum-row-count">{rows.length} 条</span>
-                </Space>
               </div>
               {canEditEnums && (
                 <Button
@@ -602,19 +600,46 @@ export default function EnumConfig({
                 </Button>
               )}
             </div>
+            <div className="pms-enum-filters" role="search" aria-label="枚举值筛选">
+              {selectedDefinition.columns.map(column => (
+                <div className="pms-enum-filter-field" key={column.key}>
+                  <label htmlFor={`enum-filter-${selectedType}-${column.key}`}>{column.label}</label>
+                  <Input
+                    id={`enum-filter-${selectedType}-${column.key}`}
+                    aria-label={`筛选-${column.label}`}
+                    prefix={<SearchOutlined />}
+                    placeholder="请输入关键词"
+                    allowClear
+                    value={filterValues[column.key] ?? ''}
+                    onChange={event => setFilterState({
+                      type: selectedType,
+                      values: { ...filterValues, [column.key]: event.target.value },
+                    })}
+                  />
+                </div>
+              ))}
+              <Button
+                disabled={!Object.values(filterValues).some(Boolean)}
+                onClick={() => setFilterState({ type: selectedType, values: {} })}
+              >清空筛选</Button>
+            </div>
             <Table
               className="pms-table pms-enum-table"
               rowKey="id"
               columns={columns}
-              dataSource={rows}
+              dataSource={filteredRows}
               pagination={false}
               size="middle"
               scroll={{ x: 'max-content' }}
               onRow={row => ({ 'data-testid': `enum-row-${row.id}` } as HTMLAttributes<HTMLTableRowElement>)}
               locale={{
                 emptyText: (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无配置值">
-                    {canEditEnums && (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={hasActiveFilters ? '暂无匹配的配置值' : '暂无配置值'}>
+                    {hasActiveFilters ? (
+                      <Button type="link" onClick={() => setFilterState({ type: selectedType, values: {} })}>
+                        清空筛选
+                      </Button>
+                    ) : canEditEnums && (
                       <Button type="link" icon={<PlusOutlined />} onClick={event => openAddModal(event.currentTarget)}>
                         新增枚举值
                       </Button>

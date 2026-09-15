@@ -138,6 +138,25 @@ export function formatEnumCellValue<K extends EnumTypeKey>(
   return field === 'value' && TOS_PREFIXED_TYPES.has(type) ? `tOS${value}` : value
 }
 
+export function filterEnumRows<K extends EnumTypeKey>(
+  type: K,
+  rows: EnumRowByType<K>[],
+  filters: Partial<Record<EnumFieldKey, string>>,
+): EnumRowByType<K>[] {
+  const activeFilters = ENUM_DEFINITIONS[type].columns
+    .map(column => ({ key: column.key, query: filters[column.key]?.trim().toLowerCase() ?? '' }))
+    .filter(filter => filter.query)
+
+  return rows.filter(row => {
+    const fields = row as unknown as Record<string, string>
+    return activeFilters.every(({ key, query }) => formatEnumCellValue(
+      type,
+      key as EnumFieldKeyByType<K>,
+      fields[key] ?? '',
+    ).toLowerCase().includes(query))
+  })
+}
+
 const normalizedDraft = <K extends EnumTypeKey>(
   type: K,
   draft: EnumRowDraftByType[K],
