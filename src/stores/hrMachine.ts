@@ -260,7 +260,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           return
         }
         const seed = getHrVersionSeed(sourceProject.versions, budgetType)?.nonLaborInvestment
-        const nonLaborInvestment = validateNonLaborInvestment(versionMeta.nonLaborInvestment ?? cloneNonLaborInvestment(seed), useHrConfigStore.getState().data.nonLaborSubject ?? [], seed)
+        const nonLaborInvestment = validateNonLaborInvestment(versionMeta.nonLaborInvestment ?? cloneNonLaborInvestment(seed), useHrConfigStore.getState().data.nonLaborSubject ?? [], seed, useHrConfigStore.getState().data.techModuleDept ?? [])
         if (versionMeta.metadata) {
           const project = get().projects.find(item => item.id === projectId)
           const canonical = getHrRegistryProject(project)
@@ -351,7 +351,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         const version = project?.versions.find(item => item.id === versionId)
         if (!project || !version || !canAccessHrProject(project, true)) return
         const allowed = allowedHrVersionUpdates(project, version, updates)
-        if (allowed.nonLaborInvestment) validateNonLaborInvestment(allowed.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment)
+        if (allowed.nonLaborInvestment) validateNonLaborInvestment(allowed.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? [])
         if (allowed.projectLevel !== undefined || allowed.levelCoefficient !== undefined || allowed.hrModelVersion !== undefined) {
           const coefficient = allowed.levelCoefficient ?? version.levelCoefficient
           if (!Number.isFinite(coefficient) || coefficient < 0 || !isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], allowed.projectLevel ?? version.projectLevel, allowed.hrModelVersion ?? version.hrModelVersion)) throw new Error('请选择有效的项目等级、人力模型版本号和等级系数')
@@ -381,7 +381,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
             const updated: HrMachineVersion = {
               ...v,
-              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment) : v.nonLaborInvestment,
+              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
               batch: permitted.batch === undefined ? v.batch : permitted.batch,
               estimatedInvestment: permitted.estimatedInvestment ?? v.estimatedInvestment,
               milestones: permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones,

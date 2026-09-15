@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Alert, App, Button, DatePicker, InputNumber, Select, Table } from 'antd'
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { Alert, App, Button, DatePicker, InputNumber, Select, Space, Table, Upload } from 'antd'
+import { DeleteOutlined, DownloadOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
+import * as XLSX from 'xlsx'
 import { useHrConfigStore } from '@/stores/hrConfig'
-import { cloneNonLaborInvestment, nonLaborMonths, nonLaborTotal } from '@/lib/nonLaborInvestment'
+import { cloneNonLaborInvestment, formatNonLaborAmount, nonLaborDepartmentPairs, nonLaborItemKey, nonLaborMonths, nonLaborTotal } from '@/lib/nonLaborInvestment'
+import { nonLaborSpreadsheetColumns, parseNonLaborInvestmentRows } from '@/lib/nonLaborSpreadsheet'
+import { exportMultiSheet } from '@/utils/exportExcel'
+import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import type { NonLaborInvestment, NonLaborInvestmentItem } from '@/types/nonLaborInvestment'
 
 export function useNonLaborDraft(open: boolean, editorKey: string, seed?: NonLaborInvestment) {
@@ -22,12 +26,61 @@ export function useNonLaborDraft(open: boolean, editorKey: string, seed?: NonLab
 export default function NonLaborInvestmentSection({ value, onChange, readOnly = false }: {
   value: NonLaborInvestment; onChange?: (value: NonLaborInvestment) => void; readOnly?: boolean
 }) {
-  const { modal } = App.useApp()
-  const subjects = useHrConfigStore(state => state.data.nonLaborSubject ?? [])
+  const { modal, message } = App.useApp()
+  const config = useHrConfigStore(state => state.data)
+  const subjects = config.nonLaborSubject ?? []
+  const departmentRecords = config.techModuleDept ?? []
+  const departments = nonLaborDepartmentPairs(departmentRecords)
+  const [importing, setImporting] = useState(false)
+  const currentValueRef = useRef(value)
+  currentValueRef.current = value
   const active = subjects.filter(subject => subject.enabled !== false)
   const months = nonLaborMonths(value)
-  const update = (id: string, change: Partial<NonLaborInvestmentItem>) =>
-    onChange?.({ ...value, items: value.items.map(item => item.id === id ? { ...item, ...change } : item) })
+  const isDuplicate = (item: NonLaborInvestmentItem) => [item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject].every(Boolean)
+    && value.items.some(other => other.id !== item.id && nonLaborItemKey(other) === nonLaborItemKey(item))
+  const update = (id: string, change: Partial<NonLaborInvestmentItem>) => {
+    const item = value.items.find(row => row.id === id)
+    if (!item) return
+    const next = { ...item, ...change }
+    if (isDuplicate(next)) {
+      message.warning('二级部门、三级部门、二级科目和三级科目组合不能重复')
+      return
+    }
+    onChange?.({ ...value, items: value.items.map(row => row.id === id ? next : row) })
+  }
+  const downloadTemplate = () => exportMultiSheet([
+    { sheetName: '非人力投入', rows: [], columns: nonLaborSpreadsheetColumns(value) },
+    { sheetName: '部门选项', rows: departments, columns: [{ key: 'secondaryDepartment', title: '二级部门' }, { key: 'tertiaryDepartment', title: '三级部门' }] },
+    { sheetName: '科目选项', rows: active, columns: [{ key: 'secondarySubject', title: '二级科目' }, { key: 'tertiarySubject', title: '三级科目' }] },
+  ], '非人力投入模板.xlsx')
+  const handleImport = async (file: File) => {
+    setImporting(true)
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer())
+      if (!workbook.SheetNames[0]) throw new Error('文件中没有工作表')
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
+      const parsed = parseNonLaborInvestmentRows(rows, value, subjects, departmentRecords)
+      const apply = () => {
+        if (currentValueRef.current !== value) {
+          message.warning('当前投入数据或时间范围已变化，请重新导入')
+          return
+        }
+        onChange?.(parsed)
+        message.success(`已导入 ${parsed.items.length} 条非人力投入数据`)
+      }
+      if (value.items.length) modal.confirm({
+        title: '确认导入非人力投入',
+        content: `将用 ${parsed.items.length} 条导入数据替换当前 ${value.items.length} 条非人力投入，保存版本后生效。`,
+        okText: '确认导入', cancelText: '取消', onOk: apply,
+      })
+      else apply()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '文件解析失败，请检查模板格式')
+    } finally {
+      setImporting(false)
+    }
+    return false
+  }
   const changeRange = (startMonth: string | null, endMonth: string | null) => {
     const allowed = nonLaborMonths({ startMonth, endMonth })
     const outside = value.items.some(item => Object.entries(item.monthlyAmounts).some(([month, amount]) => !allowed.includes(month) && amount !== 0))
@@ -42,25 +95,44 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
     else save()
   }
   const columns: ColumnsType<NonLaborInvestmentItem> = [
-    { title: '二级科目', key: 'secondarySubject', width: 170, fixed: 'left',
+    { title: '二级部门', key: 'secondaryDepartment', width: 140, fixed: 'left',
+      render: (_, item) => readOnly ? item.secondaryDepartment || '—' : <Select
+        aria-label="非人力二级部门" showSearch optionFilterProp="label" placeholder="请选择二级部门"
+        style={{ width: '100%' }} value={item.secondaryDepartment || undefined}
+        options={[...new Set([...departments.map(row => row.secondaryDepartment), ...(item.secondaryDepartment ? [item.secondaryDepartment] : [])])].map(label => ({ value: label, label }))}
+        onChange={secondaryDepartment => update(item.id, { secondaryDepartment, tertiaryDepartment: '' })} /> },
+    { title: '三级部门', key: 'tertiaryDepartment', width: 140, fixed: 'left',
+      render: (_, item) => {
+        if (readOnly) return item.tertiaryDepartment || '—'
+        if (!item.secondaryDepartment) return <HrReadonlyField label="非人力三级部门" placeholder="请先选择二级部门" reason="选择二级部门后可编辑" />
+        const options = [...new Set([
+          ...departments.filter(row => row.secondaryDepartment === item.secondaryDepartment).map(row => row.tertiaryDepartment),
+          ...(item.tertiaryDepartment ? [item.tertiaryDepartment] : []),
+        ])].map(label => ({ value: label, label, disabled: isDuplicate({ ...item, tertiaryDepartment: label }) }))
+        return <Select aria-label="非人力三级部门" showSearch optionFilterProp="label" placeholder="请选择三级部门"
+          style={{ width: '100%' }} value={item.tertiaryDepartment || undefined} options={options}
+          onChange={tertiaryDepartment => update(item.id, { tertiaryDepartment })} />
+      } },
+    { title: '二级科目', key: 'secondarySubject', width: 160, fixed: 'left',
       render: (_, item) => readOnly ? item.secondarySubject : <Select
         aria-label="二级科目" showSearch optionFilterProp="label" placeholder="请选择二级科目"
         style={{ width: '100%' }} value={item.secondarySubject || undefined}
         options={[...new Set([...active.map(subject => String(subject.secondarySubject)), ...(item.secondarySubject ? [item.secondarySubject] : [])])].map(label => ({ value: label, label }))}
         onChange={secondarySubject => update(item.id, { secondarySubject, tertiarySubject: '', subjectId: '' })} /> },
-    { title: '三级科目', key: 'tertiarySubject', width: 170, fixed: 'left',
+    { title: '三级科目', key: 'tertiarySubject', width: 160, fixed: 'left',
       render: (_, item) => {
         if (readOnly) return item.tertiarySubject
+        if (!item.secondarySubject) return <HrReadonlyField label="三级科目" placeholder="请先选择二级科目" reason="选择二级科目后可编辑" />
         const available = active.filter(subject => subject.secondarySubject === item.secondarySubject)
         const options = available.map(subject => ({
           value: subject.id, label: String(subject.tertiarySubject),
-          disabled: value.items.some(other => other.id !== item.id && other.secondarySubject === subject.secondarySubject && other.tertiarySubject === subject.tertiarySubject),
+          disabled: isDuplicate({ ...item, secondarySubject: String(subject.secondarySubject), tertiarySubject: String(subject.tertiarySubject) }),
         }))
         // Retired/renamed subjects are only retained for their existing row.
         if (item.subjectId && !options.some(option => option.value === item.subjectId && option.label === item.tertiarySubject)) {
           const sameId = options.findIndex(option => option.value === item.subjectId)
           if (sameId >= 0) options.splice(sameId, 1)
-          options.push({ value: item.subjectId, label: item.tertiarySubject, disabled: false })
+          options.push({ value: item.subjectId, label: item.tertiarySubject, disabled: isDuplicate(item) })
         }
         return <Select aria-label="三级科目" showSearch optionFilterProp="label"
           placeholder="请选择三级科目" style={{ width: '100%' }} value={item.subjectId || undefined}
@@ -70,8 +142,8 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
           }} />
       } },
     ...months.map(month => ({ title: dayjs(month + '-01').format('YYYY年MM月'), key: month, width: 126, align: 'center' as const,
-      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? (item.monthlyAmounts[month] ?? 0) : <InputNumber
-        aria-label={item.tertiarySubject + ' ' + month + ' 非人力投入'} min={0} precision={2} step={0.1}
+      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(item.monthlyAmounts[month] ?? 0) : <InputNumber
+        aria-label={[item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject, month, '非人力投入（元）'].join(' ')} min={0} precision={2} step={1}
         style={{ width: '100%' }} value={item.monthlyAmounts[month] ?? 0}
         onChange={amount => update(item.id, { monthlyAmounts: { ...item.monthlyAmounts, [month]: amount ?? 0 } })} /> })),
     ...(!readOnly ? [{ title: '操作', key: 'actions', width: 64, fixed: 'right' as const,
@@ -82,7 +154,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
   return <section className="pms-non-labor-section" aria-label="非人力投入">
     <h3>非人力投入</h3>
     <Alert className="pms-non-labor-summary" type="info" showIcon title={<div className="pms-non-labor-toolbar">
-      <span>{'预估非人力投入合计：' + nonLaborTotal(value) + ' 人月。'}</span>
+      <span>{'预估非人力投入合计：' + formatNonLaborAmount(nonLaborTotal(value)) + ' 元。'}</span>
       <div className="pms-non-labor-range">
         <span>投入时间范围</span>
         {readOnly ? <span>{value.startMonth && value.endMonth ? dayjs(value.startMonth + '-01').format('YYYY年MM月') + '～' + dayjs(value.endMonth + '-01').format('YYYY年MM月') : '—'}</span>
@@ -92,19 +164,30 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
             onChange={dates => changeRange(dates?.[0]?.format('YYYY-MM') ?? null, dates?.[1]?.format('YYYY-MM') ?? null)} />}
       </div>
     </div>} />
+    {!readOnly && <div className="pms-non-labor-actions">
+      <Space size="small">
+        <Button size="small" type="dashed" icon={<PlusOutlined />} disabled={!months.length || importing}
+          aria-label="添加非人力投入" onClick={() => onChange?.({ ...value, items: [...value.items, {
+            id: 'non-labor-' + crypto.randomUUID(), secondaryDepartment: '', tertiaryDepartment: '',
+            subjectId: '', secondarySubject: '', tertiarySubject: '', monthlyAmounts: {},
+          }] })}>添加</Button>
+        <Button size="small" type="dashed" icon={<DownloadOutlined />} disabled={!months.length}
+          aria-label="下载非人力投入模板" onClick={downloadTemplate}>下载模板</Button>
+        <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={handleImport} disabled={!months.length || importing}>
+          <Button size="small" type="dashed" icon={<UploadOutlined />} disabled={!months.length} loading={importing}
+            aria-label="导入非人力投入">导入</Button>
+        </Upload>
+      </Space>
+    </div>}
     <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={value.items}
-      pagination={false} size="small" scroll={{ x: Math.max(600, 404 + months.length * 126) }}
-      locale={{ emptyText: months.length ? '暂无非人力投入' : '请选择投入时间范围' }}
+      pagination={false} size="small" tableLayout="fixed" scroll={{ x: 600 + (readOnly ? 0 : 64) + months.length * 126, y: 320 }}
+      locale={{ emptyText: months.length ? (readOnly ? '暂无非人力投入' : '暂无非人力投入数据，请点击「添加」或「导入」') : '请选择投入时间范围' }}
       summary={() => value.items.length > 0 ? <Table.Summary.Row>
-        <Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>
-        {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 2} align="center">
-          {Math.round(value.items.reduce((sum, item) => sum + (item.monthlyAmounts[month] ?? 0), 0) * 100) / 100}
+        <Table.Summary.Cell index={0} colSpan={4}>合计</Table.Summary.Cell>
+        {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 4} align="center">
+          {formatNonLaborAmount(value.items.reduce((sum, item) => sum + (item.monthlyAmounts[month] ?? 0), 0))}
         </Table.Summary.Cell>)}
-        {!readOnly && <Table.Summary.Cell index={months.length + 2} />}
+        {!readOnly && <Table.Summary.Cell index={months.length + 4} />}
       </Table.Summary.Row> : null} />
-    {!readOnly && <Button type="dashed" block icon={<PlusOutlined />} disabled={!months.length}
-      aria-label="添加非人力投入" onClick={() => onChange?.({ ...value, items: [...value.items, {
-        id: 'non-labor-' + crypto.randomUUID(), subjectId: '', secondarySubject: '', tertiarySubject: '', monthlyAmounts: {},
-      }] })}>添加</Button>}
   </section>
 }

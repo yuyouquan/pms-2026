@@ -8,21 +8,45 @@ window.localStorage = localStorage
 const load = createTypeScriptModuleLoader()
 const rules = load('src/lib/nonLaborInvestment.ts')
 const subjects = [{ id:'travel-flight', secondarySubject:'差旅费', tertiarySubject:'机票' }]
+const departments = [
+  { id:'dept-software', secondaryDepartment:'软件部', tertiaryDepartment:'驱动开发' },
+  { id:'dept-hardware', secondaryDepartment:'硬件部', tertiaryDepartment:'电源设计' },
+]
 const value = { startMonth:'2026-12', endMonth:'2027-02', items:[
-  { id:'row-1', subjectId:'travel-flight', secondarySubject:'差旅费', tertiarySubject:'机票', monthlyAmounts:{'2026-12':2.5,'2027-01':3,'2027-02':0.5} },
+  { id:'row-1', secondaryDepartment:'软件部', tertiaryDepartment:'驱动开发', subjectId:'travel-flight', secondarySubject:'差旅费', tertiarySubject:'机票', monthlyAmounts:{'2026-12':2.5,'2027-01':3,'2027-02':0.5} },
 ] }
 assert.deepEqual(rules.nonLaborMonths(value), ['2026-12','2027-01','2027-02'])
 assert.equal(rules.nonLaborTotal(value), 6)
-assert.deepEqual(rules.validateNonLaborInvestment(value, subjects), value)
-assert.throws(() => rules.validateNonLaborInvestment({...value,items:[...value.items,{...value.items[0],id:'row-2'}]},subjects),/重复/)
+assert.deepEqual(rules.validateNonLaborInvestment(value, subjects, undefined, departments), value)
+const otherDepartment = {...value,items:[...value.items,{...value.items[0],id:'row-2',secondaryDepartment:'硬件部',tertiaryDepartment:'电源设计'}]}
+assert.equal(rules.validateNonLaborInvestment(otherDepartment, subjects, undefined, departments).items.length, 2, 'different departments may share the same subject')
+assert.throws(() => rules.validateNonLaborInvestment({...value,items:[...value.items,{...value.items[0],id:'row-2'}]},subjects,undefined,departments),/重复/)
+assert.throws(() => rules.validateNonLaborInvestment({...value,items:[{...value.items[0],tertiaryDepartment:'电源设计'}]},subjects,undefined,departments),/部门/)
+assert.throws(() => rules.validateNonLaborInvestment({...value,items:[{...value.items[0],secondaryDepartment:''}]},subjects,undefined,departments),/部门/)
 assert.throws(() => rules.validateNonLaborInvestment({...value,endMonth:'2026-11'},subjects),/时间范围/)
-assert.throws(() => rules.validateNonLaborInvestment({...value,items:[{...value.items[0],monthlyAmounts:{'2026-12':-1}}]},subjects),/非负/)
-assert.throws(() => rules.validateNonLaborInvestment(value, []),/科目/)
-assert.deepEqual(rules.validateNonLaborInvestment(value, [], value), value, 'retired subjects remain editable in their saved version')
+assert.throws(() => rules.validateNonLaborInvestment({...value,items:[{...value.items[0],monthlyAmounts:{'2026-12':-1}}]},subjects,undefined,departments),/非负/)
+assert.throws(() => rules.validateNonLaborInvestment(value, [], undefined, departments),/科目/)
+assert.deepEqual(rules.validateNonLaborInvestment(value, [], value, []), value, 'retired department and subject snapshots remain editable in their saved version')
 const clone=rules.cloneNonLaborInvestment(value)
 clone.items[0].monthlyAmounts['2026-12']=99
 assert.equal(value.items[0].monthlyAmounts['2026-12'],2.5)
 console.log('PASS monthly range, totals, duplicate and invalid input guards, retired subject snapshots and independent copies')
+
+const { seedExistingMockNonLabor, mockNonLaborInvestment } = load('src/mock/nonLaborInvestment.ts')
+const legacyId = 'hr-resource-machine-fixture-annual-1'
+const legacyValue = { startMonth:'2026-12', endMonth:'2027-02', items:[
+  {id:legacyId+'-transport',subjectId:'non-labor-transport-flight',secondarySubject:'交通费',tertiarySubject:'机票',monthlyAmounts:{'2026-12':1.2,'2027-01':3.5,'2027-02':0}},
+  {id:legacyId+'-hotel',subjectId:'non-labor-travel-hotel',secondarySubject:'差旅费',tertiarySubject:'住宿费',monthlyAmounts:{'2026-12':2,'2027-01':1.5,'2027-02':1}},
+]}
+const upgraded = seedExistingMockNonLabor([{versions:[{id:legacyId,minorVersion:1,nonLaborInvestment:legacyValue}]}])[0].versions[0].nonLaborInvestment
+assert.deepEqual(upgraded,mockNonLaborInvestment(legacyId,1),'untouched shipped mock values gain departments and currency amounts')
+const userEdited = structuredClone(legacyValue)
+userEdited.items[0].monthlyAmounts['2026-12']=42.5
+for(const preserved of [userEdited,rules.emptyNonLaborInvestment()]) {
+  assert.deepEqual(seedExistingMockNonLabor([{versions:[{id:legacyId,minorVersion:1,nonLaborInvestment:preserved}]}])[0].versions[0].nonLaborInvestment,preserved,'user edits and deliberately empty versions are not replaced')
+}
+assert.equal(rules.cloneNonLaborInvestment(userEdited).items[0].secondaryDepartment,'','legacy user data asks for department selection instead of guessing')
+console.log('PASS mock-only refresh preserves user amounts and cleared data')
 
 const { startHrFormalProjectSync } = load('src/hooks/useHrFormalProjectSync.ts')
 const stop = startHrFormalProjectSync(window)

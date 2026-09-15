@@ -304,7 +304,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             createdBy: useProjectStore.getState().currentLoginUser,
             estimatedInvestment: sumDepartmentInvestments(form.departmentInvestments),
             milestones,
-            nonLaborInvestment: validateNonLaborInvestment(form.nonLaborInvestment ?? cloneNonLaborInvestment(latest?.nonLaborInvestment), useHrConfigStore.getState().data.nonLaborSubject ?? [], latest?.nonLaborInvestment),
+            nonLaborInvestment: validateNonLaborInvestment(form.nonLaborInvestment ?? cloneNonLaborInvestment(latest?.nonLaborInvestment), useHrConfigStore.getState().data.nonLaborSubject ?? [], latest?.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []),
             departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
             createdAt: new Date().toISOString(),
             lockedAt: null,
@@ -400,7 +400,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
             const updated: HrTosVersion = {
               ...v,
-              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment) : v.nonLaborInvestment,
+              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
               batch: permitted.batch === undefined ? v.batch : permitted.batch,
               estimatedInvestment: permitted.estimatedInvestment ?? v.estimatedInvestment,
               milestones: permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones,
@@ -440,7 +440,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             if (v.id !== versionId || !isLatestHrVersion(p, v)) return v
             return {
               ...v,
-              nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment) : v.nonLaborInvestment,
+              nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
               estimatedInvestment: Math.round(newEstimatedTotal * 10) / 10,
               departmentInvestments,
               operationLogs: [
