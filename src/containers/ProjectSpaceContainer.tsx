@@ -2092,7 +2092,18 @@ export default function ProjectSpaceContainer() {
   // View columns
   const getViewKey = () => `project-${projectPlanLevel}-${projectPlanViewMode}`
   const currentViewMode = projectPlanViewMode
-  const currentViewColumns = getColumnsForView(currentViewMode)
+  const currentViewColumns = useMemo(() => {
+    const definitions = getColumnsForView(currentViewMode)
+    if (currentViewMode !== 'gantt') return definitions
+    // Keep the chart headers and column settings aligned with this scope's list.
+    const listColumns = projectPlanLevel === 'level1'
+      ? isWholeMachineProject || isTosVersionProject ? LEVEL1_TREE_EXPORT_COLUMNS : TABLE_COLUMNS
+      : [{ key: 'estimatedDays', title: '预估工期' }]
+    return definitions.map(definition => ({
+      ...definition,
+      title: listColumns.find(column => column.key === definition.key)?.title || definition.title,
+    }))
+  }, [currentViewMode, projectPlanLevel, isWholeMachineProject, isTosVersionProject])
   const currentViewKey = getViewKey()
   const storedColumnSettings = columnSettingsByView[currentViewKey]
   const columnSettings = useMemo(

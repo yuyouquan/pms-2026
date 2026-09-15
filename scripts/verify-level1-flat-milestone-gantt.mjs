@@ -38,6 +38,26 @@ assert.deepEqual(
   ['text', 'start_date', 'end_date'],
   'gantt view never exposes the predecessor column',
 )
+const renamedGanttColumns = ganttRules.buildVisiblePlanGanttColumns([
+  { key: 'taskName', title: '阶段/节点' },
+  { key: 'planEndDate', title: '计划完成时间' },
+  { key: 'planStartDate', title: '计划开始时间' },
+  { key: 'estimatedDays', title: '预估工期' },
+  { key: 'progress' },
+])
+assert.deepEqual(
+  renamedGanttColumns.map(({ name, label }) => ({ name, label })),
+  [
+    { name: 'text', label: '阶段/节点' },
+    { name: 'end_date', label: '计划完成时间' },
+    { name: 'start_date', label: '计划开始时间' },
+    { name: 'duration', label: '预估工期' },
+    { name: 'progress', label: '进度' },
+  ],
+  'gantt headers follow list definitions while preserving configured order and data fields',
+)
+assert.equal(renamedGanttColumns[3].template({ duration: 12 }), '12天')
+assert.equal(renamedGanttColumns[4].template({ progress: 0.5 }), '50%')
 
 const machineTemplate = level1Rules.buildMachineLevel1Tasks(true)
 const machineProjection = level1Rules.projectLevel1Plan(machineTemplate, { mode: 'standard', today: '2026-08-27' })
@@ -1605,7 +1625,7 @@ const technicalWorkspaceSource = read('src/lib/technicalPlanWorkspace.ts')
 const technicalPlanStoreModule = loadTypeScriptModule(root, 'src/stores/technicalPlan.ts')
 const technicalWorkspaceModule = loadTypeScriptModule(root, 'src/lib/technicalPlanWorkspace.ts')
 assert.deepEqual(technicalWorkspaceModule.getTechnicalPlanExportColumns('tdt').map(column => column.key), ['sequence', 'stageName', 'milestoneName', 'status', 'planEndDate', 'estimatedDays', 'actualEndDate', 'actualDays'], 'TDT export uses exactly the flat milestone columns')
-assert.deepEqual(technicalWorkspaceModule.getTechnicalPlanExportColumns('subproject').map(column => column.key), ['sequence', 'activityName', 'status', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays'], 'subproject export uses exactly the activity columns')
+assert.deepEqual(technicalWorkspaceModule.getTechnicalPlanExportColumns('subproject').map(column => column.key), ['sequence', 'activityName', 'planStartDate', 'planEndDate', 'estimatedDays', 'actualStartDate', 'actualEndDate', 'actualDays', 'delayStatus'], 'subproject export uses the same nine columns as its list')
 const technicalTdtRows = technicalWorkspaceModule.projectTechnicalPlanRows('tdt', flatHierarchy)
 assert.deepEqual(technicalTdtRows.map(row => [row.stageName, row.milestoneName]), [['概念阶段', '概念启动'], ['计划阶段', 'STR1']], 'TDT row projection is flat milestones')
 const technicalSubprojectRows = technicalWorkspaceModule.projectTechnicalPlanRows('subproject', seededSubprojectTasks)

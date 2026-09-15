@@ -86,10 +86,10 @@ const { Text } = Typography
 const FIXED_TDT_LABEL = 'TDT项目计划'
 const TECHNICAL_STAGE_COLORS = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2'] as const
 const TECHNICAL_GANTT_COLUMNS: DHTMLXGanttColumn[] = [
-  { name: 'text', label: '任务名称', width: 180, tree: true },
-  { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
-  { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
-  { name: 'duration', label: '计划周期', align: 'center', width: 60, template: task => `${task.duration}天` },
+  { name: 'text', label: '阶段/节点', width: 180, tree: true },
+  { name: 'start_date', label: '计划开始时间', align: 'center', width: 120 },
+  { name: 'end_date', label: '计划完成时间', align: 'center', width: 120 },
+  { name: 'duration', label: '预估工期', align: 'center', width: 90, template: task => `${task.duration}天` },
   { name: 'progress', label: '进度', align: 'center', width: 60, template: task => `${Math.round(task.progress * 100)}%` },
 ]
 const PLAN_REVISION_KIND_OPTIONS: Array<{ key: PlanRevisionKind; label: string }> = [

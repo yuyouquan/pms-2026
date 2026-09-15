@@ -42,17 +42,20 @@ export interface VisiblePlanGanttColumn {
 }
 
 export const buildVisiblePlanGanttColumns = (
-  definitions: readonly { key: string }[],
+  definitions: readonly { key: string; title?: unknown }[],
 ): VisiblePlanGanttColumn[] => {
   const columnsByKey: Record<string, VisiblePlanGanttColumn> = {
     taskName: { name: 'text', label: '任务名称', width: 180, tree: true },
-    planStartDate: { name: 'start_date', label: '计划开始', align: 'center', width: 90 },
-    planEndDate: { name: 'end_date', label: '计划完成', align: 'center', width: 90 },
-    estimatedDays: { name: 'duration', label: '计划周期', align: 'center', width: 60, template: task => `${task.duration ?? 0}天` },
+    planStartDate: { name: 'start_date', label: '计划开始', align: 'center', width: 120 },
+    planEndDate: { name: 'end_date', label: '计划完成', align: 'center', width: 120 },
+    estimatedDays: { name: 'duration', label: '计划周期', align: 'center', width: 90, template: task => `${task.duration ?? 0}天` },
     progress: { name: 'progress', label: '进度', align: 'center', width: 60, template: task => `${Math.round((task.progress ?? 0) * 100)}%` },
   }
   return definitions
-    .map(definition => columnsByKey[definition.key])
+    .map(definition => {
+      const column = columnsByKey[definition.key]
+      return column && { ...column, label: typeof definition.title === 'string' && definition.title ? definition.title : column.label }
+    })
     .filter((column): column is VisiblePlanGanttColumn => Boolean(column))
 }
 
