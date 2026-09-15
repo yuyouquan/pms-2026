@@ -9022,6 +9022,10 @@ input.ant-input,
   padding: 8px 16px 16px !important;
 }
 
+.pms-project-section--compact .pms-project-info-core-card > .ant-card-head {
+  min-height: 40px;
+}
+
 .pms-project-space-tabs > .ant-tabs-nav {
   min-height: 40px;
   margin: 0 0 8px;
