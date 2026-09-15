@@ -7,8 +7,8 @@ import {
   App, Row, Col, Button, Card, Empty, Segmented, Pagination, Space, Tooltip,
 } from 'antd'
 import {
-  AppstoreOutlined, CalendarOutlined, FullscreenExitOutlined, FullscreenOutlined,
-  TeamOutlined, UnorderedListOutlined, UserOutlined,
+  AppstoreOutlined, CalendarOutlined, DownOutlined, FullscreenExitOutlined, FullscreenOutlined,
+  TeamOutlined, UnorderedListOutlined, UpOutlined, UserOutlined,
 } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -126,6 +126,7 @@ export default function ProjectListContainer() {
   const [projectListQuickFilterHost, setProjectListQuickFilterHost] = useState<HTMLDivElement | null>(null)
   const [projectListFilterSummaryHost, setProjectListFilterSummaryHost] = useState<HTMLDivElement | null>(null)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [isFilterCollapsed, setIsFilterCollapsed] = useState(false)
   const technicalSelectedTypes = getLinkedQuickFilterValues(technicalFilters, 'technicalProjectType')
   const technicalActiveType = resolveTechnicalProjectType(technicalSelectedTypes)
   const statusEnumType = getProjectStatusEnumType(projectTypeFilter)
@@ -542,9 +543,21 @@ export default function ProjectListContainer() {
                   ]}
                 />
                 <div className="pms-project-list-table-actions" ref={setProjectListTableToolbarHost} />
+                <Tooltip title={isFilterCollapsed ? '展开筛选' : '收起筛选'}>
+                  <Button
+                    className="pms-project-list-icon-action"
+                    size="small"
+                    aria-label={isFilterCollapsed ? '展开筛选' : '收起筛选'}
+                    aria-expanded={!isFilterCollapsed}
+                    aria-controls="project-list-filter-panel"
+                    icon={isFilterCollapsed ? <DownOutlined /> : <UpOutlined />}
+                    onClick={() => setIsFilterCollapsed(collapsed => !collapsed)}
+                  />
+                </Tooltip>
               </div>
             </div>
 
+          <div id="project-list-filter-panel" className="pms-project-list-filter-panel" hidden={isFilterCollapsed}>
             {workbenchListState.kind !== 'select-category' && (workbenchListState.showSecondaryCategory || projectTypeFilter === PROJECT_TYPE_TOS_VERSION) && (
               <div className="pms-project-list-secondary-row" aria-label="项目二级分类快捷筛选">
                 <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>二级分类</span>
@@ -635,6 +648,7 @@ export default function ProjectListContainer() {
                 ref={setProjectListFilterSummaryHost}
               />
             )}
+          </div>
         </div>
       </div>
 

@@ -7025,9 +7025,20 @@ input.ant-input,
   border-radius: 8px !important;
 }
 
-.pms-project-list-filter-grid > [aria-label] {
+.pms-project-list-filter-grid > [aria-label],
+.pms-project-list-filter-panel > [aria-label] {
   min-height: var(--pms-control-height);
   line-height: var(--pms-line-height-body);
+}
+
+.pms-project-list-filter-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pms-project-list-filter-panel[hidden] {
+  display: none;
 }
 
 .pms-project-list-filter-grid .pms-project-filter-chip,
