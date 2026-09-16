@@ -1,5 +1,7 @@
 'use client'
 
+import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
+
 import NonLaborInvestmentSection from '@/components/project-resources/NonLaborInvestmentSection'
 import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
 
@@ -118,7 +120,7 @@ export default function MachineVersionDetailModal({
     <Modal
       className="pms-modal pms-hr-version-modal"
       open={open}
-      title="版本预估投入详情"
+      title={<HrVersionModalTitle title="版本预估投入详情" versionNumber={version?.versionNumber} />}
       width={1280}
       onCancel={onCancel}
       footer={null}
@@ -128,12 +130,11 @@ export default function MachineVersionDetailModal({
         <>
           <Descriptions
             size="small"
-            column={4}
+            column={3}
             bordered
             style={{ marginBottom: 12 }}
             items={[
               { key: 'projectName', label: '项目名称', children: project.name },
-              { key: 'versionNumber', label: '版本号', children: version.versionNumber },
               {
                 key: 'budgetType',
                 label: '预算类型',
@@ -143,14 +144,17 @@ export default function MachineVersionDetailModal({
                   </Tag>
                 ),
               },
-              { key: 'projectLevel', label: '项目等级', children: version.projectLevel || '-' },
-              { key: 'levelCoefficient', label: '等级系数', children: (version.levelCoefficient ?? 0).toFixed(2) },
-              { key: 'hrModelVersion', label: '人力模型版本', children: version.hrModelVersion || '-' },
               {
                 key: 'estimatedInvestment',
                 label: '预估投入(人月)',
                 children: formatPersonMonth(version.estimatedInvestment),
               },
+              { key: 'brand', label: '品牌', children: project.brand || '-' },
+              { key: 'productLine', label: '产品线', children: project.productLine || '-' },
+              { key: 'marketName', label: '市场名', children: project.marketName || '-' },
+              { key: 'projectLevel', label: '项目等级', children: version.projectLevel || '-' },
+              { key: 'levelCoefficient', label: '等级系数', children: (version.levelCoefficient ?? 0).toFixed(2) },
+              { key: 'hrModelVersion', label: '人力模型版本', children: version.hrModelVersion || '-' },
             ]}
           />
 

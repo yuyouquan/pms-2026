@@ -867,8 +867,8 @@ function mutationFailure(errors: Record<string, string>): RoadmapMutationResult 
   return { ok: false, reason: 'invalid', errors }
 }
 
-function currentRoadmapTosEnumValues(): string[] {
-  return useEnumStore.getState().rowsByType['roadmap-tos'].map(row => row.value)
+function currentRoadmapTosEnumValues(includeDisabled = false): string[] {
+  return useEnumStore.getState().rowsByType['roadmap-tos'].filter(row => includeDisabled || row.enabled !== false).map(row => row.value)
     .map(normalizeRoadmapTosValue)
     .filter(Boolean)
 }
@@ -884,7 +884,7 @@ function currentChipMappings(): ChipMappingRow[] {
 
 
 function currentTosEnumVersions(): TosVersionConfig[] {
-  return currentRoadmapTosEnumValues().map(value => {
+  return currentRoadmapTosEnumValues(true).map(value => {
     const [major, minor] = value.split('.').map(Number)
     return {
       id: value,

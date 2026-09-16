@@ -2621,7 +2621,7 @@ body:not(.pms-project-list-is-resizing) .pms-project-list-column-resize-handle:h
   gap: 4px;
 }
 
-.pms-enum-actions .ant-btn {
+.pms-enum-actions .ant-btn-icon-only {
   width: 32px;
   min-width: 32px;
   height: 32px;
@@ -9097,12 +9097,14 @@ input.ant-input,
 .pms-hr-readonly-field:hover .pms-hr-readonly-field__icon,
 .pms-hr-readonly-field:focus-within .pms-hr-readonly-field__icon { opacity: 1; }
 .pms-hr-version-row { display: grid; gap: 0 12px; }
-.pms-hr-version-row--metadata { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.pms-hr-version-row--metadata { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .pms-hr-version-row--model { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .pms-hr-version-row--milestones { column-gap: 8px; }
 .pms-hr-version-milestone-scroll { overflow-x: auto; margin-bottom: 4px; }
 .pms-hr-version-modal-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-right: 28px; }
 .pms-hr-version-modal-title > span:first-child { flex-shrink: 0; }
+.pms-hr-version-modal-title__heading { display: inline-flex; align-items: center; gap: 8px; }
+.pms-hr-version-modal-title__version.ant-tag { flex-shrink: 0; margin-inline-end: 0; }
 .pms-hr-version-modal-title__project { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pms-text-secondary); font-size: 13px; font-weight: 500; }
 .pms-hr-version-row--milestones .ant-form-item-label > label { font-size: 12px; white-space: nowrap; }
 .pms-hr-version-row--milestones .ant-form-item-label > label::after { display: none; }

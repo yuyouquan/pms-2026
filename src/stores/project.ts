@@ -293,7 +293,7 @@ function resolveAllowedFirstSaleTosValues(options?: ProjectMutationOptions): str
   }
   const enumState = useEnumStore.getState()
   if (!enumState.hasHydrated || enumState.hydrationError) return []
-  return currentTosSnapshotValues(enumState.rowsByType['first-sale-tos'].map(row => row.value))
+  return currentTosSnapshotValues(enumState.rowsByType['first-sale-tos'].filter(row => row.enabled !== false).map(row => row.value))
 }
 
 function normalizeProjectSourceBid(project: Project): string {
@@ -645,7 +645,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       let projectToAdd = sourceBid && newProject.sourceBid !== sourceBid
         ? { ...newProject, sourceBid }
         : newProject
-      if (isMachineProjectType(projectToAdd.type) && validateFanTrial(projectToAdd.fieldValues || {}, useEnumStore.getState().rowsByType['fan-trial-country'].map(row => row.value))) return false
+      if (isMachineProjectType(projectToAdd.type) && validateFanTrial(projectToAdd.fieldValues || {}, useEnumStore.getState().rowsByType['fan-trial-country'].filter(row => row.enabled !== false).map(row => row.value))) return false
       projectToAdd = withEosTransitionTime(projectToAdd)
       if (hasDuplicateProjectSourceBid(get().projects, projectToAdd)) return false
       let machineResolution: Extract<MachineTosResolution<Project>, { ok: true }> | null = null
@@ -734,7 +734,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         if (!isValidMachineProjectMutation(projectToSave, options, existing)) return null
         machineResolution = resolution
       }
-      if (!registryUpdate && isMachineProjectType(projectToSave.type) && validateFanTrial(projectToSave.fieldValues || {}, useEnumStore.getState().rowsByType['fan-trial-country'].map(row => row.value), existing.fieldValues?.fanTrialCountries)) return null
+      if (!registryUpdate && isMachineProjectType(projectToSave.type) && validateFanTrial(projectToSave.fieldValues || {}, useEnumStore.getState().rowsByType['fan-trial-country'].filter(row => row.enabled !== false).map(row => row.value), existing.fieldValues?.fanTrialCountries)) return null
       const completionBaseline = withBoundMachineBudgetMetadata(isBoundMachineBudget(projectToSave)
         ? { ...existing, boundFormalProjectId: projectToSave.boundFormalProjectId } : existing, previousProjects)
       if (!isFormalProject(projectToSave) && validateManualProjectCompletion(projectToSave, completionBaseline, useEnumStore.getState().rowsByType)) return null

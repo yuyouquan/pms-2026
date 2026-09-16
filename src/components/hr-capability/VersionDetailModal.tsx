@@ -237,7 +237,7 @@ export default function VersionDetailModal({
   return (
     <Modal
       className="pms-modal pms-hr-version-modal"
-      title={readOnly ? '版本详情' : <HrVersionModalTitle title="编辑版本" projectName={project.name} />}
+      title={<HrVersionModalTitle title={readOnly ? "版本详情" : "编辑版本"} projectName={readOnly ? undefined : project.name} versionNumber={version.versionNumber} />}
       open={open}
       onCancel={handleCancel}
       onOk={handleOk}
@@ -264,7 +264,6 @@ export default function VersionDetailModal({
         >
           {readOnly && <span>项目名称：<strong style={{ color: 'var(--pms-text-primary)' }}>{project.name}</strong></span>}
           <span>预算类型：<strong style={{ color: 'var(--pms-text-primary)' }}>{CAPABILITY_BUDGET_TYPE_LABELS[version.budgetType]}</strong></span>
-          <span>版本号：<strong style={{ color: 'var(--pms-text-primary)' }}>{version.versionNumber}</strong></span>
           <span>项目起止：<strong style={{ color: 'var(--pms-text-primary)' }}>{version.projectStartTime} ~ {version.projectEndTime}</strong></span>
           <span>预估投入：<strong style={{ color: 'var(--pms-text-primary)' }}>{formatPersonMonth(version.estimatedInvestment)}</strong></span>
         </div>

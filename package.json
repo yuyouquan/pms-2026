@@ -25,6 +25,7 @@
     "verify:project-info-todos": "node scripts/verify-project-info-todos.mjs",
     "verify:tos-project-status": "node scripts/verify-tos-project-status.mjs",
     "verify:project-roadmap": "node scripts/verify-project-roadmap.mjs",
+    "verify:enum-status": "node scripts/verify-enum-status.mjs",
     "verify:enum-config": "node scripts/verify-enum-config.mjs",
     "verify:enum-consumers": "node scripts/verify-enum-consumers.mjs",
     "verify:collapsible-sidebars": "node scripts/verify-collapsible-sidebars.mjs",

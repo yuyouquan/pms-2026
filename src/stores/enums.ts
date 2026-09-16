@@ -28,6 +28,7 @@ export interface EnumActions {
   setSelectedType: (type: EnumTypeKey) => void
   addEnumRow: <K extends EnumTypeKey>(type: K, draft: EnumRowDraftByType[K]) => EnumActionResult
   updateEnumRow: <K extends EnumTypeKey>(type: K, rowId: string, draft: EnumRowDraftByType[K]) => EnumActionResult
+  setEnumRowEnabled: (type: EnumTypeKey, rowId: string, enabled: boolean) => EnumActionResult
   deleteEnumRow: (type: EnumTypeKey, rowId: string) => EnumActionResult
   hydrateEnumStore: () => Promise<boolean>
   resetLocalConfig: () => Promise<boolean>
@@ -150,6 +151,7 @@ function sanitizeRowsForType<K extends EnumTypeKey>(
     sourceIndex: number
     suppliedId: string | null
     row: EnumRowDraftByType[K]
+    enabled?: boolean
   }> = []
   input.forEach((candidate, sourceIndex) => {
     if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return
@@ -162,7 +164,7 @@ function sanitizeRowsForType<K extends EnumTypeKey>(
     if (!validation.ok) return
 
     const suppliedId = typeof source.id === 'string' && source.id.trim() ? source.id : null
-    candidates.push({ sourceIndex, suppliedId, row: validation.row })
+    candidates.push({ sourceIndex, suppliedId, row: validation.row, ...(typeof source.enabled === 'boolean' ? { enabled: source.enabled } : {}) })
     validatedRows.push({ id: `validated-${sourceIndex}`, ...validation.row } as EnumRowByType<K>)
   })
 
@@ -175,7 +177,7 @@ function sanitizeRowsForType<K extends EnumTypeKey>(
       ? candidate.suppliedId
       : migratedId(type, candidate.sourceIndex, new Set([...reservedIds, ...claimedIds]))
     claimedIds.add(id)
-    return { id, ...candidate.row } as EnumRowByType<K>
+    return { id, ...candidate.row, ...(candidate.enabled !== undefined ? { enabled: candidate.enabled } : {}) } as EnumRowByType<K>
   })
 }
 
@@ -291,10 +293,19 @@ function updateRow<K extends EnumTypeKey>(
   const validation = validateAndNormalizeEnumRow(type, draft, existingRows, rowId)
   if (!validation.ok) return { result: validation, rowsByType }
   const nextRows = [...existingRows]
-  nextRows[rowIndex] = { id: rowId, ...validation.row } as EnumRowByType<K>
+  nextRows[rowIndex] = { ...existingRows[rowIndex], id: rowId, ...validation.row } as EnumRowByType<K>
   return {
     result: { ok: true },
     rowsByType: { ...rowsByType, [type]: nextRows } as EnumRowsByType,
+  }
+}
+
+function setRowEnabled(rowsByType: EnumRowsByType, type: EnumTypeKey, rowId: string, enabled: boolean): RowMutation {
+  if (!isEnumTypeKey(type) || typeof enabled !== 'boolean') return { result: { ok: false, reason: 'invalid' }, rowsByType }
+  if (!rowsByType[type].some(row => row.id === rowId)) return { result: { ok: false, reason: 'missing' }, rowsByType }
+  return {
+    result: { ok: true },
+    rowsByType: { ...rowsByType, [type]: rowsByType[type].map(row => row.id === rowId ? { ...row, enabled } : row) },
   }
 }
 
@@ -339,6 +350,7 @@ export function createEnumStore(initial?: Partial<PersistedEnumState>, idFactory
       apply(addRow(rowsByType, type, draft, idFactory)),
     updateEnumRow: <K extends EnumTypeKey>(type: K, rowId: string, draft: EnumRowDraftByType[K]) =>
       apply(updateRow(rowsByType, type, rowId, draft)),
+    setEnumRowEnabled: (type: EnumTypeKey, rowId: string, enabled: boolean) => apply(setRowEnabled(rowsByType, type, rowId, enabled)),
     deleteEnumRow: (type: EnumTypeKey, rowId: string) => apply(deleteRow(rowsByType, type, rowId)),
     hydrateEnumStore: async () => {
       hasHydrated = true
@@ -404,6 +416,12 @@ export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
         updateEnumRow: (type, rowId, draft) => {
           const previousRows = get().rowsByType
           const next = updateRow(previousRows, type, rowId, draft)
+          if (!next.result.ok) return next.result
+          return commitRows(previousRows, next.rowsByType)
+        },
+        setEnumRowEnabled: (type, rowId, enabled) => {
+          const previousRows = get().rowsByType
+          const next = setRowEnabled(previousRows, type, rowId, enabled)
           if (!next.result.ok) return next.result
           return commitRows(previousRows, next.rowsByType)
         },

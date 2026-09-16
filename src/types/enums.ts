@@ -32,6 +32,8 @@ export type EnumKind = 'single' | 'tmg-map' | 'chip-map' | 'project-category-map
 
 export interface BaseEnumRow {
   id: string
+  /** Existing configurations without a flag remain enabled. */
+  enabled?: boolean
 }
 
 export interface SingleEnumRow extends BaseEnumRow {
@@ -78,7 +80,7 @@ export type EnumRowsByType = {
 }
 
 export type EnumRowDraftByType = {
-  [K in EnumTypeKey]: Omit<EnumRowByType<K>, 'id'>
+  [K in EnumTypeKey]: Omit<EnumRowByType<K>, 'id' | 'enabled'>
 }
 
 export type EnumRowDraft = EnumRowDraftByType[EnumTypeKey]

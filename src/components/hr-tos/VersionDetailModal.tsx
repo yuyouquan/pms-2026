@@ -299,7 +299,7 @@ export default function VersionDetailModal({
   return (
     <Modal
       className="pms-modal pms-hr-version-modal"
-      title={readOnly ? '版本详情' : <HrVersionModalTitle title="编辑版本" projectName={project.name} />}
+      title={<HrVersionModalTitle title={readOnly ? "版本详情" : "编辑版本"} projectName={readOnly ? undefined : project.name} versionNumber={version.versionNumber} />}
       open={open}
       onCancel={handleCancel}
       onOk={handleOk}
@@ -338,10 +338,6 @@ export default function VersionDetailModal({
             <strong style={{ color: 'var(--pms-text-primary)' }}>
               {TOS_BUDGET_TYPE_LABELS[version.budgetType]}
             </strong>
-          </span>
-          <span>
-            版本号：
-            <strong style={{ color: 'var(--pms-text-primary)' }}>{version.versionNumber}</strong>
           </span>
           <span>
             预估投入：

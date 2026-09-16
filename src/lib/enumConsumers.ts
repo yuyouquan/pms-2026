@@ -7,6 +7,8 @@ import type {
   SingleEnumRow,
 } from '@/types/enums'
 
+export type EnumOptionPurpose = 'edit' | 'filter'
+
 export interface EnumOption {
   value: string
   label: string
@@ -88,19 +90,21 @@ export function resolveCurrentTosSnapshot(
 export function getSingleEnumValues(
   rowsByType: EnumRowsByType,
   type: SingleEnumTypeKey,
+  purpose: EnumOptionPurpose = 'edit',
 ): string[] {
   const normalize = type === 'first-sale-tos' || type === 'roadmap-tos'
     ? normalizeTosSnapshot
     : nonemptyString
-  return rowsByType[type].map(row => normalize(row.value)).filter(Boolean)
+  return rowsByType[type].filter(row => purpose === 'filter' || row.enabled !== false).map(row => normalize(row.value)).filter(Boolean)
 }
 
 export function buildEnumOptions(
   rowsByType: EnumRowsByType,
   type: SingleEnumTypeKey,
   historicalValues: readonly string[] = [],
+  purpose: EnumOptionPurpose = 'edit',
 ): EnumOption[] {
-  const currentValues = getSingleEnumValues(rowsByType, type)
+  const currentValues = getSingleEnumValues(rowsByType, type, purpose)
   const options = currentValues.map(value => ({
     value,
     label: formatEnumCellValue(type, 'value', value),
@@ -114,7 +118,8 @@ export function buildEnumOptions(
     const value = normalizeHistory(input)
     if (!value || seen.has(value)) continue
     seen.add(value)
-    options.push(historyOption(value, formatEnumCellValue(type, 'value', value)))
+    const label = formatEnumCellValue(type, 'value', value)
+    options.push(purpose === 'filter' ? { value, label } : historyOption(value, label))
   }
 
   return options
@@ -175,13 +180,13 @@ export function buildChipOptions(
   rowsByType: EnumRowsByType,
   historical: readonly ProjectChipSnapshot[] = [],
 ): ChipOption[] {
-  const rows = rowsByType['chip-mapping']
+  const rows = rowsByType['chip-mapping'].filter(row => row.enabled !== false)
   const options: ChipOption[] = rows.map(row => ({
     value: row.id,
     label: chipLabel(row),
   }))
   const seen = new Set(rows.map(chipSnapshotKey))
-  const usedOptionValues = new Set(rows.map(row => row.id))
+  const usedOptionValues = new Set(rowsByType['chip-mapping'].map(row => row.id))
 
   for (const snapshot of historical) {
     const key = chipSnapshotKey(snapshot)
@@ -208,7 +213,7 @@ export function resolveChipRow(
   rowsByType: EnumRowsByType,
   rowId: string,
 ): ProjectChipSnapshot | undefined {
-  const row = rowsByType['chip-mapping'].find(candidate => candidate.id === rowId)
+  const row = rowsByType['chip-mapping'].find(candidate => candidate.enabled !== false && candidate.id === rowId)
   if (row) {
     return {
       chipCode: row.chipCode,
@@ -246,6 +251,7 @@ export function getTmgDomains(
   const options: EnumOption[] = []
   const seen = new Set<string>()
   for (const row of rowsByType['tmg-subdomain-mapping']) {
+    if (row.enabled === false) continue
     const domain = row.domain.trim()
     if (!domain || seen.has(domain)) continue
     seen.add(domain)
@@ -267,6 +273,7 @@ export function getTmgSubdomainState(
   const liveSubdomains: string[] = []
   const seen = new Set<string>()
   for (const row of rowsByType['tmg-subdomain-mapping']) {
+    if (row.enabled === false) continue
     const subdomain = row.subdomain.trim()
     if (row.domain.trim() !== selectedDomain || !subdomain || seen.has(subdomain)) continue
     seen.add(subdomain)

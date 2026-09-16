@@ -3033,7 +3033,7 @@ export default function ProjectSpaceContainer() {
     const submittedStatus = typeof editingProjectFields.status === 'string'
       ? editingProjectFields.status.trim()
       : selectedProject.status
-    const currentStatusRows = enumState.rowsByType[getProjectStatusEnumType(selectedProject.type)]
+    const currentStatusRows = enumState.rowsByType[getProjectStatusEnumType(selectedProject.type)].filter(row => row.enabled !== false)
     if (
       submittedStatus
       && submittedStatus !== selectedProject.status
