@@ -7,7 +7,7 @@ import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/projec
 import { canAccessHrProject, getHrAllowedBudgetTypes, resolveHrNewVersionProjectId } from '@/lib/hrProjectRegistry'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
-import { canCreateHrVersion, getHrVersionSeed } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, getHrVersionSeed, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -304,7 +304,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   return (
     <Modal
       className="pms-modal pms-hr-version-modal"
-      title={<HrVersionModalTitle title="新建版本" projectName={project?.name} />}
+      title={<HrVersionModalTitle title="新建版本" projectName={project?.name} versionNumber={project && budgetType ? `V0.${nextHrMinorVersion(project.versions, budgetType)}` : undefined} versionLabel="将创建版本" />}
       open={open}
       onOk={handleOk}
       onCancel={handleCancel}

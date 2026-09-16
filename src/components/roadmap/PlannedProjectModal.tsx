@@ -35,7 +35,6 @@ import { useRoadmapStore } from '@/stores/roadmap'
 import type {
   PlannedRoadmapProject,
   PlannedRoadmapProjectInput,
-  RoadmapAndroidVersion,
   RoadmapBrand,
   RoadmapDevelopMode,
   RoadmapProductType,
@@ -45,7 +44,6 @@ import type {
   TosVersionConfig,
 } from '@/types/roadmap'
 
-const ANDROID_VERSIONS: readonly RoadmapAndroidVersion[] = ['Android 16', 'Android 17', 'Android 18']
 const BRANDS: readonly RoadmapBrand[] = ['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌']
 const PRODUCT_TYPES: readonly RoadmapProductType[] = ['新品', '老品']
 
@@ -112,6 +110,7 @@ export default function PlannedProjectModal({
     editingProject?.firstSaleTosVersionId ? [editingProject.firstSaleTosVersionId] : [],
     open,
   )
+  const androidOptions = useSingleEnumOptions('android-version', editingProject?.androidVersion ? [editingProject.androidVersion] : [], open)
   const ramOptions = useSingleEnumOptions('memory-size', editingProject?.startRam ? [editingProject.startRam] : [], open)
   const versionTypeOptions = useSingleEnumOptions('version-type', editingProject?.versionType ? [editingProject.versionType] : [], open)
   const productSeriesOptions = useSingleEnumOptions('product-series', editingProject?.productSeries ? [editingProject.productSeries] : [], open)
@@ -119,7 +118,7 @@ export default function PlannedProjectModal({
   const { hasHydrated, hydrationError, isReady: enumReady, retryHydration } = useEnumHydration(open)
   const rowsByType = useEnumStore(state => state.rowsByType)
   const liveChipRow = useMemo(
-    () => rowsByType['chip-mapping'].find(row => row.chipCode.trim() === chipCode.trim()),
+    () => rowsByType['chip-mapping'].find(row => row.enabled !== false && row.chipCode.trim() === chipCode.trim()),
     [chipCode, rowsByType],
   )
   const chipOptions = useMemo(() => {
@@ -130,7 +129,7 @@ export default function PlannedProjectModal({
     return buildChipOptions(rowsByType, historical)
   }, [editingProject?.chipCode, enumReady, liveChipRow, rowsByType])
   const selectedChipOptionId = liveChipRow?.id ?? chipOptions.find(option => option.historical)?.value
-  const hasActiveChipCodes = enumReady && rowsByType['chip-mapping'].some(row => Boolean(row.chipCode.trim()))
+  const hasActiveChipCodes = enumReady && rowsByType['chip-mapping'].some(row => row.enabled !== false && Boolean(row.chipCode.trim()))
   const hasInactiveChipCode = Boolean(editingProject?.chipCode && !liveChipRow)
   const preservesHistoricalChipCode = Boolean(
     editingProject?.chipCode.trim()
@@ -231,7 +230,7 @@ export default function PlannedProjectModal({
         editingProject?.chipCode.trim()
         && submittedChipCode === editingProject.chipCode.trim(),
       )
-      if (!enumState.rowsByType['chip-mapping'].some(row => Boolean(row.chipCode.trim()))
+      if (!enumState.rowsByType['chip-mapping'].some(row => row.enabled !== false && Boolean(row.chipCode.trim()))
         && !preservesExistingChipCode) {
         const chipConfigMessage = '请先在配置中心维护芯片编码'
         form.setFields([{ name: 'chipCode', errors: [chipConfigMessage] }])
@@ -422,7 +421,7 @@ export default function PlannedProjectModal({
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
                 <Form.Item label="安卓版本" name="androidVersion" rules={[{ required: true, message: '请选择安卓版本' }]}>
-                  <Select options={ANDROID_VERSIONS.map(value => ({ label: value, value }))} />
+                  <Select options={androidOptions} />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>

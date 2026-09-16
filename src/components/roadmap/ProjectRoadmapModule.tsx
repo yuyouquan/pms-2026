@@ -121,7 +121,7 @@ export default function ProjectRoadmapModule({
 
   const plannedProjects = useMemo(() => projects.filter(project => getProjectAttribute(project) === 'roadmap').map(projectRegistryToPlanned), [projects])
   const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
-  const enumTosOptions = useSingleEnumOptions('roadmap-tos')
+  const enumTosOptions = useSingleEnumOptions('roadmap-tos', undefined, true, 'filter')
   const {
     hasHydrated: enumHasHydrated,
     hydrationError: enumHydrationError,
@@ -139,9 +139,9 @@ export default function ProjectRoadmapModule({
     developMode: [...plannedProjects.map(project => project.developMode), ...projects.map(project => project.developMode)]
       .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
   }), [plannedProjects, projects])
-  const filterRamOptions = useSingleEnumOptions('memory-size', configurableHistory.startRam)
-  const filterVersionTypeOptions = useSingleEnumOptions('version-type', configurableHistory.versionType)
-  const filterDevelopModeOptions = useSingleEnumOptions('machine-development-mode', configurableHistory.developMode)
+  const filterRamOptions = useSingleEnumOptions('memory-size', configurableHistory.startRam, true, 'filter')
+  const filterVersionTypeOptions = useSingleEnumOptions('version-type', configurableHistory.versionType, true, 'filter')
+  const filterDevelopModeOptions = useSingleEnumOptions('machine-development-mode', configurableHistory.developMode, true, 'filter')
   const setSelectedType = useEnumStore(state => state.setSelectedType)
   const rowsByType = useEnumStore(state => state.rowsByType)
   const filterChipCodeOptions = useMemo(() => {
@@ -151,7 +151,7 @@ export default function ProjectRoadmapModule({
       .filter(value => !activeValueSet.has(value))
     return [
       ...activeValues.map(value => ({ label: value, value })),
-      ...historicalValues.map(value => ({ label: `${value}（已停用）`, value, disabled: true })),
+      ...historicalValues.map(value => ({ label: value, value })),
     ]
   }, [configurableHistory.chipCode, rowsByType])
   const setActiveModule = useUiStore(state => state.setActiveModule)

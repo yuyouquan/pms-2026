@@ -15,10 +15,11 @@ import {
   Skeleton,
   Space,
   Table,
+  Tag,
   Tooltip,
   Typography,
 } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import {
   ENUM_DEFINITIONS,
@@ -79,6 +80,7 @@ export default function EnumConfig({
   const selectedType = useEnumStore(state => state.selectedType)
   const addEnumRow = useEnumStore(state => state.addEnumRow)
   const updateEnumRow = useEnumStore(state => state.updateEnumRow)
+  const setEnumRowEnabled = useEnumStore(state => state.setEnumRowEnabled)
   const deleteEnumRow = useEnumStore(state => state.deleteEnumRow)
   const hasHydrated = useEnumStore(state => state.hasHydrated)
   const hydrationError = useEnumStore(state => state.hydrationError)
@@ -99,7 +101,7 @@ export default function EnumConfig({
   const [recoveryAction, setRecoveryAction] = useState<'retry' | 'reset' | null>(null)
   const [storageWriteContext, setStorageWriteContext] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [filterState, setFilterState] = useState<{ type: EnumTypeKey; values: DraftValues }>({
+  const [filterState, setFilterState] = useState<{ type: EnumTypeKey; values: DraftValues; status?: 'all' | 'enabled' | 'disabled' }>({
     type: selectedType,
     values: {},
   })
@@ -113,8 +115,9 @@ export default function EnumConfig({
   const editorDefinition = editorType ? ENUM_DEFINITIONS[editorType] : null
   const rows = rowsByType[selectedType] as EnumRow[]
   const filterValues = filterState.type === selectedType ? filterState.values : {}
-  const hasActiveFilters = Object.values(filterValues).some(value => value?.trim())
-  const filteredRows = filterEnumRows(selectedType, rows, filterValues)
+  const filterStatus = filterState.type === selectedType ? filterState.status ?? 'all' : 'all'
+  const hasActiveFilters = filterStatus !== 'all' || Object.values(filterValues).some(value => value?.trim())
+  const filteredRows = filterEnumRows(selectedType, rows, filterValues, filterStatus)
 
   useEffect(() => {
     setFilterState({ type: selectedType, values: {} })
@@ -295,6 +298,45 @@ export default function EnumConfig({
     })
   }
 
+  const confirmToggleRowEnabled = (row: EnumRow, trigger: HTMLElement) => {
+    if (!canEditRef.current) return
+    captureTrigger(trigger)
+    const toggleType = selectedType
+    const enabled = row.enabled === false
+    const action = enabled ? '启用' : '禁用'
+    const summary = getEnumRowSummary(toggleType, row)
+    modal.confirm({
+      title: `${action}配置值？`,
+      content: `确认${action}“${summary}”吗？${enabled
+        ? '启用后，填写表单时可选择此配置值。'
+        : '禁用后，填写表单时无法重新选择此配置值，已有数据和筛选不受影响。'}`,
+      okText: `确认${action}`,
+      okButtonProps: { danger: !enabled },
+      cancelText: '取消',
+      onOk: () => {
+        if (!canEditRef.current) {
+          message.warning('当前用户无权限编辑枚举值')
+          return
+        }
+        const result = setEnumRowEnabled(toggleType, row.id, enabled)
+        if (!result.ok) {
+          const errorMessage = resultMessage(result)
+          if (result.reason === 'storage') {
+            setStorageWriteContext(true)
+            setSaveError(errorMessage)
+          }
+          message.error(errorMessage)
+          return Promise.reject(new Error(result.reason))
+        }
+        setSaveError(null)
+        message.success(`配置值已${action}`)
+      },
+      afterClose: () => restoreTriggerFocus(() => (
+        trigger.isConnected ? trigger : safeFocusFallback(toggleType)
+      )),
+    })
+  }
+
   const handleRetry = async () => {
     setRecoveryAction('retry')
     const hydrated = await hydrateEnumStore()
@@ -355,16 +397,31 @@ export default function EnumConfig({
       className: 'pms-enum-sequence',
     },
     ...businessColumns,
+    {
+      title: '状态',
+      key: 'status',
+      width: 100,
+      render: (_value, row) => <Tag color={row.enabled === false ? 'default' : 'success'}>{row.enabled === false ? '禁用' : '启用'}</Tag>,
+    },
     ...(canEditEnums ? [{
       title: '操作',
       key: 'actions',
-      width: 112,
+      width: 136,
       fixed: 'right' as const,
       align: 'right' as const,
       render: (_value: unknown, row: EnumRow) => {
         const summary = getEnumRowSummary(selectedType, row)
         return (
           <div className="pms-enum-actions">
+            <Tooltip title={row.enabled === false ? '启用配置值' : '禁用配置值'}>
+              <Button
+                type="text"
+                aria-label={`${row.enabled === false ? '启用' : '禁用'}配置值 ${summary}`}
+                data-testid={`enum-toggle-${row.id}`}
+                icon={row.enabled === false ? <CheckCircleOutlined /> : <StopOutlined />}
+                onClick={event => confirmToggleRowEnabled(row, event.currentTarget)}
+              />
+            </Tooltip>
             <Tooltip title="编辑配置值">
               <Button
                 aria-label={`编辑配置值 ${summary}`}
@@ -415,9 +472,11 @@ export default function EnumConfig({
     }
     if (editorDefinition.kind === 'package-map') {
       const androidValues = rowsByType['android-version']
+        .filter(row => row.enabled !== false)
         .map(row => row.value.trim())
         .filter(Boolean)
       const chipModels = [...new Set(rowsByType['chip-mapping']
+        .filter(row => row.enabled !== false)
         .map(row => row.chipModel.trim())
         .filter(Boolean))]
       const androidOptions: Array<{ value: string; label: string; disabled?: boolean }> = androidValues
@@ -613,13 +672,25 @@ export default function EnumConfig({
                     value={filterValues[column.key] ?? ''}
                     onChange={event => setFilterState({
                       type: selectedType,
+                      status: filterStatus,
                       values: { ...filterValues, [column.key]: event.target.value },
                     })}
                   />
                 </div>
               ))}
+              <div className="pms-enum-filter-field">
+                <label htmlFor="enum-filter-status">状态</label>
+                <Select
+                  id="enum-filter-status"
+                  aria-label="筛选-状态"
+                  value={filterStatus}
+                  style={{ minWidth: 120 }}
+                  options={[{ value: 'all', label: '全部' }, { value: 'enabled', label: '启用' }, { value: 'disabled', label: '禁用' }]}
+                  onChange={status => setFilterState({ type: selectedType, values: filterValues, status })}
+                />
+              </div>
               <Button
-                disabled={!Object.values(filterValues).some(Boolean)}
+                disabled={!hasActiveFilters}
                 onClick={() => setFilterState({ type: selectedType, values: {} })}
               >清空筛选</Button>
             </div>

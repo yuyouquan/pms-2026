@@ -25,18 +25,18 @@ export function validateManualProjectCompletion(candidate: ProjectItem, previous
     ['secondaryCategory', MACHINE_PROJECT_TYPES], ['productType', ['新品', '老品']],
     ['androidVersion', ['Android 16', 'Android 17', 'Android 18']],
     ['brand', ['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌']],
-    ['versionType', rows['version-type'].map(row => row.value)],
-    ['developMode', rows['machine-development-mode'].map(row => row.value)],
+    ['versionType', rows['version-type'].filter(row => row.enabled !== false).map(row => row.value)],
+    ['developMode', rows['machine-development-mode'].filter(row => row.enabled !== false).map(row => row.value)],
   ] as const) {
     const value = candidate[key]
     if (value && value !== previous[key] && !(values as readonly string[]).includes(value)) return `${({ secondaryCategory: '项目二级分类', productType: '产品类型', androidVersion: '安卓版本', brand: '品牌', versionType: '版本类型', developMode: '开发模式' })[key]}取值无效`
   }
   for (const key of ['firstSaleTosVersionId', 'firstSaleTosVersion', 'currentTosVersionId', 'currentTosVersion'] as const) {
     const value = normalizeTosSnapshot(candidate[key])
-    if (value && value !== normalizeTosSnapshot(previous[key]) && !rows['first-sale-tos'].some(row => normalizeTosSnapshot(row.value) === value)) return '请选择有效的 tOS 版本'
+    if (value && value !== normalizeTosSnapshot(previous[key]) && !rows['first-sale-tos'].some(row => row.enabled !== false && normalizeTosSnapshot(row.value) === value)) return '请选择有效的 tOS 版本'
   }
   const chip = candidate.fieldValues?.chipCode
-  if (chip && chip !== previous.fieldValues?.chipCode && !rows['chip-mapping'].some(row => row.chipCode === chip)) return '请选择有效的芯片编码'
+  if (chip && chip !== previous.fieldValues?.chipCode && !rows['chip-mapping'].some(row => row.enabled !== false && row.chipCode === chip)) return '请选择有效的芯片编码'
   return null
 }
 

@@ -314,7 +314,7 @@ export default function ProjectInfoModal({
   )
   const selectedChipOptionId = useMemo(() => {
     if (!enumReady) return undefined
-    const live = rowsByType['chip-mapping'].find(row => (
+    const live = rowsByType['chip-mapping'].find(row => row.enabled !== false && (
       row.chipCode === chipSnapshot.chipCode
       && row.chipModel === chipSnapshot.chipModel
       && row.chipPlatform === chipSnapshot.chipPlatform
@@ -599,7 +599,7 @@ export default function ProjectInfoModal({
     if (!entry) return
     const sourceValues = fetchByBid(bid)
     const type = nextType || String(form.getFieldValue('type') || '')
-    const configuredStatusValues = rowsByType[getProjectStatusEnumType(type)].map(row => row.value)
+    const configuredStatusValues = rowsByType[getProjectStatusEnumType(type)].filter(row => row.enabled !== false).map(row => row.value)
     const initialStatusPatch = buildInitialProjectStatusPatch({
       initialize: initializeStatus,
       projectType: type,
@@ -621,7 +621,7 @@ export default function ProjectInfoModal({
       const keepConfiguredValue = (fieldKey: string, enumType: SingleEnumTypeKey) => {
         const rawValue = String(derivedValues[fieldKey] || '')
         const value = enumType === 'first-sale-tos' ? normalizeTosSnapshot(rawValue) : rawValue
-        return rowsByType[enumType].some(row => row.value === value) ? value : ''
+        return rowsByType[enumType].some(row => row.enabled !== false && row.value === value) ? value : ''
       }
       form.setFieldsValue({
         ...derivedValues,
@@ -967,6 +967,7 @@ export default function ProjectInfoModal({
       : resolveProjectClassification(projectType, String(values.secondaryCategory || '')).projectCategory
     const submittedStatus = String(values.status || '').trim()
     const currentStatusRows = enumState.rowsByType[getProjectStatusEnumType(normalizedProjectType)]
+      .filter(row => row.enabled !== false || (mode === 'edit' && row.value === project?.status))
     const resolvedProjectStatus = resolveConfiguredProjectStatus({
       projectType: normalizedProjectType,
       configuredValues: currentStatusRows.map(row => row.value),
@@ -1169,7 +1170,7 @@ export default function ProjectInfoModal({
         extra={field.conditionalHint}
         className={['jira', 'fanTrial'].includes(field.inputType) ? 'pms-project-info-form-span' : undefined}
         rules={field.inputType === 'fanTrial' ? [{ required: true, validator: async (_, value) => {
-          const error = validateFanTrial({ fanTrialEnabled: form.getFieldValue('fanTrialEnabled'), fanTrialCountries: value }, rowsByType['fan-trial-country'].map(row => row.value), project?.fieldValues?.fanTrialCountries)
+          const error = validateFanTrial({ fanTrialEnabled: form.getFieldValue('fanTrialEnabled'), fanTrialCountries: value }, rowsByType['fan-trial-country'].filter(row => row.enabled !== false).map(row => row.value), project?.fieldValues?.fanTrialCountries)
           if (error) throw new Error(error.message)
         } }] : isRequired
           ? [{ required: true, message: `请填写${renderedField.label}` }]

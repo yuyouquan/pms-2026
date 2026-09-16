@@ -133,8 +133,9 @@ export default function ProjectListContainer() {
   const statusEnumType = getProjectStatusEnumType(projectTypeFilter)
   const configuredStatusOptions = useSingleEnumOptions(
     statusEnumType,
-    [],
+    undefined,
     projectTypeFilter !== 'all',
+    'filter',
   )
   const {
     hasHydrated: statusHasHydrated,

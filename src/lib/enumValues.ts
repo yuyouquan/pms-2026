@@ -142,12 +142,14 @@ export function filterEnumRows<K extends EnumTypeKey>(
   type: K,
   rows: EnumRowByType<K>[],
   filters: Partial<Record<EnumFieldKey, string>>,
+  status: 'all' | 'enabled' | 'disabled' = 'all',
 ): EnumRowByType<K>[] {
   const activeFilters = ENUM_DEFINITIONS[type].columns
     .map(column => ({ key: column.key, query: filters[column.key]?.trim().toLowerCase() ?? '' }))
     .filter(filter => filter.query)
 
   return rows.filter(row => {
+    if (status !== 'all' && (row.enabled !== false) !== (status === 'enabled')) return false
     const fields = row as unknown as Record<string, string>
     return activeFilters.every(({ key, query }) => formatEnumCellValue(
       type,

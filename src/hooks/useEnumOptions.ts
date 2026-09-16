@@ -9,6 +9,7 @@ import {
   getTmgSubdomainState,
   type ChipOption,
   type EnumOption,
+  type EnumOptionPurpose,
   type ProjectChipSnapshot,
   type ProjectCategorySnapshot,
   type SingleEnumTypeKey,
@@ -38,15 +39,16 @@ export function useSingleEnumOptions(
   type: SingleEnumTypeKey,
   historicalValues: readonly string[] = EMPTY_STRINGS,
   enabled = true,
+  purpose: EnumOptionPurpose = 'edit',
 ): EnumOption[] {
   const rowsByType = useEnumStore(state => state.rowsByType)
   const { isReady } = useEnumHydration(enabled)
   return useMemo(
     () => {
       if (!isReady) return []
-      return buildEnumOptions(rowsByType, type, historicalValues)
+      return buildEnumOptions(rowsByType, type, historicalValues, purpose)
     },
-    [historicalValues, isReady, rowsByType, type],
+    [historicalValues, isReady, rowsByType, type, purpose],
   )
 }
 
