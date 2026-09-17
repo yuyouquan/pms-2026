@@ -147,5 +147,11 @@ for (const kind of ['Machine', 'Tos', 'Technical', 'Capability']) {
    store.getState().updateVersion(bound.id, id, { batch: 20 })
    assert.deepEqual(store.getState().projects.find(p => p.id === bound.id), before, `${kind}: bound source protected`)
  }
+ store.getState().setVersionActive(project.id, dependencyCopy.id, true)
+ const retained = read().versions.filter(version => version.id !== dependencyCopy.id).map(version => version.id)
+ store.getState().deleteVersion(project.id, dependencyCopy.id)
+ assert.deepEqual(read().versions.map(version => version.id), retained, `${kind}: delete removes only target version`)
+ assert.equal(rules.getActiveHrVersion(read().versions, budgetType), undefined, `${kind}: deleting active never falls back`)
+ assert.equal(store.getState().monthlyInvestments.some(row => row.versionId === dependencyCopy.id), false, `${kind}: deletion removes owned monthly rows`)
  console.log(`PASS ${kind}: active/clear/reload, history edit, lock/write/sync, copy isolation/monthly, permissions`)
 }
