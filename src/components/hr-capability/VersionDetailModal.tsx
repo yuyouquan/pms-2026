@@ -6,13 +6,14 @@ import { HrVersionModalTitle } from '@/components/project-resources/HrVersionMod
 import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
 
-import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
+import { HrVersionMilestoneDetails, HrVersionMilestoneRow } from '@/components/project-resources/HrVersionMilestones'
 
 import { canEditHrInScope } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { isHrVersionEditable } from '@/lib/hrVersionRules'
-import { Table, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
+import dayjs from 'dayjs'
+import { Form, Table, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import * as XLSX from 'xlsx'
@@ -54,7 +55,8 @@ export default function VersionDetailModal({
   }, [projects, projectId, versionId])
   const scopeId = useHrResourceScope()
   const readOnly = !canEditHrInScope(project, scopeId) || requestedReadOnly || !project || !version || !isHrVersionEditable(project, version)
-  const nonLabor = useNonLaborDraft(open, `${versionId ?? ''}:${requestedReadOnly}`,  version?.nonLaborInvestment, 'capability', version ?? {})
+  const [dates, setDates] = useState({ projectStartTime: '', projectEndTime: '' })
+  const nonLabor = useNonLaborDraft(open, `${versionId ?? ''}:${requestedReadOnly}`,  version?.nonLaborInvestment, 'capability', readOnly ? version ?? {} : dates)
   const versionRef = useRef(version)
   versionRef.current = version
 
@@ -64,9 +66,11 @@ export default function VersionDetailModal({
   useEffect(() => {
     const initialVersion = versionRef.current
     if (open && initialVersion) {
+      setDates({ projectStartTime: initialVersion.projectStartTime, projectEndTime: initialVersion.projectEndTime })
       setEditData(initialVersion.departmentInvestments.map((d) => ({ ...d })))
     }
     if (!open) {
+      setDates({ projectStartTime: '', projectEndTime: '' })
       setEditData([])
     }
   }, [open, versionId, requestedReadOnly])
@@ -152,8 +156,16 @@ export default function VersionDetailModal({
 
   const handleOk = () => {
     if (!project || !version || readOnly) return
+    if (!dates.projectStartTime || !dates.projectEndTime || !dayjs(dates.projectStartTime).isValid() || !dayjs(dates.projectEndTime).isValid()) {
+      message.warning('请选择项目起止时间')
+      return
+    }
+    if (dayjs(dates.projectEndTime).isBefore(dayjs(dates.projectStartTime))) {
+      message.warning('项目结束时间不能早于开始时间')
+      return
+    }
     try {
-      updateVersionDepartmentInvestments(project.id, version.id, editData, nonLabor.value)
+      updateVersionDepartmentInvestments(project.id, version.id, editData, nonLabor.value, dates)
       ;(onSaved ?? onCancel)()
       message.success('版本预估投入已更新')
     } catch (error) { message.warning(error instanceof Error ? error.message : '版本保存失败') }
@@ -274,7 +286,8 @@ export default function VersionDetailModal({
           <span>预估投入：<strong style={{ color: 'var(--pms-text-primary)' }}>{formatPersonMonth(version.estimatedInvestment)}</strong></span>
         </div>
 
-        <HrVersionMilestoneDetails category="capability" values={version} />
+        <div>{readOnly ? <HrVersionMilestoneDetails category="capability" values={version} />
+          : <Form layout="vertical"><HrVersionMilestoneRow category="capability" values={dates} readOnly={false} onChange={(key, value) => setDates(previous => ({ ...previous, [key]: value ?? '' }))} /></Form>}</div>
 
         {/* 合计提示 */}
         <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
