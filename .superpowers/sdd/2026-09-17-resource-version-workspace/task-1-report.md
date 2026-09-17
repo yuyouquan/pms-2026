@@ -17,3 +17,15 @@ Stores retain monthly records for every version. HrResourceScope selects active 
 - `git diff --check` passed after whitespace cleanup.
 
 Existing scripts asserting latest-only editability or latest-only monthly row storage encode superseded requirements and may need integration fixture updates; those changes are outside this task's ownership.
+
+## Review follow-up: copied snapshots and manual fixture allocations
+
+Independent review reproduced a copied locked machine snapshot being replaced by current configuration/plan data on refresh. Added a RED case that clears model configuration and shifts published plan dates before copying, then refreshes and rehydrates. RED reported copied investment 100 → 0, model snapshot emptied and copied milestone/nonlabor ranges changed.
+
+Fixed background synchronization to retain a copied version's saved business snapshot in every category. Machine model fixture preparation and current-model snapshot replacement also exclude copied records. Explicit user edits normalize dependent nonlabor ranges in the write path; an actual changed model option recaptures/recalculates the machine snapshot. Re-submitting unchanged model fields during an unrelated save does not require the old model to remain in current configuration and does not recalculate.
+
+GREEN: `node scripts/verify-resource-version-lifecycle.mjs` passes all four categories including full copied-version equality after changed model/plan dependencies + refresh + reload, unchanged source, same-valued model submission, and explicit coefficient change followed by stable refresh/reload.
+
+Also fixed the fresh fixture manual-month allocation seed to key by project + version, rather than only project. Storing all versions had otherwise assigned the demo edit only to the oldest version and removed the existing current-source manual allocation scenario. `node scripts/verify-project-resource-fixtures.mjs` passes after this correction.
+
+Forms agent/root informed of copied edit initialization needing saved formal milestones and machine level; that UI follow-up is outside Task 1 ownership.

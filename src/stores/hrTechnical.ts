@@ -7,7 +7,7 @@ import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry
 import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalTechnicalProjects, createResourceTechnicalProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { synchronizeHrProjects } from '@/lib/hrProjectSync'
+import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -387,7 +387,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
               ]
             }
 
-            return updated
+            return normalizeHrEditedVersion(updated, 'technical')
           })
           return { ...p, versions: newVersions }
         })
@@ -408,7 +408,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
             if (v.id !== versionId || !isHrVersionEditable(p, v)) return v
             const permittedMilestones = allowedHrVersionUpdates(p, v, { milestones }).milestones
             const milestonesChanged = permittedMilestones && Object.entries(permittedMilestones).some(([key, value]) => v.milestones[key as keyof TechMilestoneNodes] !== value)
-            return {
+            return normalizeHrEditedVersion({
               ...v,
               milestones: permittedMilestones ? { ...v.milestones, ...permittedMilestones } : v.milestones,
               nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
@@ -418,7 +418,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
                 ...v.operationLogs,
                 makeLog('deptUpdated', `更新部门预估投入（共${departmentInvestments.length}条）${milestonesChanged ? '、里程碑时间' : ''}`),
               ],
-            }
+            }, 'technical')
           })
           return { ...p, versions: newVersions }
         })

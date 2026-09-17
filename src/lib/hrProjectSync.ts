@@ -38,7 +38,7 @@ export function synchronizeHrProjects<T extends SyncProject>(
     const normalized = { ...project, versions: normalizeHrVersionSequence(project.versions) }
     const source = isHrFormalRecord(project) ? resolveHrFormalSource(category, project.ipmProjectCode, project.pmsProjectId) : null
     const versions = normalized.versions.map(version => {
-      if (version.lockState === 'locked') return version
+      if (version.lockState === 'locked' || version.copiedFromVersionId) return version
       if (!isLatestHrVersion(normalized, version)) return { ...version, nonLaborInvestment: withHrNonLaborRange(version.nonLaborInvestment, category, category === 'capability' ? version : version.milestones ?? {}) }
       const next = { ...version }
       if (source?.project && category !== 'capability' && version.budgetType !== 'annual') {
@@ -59,4 +59,9 @@ export function synchronizeHrProjects<T extends SyncProject>(
     }
     return updated as T
   })
+}
+
+/** Explicit edits may update dependent month ranges; background sync may not rewrite copied snapshots. */
+export function normalizeHrEditedVersion<T extends SyncVersion>(version: T, category: HrProjectCategory): T {
+  return { ...version, nonLaborInvestment: withHrNonLaborRange(version.nonLaborInvestment, category, category === 'capability' ? version : version.milestones ?? {}) }
 }

@@ -7,7 +7,7 @@ import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry
 import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalTosProjects, createResourceTosProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { synchronizeHrProjects } from '@/lib/hrProjectSync'
+import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -380,7 +380,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
               ]
             }
 
-            return updated
+            return normalizeHrEditedVersion(updated, 'tos')
           })
           return { ...p, versions: newVersions }
         })
@@ -402,7 +402,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             if (v.id !== versionId || !isHrVersionEditable(p, v)) return v
             const permittedMilestones = allowedHrVersionUpdates(p, v, { milestones }).milestones
             const milestonesChanged = permittedMilestones && Object.entries(permittedMilestones).some(([key, value]) => v.milestones[key as keyof TosMilestoneNodes] !== value)
-            return {
+            return normalizeHrEditedVersion({
               ...v,
               milestones: permittedMilestones ? { ...v.milestones, ...permittedMilestones } : v.milestones,
               nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
@@ -412,7 +412,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
                 ...v.operationLogs,
                 makeLog('deptUpdated', `更新部门预估投入（共${departmentInvestments.length}条）${milestonesChanged ? '、里程碑时间' : ''}`),
               ],
-            }
+            }, 'tos')
           })
           return { ...p, versions: newVersions }
         })

@@ -6,7 +6,7 @@ import { canAccessHrProject, getHrRegistryProject, isHrFormalRecord, reconcileHr
 import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalMachineProjects, createResourceMachineProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { synchronizeHrProjects } from '@/lib/hrProjectSync'
+import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -107,10 +107,10 @@ function getLatestVersions(project: HrMachineProject): HrMachineVersion[] {
 
 function synchronizeProjects(projects: HrMachineProject[]): HrMachineProject[] {
   const records = useHrConfigStore.getState().data.hrModel ?? []
-  const prepared = projects.map(project => ({ ...project, versions: project.versions.map(version => version.lockState !== 'locked' && version.modelSnapshot
+  const prepared = projects.map(project => ({ ...project, versions: project.versions.map(version => version.lockState !== 'locked' && !version.copiedFromVersionId && version.modelSnapshot
     ? { ...version, modelSnapshot: refreshMachineModelFixtures(version.modelSnapshot) } : version) }))
   return synchronizeHrProjects(prepared, 'machine', (level, model, coefficient) => calcEstimatedInvestment(records, level, model, coefficient))
-    .map(project => ({ ...project, versions: project.versions.map(version => version.lockState !== 'locked' && isLatestHrVersion(project, version)
+    .map(project => ({ ...project, versions: project.versions.map(version => version.lockState !== 'locked' && !version.copiedFromVersionId && isLatestHrVersion(project, version)
       ? { ...version, modelSnapshot: records.filter(row => row.enabled !== false
         && String(row.projectLevel) === version.projectLevel && String(row.modelVersion) === version.hrModelVersion).map(row => ({ ...row })) }
       : version) }))
@@ -369,7 +369,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         if (!project || !version || !canAccessHrProject(project, true)) return
         const allowed = allowedHrVersionUpdates(project, version, updates)
         if (allowed.nonLaborInvestment) validateNonLaborInvestment(allowed.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? [])
-        if (allowed.projectLevel !== undefined || allowed.levelCoefficient !== undefined || allowed.hrModelVersion !== undefined) {
+        if ((allowed.projectLevel !== undefined && allowed.projectLevel !== version.projectLevel) || (allowed.levelCoefficient !== undefined && allowed.levelCoefficient !== version.levelCoefficient) || (allowed.hrModelVersion !== undefined && allowed.hrModelVersion !== version.hrModelVersion)) {
           const coefficient = allowed.levelCoefficient ?? version.levelCoefficient
           if (!Number.isFinite(coefficient) || coefficient < 0 || !isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], allowed.projectLevel ?? version.projectLevel, allowed.hrModelVersion ?? version.hrModelVersion)) throw new Error('请选择有效的项目等级、人力模型版本号和等级系数')
         }
@@ -409,9 +409,9 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
             // 如果项目等级/等级系数/人力模型版本号发生变化，自动重算预估投入
             if (
-              permitted.projectLevel !== undefined ||
-              permitted.levelCoefficient !== undefined ||
-              permitted.hrModelVersion !== undefined
+              (permitted.projectLevel !== undefined && permitted.projectLevel !== v.projectLevel) ||
+              (permitted.levelCoefficient !== undefined && permitted.levelCoefficient !== v.levelCoefficient) ||
+              (permitted.hrModelVersion !== undefined && permitted.hrModelVersion !== v.hrModelVersion)
             ) {
               updated.modelSnapshot = configRecords.filter(row => row.enabled !== false && String(row.projectLevel) === updated.projectLevel && String(row.modelVersion) === updated.hrModelVersion).map(row => ({ ...row }))
               updated.estimatedInvestment = calcEstimatedInvestment(
@@ -422,7 +422,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
               )
             }
 
-            return updated
+            return normalizeHrEditedVersion(updated, 'machine')
           })
           return { ...p, versions: newVersions }
         })

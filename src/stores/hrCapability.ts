@@ -11,7 +11,7 @@ import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry
 import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalCapabilityProjects, createResourceCapabilityProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { changeHrVersionLifecycle, copyHrVersionSnapshot, getActiveHrVersion, isHrVersionEditable, canCreateHrVersion, getHrVersionSeed, allowedHrVersionUpdates, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { synchronizeHrProjects } from '@/lib/hrProjectSync'
+import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -333,7 +333,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
             const permitted = allowedHrVersionUpdates(project, version, updates)
             if (Object.keys(permitted).length === 0) return version
             if (permitted.nonLaborInvestment) permitted.nonLaborInvestment = validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? [])
-            return { ...version, ...permitted, operationLogs: [...version.operationLogs, makeLog('edited', useProjectStore.getState().currentLoginUser, permitted.batch !== undefined ? '更新批次' : '编辑版本信息')] }
+            return normalizeHrEditedVersion({ ...version, ...permitted, operationLogs: [...version.operationLogs, makeLog('edited', useProjectStore.getState().currentLoginUser, permitted.batch !== undefined ? '更新批次' : '编辑版本信息')] }, 'capability')
           }) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
@@ -345,7 +345,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => version.id === versionId && isHrVersionEditable(project, version)
-            ? { ...version, ...allowedHrVersionUpdates(project, version, dates ?? {}), nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : version.nonLaborInvestment, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }
+            ? normalizeHrEditedVersion({ ...version, ...allowedHrVersionUpdates(project, version, dates ?? {}), nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : version.nonLaborInvestment, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }, 'capability')
             : version) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })

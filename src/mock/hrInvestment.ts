@@ -201,10 +201,10 @@ export const createResourceCapabilityProjects = () => resourceProjects('capabili
 export function seedResourceMonthlyEdits<T extends { projectId: string; versionId: string; monthlyData: Record<string, number>; isEdited: boolean }>(rows: T[]): T[] {
   const editedSources = new Set<string>()
   return rows.map(row => {
-    if (!row.projectId.startsWith('hr-resource-') || !row.projectId.endsWith('-bound') || editedSources.has(row.projectId)) return row
+    if (!row.projectId.startsWith('hr-resource-') || !row.projectId.endsWith('-bound') || editedSources.has(`${row.projectId}:${row.versionId}`)) return row
     const months = Object.keys(row.monthlyData).sort()
     if (months.length < 2) return row
-    editedSources.add(row.projectId)
+    editedSources.add(`${row.projectId}:${row.versionId}`)
     return { ...row, isEdited: true, monthlyData: { ...row.monthlyData,
       [months[0]]: 0, [months[1]]: round(row.monthlyData[months[0]] + row.monthlyData[months[1]]),
     } }

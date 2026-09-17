@@ -106,8 +106,29 @@ for (const kind of ['Machine', 'Tos', 'Technical', 'Capability']) {
  store.getState().refreshFormalProjects()
  await store.persist.rehydrate()
  assert.deepEqual(read().versions.find(v => v.id === latestId), latestFrozen, `${kind}: latest lock rejects model/config refresh`)
+ store.getState().copyVersion(project.id, latestId)
+ const dependencyCopy = structuredClone(read().versions.at(-1))
+ store.getState().refreshFormalProjects()
+ await store.persist.rehydrate()
+ assert.deepEqual(read().versions.find(v => v.id === dependencyCopy.id), dependencyCopy, `${kind}: copied snapshot survives changed dependencies and reload`)
+ assert.deepEqual(read().versions.find(v => v.id === latestId), latestFrozen, `${kind}: copying with changed dependencies leaves source intact`)
+ if (kind === 'Machine') {
+   store.getState().updateVersion(project.id, dependencyCopy.id, { projectLevel: dependencyCopy.projectLevel, hrModelVersion: dependencyCopy.hrModelVersion, levelCoefficient: dependencyCopy.levelCoefficient, batch: 4 })
+   assert.equal(read().versions.find(v => v.id === dependencyCopy.id).estimatedInvestment, dependencyCopy.estimatedInvestment, 'unrelated save with unchanged model fields preserves snapshot')
+ }
  config.setState({ data: configBefore })
  plans.setState(planBefore)
+ if (kind === 'Machine') {
+   const coefficient = dependencyCopy.levelCoefficient + 1
+   store.getState().updateVersion(project.id, dependencyCopy.id, { levelCoefficient: coefficient })
+   const edited = structuredClone(read().versions.find(v => v.id === dependencyCopy.id))
+   assert.notEqual(edited.estimatedInvestment, dependencyCopy.estimatedInvestment, 'explicit model option change recalculates')
+   assert.equal(edited.levelCoefficient, coefficient)
+   store.getState().refreshFormalProjects()
+   await store.persist.rehydrate()
+   assert.deepEqual(read().versions.find(v => v.id === dependencyCopy.id), edited, 'explicitly recaptured copied snapshot survives refresh')
+ }
+
  const protectedState = structuredClone(read())
  registry.setState({ currentLoginUser: 'unknown' })
  store.getState().setVersionActive(project.id, third.id, true)
