@@ -1,7 +1,9 @@
 'use client'
 
+import { HrVersionSurface } from '@/components/project-resources/HrVersionSurface'
 import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
 
+import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
 
 import { HrVersionMilestoneDetails, HrVersionMilestoneRow, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
@@ -9,8 +11,8 @@ import { HrVersionMilestoneDetails, HrVersionMilestoneRow, useHrVersionMilestone
 import { canEditHrInScope } from '@/lib/hrProjectRegistry'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { useEffect, useMemo, useState, useRef } from 'react'
-import { isLatestHrVersion } from '@/lib/hrVersionRules'
-import { Modal, Table, Form, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
+import { isHrVersionEditable } from '@/lib/hrVersionRules'
+import { Table, Form, Input, InputNumber, Button, Space, Alert, App, Upload } from 'antd'
 import { PlusOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import * as XLSX from 'xlsx'
@@ -24,6 +26,8 @@ interface VersionDetailModalProps {
   versionId: string | null
   projectId: string
   readOnly?: boolean
+  embedded?: boolean
+  onSaved?: () => void
   onCancel: () => void
 }
 
@@ -32,6 +36,8 @@ export default function VersionDetailModal({
   versionId,
   projectId,
   readOnly: requestedReadOnly = false,
+  embedded = false,
+  onSaved,
   onCancel,
 }: VersionDetailModalProps) {
   const { message } = App.useApp()
@@ -49,9 +55,9 @@ export default function VersionDetailModal({
     return { project: p, version: v }
   }, [projects, projectId, versionId])
   const scopeId = useHrResourceScope()
-  const readOnly = !canEditHrInScope(project, scopeId) || requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
-  const milestoneForm = useHrVersionMilestones('tos', project ?? undefined, version?.budgetType ?? 'annual', open, versionId ?? undefined)
-  const nonLabor = useNonLaborDraft(open, versionId ?? '', version?.nonLaborInvestment, 'tos', readOnly ? version?.milestones ?? {} : milestoneForm.values)
+  const readOnly = !canEditHrInScope(project, scopeId) || requestedReadOnly || !project || !version || !isHrVersionEditable(project, version)
+  const milestoneForm = useHrVersionMilestones('tos', project ?? undefined, version?.budgetType ?? 'annual', open, versionId ?? undefined, requestedReadOnly)
+  const nonLabor = useNonLaborDraft(open, `${versionId ?? ''}:${requestedReadOnly}`,  version?.nonLaborInvestment, 'tos', readOnly ? version?.milestones ?? {} : milestoneForm.values)
   const versionRef = useRef(version)
   versionRef.current = version
 
@@ -68,7 +74,7 @@ export default function VersionDetailModal({
     if (!open) {
       setEditData([])
     }
-  }, [open, versionId])
+  }, [open, versionId, requestedReadOnly])
 
   // ── 合计与一致性校验 ────────────────────────────────────────────────
   // editTotal = 所有行的各阶段预估投入之和
@@ -201,7 +207,7 @@ export default function VersionDetailModal({
     if (!project || !version || readOnly) return
     try {
       updateVersionDepartmentInvestments(project.id, version.id, editData, nonLabor.value, milestoneForm.values)
-      onCancel()
+      ;(onSaved ?? onCancel)()
       message.success('版本预估投入已更新')
     } catch (error) { message.warning(error instanceof Error ? error.message : '版本保存失败') }
   }
@@ -297,7 +303,7 @@ export default function VersionDetailModal({
   if (!project || !version) return null
 
   return (
-    <Modal
+    <HrVersionSurface embedded={embedded}
       className="pms-modal pms-hr-version-modal"
       title={<HrVersionModalTitle title={readOnly ? "版本详情" : "编辑版本"} projectName={readOnly ? undefined : project.name} versionNumber={version.versionNumber} />}
       open={open}
@@ -399,7 +405,7 @@ export default function VersionDetailModal({
           }}
         />
 
-        <NonLaborInvestmentSection {...nonLabor} readOnly={readOnly} />
+        <NonLaborInvestmentSection {...nonLabor} value={readOnly ? cloneNonLaborInvestment(version.nonLaborInvestment) : nonLabor.value} readOnly={readOnly} />
       </div>
 
       <style jsx global>{`
@@ -410,6 +416,6 @@ export default function VersionDetailModal({
           width: 100%;
         }
       `}</style>
-    </Modal>
+    </HrVersionSurface>
   )
 }

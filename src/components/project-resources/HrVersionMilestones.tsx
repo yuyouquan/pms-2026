@@ -18,15 +18,16 @@ const fieldsByCategory = { machine: MILESTONE_FIELDS, tos: TOS_MILESTONE_FIELDS,
 type Dates = Record<string, string | null | undefined>
 type Project = { id: string; pmsProjectId?: string; ipmProjectCode: string | null; versions: (HrVersionIdentity & { milestones?: object })[] }
 
-export function useHrVersionMilestones(category: Exclude<HrProjectCategory, 'capability'>, project: Project | undefined, budgetType: string, open: boolean, versionId?: string) {
+export function useHrVersionMilestones(category: Exclude<HrProjectCategory, 'capability'>, project: Project | undefined, budgetType: string, open: boolean, versionId?: string, resetKey?: boolean) {
   const [manual, setManual] = useState<Dates>({})
   useEffect(() => {
     if (!open) return
     const seed = project ? (versionId ? project.versions.find(version => version.id === versionId) : getHrVersionSeed(project.versions, budgetType)) : undefined
     setManual({ ...seed?.milestones } as Dates)
-  }, [open, project?.id, budgetType, versionId])
+  }, [open, project?.id, budgetType, versionId, resetKey])
   const readOnly = isHrFormalRecord(project)
-  const values = readOnly
+  const version = project?.versions.find(item => item.id === versionId)
+  const values = version?.lockState === 'locked' ? { ...version.milestones } as Dates : readOnly
     ? mergeHrFormalMilestones(category, resolveHrFormalSource(category, project?.ipmProjectCode ?? null, project?.pmsProjectId).milestones, manual) as Dates
     : manual
   return { values, readOnly, onChange: (key: string, value: string | null) => setManual(previous => ({ ...previous, [key]: value })) }
@@ -56,8 +57,8 @@ export function HrVersionMilestoneRow(props: Parameters<typeof HrVersionMileston
   </div>
 }
 
-export function HrVersionMilestoneDetails({ category, values }: { category: HrProjectCategory; values: object }) {
-  const dates = (category === 'machine' ? withMachineDerivedMilestones(values) : values) as Dates
+export function HrVersionMilestoneDetails({ category, values, frozen = false }: { category: HrProjectCategory; values: object; frozen?: boolean }) {
+  const dates = (category === 'machine' && !frozen ? withMachineDerivedMilestones(values) : values) as Dates
   return <section className="pms-hr-milestone-details" aria-label="里程碑信息">
     <h3 className="pms-hr-investment-section-title">里程碑信息</h3>
     <div className="pms-hr-milestone-details-scroll">

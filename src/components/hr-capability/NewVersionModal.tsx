@@ -1,5 +1,6 @@
 'use client'
 
+import { HrVersionSurface } from '@/components/project-resources/HrVersionSurface'
 import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
 
 import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/project-resources/NonLaborInvestmentSection'
@@ -12,7 +13,6 @@ import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Modal,
   Form,
   Select,
   DatePicker,
@@ -41,10 +41,13 @@ import { exportSheet } from '@/utils/exportExcel'
 
 interface NewVersionModalProps {
   open: boolean
+  embedded?: boolean
+  fixedBudgetType?: BudgetType
+  onSaved?: () => void
   onCancel: () => void
 }
 
-export default function NewVersionModal({ open, onCancel }: NewVersionModalProps) {
+export default function NewVersionModal({ open, embedded = false, fixedBudgetType, onSaved, onCancel }: NewVersionModalProps) {
   const { message } = App.useApp()
   const scopeId = useHrResourceScope()
   const { primaryOptions, getSecondaryOptions, isValidPair } = useHrDepartmentOptions()
@@ -56,7 +59,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
   const [localProjectId, setLocalProjectId] = useState(resolveHrNewVersionProjectId(projects, selectedProjectId, scopeId))
   const [editData, setEditData] = useState<CapabilityDepartmentInvestment[]>([])
-  const [budgetType, setBudgetType] = useState<BudgetType | null>(null)
+  const [budgetType, setBudgetType] = useState<BudgetType | null>(fixedBudgetType ?? null)
   const [startTime, setStartTime] = useState<dayjs.Dayjs | null>(null)
   const [endTime, setEndTime] = useState<dayjs.Dayjs | null>(null)
 
@@ -72,12 +75,12 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
   useEffect(() => {
     if (open) {
       setLocalProjectId(resolveHrNewVersionProjectId(projects, selectedProjectId, scopeId))
-      setBudgetType(getHrAllowedBudgetTypes(projects.find(p => scopeId ? p.pmsProjectId === scopeId : p.id === selectedProjectId))[0] ?? 'annual')
+      setBudgetType(fixedBudgetType ?? getHrAllowedBudgetTypes(projects.find(p => scopeId ? p.pmsProjectId === scopeId : p.id === selectedProjectId))[0] ?? 'annual')
       setStartTime(null)
       setEndTime(null)
       setEditData([])
     }
-  }, [open, selectedProjectId, scopeId])
+  }, [open, selectedProjectId, scopeId, fixedBudgetType])
 
   useEffect(() => {
     if (!open) return
@@ -219,7 +222,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
       departmentInvestments: editData,
     })
     message.success('版本创建成功')
-    onCancel()
+    ;(onSaved ?? onCancel)()
     resetState()
     setShowNewVersionModal(false)
     } catch (error) { message.warning(error instanceof Error ? error.message : '版本创建失败') }
@@ -302,7 +305,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
 
   return (
-    <Modal
+    <HrVersionSurface embedded={embedded}
       className="pms-modal pms-hr-version-modal"
       title={<HrVersionModalTitle title="新建版本" projectName={project?.name} versionNumber={project && budgetType ? `V0.${nextHrMinorVersion(project.versions, budgetType)}` : undefined} versionLabel="将创建版本" />}
       open={open}
@@ -317,7 +320,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
         {/* 表单区 */}
         <Form form={form} layout="vertical">
           <div className="pms-hr-version-form">
-          {!scopeId && <Form.Item label="项目" required>
+          {!embedded && !scopeId && <Form.Item label="项目" required>
             <Select
                 showSearch
                 aria-label="选择项目"
@@ -325,10 +328,10 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
                 value={localProjectId || undefined}
                 options={projects.filter(p => canAccessHrProject(p, true) && getHrAllowedBudgetTypes(p).length > 0).map(p => ({ disabled: p.status !== 'active', value: p.id, label: p.name }))}
                 optionFilterProp="label"
-                onChange={value => { setLocalProjectId(value); setBudgetType(getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setStartTime(null); setEndTime(null); setEditData([]) }}
+                onChange={value => { setLocalProjectId(value); setBudgetType(fixedBudgetType ?? getHrAllowedBudgetTypes(projects.find(p => p.id === value))[0] ?? 'annual'); setStartTime(null); setEndTime(null); setEditData([]) }}
               />
           </Form.Item>}
-            <Form.Item label="预算类型" required>
+            {!fixedBudgetType && <Form.Item label="预算类型" required>
               <Select
                 style={{ width: '100%' }}
                 placeholder="选择预算类型"
@@ -339,7 +342,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
                   value: t.value,
                 }))}
               />
-            </Form.Item>
+            </Form.Item>}
             <Form.Item label="项目开始时间" required>
               <DatePicker
                 style={{ width: '100%' }}
@@ -395,6 +398,6 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
 
         <NonLaborInvestmentSection {...nonLabor} />
       </div>
-    </Modal>
+    </HrVersionSurface>
   )
 }

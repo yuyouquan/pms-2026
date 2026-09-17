@@ -1,15 +1,16 @@
 'use client'
 
+import { HrVersionSurface } from '@/components/project-resources/HrVersionSurface'
 import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
 
 import NonLaborInvestmentSection from '@/components/project-resources/NonLaborInvestmentSection'
-import { withHrNonLaborRange } from '@/lib/hrNonLaborRange'
+import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
 
 import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
 
 import { machinePhaseFields } from '@/lib/hrMachinePeriods'
 import { useMemo } from 'react'
-import { Alert, Modal, Table, Tag, Descriptions } from 'antd'
+import { Alert, Table, Tag, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import { calcMachineDepartmentInvestments } from '@/constants/hrConfig'
@@ -31,12 +32,14 @@ interface DeptPhaseRow {
 interface MachineVersionDetailModalProps {
   open: boolean
   versionId: string | null
+  embedded?: boolean
   onCancel: () => void
 }
 
 export default function MachineVersionDetailModal({
   open,
   versionId,
+  embedded = false,
   onCancel,
 }: MachineVersionDetailModalProps) {
   const projects = useHrMachineStore((s) => s.projects)
@@ -117,7 +120,7 @@ export default function MachineVersionDetailModal({
   }, [dataSource])
 
   return (
-    <Modal
+    <HrVersionSurface embedded={embedded}
       className="pms-modal pms-hr-version-modal"
       open={open}
       title={<HrVersionModalTitle title="版本预估投入详情" versionNumber={version?.versionNumber} />}
@@ -158,7 +161,7 @@ export default function MachineVersionDetailModal({
             ]}
           />
 
-        <HrVersionMilestoneDetails category="machine" values={version.milestones} />
+        <HrVersionMilestoneDetails category="machine" values={version.milestones} frozen={version.lockState === 'locked'} />
 
           <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
           {version.modelSnapshot ? <Table<DeptPhaseRow>
@@ -200,13 +203,13 @@ export default function MachineVersionDetailModal({
           {version.modelSnapshot && <div style={{ marginTop: 8, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>
             数据来源：版本保存的整机人力模型（项目等级 {version.projectLevel || '-'} / 模型版本 {version.hrModelVersion || '-'}），各阶段值已乘以等级系数 {(version.levelCoefficient ?? 0).toFixed(2)}。
           </div>}
-          <NonLaborInvestmentSection value={withHrNonLaborRange(version.nonLaborInvestment, 'machine', version.milestones)} readOnly />
+          <NonLaborInvestmentSection value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly />
         </>
       ) : (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--pms-text-tertiary)' }}>
           未找到版本数据
         </div>
       )}
-    </Modal>
+    </HrVersionSurface>
   )
 }
