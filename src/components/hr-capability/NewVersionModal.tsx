@@ -229,6 +229,8 @@ export default function NewVersionModal({ open, embedded = false, fixedBudgetTyp
   }
 
   const handleCancel = () => {
+    // The workspace owns leave confirmation; keep the draft until it approves leaving.
+    if (embedded) { onCancel(); return }
     resetState()
     setShowNewVersionModal(false)
     onCancel()

@@ -303,7 +303,7 @@ export default function VersionDetailModal({
       okText="保存"
       cancelText={readOnly ? '关闭' : '取消'}
       footer={
-        readOnly
+        embedded && readOnly ? null : readOnly
           ? [
               <Button key="close" onClick={handleCancel}>
                 关闭
