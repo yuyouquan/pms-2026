@@ -152,7 +152,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
     </div>} />
     {!readOnly && <div className="pms-non-labor-actions">
       <Space size="small">
-        <Button size="small" type="dashed" icon={<PlusOutlined />} disabled={!months.length || importing}
+        <Button size="small" type="dashed" icon={<PlusOutlined />} disabled={importing}
           aria-label="添加非人力投入" onClick={() => onChange?.({ ...value, items: [...value.items, {
             id: 'non-labor-' + crypto.randomUUID(), secondaryDepartment: '', tertiaryDepartment: '',
             subjectId: '', secondarySubject: '', tertiarySubject: '', monthlyAmounts: {},
@@ -167,7 +167,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
     </div>}
     <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={value.items}
       pagination={false} size="small" tableLayout="fixed" scroll={{ x: 600 + (readOnly ? 0 : 64) + months.length * 126, y: 320 }}
-      locale={{ emptyText: months.length ? (readOnly ? '暂无非人力投入' : '暂无非人力投入数据，请点击「添加」或「导入」') : '请先填写里程碑时间，自动生成投入月份' }}
+      locale={{ emptyText: readOnly ? '暂无非人力投入' : months.length ? '暂无非人力投入数据，请点击「添加」或「导入」' : '暂无非人力投入数据，可先点击「添加」配置部门和科目，填写里程碑后自动生成月份' }}
       summary={() => value.items.length > 0 ? <Table.Summary.Row>
         <Table.Summary.Cell index={0} colSpan={4}>合计</Table.Summary.Cell>
         {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 4} align="center">
