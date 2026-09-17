@@ -14,6 +14,7 @@ import { useUiStore } from '@/stores/ui'
 import { BUDGET_TYPE_LABELS, formatPersonMonth } from '@/constants/hrMachine'
 import { chooseResourceVersion, type ResourceBudgetType } from '@/components/project-resources/resourceVersionViewData'
 import { resourceStore, useResourceStore, resourceProjectName, type ResourceVersion } from '@/components/project-resources/resourceVersionAdapter'
+import HrSourceLink from '@/components/project-resources/HrSourceLink'
 import ResourceVersionViews from '@/components/project-resources/ResourceVersionViews'
 import { exportResourceVersion } from '@/components/project-resources/exportResourceVersion'
 import MachineNew from '@/components/hr-machine/NewVersionModal'
@@ -82,7 +83,7 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
       </div>
       {canCreate && <Button icon={<PlusOutlined />} type="primary" disabled={editing} onClick={() => setMode('create')}>新建版本</Button>}
     </div>
-    {linked && <Alert showIcon type="info" title={`来源：${resourceProjectName(owner)} · 关联年度预算只读`} />}
+    {linked && <Alert showIcon type="info" title={<Space wrap><span>来源：</span><HrSourceLink project={owner} name={resourceProjectName(owner)} /><span>关联年度预算只读</span></Space>} />}
     {getProjectAttribute(project) === 'budget' && project.boundFormalProjectId && <Alert type="info" showIcon title="已绑定正式项目，当前预算只读；解绑后可新增或修改预算。" />}
     {mode === 'create' && own ? <div key={`create-${budgetType}`}>
       {category === 'machine' ? <MachineNew {...formProps} projectId={own.id} />

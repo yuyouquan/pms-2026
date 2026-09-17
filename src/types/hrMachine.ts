@@ -57,9 +57,9 @@ export interface HrMachineVersion {
   budgetType: BudgetType
   /** 版本号，如 V0.1、V0.2 */
   versionNumber: string
-  /** 所属批次，所有历史版本均可更新 */
+  /** 所属批次，仅未锁定版本可更新 */
   batch?: number | null
-  /** 旧数据兼容字段，不再用于控制编辑 */
+  /** 是否激活；同一预算类型至多一个激活版本 */
   isActive: boolean
   copiedFromVersionId?: string
   copiedFromVersionNumber?: string
@@ -142,9 +142,9 @@ export interface MonthlyInvestment {
   budgetType: BudgetType
   /** 版本号 */
   versionNumber: string
-  /** 所属批次，所有历史版本均可更新 */
+  /** 所属批次，仅未锁定版本可更新 */
   batch?: number | null
-  /** 旧数据兼容字段，不再用于控制编辑 */
+  /** 锁定状态；锁定后版本内容只读 */
   versionLockState: VersionLockState
   /** 预估合计 */
   estimatedTotal: number
