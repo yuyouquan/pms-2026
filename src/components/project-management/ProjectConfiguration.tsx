@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button, Descriptions, Dropdown, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd'
-import { ClearOutlined, DeleteOutlined, EditOutlined, ExportOutlined, HistoryOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { ClearOutlined, DeleteOutlined, EditOutlined, ExportOutlined, HistoryOutlined, PlusOutlined, FilterOutlined } from '@ant-design/icons'
 import { PROJECT_TYPES } from '@/constants/projectTypes'
 import type { ColumnsType } from 'antd/es/table'
 import { resolvePermissionProjectId, usePermissionStore } from '@/stores/permission'
@@ -337,32 +337,27 @@ export default function ProjectConfiguration() {
       {modalContextHolder}
       <div className="pms-project-config__filters" role="search" aria-label="项目配置筛选">
         <div className="pms-project-config__filter">
-          <label htmlFor="project-config-name-filter">项目名称</label>
-          <Input id="project-config-name-filter" aria-label="筛选项目名称" allowClear prefix={<SearchOutlined />}
-            placeholder="模糊搜索项目名称" value={filters.name} onChange={event => setFilters({ name: event.target.value })} />
+          <Input id="project-config-name-filter" aria-label="筛选项目名称" allowClear prefix={<FilterOutlined />}
+            placeholder="项目名称" value={filters.name} onChange={event => setFilters({ name: event.target.value })} />
         </div>
         <div className="pms-project-config__filter">
-          <label htmlFor="project-config-type-filter">项目类型</label>
           <Select id="project-config-type-filter" aria-label="筛选项目类型" mode="multiple" allowClear showSearch maxTagCount="responsive"
-            placeholder="全部项目类型" value={filters.projectTypes} options={PROJECT_TYPES.map(value => ({ value, label: value }))}
+            placeholder="项目类型" value={filters.projectTypes} options={PROJECT_TYPES.map(value => ({ value, label: value }))}
             onChange={projectTypes => setFilters({ projectTypes })} />
         </div>
         <div className="pms-project-config__filter">
-          <label htmlFor="project-config-attribute-filter">项目属性</label>
           <Select id="project-config-attribute-filter" aria-label="筛选项目属性" mode="multiple" allowClear showSearch maxTagCount="responsive"
-            placeholder="全部项目属性" value={filters.projectAttributes} optionFilterProp="label"
+            placeholder="项目属性" value={filters.projectAttributes} optionFilterProp="label"
             options={Object.entries(PROJECT_ATTRIBUTE_LABELS).map(([value, label]) => ({ value, label }))}
             onChange={projectAttributes => setFilters({ projectAttributes })} />
         </div>
         <div className="pms-project-config__filter">
-          <label htmlFor="project-config-code-filter">项目编码</label>
-          <Input id="project-config-code-filter" aria-label="筛选项目编码" allowClear prefix={<SearchOutlined />}
-            placeholder="模糊搜索项目编码" value={filters.projectCode} onChange={event => setFilters({ projectCode: event.target.value })} />
+          <Input id="project-config-code-filter" aria-label="筛选项目编码" allowClear prefix={<FilterOutlined />}
+            placeholder="项目编码" value={filters.projectCode} onChange={event => setFilters({ projectCode: event.target.value })} />
         </div>
         <div className="pms-project-config__filter">
-          <label htmlFor="project-config-binding-filter">绑定正式项目</label>
-          <Input id="project-config-binding-filter" aria-label="筛选绑定正式项目" allowClear prefix={<SearchOutlined />}
-            placeholder="模糊搜索正式项目名称" value={filters.boundFormalProjectName} onChange={event => setFilters({ boundFormalProjectName: event.target.value })} />
+          <Input id="project-config-binding-filter" aria-label="筛选绑定正式项目" allowClear prefix={<FilterOutlined />}
+            placeholder="绑定正式项目" value={filters.boundFormalProjectName} onChange={event => setFilters({ boundFormalProjectName: event.target.value })} />
         </div>
         <div className="pms-project-config__actions">
           <Button icon={<ClearOutlined />} disabled={!hasFilters} onClick={resetFilters}>清空筛选</Button>
