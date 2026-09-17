@@ -30,9 +30,9 @@ function parseAmount(value: unknown): number {
 }
 
 /** Parse completely before replacing a draft; one invalid row rejects the whole import. */
-export function parseNonLaborInvestmentRows(rows: unknown[][], range: MonthRange, subjects: readonly ConfigRecord[], departments: readonly ConfigRecord[]): NonLaborInvestment {
+export function parseNonLaborInvestmentRows(rows: unknown[][], range: MonthRange, subjects: readonly ConfigRecord[], departments: readonly ConfigRecord[], previous?: NonLaborInvestment): NonLaborInvestment {
   const months = nonLaborMonths(range)
-  if (!months.length) throw new Error('请先选择非人力投入时间范围')
+  if (!months.length) throw new Error('请先填写里程碑时间以生成费用投入月份')
   const columns = nonLaborSpreadsheetColumns(range)
   const header = (rows[0] ?? []).map(cell => String(cell ?? '').trim())
   while (header.at(-1) === '') header.pop()
@@ -57,6 +57,11 @@ export function parseNonLaborInvestmentRows(rows: unknown[][], range: MonthRange
       const key = nonLaborItemKey(validated)
       if (keys.has(key)) throw new Error('二级部门、三级部门、二级科目和三级科目组合重复')
       keys.add(key)
+      const retained = previous?.items.find(row => nonLaborItemKey(row) === key)
+      if (retained) {
+        validated.id = retained.id
+        validated.monthlyAmounts = { ...Object.fromEntries(Object.entries(retained.monthlyAmounts).filter(([month]) => !months.includes(month))), ...validated.monthlyAmounts }
+      }
       items.push(validated)
     } catch (error) {
       throw new Error(`第 ${index + 2} 行：${error instanceof Error ? error.message : '数据格式不正确'}`)

@@ -24,6 +24,7 @@ export const getHrRegistryProject = (record?: Pick<HrRegistryRecord, 'pmsProject
 export function canAccessHrProject(record?: Pick<HrRegistryRecord, 'pmsProjectId'> | null, edit = false, actor = useProjectStore.getState().currentLoginUser) {
   const project = getHrRegistryProject(record)
   if (!project && !edit && record && !record.pmsProjectId) return isGlobalAdmin(actor)
+  if (edit && project && getProjectAttribute(project) === 'budget' && project.boundFormalProjectId) return false
   return !!project && hasPermission(actor, project.id, edit ? 'basicInfo:编辑' : 'basicInfo:查看')
 }
 export function getHrAllowedBudgetTypes(record?: Pick<HrRegistryRecord, 'pmsProjectId'> | null): Array<'annual' | 'projectEstimate' | 'projectBudget'> {

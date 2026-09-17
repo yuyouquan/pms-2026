@@ -106,6 +106,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
                       const action = isDisabled ? '启用' : '禁用'
                       const affectedRecords = getHrModelVersionGroup(records, record)
                       modal.confirm({
+                        centered: true,
                         title: `确认${action}模型版本`,
                         content: (
                           <div>

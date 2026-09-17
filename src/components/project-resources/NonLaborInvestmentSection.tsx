@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Alert, App, Button, DatePicker, InputNumber, Select, Space, Table, Upload } from 'antd'
+import { Alert, App, Button, InputNumber, Select, Space, Table, Upload } from 'antd'
 import { DeleteOutlined, DownloadOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
@@ -12,15 +12,17 @@ import { nonLaborSpreadsheetColumns, parseNonLaborInvestmentRows } from '@/lib/n
 import { exportMultiSheet } from '@/utils/exportExcel'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import type { NonLaborInvestment, NonLaborInvestmentItem } from '@/types/nonLaborInvestment'
+import { hrNonLaborMonthRange } from '@/lib/hrNonLaborRange'
+import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
 
-export function useNonLaborDraft(open: boolean, editorKey: string, seed?: NonLaborInvestment) {
+export function useNonLaborDraft(open: boolean, editorKey: string, seed: NonLaborInvestment | undefined, category: HrProjectCategory, dates: object) {
   const seedRef = useRef(seed)
   seedRef.current = seed
   const [value, setValue] = useState<NonLaborInvestment>(() => cloneNonLaborInvestment(seed))
   useEffect(() => {
     if (open) setValue(cloneNonLaborInvestment(seedRef.current))
   }, [open, editorKey])
-  return { value, onChange: setValue }
+  return { value: { ...value, ...hrNonLaborMonthRange(category, dates) }, onChange: setValue }
 }
 
 export default function NonLaborInvestmentSection({ value, onChange, readOnly = false }: {
@@ -59,7 +61,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
       const workbook = XLSX.read(await file.arrayBuffer())
       if (!workbook.SheetNames[0]) throw new Error('文件中没有工作表')
       const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
-      const parsed = parseNonLaborInvestmentRows(rows, value, subjects, departmentRecords)
+      const parsed = parseNonLaborInvestmentRows(rows, value, subjects, departmentRecords, value)
       const apply = () => {
         if (currentValueRef.current !== value) {
           message.warning('当前投入数据或时间范围已变化，请重新导入')
@@ -69,6 +71,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
         message.success(`已导入 ${parsed.items.length} 条非人力投入数据`)
       }
       if (value.items.length) modal.confirm({
+        centered: true,
         title: '确认导入非人力投入',
         content: `将用 ${parsed.items.length} 条导入数据替换当前 ${value.items.length} 条非人力投入，保存版本后生效。`,
         okText: '确认导入', cancelText: '取消', onOk: apply,
@@ -80,19 +83,6 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
       setImporting(false)
     }
     return false
-  }
-  const changeRange = (startMonth: string | null, endMonth: string | null) => {
-    const allowed = nonLaborMonths({ startMonth, endMonth })
-    const outside = value.items.some(item => Object.entries(item.monthlyAmounts).some(([month, amount]) => !allowed.includes(month) && amount !== 0))
-    const save = () => onChange?.({ startMonth, endMonth,
-      items: value.items.map(item => ({ ...item, monthlyAmounts: Object.fromEntries(Object.entries(item.monthlyAmounts).filter(([month]) => allowed.includes(month))) })),
-    })
-    if (outside) modal.confirm({
-      title: '确认修改非人力投入时间范围',
-      content: '新范围之外的已填投入将被移除，确认后生效。',
-      okText: '确认修改', cancelText: '保留原范围', onOk: save,
-    })
-    else save()
   }
   const columns: ColumnsType<NonLaborInvestmentItem> = [
     { title: '二级部门', key: 'secondaryDepartment', width: 140, fixed: 'left',
@@ -154,14 +144,10 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
   return <section className="pms-non-labor-section" aria-label="非人力投入">
     <h3>非人力投入</h3>
     <Alert className="pms-non-labor-summary" type="info" showIcon title={<div className="pms-non-labor-toolbar">
-      <span>{'预估非人力投入合计：' + formatNonLaborAmount(nonLaborTotal(value)) + ' 元。'}</span>
+      <span>{'费用预估投入合计：' + formatNonLaborAmount(nonLaborTotal(value)) + ' 元。'}</span>
       <div className="pms-non-labor-range">
         <span>投入时间范围</span>
-        {readOnly ? <span>{value.startMonth && value.endMonth ? dayjs(value.startMonth + '-01').format('YYYY年MM月') + '～' + dayjs(value.endMonth + '-01').format('YYYY年MM月') : '—'}</span>
-          : <DatePicker.RangePicker picker="month" format="YYYY年MM月" allowClear={false}
-            aria-label="非人力投入时间范围" placeholder={['开始月份', '结束月份']}
-            value={value.startMonth && value.endMonth ? [dayjs(value.startMonth + '-01'), dayjs(value.endMonth + '-01')] : null}
-            onChange={dates => changeRange(dates?.[0]?.format('YYYY-MM') ?? null, dates?.[1]?.format('YYYY-MM') ?? null)} />}
+        <span aria-label="费用投入时间范围" title="根据当前版本里程碑时间自动生成">{value.startMonth && value.endMonth ? dayjs(value.startMonth + '-01').format('YYYY年MM月') + '～' + dayjs(value.endMonth + '-01').format('YYYY年MM月') : '待填写里程碑时间'}</span>
       </div>
     </div>} />
     {!readOnly && <div className="pms-non-labor-actions">
@@ -181,7 +167,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
     </div>}
     <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={value.items}
       pagination={false} size="small" tableLayout="fixed" scroll={{ x: 600 + (readOnly ? 0 : 64) + months.length * 126, y: 320 }}
-      locale={{ emptyText: months.length ? (readOnly ? '暂无非人力投入' : '暂无非人力投入数据，请点击「添加」或「导入」') : '请选择投入时间范围' }}
+      locale={{ emptyText: months.length ? (readOnly ? '暂无非人力投入' : '暂无非人力投入数据，请点击「添加」或「导入」') : '请先填写里程碑时间，自动生成投入月份' }}
       summary={() => value.items.length > 0 ? <Table.Summary.Row>
         <Table.Summary.Cell index={0} colSpan={4}>合计</Table.Summary.Cell>
         {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 4} align="center">

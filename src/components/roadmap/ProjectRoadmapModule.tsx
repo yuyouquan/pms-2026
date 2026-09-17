@@ -465,6 +465,7 @@ export default function ProjectRoadmapModule({
       return
     }
     Modal.confirm({
+      centered: true,
       title: '删除待规划项目？',
       content: (
         <>

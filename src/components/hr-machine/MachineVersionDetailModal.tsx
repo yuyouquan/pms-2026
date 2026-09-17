@@ -3,7 +3,7 @@
 import { HrVersionModalTitle } from '@/components/project-resources/HrVersionModalTitle'
 
 import NonLaborInvestmentSection from '@/components/project-resources/NonLaborInvestmentSection'
-import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
+import { withHrNonLaborRange } from '@/lib/hrNonLaborRange'
 
 import { HrVersionMilestoneDetails } from '@/components/project-resources/HrVersionMilestones'
 
@@ -200,7 +200,7 @@ export default function MachineVersionDetailModal({
           {version.modelSnapshot && <div style={{ marginTop: 8, color: 'var(--pms-text-tertiary)', fontSize: 12 }}>
             数据来源：版本保存的整机人力模型（项目等级 {version.projectLevel || '-'} / 模型版本 {version.hrModelVersion || '-'}），各阶段值已乘以等级系数 {(version.levelCoefficient ?? 0).toFixed(2)}。
           </div>}
-          <NonLaborInvestmentSection value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly />
+          <NonLaborInvestmentSection value={withHrNonLaborRange(version.nonLaborInvestment, 'machine', version.milestones)} readOnly />
         </>
       ) : (
         <div style={{ textAlign: 'center', padding: 40, color: 'var(--pms-text-tertiary)' }}>

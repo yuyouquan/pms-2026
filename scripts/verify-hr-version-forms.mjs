@@ -81,7 +81,7 @@ await check('Canonical display uses actual project code while legacy lookup reta
   assert.equal(hrFormalDisplayCode(formal), 'ACTUAL-CODE')
   assert.equal(stores[0].getState().projects.find(p => p.pmsProjectId === formal.id).ipmProjectCode, 'ACTUAL-CODE')
 })
-await check('Bound machine budgets accept partial or empty readonly formal metadata without changing sources or manual milestone dates', () => {
+await check('Bound machine budgets reject creation with partial or empty formal metadata without changing sources', () => {
   const store = stores[0]
   for (const [caseName, sourceMetadata] of Object.entries({ empty: { brand: '', productLine: '', marketName: '' }, partial: { brand: '示例品牌A', productLine: '', marketName: '' } })) {
     const source = { ...base, id: `bound-source-${caseName}`, type: types[0], name: `来源-${caseName}`, projectAttribute: 'formal', sourceBid: '', projectCode: '', ...sourceMetadata, fieldValues: {} }
@@ -92,13 +92,8 @@ await check('Bound machine budgets accept partial or empty readonly formal metad
     assert.deepEqual({ brand: record().brand, productLine: record().productLine, marketName: record().marketName }, sourceMetadata)
     const canonicalBefore = structuredClone(registry.getState().projects)
     const milestones = { conceptStart: '2032-02-01', str5: '2032-11-01' }
-    assert.doesNotThrow(() => store.getState().addVersion(record().id, 'annual', { ...meta, metadata: sourceMetadata, milestones }))
-    assert.equal(record().versions.length, 1)
-    assert.equal(record().versions[0].milestones.conceptStart, milestones.conceptStart)
-    assert.equal(record().versions[0].milestones.str5, milestones.str5)
-    store.getState().addVersion(record().id, 'annual', { ...meta, metadata: sourceMetadata })
-    assert.equal(record().versions.length, 2)
-    assert.equal(record().versions[1].milestones.str5, milestones.str5)
+    assert.throws(() => store.getState().addVersion(record().id, 'annual', { ...meta, metadata: sourceMetadata, milestones }), /权限/)
+    assert.equal(record().versions.length, 0)
     assert.deepEqual(registry.getState().projects, canonicalBefore)
   }
 })
@@ -147,7 +142,7 @@ await check('Model stores deny seed editor/viewer; explicit custom grants permit
 await check('Forms and navigation wire shared milestones, category layouts, permission guards and existing model data', () => {
   const source = file => fs.readFileSync(file, 'utf8')
   for (const category of ['machine', 'tos', 'technical', 'capability']) {
-    assert.match(source(`src/components/hr-${category}/NewVersionModal.tsx`), category === 'machine' ? /pms-hr-version-row--metadata/ : /pms-hr-version-form/)
+    assert.match(source(`src/components/hr-${category}/NewVersionModal.tsx`), category === 'machine' ? /pms-hr-version-row--machine-settings/ : /pms-hr-version-form/)
     assert.match(source(`src/components/hr-${category}/${category === 'machine' ? 'MachineVersionDetailModal' : 'VersionDetailModal'}.tsx`), /HrVersionMilestoneDetails/)
   }
   assert.doesNotMatch(source('src/constants/hrPipeline.ts'), /key: 'config\/hr-model'/)

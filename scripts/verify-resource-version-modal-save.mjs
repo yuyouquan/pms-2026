@@ -11,7 +11,7 @@ const { isLatestHrVersion } = load('src/lib/hrVersionRules.ts')
 const { isHrFormalRecord } = load('src/lib/hrProjectRegistry.ts')
 for (const category of ['Tos','Technical']) {
   const store = load(`src/stores/hr${category}.ts`)[`useHr${category}Store`]
-  const project = () => store.getState().projects.find(p => p.pmsProjectId === RESOURCE_BUDGET_IDS[category.toLowerCase()])
+  const project = () => store.getState().projects.find(p => p.pmsProjectId === `mock-budget-${category.toLowerCase()}-unbound`)
   const latest = project().versions.find(v => isLatestHrVersion(project(),v))
   const before = structuredClone(project())
   const fields = category === 'Tos' ? { str5:'2027-09-30',maintenanceEnd:'2029-06-01' } : { tdr2:'2027-05-10',edcp:'2028-02-10' }

@@ -35,13 +35,13 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
   const editingVersion = project?.versions.find(version => version.id === versionId)
   const editing = Boolean(versionId)
   const canSave = editing ? Boolean(project && editingVersion && isLatestHrVersion(project, editingVersion) && canEditHrInScope(project, scopeId)) : canCreateHrVersion(project, budgetType)
-  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType + ':' + versionId, editingVersion?.nonLaborInvestment ?? (project ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined))
   const formal = isHrFormalRecord(project)
   const bound = Boolean(getHrRegistryProject(project)?.boundFormalProjectId)
   const metadataReadOnly = formal || bound
   const effectiveMetadata = metadataReadOnly ? { brand: project?.brand ?? '', productLine: project?.productLine ?? '', marketName: project?.marketName ?? '' } : metadata
   const effectiveProjectLevel = formal ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null, project?.pmsProjectId).projectLevel : projectLevel
-  const milestoneForm = useHrVersionMilestones('machine', project, budgetType, open)
+  const milestoneForm = useHrVersionMilestones('machine', project, budgetType, open, versionId)
+  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType + ':' + versionId, editingVersion?.nonLaborInvestment ?? (project ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined), 'machine', milestoneForm.values)
 
   useEffect(() => {
     if (!open) return
@@ -84,15 +84,13 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
   }
 
   return <Modal className="pms-modal pms-hr-version-modal" title={<HrVersionModalTitle title={editing ? "编辑版本" : "新增版本"} projectName={project?.name} versionNumber={editingVersion?.versionNumber ?? (project ? `V0.${nextHrMinorVersion(project.versions, budgetType)}` : undefined)} versionLabel={editing ? "版本号" : "将创建版本"} />} open={open} onCancel={onCancel} onOk={handleOk} okText={editing ? "保存" : "创建"} cancelText="取消" width={1560} okButtonProps={{ disabled: !canSave }}>
-    {bound && Object.values(effectiveMetadata).some(value => !value.trim()) && <Alert type="info" showIcon style={{ marginBottom: 8 }} title="来源正式项目的品牌信息尚未补充完整，可在正式项目空间完善；仍可创建年度预算版本。" />}
+    {bound && Object.values(effectiveMetadata).some(value => !value.trim()) && <Alert type="info" showIcon style={{ marginBottom: 8 }} title="来源正式项目的品牌信息尚未补充完整，可在正式项目空间完善；解绑后可新增或修改预算。" />}
     <Form layout="vertical">
-      <div className="pms-hr-version-row pms-hr-version-row--metadata">
+      <div className="pms-hr-version-row pms-hr-version-row--machine-settings">
       <Form.Item label="预算类型" required>{editing ? <HrReadonlyField label="预算类型" value={budgetOptions.find(option => option.value === budgetType)?.label} reason="版本预算类型不可修改" /> : <Select value={budgetType} options={budgetOptions} onChange={setBudgetType} />}</Form.Item>
       <Form.Item label="品牌" required={!formal && !bound}>{metadataReadOnly ? <HrReadonlyField label="品牌" value={effectiveMetadata.brand} reason="来源于正式项目基础信息" /> : <Select aria-label="品牌" value={metadata.brand || undefined} options={[...new Set([...Object.keys(PRODUCT_LINES_BY_BRAND), ...(metadata.brand ? [metadata.brand] : [])])].map(value => ({ value, label: value }))} onChange={brand => setMetadata(previous => ({ ...previous, brand, productLine: '' }))} />}</Form.Item>
       <Form.Item label="产品线" required={!formal && !bound}>{metadataReadOnly ? <HrReadonlyField label="产品线" value={effectiveMetadata.productLine} reason="来源于正式项目基础信息" /> : <Select aria-label="产品线" value={metadata.productLine || undefined} options={[...new Set([...productLines, ...(metadata.productLine ? [metadata.productLine] : [])])].map(value => ({ value, label: value }))} onChange={productLine => setMetadata(previous => ({ ...previous, productLine }))} />}</Form.Item>
       <Form.Item label="市场名" required={!formal && !bound}>{metadataReadOnly ? <HrReadonlyField label="市场名" value={effectiveMetadata.marketName} reason="来源于正式项目基础信息" /> : <Input aria-label="市场名" value={effectiveMetadata.marketName} placeholder="请输入市场名" onChange={event => setMetadata(previous => ({ ...previous, marketName: event.target.value }))} />}</Form.Item>
-      </div>
-      <div className="pms-hr-version-row pms-hr-version-row--model">
       <Form.Item label="项目等级" required tooltip={formal ? '来源于本项目基础信息' : '来源于启用的整机人力模型'}>{formal ? <HrReadonlyField label="项目等级" value={effectiveProjectLevel} reason="来源于本项目基础信息" /> : <Select value={effectiveProjectLevel || undefined} options={getConfigProjectLevels(records).map(value => ({ value, label: value }))} onChange={setProjectLevel} />}</Form.Item>
       <Form.Item label="等级系数" required><InputNumber style={{ width: '100%' }} min={0} precision={2} step={0.1} value={levelCoefficient} onChange={value => setLevelCoefficient(value ?? 1)} /></Form.Item>
       <Form.Item label="人力模型版本号" required><Select value={hrModelVersion || undefined} options={getConfigModelVersions(records).map(value => ({ value, label: value }))} onChange={setHrModelVersion} /></Form.Item>
@@ -101,7 +99,7 @@ export default function NewVersionModal({ open, projectId, versionId, onCancel }
       <HrVersionMilestoneRow category="machine" {...milestoneForm} />
     </Form>
     <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
-    <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`预估人力投入合计：${total} 人月。`} />
+    <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`人力预估投入合计：${total} 人月。`} />
     <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={departments} pagination={false} size="small" scroll={{ x: columns.reduce((sum, column) => sum + column.width, 0) }} locale={{ emptyText: '当前项目等级与模型版本无可用部门配置' }} />
     <NonLaborInvestmentSection {...nonLabor} />
   </Modal>

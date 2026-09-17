@@ -44,7 +44,7 @@ export function validateNonLaborInvestment(value: NonLaborInvestment, subjects: 
   const result = cloneNonLaborInvestment(value)
   if (!result.startMonth && !result.endMonth && result.items.length === 0) return result
   const months = nonLaborMonths(result)
-  if (!months.length) throw new Error('请选择有效的非人力投入时间范围')
+  if (!months.length && (result.startMonth || result.endMonth)) throw new Error('请填写有效的里程碑时间以生成费用投入时间范围')
   const keys = new Set<string>(), ids = new Set<string>()
   const departments = nonLaborDepartmentPairs(departmentRecords)
   for (const item of result.items) {
@@ -71,7 +71,9 @@ export function validateNonLaborInvestment(value: NonLaborInvestment, subjects: 
     for (const [month, amount] of Object.entries(item.monthlyAmounts)) {
       if (!Number.isFinite(amount) || amount < 0) throw new Error('非人力投入金额必须为非负数')
       if (Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) throw new Error('非人力投入金额最多保留两位小数')
-      if (!months.includes(month)) throw new Error('投入月份不能超出所选时间范围')
+      if (monthIndex(month) === null) throw new Error('费用投入月份格式不正确')
+      // A user may enter an amount and then shrink the milestones in the same draft.
+      // Keep valid hidden month amounts; only visible months participate in totals.
     }
   }
   return result

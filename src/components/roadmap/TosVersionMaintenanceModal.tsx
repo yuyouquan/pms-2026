@@ -130,6 +130,7 @@ export default function TosVersionMaintenanceModal({
       return
     }
     Modal.confirm({
+      centered: true,
       title: '放弃未保存的修改？',
       content: '当前输入尚未保存。',
       okText: '放弃修改',
@@ -224,6 +225,7 @@ export default function TosVersionMaintenanceModal({
     const count = referenceCounts.get(version.id)?.total ?? 0
     if (!canEdit || count > 0) return
     Modal.confirm({
+      centered: true,
       title: `删除 ${formatTosSnapshot(version.id)} 的路标维护信息？`,
       content: '仅删除路标中的周期和版本目标，不会删除配置中心的枚举值。',
       okText: '确认删除',

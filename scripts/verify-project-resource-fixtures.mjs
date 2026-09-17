@@ -85,11 +85,11 @@ check('fresh multi-owner, partial milestones and cancelled budget retain distinc
  assert.throws(()=>stores[0].getState().addVersion(cancelled.id,'annual',{projectLevel:'S',levelCoefficient:1,hrModelVersion:'V2026.1',metadata:{brand:cancelled.brand,productLine:cancelled.productLine,marketName:cancelled.marketName}}),/取消|创建|新增|新建/)
  assert.deepEqual(record(stores[0],cancelled.pmsProjectId).versions,history)
 })
-check('source owner09 controls annual visibility; formal viewer02 cannot inherit a grant',()=>{
+check('bound budgets are readonly even for owner09 and admin; formal viewer02 cannot inherit a view grant',()=>{
  const b=record(stores[0],RESOURCE_BUDGET_IDS.machine),f=record(stores[0],'1')
  permission.getState().ensureProjectPermissions(registry.getState().projects)
  assert.equal(hasPermission('演示用户02','1','basicInfo:查看'),true)
- for(const actor of ['演示用户01','演示用户09'])assert.equal(access.canAccessHrProject(b,true,actor),true)
+ for(const actor of ['演示用户01','演示用户09'])assert.equal(access.canAccessHrProject(b,true,actor),false)
  assert.equal(access.canAccessHrProject(b,false,'演示用户02'),false)
  registry.setState({currentLoginUser:'演示用户02'});assert.equal(access.isHrVersionVisible(b,'annual',f.pmsProjectId),false)
  registry.setState({currentLoginUser:'演示用户01'})
@@ -104,14 +104,14 @@ check('roadmap stays listed with absent dates; completed sample no longer create
  assert.ok(rows.some(row=>row.projectCode==='DEMOR001'&&adapter.canPositionRoadmapRow(row)))
  assert.equal(adapter.deriveRoadmapPlanningConflicts(rows.filter(r=>r.source==='normal'),rows.filter(r=>r.source==='planned')).length,0)
 })
-check('bound incomplete source allows annual creation; unbound incomplete requires its own metadata',()=>{
+check('bound incomplete source rejects annual creation; unbound incomplete requires its own metadata',()=>{
  const store=stores[0],bound=record(store,'mock-budget-machine-incomplete-bound'),unbound=record(store,'mock-budget-machine-incomplete-unbound')
  const meta={projectLevel:'S',levelCoefficient:1,hrModelVersion:'V2026.1',metadata:{brand:'',productLine:'',marketName:''},milestones:{conceptStart:'2027-01-10'}}
  assert.equal(bound.versions.length,0);assert.equal(unbound.versions.length,0)
  assert.ok(['brand','productLine','marketName'].every(key=>bound[key]===''))
  const previous=JSON.stringify(registry.getState().projects)
- store.getState().addVersion(bound.id,'annual',meta)
- assert.equal(record(store,bound.pmsProjectId).versions.length,1)
+ assert.throws(()=>store.getState().addVersion(bound.id,'annual',meta),/权限/)
+ assert.equal(record(store,bound.pmsProjectId).versions.length,0)
  assert.equal(JSON.stringify(registry.getState().projects),previous)
  assert.throws(()=>store.getState().addVersion(unbound.id,'annual',meta),/品牌|产品线|市场/)
  assert.equal(record(store,unbound.pmsProjectId).versions.length,0)

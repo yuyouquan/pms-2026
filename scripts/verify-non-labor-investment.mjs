@@ -52,19 +52,20 @@ const { startHrFormalProjectSync } = load('src/hooks/useHrFormalProjectSync.ts')
 const stop = startHrFormalProjectSync(window)
 const { useHrConfigStore: config } = load('src/stores/hrConfig.ts')
 const { useProjectStore: registry } = load('src/stores/project.ts')
-const { RESOURCE_BUDGET_IDS } = load('src/mock/projectRegistry.ts')
+const { RESOURCE_FORMAL_IDS } = load('src/mock/projectRegistry.ts')
 const { canEditHrInScope } = load('src/lib/hrProjectRegistry.ts')
 const names = ['Machine','Tos','Technical','Capability']
 const stores = names.map(name => load('src/stores/hr' + name + '.ts')['useHr' + name + 'Store'])
 const initialRegistry = structuredClone(registry.getState().projects)
 for (const [index, store] of stores.entries()) {
   const category = names[index].toLowerCase()
-  const project = () => store.getState().projects.find(p => p.pmsProjectId === RESOURCE_BUDGET_IDS[category])
+  const project = () => store.getState().projects.find(p => p.pmsProjectId === `mock-budget-${category}-unbound`)
   const before = structuredClone(project().versions)
   const seed = before.at(-1)
   assert.ok(seed.nonLaborInvestment.items.length > 0)
   const nonLaborInvestment = rules.cloneNonLaborInvestment(seed.nonLaborInvestment)
-  nonLaborInvestment.items[0].monthlyAmounts['2026-12'] = 9.9
+  const month = nonLaborInvestment.startMonth
+  nonLaborInvestment.items[0].monthlyAmounts[month] = 9.9
   const form = { ...seed, nonLaborInvestment }
   if (index === 0) store.getState().addVersion(project().id, 'annual', {
     ...form, metadata:{brand:project().brand,productLine:project().productLine,marketName:project().marketName},
@@ -73,14 +74,14 @@ for (const [index, store] of stores.entries()) {
   assert.equal(project().versions.length, before.length + 1)
   assert.deepEqual(project().versions.slice(0,-1), before, 'creation preserves history')
   const latest = project().versions.at(-1)
-  assert.equal(latest.nonLaborInvestment.items[0].monthlyAmounts['2026-12'],9.9)
-  nonLaborInvestment.items[0].monthlyAmounts['2026-12'] = 777
-  assert.equal(project().versions.at(-1).nonLaborInvestment.items[0].monthlyAmounts['2026-12'],9.9, 'store owns its copy')
+  assert.equal(latest.nonLaborInvestment.items[0].monthlyAmounts[month],9.9)
+  nonLaborInvestment.items[0].monthlyAmounts[month] = 777
+  assert.equal(project().versions.at(-1).nonLaborInvestment.items[0].monthlyAmounts[month],9.9, 'store owns its copy')
   const edit = rules.cloneNonLaborInvestment(latest.nonLaborInvestment)
-  edit.items[0].monthlyAmounts['2026-12'] = 4.4
+  edit.items[0].monthlyAmounts[month] = 4.4
   if (index === 0) store.getState().updateVersion(project().id,latest.id,{ nonLaborInvestment:edit })
   else store.getState().updateVersionDepartmentInvestments(project().id,latest.id,latest.departmentInvestments,edit)
-  assert.equal(project().versions.at(-1).nonLaborInvestment.items[0].monthlyAmounts['2026-12'],4.4)
+  assert.equal(project().versions.at(-1).nonLaborInvestment.items[0].monthlyAmounts[month],4.4)
   const frozen = structuredClone(project().versions[0])
   store.getState().updateVersion(project().id,frozen.id,{nonLaborInvestment:edit})
   assert.deepEqual(project().versions[0],frozen,'history remains readonly')
@@ -90,11 +91,11 @@ for (const [index, store] of stores.entries()) {
   else assert.throws(()=>store.getState().updateVersionDepartmentInvestments(project().id,latest.id,[],invalid),/重复/)
   assert.deepEqual(project().versions,snapshot,'invalid non-labor data cannot partially save human investment')
   const canonical = registry.getState().projects.find(p=>p.id===project().pmsProjectId)
-  assert.equal(canEditHrInScope(project(),canonical.boundFormalProjectId),false,'linked annual remains readonly in formal scope')
+  assert.equal(canEditHrInScope(project(),RESOURCE_FORMAL_IDS[category]),false,'linked annual remains readonly in formal scope')
   console.log('PASS ' + category + ' creation, latest editing, history, independent snapshots and atomic validation')
 }
 assert.deepEqual(registry.getState().projects,initialRegistry)
-const machineProject = () => stores[0].getState().projects.find(p => p.pmsProjectId === RESOURCE_BUDGET_IDS.machine)
+const machineProject = () => stores[0].getState().projects.find(p => p.pmsProjectId === 'mock-budget-machine-unbound')
 const modelBefore = structuredClone(machineProject().versions.at(-1))
 const savedModels = config.getState().data.hrModel
 config.setState({ data: { ...config.getState().data, hrModel: savedModels.filter(row => row.modelVersion !== modelBefore.hrModelVersion) } })
@@ -110,7 +111,7 @@ const snapshots = stores.map(store=>structuredClone(store.getState().projects))
 config.getState().deleteRecord('nonLaborSubject','non-labor-transport-flight')
 for (const [index, store] of stores.entries()) {
   assert.deepEqual(store.getState().projects,snapshots[index],'deleting a subject does not rewrite budget data')
-  const project=store.getState().projects.find(p=>p.pmsProjectId===RESOURCE_BUDGET_IDS[names[index].toLowerCase()])
+  const project=store.getState().projects.find(p=>p.pmsProjectId===`mock-budget-${names[index].toLowerCase()}-unbound`)
   const latest=project.versions.at(-1)
   store.getState().updateVersion(project.id,latest.id,{nonLaborInvestment:latest.nonLaborInvestment})
 }

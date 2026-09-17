@@ -1134,6 +1134,7 @@ export default function ProjectPlanSummaryBoard({ projects, onViewProject }: Pro
     if (!view) return
 
     Modal.confirm({
+      centered: true,
       title: '确认删除视图',
       content: `删除「${view.name}」后无法恢复。`,
       okText: '删除',

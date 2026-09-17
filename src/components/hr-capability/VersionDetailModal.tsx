@@ -48,7 +48,7 @@ export default function VersionDetailModal({
   }, [projects, projectId, versionId])
   const scopeId = useHrResourceScope()
   const readOnly = !canEditHrInScope(project, scopeId) || requestedReadOnly || !project || !version || !isLatestHrVersion(project, version)
-  const nonLabor = useNonLaborDraft(open, versionId ?? '', version?.nonLaborInvestment)
+  const nonLabor = useNonLaborDraft(open, versionId ?? '', version?.nonLaborInvestment, 'capability', version ?? {})
   const versionRef = useRef(version)
   versionRef.current = version
 
@@ -276,7 +276,7 @@ export default function VersionDetailModal({
           type="info"
           showIcon
           style={{ marginBottom: 8 }}
-          title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`}
+          title={`人力预估投入合计：${formatPersonMonth(editTotal)} 人月。`}
         />
 
         {/* 操作按钮 */}
