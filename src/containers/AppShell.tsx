@@ -46,7 +46,8 @@ function UserSwitcher() {
       setCurrentLoginUser(user)
       setProjectCardPage(1)
     }
-    const autoSavedDraft = plan.versions.find(version => version.id === plan.currentVersion)?.status === '修订中'
+    const autoSavedDraft = ui.activeModule === 'projectSpace' && ui.projectSpaceModule === 'plan'
+      && plan.versions.find(version => version.id === plan.currentVersion)?.status === '修订中'
     if (project.basicInfoEditMode || (ui.isEditMode && !autoSavedDraft)) {
       ui.setPendingNavigation(apply)
       ui.setShowLeaveConfirm(true)

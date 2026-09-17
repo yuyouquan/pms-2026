@@ -161,7 +161,7 @@ export default function MachineVersionDetailModal({
             ]}
           />
 
-        <HrVersionMilestoneDetails category="machine" values={version.milestones} frozen={version.lockState === 'locked'} />
+        <HrVersionMilestoneDetails category="machine" values={version.milestones} frozen />
 
           <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
           {version.modelSnapshot ? <Table<DeptPhaseRow>

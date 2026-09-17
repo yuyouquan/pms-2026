@@ -9178,3 +9178,32 @@ input.ant-input,
 .pms-hr-milestone-details dl > div:last-child { border-right: 0; }
 .pms-hr-milestone-details dt, .pms-hr-milestone-details dd { margin: 0; padding: 8px 6px; text-align: center; white-space: nowrap; }
 .pms-hr-milestone-details dt { background: var(--pms-brand-surface); color: var(--pms-text-secondary); }
+
+/* Project resource versions: compact page workspace on existing PMS tokens. */
+.pms-resource-workspace { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.pms-resource-version-toolbar, .pms-resource-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.pms-resource-version-select, .pms-resource-version-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pms-resource-workspace h2, .pms-resource-workspace h3 { margin: 0; color: var(--pms-text-primary); font-weight: 600; }
+.pms-resource-workspace h2 { font-size: 16px; }
+.pms-resource-workspace h3 { font-size: 14px; }
+.pms-resource-caption { color: var(--pms-text-secondary); font-size: 12px; }
+.pms-resource-version-context, .pms-resource-monthly, .pms-hr-version-surface { background: var(--pms-surface-solid); border: 1px solid var(--pms-border); border-radius: var(--pms-radius-surface); }
+.pms-resource-version-context, .pms-resource-monthly { padding: 16px; }
+.pms-resource-version-meta { display: flex; gap: 14px 24px; align-items: center; flex-wrap: wrap; margin: 16px 0 10px; font-size: 12px; color: var(--pms-text-secondary); }
+.pms-resource-version-meta strong { color: var(--pms-text-primary); font-size: 16px; font-variant-numeric: tabular-nums; }
+.pms-resource-version-context p { margin: 0; }
+.pms-hr-version-surface-header { padding: 14px 16px; border-bottom: 1px solid var(--pms-border); font-weight: 600; }
+.pms-hr-version-surface-content { padding: 16px; min-width: 0; overflow-x: auto; }
+.pms-hr-version-surface-actions { display: flex; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid var(--pms-border); }
+.pms-resource-monthly-summary { display: flex; gap: 24px; flex-wrap: wrap; padding: 16px 0; color: var(--pms-text-secondary); font-size: 12px; }
+.pms-resource-monthly-summary strong { margin-left: 6px; color: var(--pms-text-primary); font-size: 18px; font-variant-numeric: tabular-nums; }
+.pms-resource-trend { overflow-x: auto; margin: 8px 0 16px; }
+.pms-resource-trend svg { display: block; max-height: 260px; }
+.pms-resource-chart-value { fill: var(--pms-text-primary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.pms-resource-chart-label { fill: var(--pms-text-secondary); font-size: 10px; }
+.pms-resource-placeholder { padding: 64px 20px; background: var(--pms-surface-solid); border: 1px solid var(--pms-border); border-radius: var(--pms-radius-surface); }
+@media (max-width: 720px) {
+  .pms-resource-version-toolbar { align-items: flex-start; }
+  .pms-resource-version-context, .pms-resource-monthly, .pms-hr-version-surface-content { padding: 12px; }
+  .pms-resource-version-meta { gap: 10px 16px; }
+}
