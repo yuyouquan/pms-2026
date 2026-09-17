@@ -243,17 +243,6 @@ export default function HistoryVersionSpace() {
         ),
       },
       {
-        title: '项目目标',
-        key: 'projectTarget',
-        width: 200,
-        ellipsis: true,
-        render: (_value: unknown, record: FlatVersionRow) => (
-          <Tooltip title={record.projectTarget}>
-            <span style={{ color: 'var(--pms-text-primary)' }}>{record.projectTarget}</span>
-          </Tooltip>
-        ),
-      },
-      {
         title: '预估投入',
         key: 'estimatedInvestment',
         width: 110,
@@ -354,7 +343,6 @@ export default function HistoryVersionSpace() {
       { key: 'projectName', title: '项目名称' },
       { key: 'budgetType', title: '预算类型', formatter: (_v: unknown, row: FlatVersionRow) => TOS_BUDGET_TYPE_LABELS[row.budgetType] },
       { key: 'versionNumber', title: '版本号' },
-      { key: 'projectTarget', title: '项目目标' },
       { key: 'estimatedInvestment', title: '预估投入(人月)' },
       ...TOS_MILESTONE_FIELDS.map((f) => ({
         key: f.key as string,

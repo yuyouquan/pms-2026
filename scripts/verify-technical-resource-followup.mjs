@@ -56,7 +56,7 @@ for (const category of ['technical', 'tos', 'capability']) {
   // Version context now belongs to the modal title Tag, not the old body banner.
   assert.doesNotMatch(source.replace(/versionLabel="将创建版本"/g, ''), /将创建版本|IPM编码：|IPM：|TDT项目：/)
   assert.match(source, /aria-label="选择项目"/, 'aggregate entry still supports project selection')
-  assert.match(source, /预估人力投入合计：/)
+  assert.match(source, /人力预估投入合计：/)
   assert.doesNotMatch(source, /编辑各阶段预估投入，合计将自动更新|版本规则：/)
 }
 console.log('PASS: technical milestones create/edit/bind/copy/reload/history/formal-source rules and compact modal contracts')

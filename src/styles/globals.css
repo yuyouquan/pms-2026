@@ -9098,6 +9098,7 @@ input.ant-input,
 .pms-hr-readonly-field:focus-within .pms-hr-readonly-field__icon { opacity: 1; }
 .pms-hr-version-row { display: grid; gap: 0 12px; }
 .pms-hr-version-row--metadata { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pms-hr-version-row--machine-settings { grid-template-columns: repeat(7, minmax(140px, 1fr)); overflow-x: auto; padding-bottom: 2px; }
 .pms-hr-version-row--model { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .pms-hr-version-row--milestones { column-gap: 8px; }
 .pms-hr-version-milestone-scroll { overflow-x: auto; margin-bottom: 4px; }

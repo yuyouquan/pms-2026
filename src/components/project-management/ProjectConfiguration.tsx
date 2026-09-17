@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Descriptions, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd'
-import { ClearOutlined, DeleteOutlined, EditOutlined, HistoryOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { App, Button, Descriptions, Dropdown, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd'
+import { ClearOutlined, DeleteOutlined, EditOutlined, ExportOutlined, HistoryOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import { PROJECT_TYPES } from '@/constants/projectTypes'
 import type { ColumnsType } from 'antd/es/table'
 import { resolvePermissionProjectId, usePermissionStore } from '@/stores/permission'
@@ -22,7 +22,9 @@ import {
   shouldConfirmConfigurationChange,
   buildProjectRegistryHistoryRows,
   filterConfigurationProjects,
+  buildProjectConfigurationExportRows,
 } from '@/lib/projectManagementUi'
+import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import { getProjectAttribute, isFormalProject, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import type { ProjectItem } from '@/types/app'
 import NewProjectModal from '@/components/project-management/NewProjectModal'
@@ -63,6 +65,17 @@ export default function ProjectConfiguration() {
   const filteredProjects = useMemo(() => filterConfigurationProjects(projects, filters), [projects, filters])
   const hasFilters = Boolean(filters.name || filters.projectCode || filters.boundFormalProjectName || filters.projectTypes.length || filters.projectAttributes.length)
   const currentPage = Math.min(Math.max(1, projectConfigurationPage), Math.max(1, Math.ceil(filteredProjects.length / 15)))
+
+  const exportProjects = (scope: 'all' | 'current') => {
+    if (!canManageProjectRegistry(useProjectStore.getState().currentLoginUser)) return
+    const rows = buildProjectConfigurationExportRows(scope === 'all' ? projects : filteredProjects, projects)
+    exportSheet(rows, [
+      { key: 'name', title: '项目名称' }, { key: 'type', title: '项目类型' },
+      { key: 'projectAttribute', title: '项目属性' }, { key: 'projectCode', title: '项目编码' },
+      { key: 'createdBy', title: '创建人' }, { key: 'createdAt', title: '创建时间' },
+      { key: 'boundFormalProject', title: '绑定正式项目' },
+    ], `项目配置-${scope === 'all' ? '全部' : '当前'}-${exportTimestamp()}.xlsx`, '项目配置')
+  }
 
   useEffect(() => {
     if (projectConfigurationPage !== currentPage) setProjectConfigurationPage(currentPage)
@@ -112,6 +125,7 @@ export default function ProjectConfiguration() {
     }
     confirmingRef.current = true
     modal.confirm({
+      centered: true,
       className: 'pms-modal',
       width: 560,
       title: '确认修改',
@@ -175,6 +189,7 @@ export default function ProjectConfiguration() {
   const confirmDelete = (project: ProjectItem) => {
     const linked = isFormalProject(project) ? getLinkedRegistryProjects(projects, project.id) : []
     modal.confirm({
+      centered: true,
       className: 'pms-modal',
       width: 560,
       title: '确认删除项目',
@@ -351,6 +366,12 @@ export default function ProjectConfiguration() {
         </div>
         <div className="pms-project-config__actions">
           <Button icon={<ClearOutlined />} disabled={!hasFilters} onClick={resetFilters}>清空筛选</Button>
+          {canManage && <Dropdown trigger={['click']} menu={{ items: [
+            { key: 'all', label: '导出全部', title: '导出全部项目配置', disabled: !projects.length },
+            { key: 'current', label: '导出当前', title: '导出当前筛选结果，包含所有分页', disabled: !filteredProjects.length },
+          ], onClick: ({ key }) => exportProjects(key as 'all' | 'current') }}>
+            <Button icon={<ExportOutlined />}>导出</Button>
+          </Dropdown>}
           {canManage ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewProjectOpen(true)}>新项目</Button> : null}
         </div>
       </div>

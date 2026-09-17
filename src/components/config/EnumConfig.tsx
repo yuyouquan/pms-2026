@@ -260,6 +260,7 @@ export default function EnumConfig({
     const deleteType = selectedType
     const summary = getEnumRowSummary(deleteType, row)
     modal.confirm({
+      centered: true,
       title: '删除配置值？',
       content: `确认删除“${summary}”吗？删除后无法恢复。`,
       okText: '删除',
@@ -306,6 +307,7 @@ export default function EnumConfig({
     const action = enabled ? '启用' : '禁用'
     const summary = getEnumRowSummary(toggleType, row)
     modal.confirm({
+      centered: true,
       title: `${action}配置值？`,
       content: `确认${action}“${summary}”吗？${enabled
         ? '启用后，填写表单时可选择此配置值。'

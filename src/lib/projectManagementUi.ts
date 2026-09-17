@@ -36,6 +36,20 @@ export function filterConfigurationProjects<T extends ProjectItem>(projects: rea
   ))
 }
 
+/** Export uses saved values and resolves bindings against the complete registry. */
+export function buildProjectConfigurationExportRows(projects: readonly ProjectItem[], registry: readonly ProjectItem[]) {
+  const names = new Map(registry.map(project => [project.id, project.name]))
+  return projects.map(project => ({
+    name: project.name,
+    type: project.type,
+    projectAttribute: PROJECT_ATTRIBUTE_LABELS[getProjectAttribute(project)],
+    projectCode: project.projectCode || '—',
+    createdBy: project.createdBy || '—',
+    createdAt: project.createdAt ? new Date(project.createdAt).toLocaleString('zh-CN', { hour12: false }) : '—',
+    boundFormalProject: isFormalProject(project) ? '—' : names.get(project.boundFormalProjectId ?? '') || '—',
+  }))
+}
+
 export function normalizeConfigurationCellValue(value: string | null | undefined): string {
   return value?.trim() ?? ''
 }

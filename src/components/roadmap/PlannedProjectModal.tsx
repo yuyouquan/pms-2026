@@ -313,6 +313,7 @@ export default function PlannedProjectModal({
     }
     discardConfirmOpenRef.current = true
     Modal.confirm({
+      centered: true,
       title: '放弃未保存的修改？',
       content: '当前表单内容尚未保存，放弃后本次修改将不会保留。',
       okText: '放弃修改',

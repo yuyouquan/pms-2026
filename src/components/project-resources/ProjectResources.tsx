@@ -1,5 +1,5 @@
 'use client'
-import { Empty } from 'antd'
+import { Alert, Empty } from 'antd'
 import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
 import { getProjectAttribute } from '@/types/projectRegistry'
 import { matchesHrCategory } from '@/lib/hrFormalProjectSource'
@@ -19,7 +19,10 @@ export default function ProjectResources({ project }: { project: ProjectItem }) 
       : matchesHrCategory(project, 'tos') ? <TosProjectContent />
         : matchesHrCategory(project, 'technical') ? <TechnicalProjectContent /> : <CapabilityProjectContent />
   return <HrResourceScope key={project.id} projectId={project.id}><ProjectSpaceTabs className="pms-project-resource-tabs" defaultActiveKey="estimate" items={[
-    { key: 'estimate', label: '项目预估投入', children: content },
+    { key: 'estimate', label: '项目预估投入', children: <>
+      {getProjectAttribute(project) === 'budget' && project.boundFormalProjectId && <Alert type="info" showIcon style={{ marginBottom: 8 }} title="已绑定正式项目，当前预算只读；解绑后可新增或修改预算。" />}
+      {content}
+    </> },
     { key: 'dashboard', label: '项目资源看板', children: <Empty description="暂无项目资源看板" /> },
   ]} /></HrResourceScope>
 }

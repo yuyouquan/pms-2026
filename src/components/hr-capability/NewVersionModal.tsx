@@ -65,7 +65,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
     [projects, localProjectId],
   )
 
-  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType, project && budgetType ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined)
+  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType, project && budgetType ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined, 'capability', { projectStartTime: startTime?.format('YYYY-MM-DD'), projectEndTime: endTime?.format('YYYY-MM-DD') })
 
   const canCreateVersion = canCreateHrVersion(project, budgetType)
 
@@ -361,7 +361,7 @@ export default function NewVersionModal({ open, onCancel }: NewVersionModalProps
         </Form>
 
         <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
-        <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`} />
+        <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`人力预估投入合计：${formatPersonMonth(editTotal)} 人月。`} />
 
         {/* 操作按钮 */}
         <div style={{ marginBottom: 8 }}>

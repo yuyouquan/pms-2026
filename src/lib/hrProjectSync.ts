@@ -1,10 +1,13 @@
 import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
+import { withHrNonLaborRange } from '@/lib/hrNonLaborRange'
+import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { isHrFormalRecord, synchronizeHrRegistryRecord } from '@/lib/hrProjectRegistry'
 import { resolveHrFormalSource, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import { mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
 import { HR_BUDGET_TYPES, getLatestHrVersion, getMachineProjectYear, isLatestHrVersion, normalizeHrVersionSequence, type HrVersionIdentity } from '@/lib/hrVersionRules'
 
 interface SyncVersion extends HrVersionIdentity {
+  nonLaborInvestment?: NonLaborInvestment
   milestones?: object
   projectStartTime?: string
   projectEndTime?: string
@@ -35,7 +38,7 @@ export function synchronizeHrProjects<T extends SyncProject>(
     const normalized = { ...project, versions: normalizeHrVersionSequence(project.versions) }
     const source = isHrFormalRecord(project) ? resolveHrFormalSource(category, project.ipmProjectCode, project.pmsProjectId) : null
     const versions = normalized.versions.map(version => {
-      if (!isLatestHrVersion(normalized, version)) return version
+      if (!isLatestHrVersion(normalized, version)) return { ...version, nonLaborInvestment: withHrNonLaborRange(version.nonLaborInvestment, category, category === 'capability' ? version : version.milestones ?? {}) }
       const next = { ...version }
       if (source?.project && category !== 'capability' && version.budgetType !== 'annual') {
         next.milestones = mergeHrFormalMilestones(category, source.milestones, version.milestones)
@@ -45,6 +48,7 @@ export function synchronizeHrProjects<T extends SyncProject>(
       if (category === 'machine' && calculateMachineInvestment) {
         next.estimatedInvestment = calculateMachineInvestment(next.projectLevel || '', next.hrModelVersion || '', next.levelCoefficient ?? 1)
       }
+      next.nonLaborInvestment = withHrNonLaborRange(next.nonLaborInvestment, category, category === 'capability' ? next : next.milestones ?? {})
       return next
     })
     const updated = { ...normalized, versions }

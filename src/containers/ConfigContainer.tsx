@@ -678,6 +678,7 @@ export default function ConfigContainer() {
     }
     if (!isCurrentDraft || !currentVersionData) return
     Modal.confirm({
+      centered: true,
       title: '取消修订版本',
       content: `确认取消 ${currentVersionData.versionNo} 修订版本？取消后该版本将显示为已取消，可重新创建新的修订版本。`,
       okText: '确认取消',
@@ -910,6 +911,7 @@ export default function ConfigContainer() {
                         onClose={(e) => {
                           e.preventDefault()
                           Modal.confirm({
+                            centered: true,
                             title: '删除计划类型',
                             content: `确认删除自定义类型"${t}"？`,
                             okText: '删除', okType: 'danger', cancelText: '取消',

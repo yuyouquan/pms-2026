@@ -62,9 +62,9 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
     [projects, localProjectId],
   )
 
-  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType, project && budgetType ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined)
 
   const milestoneForm = useHrVersionMilestones('tos', project, budgetType, open)
+  const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType, project && budgetType ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined, 'tos', milestoneForm.values)
 
 
   useEffect(() => {
@@ -362,7 +362,7 @@ export default function NewVersionModal({ open, projectId, onCancel }: NewVersio
           type="info"
           showIcon
           style={{ marginBottom: 8 }}
-          title={`预估人力投入合计：${formatPersonMonth(editTotal)} 人月。`}
+          title={`人力预估投入合计：${formatPersonMonth(editTotal)} 人月。`}
         />
 
         {/* 操作按钮 */}
