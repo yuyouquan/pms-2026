@@ -102,6 +102,9 @@ export interface HrTosVersion {
   /** 所属批次，所有历史版本均可更新 */
   batch?: number | null
   /** 旧数据兼容字段，不再用于控制编辑 */
+  isActive: boolean
+  copiedFromVersionId?: string
+  copiedFromVersionNumber?: string
   lockState: VersionLockState
   /** 兼容旧数据的大版本字段；当前编号固定为 0 */
   majorVersion: number

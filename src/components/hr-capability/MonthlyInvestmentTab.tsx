@@ -1,7 +1,8 @@
 'use client'
 
+import { isHrVersionEditable } from '@/lib/hrVersionRules'
+
 import MonthlyAllocationNotice from '@/components/hr-shared/MonthlyAllocationNotice'
-import { canAccessHrProject } from '@/lib/hrProjectRegistry'
 import { useMemo, useState } from 'react'
 import { Card, Table, Button, Tooltip, Tag, Checkbox, Space, Input, Select, DatePicker } from 'antd'
 import { EditOutlined, DownloadOutlined, SearchOutlined } from '@ant-design/icons'
@@ -227,7 +228,7 @@ export default function MonthlyInvestmentTab() {
             <Button
               type="text"
               size="small"
-              disabled={!canAccessHrProject(projects.find(project => project.id === record.projectId), true)}
+              disabled={!isHrVersionEditable(projects.find(project => project.id === record.projectId), projects.find(project => project.id === record.projectId)?.versions.find(version => version.id === record.versionId))}
               icon={<EditOutlined />}
               onClick={(e) => {
                 e.stopPropagation()

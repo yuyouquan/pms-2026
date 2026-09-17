@@ -3,9 +3,9 @@ import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import { canAccessHrProject, getHrRegistryProject, isHrFormalRecord, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
-import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
+import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalMachineProjects, createResourceMachineProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
-import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -100,17 +100,17 @@ function getLatestVersions(project: HrMachineProject): HrMachineVersion[] {
 }
 
 /**
- * 同步月度预估投入：每个预算类型只保留最新版本的数据。
+ * 同步月度预估投入：保留所有版本的记录，汇总由消费者按激活版本筛选。
  * 按配置中心部门拆分，每个部门一条记录。
  * 保留用户已编辑的月度数据（通过 versionId + 部门匹配）。
  */
 
 function synchronizeProjects(projects: HrMachineProject[]): HrMachineProject[] {
   const records = useHrConfigStore.getState().data.hrModel ?? []
-  const prepared = projects.map(project => ({ ...project, versions: project.versions.map(version => version.modelSnapshot
+  const prepared = projects.map(project => ({ ...project, versions: project.versions.map(version => version.lockState !== 'locked' && version.modelSnapshot
     ? { ...version, modelSnapshot: refreshMachineModelFixtures(version.modelSnapshot) } : version) }))
   return synchronizeHrProjects(prepared, 'machine', (level, model, coefficient) => calcEstimatedInvestment(records, level, model, coefficient))
-    .map(project => ({ ...project, versions: project.versions.map(version => isLatestHrVersion(project, version)
+    .map(project => ({ ...project, versions: project.versions.map(version => version.lockState !== 'locked' && isLatestHrVersion(project, version)
       ? { ...version, modelSnapshot: records.filter(row => row.enabled !== false
         && String(row.projectLevel) === version.projectLevel && String(row.modelVersion) === version.hrModelVersion).map(row => ({ ...row })) }
       : version) }))
@@ -118,9 +118,9 @@ function synchronizeProjects(projects: HrMachineProject[]): HrMachineProject[] {
 
 function syncMonthlyInvestments(projects: HrMachineProject[], existingMonthly: MonthlyInvestment[]): MonthlyInvestment[] {
   const generated = synchronizeProjects(projects).flatMap(project =>
-    getLatestVersions(project).flatMap(version => generateDepartmentMonthlyRecords(project.id, version)),
+    project.versions.flatMap(version => generateDepartmentMonthlyRecords(project.id, version)),
   )
-  return preserveHrMonthlyEdits(generated, existingMonthly)
+  return preserveLockedHrMonthlyRows(generated, existingMonthly, projects)
 }
 
 
@@ -167,6 +167,9 @@ export interface HrMachineActions {
   /** 绑定IPM正式项目编码 */
   bindIpmProject: (projectId: string, ipmCode: string) => void
 
+  setVersionLocked: (projectId: string, versionId: string, locked: boolean) => void
+  setVersionActive: (projectId: string, versionId: string, active: boolean) => void
+  copyVersion: (projectId: string, versionId: string) => void
   addVersion: (projectId: string, budgetType: BudgetType, versionMeta: { nonLaborInvestment?: NonLaborInvestment; projectLevel: string; levelCoefficient: number; hrModelVersion: string; milestones?: Partial<MilestoneNodes>; metadata?: { brand: string; productLine: string; marketName: string } }) => void
   deleteVersion: (projectId: string, versionId: string) => void
 
@@ -255,6 +258,14 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
       bindIpmProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
+      setVersionLocked: (projectId, versionId, locked) => set(s => ({
+        projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'lock', locked),
+      })),
+      setVersionActive: (projectId, versionId, active) => set(s => ({
+        projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'active', active),
+      })),
+      copyVersion: (projectId, versionId) => set(s => copyHrVersionSnapshot(s.projects, s.monthlyInvestments, projectId, versionId, useProjectStore.getState().currentLoginUser)),
+
       addVersion: (projectId, budgetType, versionMeta) => {
         // Validate the complete form before writing canonical metadata. Canonical writes
         // synchronously refresh HR stores, so acquire the version state only afterwards.
@@ -312,6 +323,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
             versionNumber: `V0.${minorVersion}`,
             batch: null,
             lockState: 'unlocked',
+            isActive: false,
             majorVersion: 0,
             minorVersion,
             createdBy: useProjectStore.getState().currentLoginUser,
@@ -337,6 +349,8 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
       deleteVersion: (projectId, versionId) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        const targetProject = s.projects.find(p => p.id === projectId)
+        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId))) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.filter(v => v.id !== versionId)
@@ -399,6 +413,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
               permitted.levelCoefficient !== undefined ||
               permitted.hrModelVersion !== undefined
             ) {
+              updated.modelSnapshot = configRecords.filter(row => row.enabled !== false && String(row.projectLevel) === updated.projectLevel && String(row.modelVersion) === updated.hrModelVersion).map(row => ({ ...row }))
               updated.estimatedInvestment = calcEstimatedInvestment(
                 configRecords,
                 updated.projectLevel,
@@ -428,7 +443,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId && !mi.isArchived && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
+          mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(s.projects.find(p => p.id === mi.projectId), s.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId))
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),
@@ -461,7 +476,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
-        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects))
+        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects).map((project, index) => ({ ...project, versions: project.versions.map((version, vi) => merged.projects[index].versions[vi].lockState === 'locked' ? merged.projects[index].versions[vi] : version) })))
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
       version: 12,

@@ -8,9 +8,9 @@ import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLa
 import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 
-import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
+import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalCapabilityProjects, createResourceCapabilityProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
-import { canCreateHrVersion, getHrVersionSeed, allowedHrVersionUpdates, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { changeHrVersionLifecycle, copyHrVersionSnapshot, getActiveHrVersion, isHrVersionEditable, canCreateHrVersion, getHrVersionSeed, allowedHrVersionUpdates, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -140,6 +140,8 @@ interface HrCapabilityState {
   restoreProject: (projectId: string) => void
   bindIpmProject: (projectId: string, code: string, name: string) => void
 
+  setVersionLocked: (projectId: string, versionId: string, locked: boolean) => void
+  setVersionActive: (projectId: string, versionId: string, active: boolean) => void
   addVersion: (
     projectId: string,
     form: {
@@ -162,6 +164,7 @@ interface HrCapabilityState {
     versionId: string,
     deptInvestments: CapabilityDepartmentInvestment[],
     nonLaborInvestment?: NonLaborInvestment,
+    dates?: { projectStartTime: string; projectEndTime: string },
   ) => void
   refreshFormalProjects: () => void
   updateMonthlyInvestment: (monthlyId: string, monthlyData: Record<string, number>) => void
@@ -187,18 +190,15 @@ interface HrCapabilityState {
 
 function syncProjectBudgetFields(project: HrCapabilityProject): void {
   for (const budgetType of ['annual', 'projectEstimate', 'projectBudget'] as const) {
-    project[budgetType === 'annual' ? 'annualBudget' : budgetType] = getLatestHrVersion(project.versions, budgetType)?.estimatedInvestment ?? 0
+    project[budgetType === 'annual' ? 'annualBudget' : budgetType] = getActiveHrVersion(project.versions, budgetType)?.estimatedInvestment ?? 0
   }
 }
 
 function syncMonthlyInvestments(projects: HrCapabilityProject[], existingMonthly: CapabilityMonthlyInvestment[]): CapabilityMonthlyInvestment[] {
   const generated = synchronizeProjects(projects).flatMap(project =>
-    (['annual', 'projectEstimate', 'projectBudget'] as const).flatMap(budgetType => {
-      const latest = getLatestHrVersion(project.versions, budgetType)
-      return latest ? generateDepartmentMonthlyRecords(project, latest) : []
-    }),
+    project.versions.flatMap(version => generateDepartmentMonthlyRecords(project, version)),
   )
-  return preserveHrMonthlyEdits(generated, existingMonthly)
+  return preserveLockedHrMonthlyRows(generated, existingMonthly, projects)
 }
 
 
@@ -250,6 +250,14 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
 
       bindIpmProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
+      setVersionLocked: (projectId, versionId, locked) => set(s => ({
+        projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'lock', locked),
+      })),
+      setVersionActive: (projectId, versionId, active) => set(s => ({
+        projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'active', active),
+      })),
+      copyVersion: (projectId, versionId) => set(s => copyHrVersionSnapshot(s.projects, s.monthlyInvestments, projectId, versionId, useProjectStore.getState().currentLoginUser)),
+
       addVersion: (projectId, form) => {
         if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const project = get().projects.find((p) => p.id === projectId)
@@ -267,6 +275,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
           versionNumber: `V${majorVersion}.${minorVersion}`,
           batch: null,
           lockState: 'unlocked',
+          isActive: false,
           majorVersion,
           minorVersion,
           createdBy: operator,
@@ -292,50 +301,11 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         set({ projects: synchronizeProjects(updatedProjects), monthlyInvestments: syncMonthlyInvestments(updatedProjects, get().monthlyInvestments) })
       },
 
-      copyVersion: (projectId, versionId) => {
-        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
-        const project = get().projects.find((p) => p.id === projectId)
-        if (!project) return
-        const source = project.versions.find((v) => v.id === versionId)
-        if (!source || !canCreateHrVersion(project, source.budgetType)) return
-
-        const minorVersion = nextHrMinorVersion(project.versions, source.budgetType)
-        const operator = useProjectStore.getState().currentLoginUser
-
-        const newVersion: HrCapabilityVersion = {
-          ...source,
-          nonLaborInvestment: cloneNonLaborInvestment(source.nonLaborInvestment),
-          createdBy: useProjectStore.getState().currentLoginUser,
-          id: uid('cap-ver'),
-          versionNumber: `V0.${minorVersion}`,
-          batch: null,
-          lockState: 'unlocked',
-          majorVersion: 0,
-          minorVersion,
-          createdAt: nowISO(),
-          lockedAt: null,
-          operationLogs: [
-            makeLog('copied', operator, `从版本 ${source.versionNumber} 复制`),
-            makeLog('created', operator, `创建版本（复制来源：${source.versionNumber}）`),
-          ],
-          departmentInvestments: source.departmentInvestments.map((d) => ({
-            ...d,
-            id: uid('cap-di'),
-          })),
-        }
-
-        const updatedProjects = get().projects.map((p) => {
-          if (p.id !== projectId) return p
-          const updated = { ...p, versions: [...p.versions, newVersion] }
-          syncProjectBudgetFields(updated)
-          return updated
-        })
-
-        set({ projects: synchronizeProjects(updatedProjects), monthlyInvestments: syncMonthlyInvestments(updatedProjects, get().monthlyInvestments) })
-      },
 
       deleteVersion: (projectId, versionId) => {
         if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
+        const targetProject = get().projects.find(p => p.id === projectId)
+        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId))) return
         const updatedProjects = get().projects.map((p) => {
           if (p.id !== projectId) return p
           const updated = {
@@ -369,12 +339,13 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
       },
 
-      updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments, nonLaborInvestment) => {
+      updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments, nonLaborInvestment, dates) => {
+        if (dates && (!dates.projectStartTime || !dates.projectEndTime || dates.projectStartTime > dates.projectEndTime)) return
         if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
-          return { ...project, versions: project.versions.map(version => version.id === versionId && isLatestHrVersion(project, version)
-            ? { ...version, nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : version.nonLaborInvestment, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }
+          return { ...project, versions: project.versions.map(version => version.id === versionId && isHrVersionEditable(project, version)
+            ? { ...version, ...allowedHrVersionUpdates(project, version, dates ?? {}), nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : version.nonLaborInvestment, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }
             : version) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
@@ -391,7 +362,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       updateMonthlyInvestment: (monthlyId, monthlyData) => {
         set((state) => ({
           monthlyInvestments: state.monthlyInvestments.map((mi) =>
-            mi.id === monthlyId && !mi.isArchived && canAccessHrProject(state.projects.find(p => p.id === mi.projectId), true)
+            mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(state.projects.find(p => p.id === mi.projectId), state.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId))
               ? { ...mi, monthlyData, isEdited: true }
               : mi,
           ),
@@ -412,7 +383,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         const project = get().projects.find((p) => p.id === projectId)
         if (!project) return
         const version = project.versions.find((v) => v.id === versionId)
-        if (!version || !isLatestHrVersion(project, version)) return
+        if (!version || !isHrVersionEditable(project, version)) return
 
         const newRecords = generateDepartmentMonthlyRecords(project, version)
         const otherRecords = get().monthlyInvestments.filter(
@@ -450,7 +421,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
-        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects))
+        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects).map((project, index) => ({ ...project, versions: project.versions.map((version, vi) => merged.projects[index].versions[vi].lockState === 'locked' ? merged.projects[index].versions[vi] : version) })))
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
       onRehydrateStorage: () => (state) => {

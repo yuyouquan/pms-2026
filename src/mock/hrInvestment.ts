@@ -55,7 +55,7 @@ function versionSpecs(project: ReturnType<typeof baseProject>, scenario: number)
       return {
         id: `${project.id}-${budgetType}-${index + 1}`, projectId: project.id, budgetType,
         versionNumber: `V0.${index + 1}`, majorVersion: 0, minorVersion: index + 1,
-        lockState: 'unlocked' as const, lockedAt: null, batch: null,
+        lockState: 'unlocked' as const, lockedAt: null, batch: null, isActive: index === count - 1,
         createdBy: ['演示用户01', '演示用户02', '演示用户03'][index % 3],
         createdAt: `2026-0${scenario + 1}-${String(order + 2).padStart(2, '0')}T09:00:00.000Z`,
       }

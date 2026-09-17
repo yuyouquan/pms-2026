@@ -4,9 +4,9 @@ import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
-import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
+import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalTechnicalProjects, createResourceTechnicalProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
-import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -118,7 +118,7 @@ function getLatestVersions(project: HrTechnicalProject): HrTechnicalVersion[] {
 }
 
 /**
- * 同步月度预估投入：每个预算类型只保留最新版本的数据。
+ * 同步月度预估投入：保留所有版本的记录，汇总由消费者按激活版本筛选。
  */
 
 function synchronizeProjects(projects: HrTechnicalProject[]): HrTechnicalProject[] {
@@ -127,9 +127,9 @@ function synchronizeProjects(projects: HrTechnicalProject[]): HrTechnicalProject
 
 function syncMonthlyInvestments(projects: HrTechnicalProject[], existingMonthly: TechMonthlyInvestment[]): TechMonthlyInvestment[] {
   const generated = synchronizeProjects(projects).flatMap(project =>
-    getLatestVersions(project).flatMap(version => generateDepartmentMonthlyRecords(project.id, version)),
+    project.versions.flatMap(version => generateDepartmentMonthlyRecords(project.id, version)),
   )
-  return preserveHrMonthlyEdits(generated, existingMonthly)
+  return preserveLockedHrMonthlyRows(generated, existingMonthly, projects)
 }
 
 
@@ -187,6 +187,8 @@ export interface HrTechnicalActions {
   /** 绑定IPM正式项目编码 */
   bindIpmProject: (projectId: string, ipmCode: string) => void
 
+  setVersionLocked: (projectId: string, versionId: string, locked: boolean) => void
+  setVersionActive: (projectId: string, versionId: string, active: boolean) => void
   addVersion: (projectId: string, form: TechNewVersionForm) => void
   deleteVersion: (projectId: string, versionId: string) => void
   /** 复制版本 */
@@ -288,6 +290,14 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
 
       bindIpmProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
+      setVersionLocked: (projectId, versionId, locked) => set(s => ({
+        projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'lock', locked),
+      })),
+      setVersionActive: (projectId, versionId, active) => set(s => ({
+        projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'active', active),
+      })),
+      copyVersion: (projectId, versionId) => set(s => copyHrVersionSnapshot(s.projects, s.monthlyInvestments, projectId, versionId, useProjectStore.getState().currentLoginUser)),
+
       addVersion: (projectId, form) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const project = s.projects.find(p => p.id === projectId)
@@ -308,6 +318,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
             versionNumber: `V0.${minorVersion}`,
             batch: null,
             lockState: 'unlocked',
+            isActive: false,
             majorVersion: 0,
             minorVersion,
             createdBy: useProjectStore.getState().currentLoginUser,
@@ -333,6 +344,8 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
 
       deleteVersion: (projectId, versionId) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        const targetProject = s.projects.find(p => p.id === projectId)
+        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId))) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.filter(v => v.id !== versionId)
@@ -345,57 +358,6 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
       }),
 
 
-      copyVersion: (projectId, versionId) => set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
-        const project = s.projects.find(p => p.id === projectId)
-        if (!project) return s
-        const sourceVersion = project.versions.find(v => v.id === versionId)
-        if (!sourceVersion || !canCreateHrVersion(project, sourceVersion.budgetType)) return s
-
-        const minorVersion = nextHrMinorVersion(project.versions, sourceVersion.budgetType)
-
-        const newVersion: HrTechnicalVersion = {
-          ...sourceVersion,
-          nonLaborInvestment: cloneNonLaborInvestment(sourceVersion.nonLaborInvestment),
-          createdBy: useProjectStore.getState().currentLoginUser,
-          id: `${projectId}-${sourceVersion.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          versionNumber: `V0.${minorVersion}`,
-            batch: null,
-          lockState: 'unlocked',
-          majorVersion: 0,
-          minorVersion,
-          lockedAt: null,
-          createdAt: new Date().toISOString(),
-          milestones: { ...sourceVersion.milestones },
-          departmentInvestments: sourceVersion.departmentInvestments.map(d => ({ ...d })),
-          operationLogs: [
-            makeLog('created', `从版本 ${sourceVersion.versionNumber} 复制创建 V0.${minorVersion}`),
-            makeLog('copied', `复制自 ${sourceVersion.versionNumber}`),
-          ],
-        }
-
-        const newProjects = s.projects.map(p => {
-          if (p.id !== projectId) return p
-          const newVersions = p.versions.map(v => {
-            if (v.id === versionId) {
-              return {
-                ...v,
-                operationLogs: [
-                  ...v.operationLogs,
-                  makeLog('copied', `版本 ${v.versionNumber} 被复制为 V0.${minorVersion}`),
-                ],
-              }
-            }
-            return v
-          })
-          return { ...p, versions: [...newVersions, newVersion] }
-        })
-
-        return {
-          projects: synchronizeProjects(newProjects),
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
-        }
-      }),
 
       updateVersion: (projectId, versionId, updates) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
@@ -443,7 +405,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
-            if (v.id !== versionId || !isLatestHrVersion(p, v)) return v
+            if (v.id !== versionId || !isHrVersionEditable(p, v)) return v
             const permittedMilestones = allowedHrVersionUpdates(p, v, { milestones }).milestones
             const milestonesChanged = permittedMilestones && Object.entries(permittedMilestones).some(([key, value]) => v.milestones[key as keyof TechMilestoneNodes] !== value)
             return {
@@ -479,7 +441,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId && !mi.isArchived && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
+          mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(s.projects.find(p => p.id === mi.projectId), s.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId))
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),
@@ -513,7 +475,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
-        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects))
+        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects).map((project, index) => ({ ...project, versions: project.versions.map((version, vi) => merged.projects[index].versions[vi].lockState === 'locked' ? merged.projects[index].versions[vi] : version) })))
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
       version: 2,

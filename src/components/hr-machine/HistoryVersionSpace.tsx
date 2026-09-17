@@ -33,7 +33,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { isLatestHrVersion } from '@/lib/hrVersionRules'
+import { isLatestHrVersion, isHrVersionEditable } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import {
@@ -290,7 +290,7 @@ export default function HistoryVersionSpace() {
       for (const version of project.versions) {
         rows.push({
           ...version,
-          canEdit: canEditHrInScope(project, scopeId),
+          canEdit: canEditHrInScope(project, scopeId) && isHrVersionEditable(project, version),
           isLatest: isLatestHrVersion(project, version),
           isBound: isHrFormalRecord(project),
           sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
@@ -340,7 +340,7 @@ export default function HistoryVersionSpace() {
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
           value={withMachineDerivedMilestones(record.milestones)[field.key] ?? null}
-          editable={field.key !== 'str5Plus6Months' && record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.machine.includes(field.key))}
+          editable={field.key !== 'str5Plus6Months' && record.canEdit && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.machine.includes(field.key))}
           onSave={(v) =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<MilestoneNodes>,
@@ -394,7 +394,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableSelectCell
             value={record.projectLevel}
-            editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
+            editable={record.canEdit && (record.budgetType === 'annual' || !record.isBound)}
             options={projectLevelOptions}
             onSave={(v) => updateVersion(record.projectId, record.id, { projectLevel: v })}
             renderDisplay={(v) =>
@@ -429,7 +429,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableNumberCell
             value={record.levelCoefficient}
-            editable={record.canEdit && record.isLatest}
+            editable={record.canEdit}
             formatter={(v) => (v ?? 0).toFixed(2)}
             onSave={(v) => updateVersion(record.projectId, record.id, { levelCoefficient: v })}
           />
@@ -442,7 +442,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableSelectCell
             value={record.hrModelVersion}
-            editable={record.canEdit && record.isLatest}
+            editable={record.canEdit}
             options={modelVersionOptions}
             onSave={(v) => updateVersion(record.projectId, record.id, { hrModelVersion: v })}
           />
@@ -492,7 +492,7 @@ export default function HistoryVersionSpace() {
                   setShowVersionDetailModal(true)
                 }}
               />
-              {record.canEdit && project && isLatestHrVersion(project, record) && <Button
+              {record.canEdit && project && <Button
                 type="text" size="small" aria-label="编辑版本" title="编辑版本" icon={<EditOutlined />}
                 onClick={event => { event.stopPropagation(); setVersionToEdit({ projectId: record.projectId, versionId: record.id }) }} />}
               {record.canEdit && <Popconfirm
