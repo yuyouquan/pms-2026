@@ -27,7 +27,7 @@ export function useHrVersionMilestones(category: Exclude<HrProjectCategory, 'cap
   }, [open, project?.id, budgetType, versionId, resetKey])
   const readOnly = isHrFormalRecord(project)
   const version = project?.versions.find(item => item.id === versionId)
-  const values = version?.lockState === 'locked' ? { ...version.milestones } as Dates : readOnly && !version?.copiedFromVersionId
+  const values = version?.lockState === 'locked' ? { ...version.milestones } as Dates : readOnly && !version
     ? mergeHrFormalMilestones(category, resolveHrFormalSource(category, project?.ipmProjectCode ?? null, project?.pmsProjectId).milestones, manual) as Dates
     : manual
   return { values, readOnly, onChange: (key: string, value: string | null) => setManual(previous => ({ ...previous, [key]: value })) }

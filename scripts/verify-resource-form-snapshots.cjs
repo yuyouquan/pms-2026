@@ -20,11 +20,15 @@ const mod={exports:{}};new Function('require','module','exports',ts.transpileMod
 const original={id:'v',budgetType:'projectEstimate',lockState:'unlocked',milestones:{conceptStart:'2020-01-01'}};
 const values=v=>mod.exports.useHrVersionMilestones('machine',{id:'p',ipmProjectCode:null,versions:[v]},'projectEstimate',true,'v').values;
 assert.equal(values({...original,copiedFromVersionId:'source'}).conceptStart,'2020-01-01','copied draft cannot overlay live formal dates');
-assert.equal(values(original).conceptStart,'2099-01-01','normal unlocked formal version retains live-source behavior');
+assert.equal(values(original).conceptStart,'2020-01-01','existing historical draft retains its saved source dates');
+assert.equal(values({...original,milestones:{conceptStart:'2020-01-01'}}).productLaunch,'2020-08-01','allowed manual date draft remains editable');
+assert.equal(mod.exports.useHrVersionMilestones('machine',{id:'p',ipmProjectCode:null,versions:[]},'projectEstimate',true).values.conceptStart,'2099-01-01','new formal version uses current source dates');
 assert.equal(values({...original,lockState:'locked'}).conceptStart,'2020-01-01','locked original remains frozen');
 const machine=fs.readFileSync('src/components/hr-machine/NewVersionModal.tsx','utf8');
 const expr=machine.match(/const effectiveProjectLevel = ([^\n]+)/)[1];
 const level=new Function('editingVersion','formal','resolveHrFormalSource','project','projectLevel',`return ${expr}`);
 assert.equal(level({copiedFromVersionId:'source',projectLevel:'A'},true,()=>({projectLevel:'S'}),{},'A'),'A','copied model level stays saved despite live source changes');
+assert.equal(level({projectLevel:'A'},true,()=>({projectLevel:'S'}),{},'A'),'A','existing non-copied model level stays saved despite live source changes');
 assert.equal(level(undefined,true,()=>({projectLevel:'S'}),{},'A'),'S','new formal creation retains source level');
-console.log('PASS copied draft source dates/model level retained, ordinary source/locked behavior preserved');
+assert.equal(level({projectLevel:'A',copiedFromVersionId:'source'},false,()=>({projectLevel:'S'}),{},'B'),'B','budget project level remains user editable even on copied versions');
+console.log('PASS existing and copied source snapshots retained; new versions use live source; manual date and budget-level drafts remain editable');

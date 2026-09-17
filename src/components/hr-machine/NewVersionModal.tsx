@@ -40,7 +40,7 @@ export default function NewVersionModal({ open, projectId, versionId, embedded =
   const bound = Boolean(getHrRegistryProject(project)?.boundFormalProjectId)
   const metadataReadOnly = formal || bound
   const effectiveMetadata = metadataReadOnly ? { brand: project?.brand ?? '', productLine: project?.productLine ?? '', marketName: project?.marketName ?? '' } : metadata
-  const effectiveProjectLevel = editingVersion?.copiedFromVersionId ? editingVersion.projectLevel : formal ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null, project?.pmsProjectId).projectLevel : projectLevel
+  const effectiveProjectLevel = formal && editingVersion ? editingVersion.projectLevel : formal ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null, project?.pmsProjectId).projectLevel : projectLevel
   const milestoneForm = useHrVersionMilestones('machine', project, budgetType, open, versionId)
   const nonLabor = useNonLaborDraft(open, localProjectId + ':' + budgetType + ':' + versionId, editingVersion?.nonLaborInvestment ?? (project ? getHrVersionSeed(project.versions, budgetType)?.nonLaborInvestment : undefined), 'machine', milestoneForm.values)
 
@@ -53,7 +53,7 @@ export default function NewVersionModal({ open, projectId, versionId, embedded =
   useEffect(() => {
     if (!open) return
     const seed = editingVersion ?? (project ? getHrVersionSeed(project.versions, budgetType) : undefined)
-    const sourceLevel = editingVersion?.copiedFromVersionId ? editingVersion.projectLevel : isHrFormalRecord(project) ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null, project?.pmsProjectId).projectLevel : seed?.projectLevel ?? ''
+    const sourceLevel = editingVersion ? editingVersion.projectLevel : isHrFormalRecord(project) ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null, project?.pmsProjectId).projectLevel : seed?.projectLevel ?? ''
     const selection = getAvailableHrModelSelection(records, { projectLevel: sourceLevel, hrModelVersion: seed?.hrModelVersion ?? '' })
     setProjectLevel(editing ? seed?.projectLevel ?? '' : selection.projectLevel)
     setHrModelVersion(editing ? seed?.hrModelVersion ?? '' : selection.hrModelVersion)
