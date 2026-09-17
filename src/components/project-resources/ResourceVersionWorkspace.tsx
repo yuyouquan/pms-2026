@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Alert, Button, Empty, Popconfirm, Select, Space, Tag, message } from 'antd'
+import { Alert, App, Button, Empty, Popconfirm, Select, Space, Tag } from 'antd'
 import { CopyOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { ProjectItem } from '@/types/app'
@@ -28,6 +28,7 @@ import CapabilityDetail from '@/components/hr-capability/VersionDetailModal'
 export default function ResourceVersionWorkspace({ project, category, budgetType }: {
   project: ProjectItem; category: HrProjectCategory; budgetType: ResourceBudgetType
 }) {
+  const { message } = App.useApp()
   const store = useResourceStore(category)
   useProjectStore(state => state.currentLoginUser)
   usePermissionStore()
