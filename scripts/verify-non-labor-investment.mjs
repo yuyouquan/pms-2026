@@ -82,9 +82,21 @@ for (const [index, store] of stores.entries()) {
   if (index === 0) store.getState().updateVersion(project().id,latest.id,{ nonLaborInvestment:edit })
   else store.getState().updateVersionDepartmentInvestments(project().id,latest.id,latest.departmentInvestments,edit)
   assert.equal(project().versions.at(-1).nonLaborInvestment.items[0].monthlyAmounts[month],4.4)
+  const historicalId = project().versions[0].id
+  store.getState().updateVersion(project().id,historicalId,{nonLaborInvestment:edit})
+  assert.equal(project().versions[0].nonLaborInvestment.items[0].monthlyAmounts[month],4.4,'unlocked historical versions remain editable')
+  store.getState().setVersionLocked(project().id,historicalId,true)
   const frozen = structuredClone(project().versions[0])
-  store.getState().updateVersion(project().id,frozen.id,{nonLaborInvestment:edit})
-  assert.deepEqual(project().versions[0],frozen,'history remains readonly')
+  const lockedEdit = rules.cloneNonLaborInvestment(edit)
+  lockedEdit.items[0].monthlyAmounts[month] = 88.8
+  store.getState().updateVersion(project().id,historicalId,{nonLaborInvestment:lockedEdit})
+  assert.deepEqual(project().versions[0],frozen,'locked history rejects content updates')
+  if (index !== 0) {
+    store.getState().updateVersionDepartmentInvestments(project().id,historicalId,[],lockedEdit)
+    assert.deepEqual(project().versions[0],frozen,'locked history rejects department and non-labor form saves')
+  }
+  store.getState().deleteVersion(project().id,historicalId)
+  assert.deepEqual(project().versions[0],frozen,'locked history cannot be deleted')
   const snapshot = structuredClone(project().versions)
   const invalid={...edit,items:[...edit.items,{...edit.items[0],id:'duplicate-row'}]}
   if (index === 0) assert.throws(()=>store.getState().updateVersion(project().id,latest.id,{nonLaborInvestment:invalid}),/重复/)
@@ -92,7 +104,7 @@ for (const [index, store] of stores.entries()) {
   assert.deepEqual(project().versions,snapshot,'invalid non-labor data cannot partially save human investment')
   const canonical = registry.getState().projects.find(p=>p.id===project().pmsProjectId)
   assert.equal(canEditHrInScope(project(),RESOURCE_FORMAL_IDS[category]),false,'linked annual remains readonly in formal scope')
-  console.log('PASS ' + category + ' creation, latest editing, history, independent snapshots and atomic validation')
+  console.log('PASS ' + category + ' creation, unlocked historical editing, locked immutability, independent snapshots and atomic validation')
 }
 assert.deepEqual(registry.getState().projects,initialRegistry)
 const machineProject = () => stores[0].getState().projects.find(p => p.pmsProjectId === 'mock-budget-machine-unbound')
