@@ -1946,10 +1946,11 @@ assert.deepEqual(plan.migratePlanStoreState(migratedV8, 13), migratedV8, 'the co
 assert.match(configSource, /getDefaultLevel1TasksForProjectType/, 'config center imports the selected-type default helper')
 assert.doesNotMatch(configSource, /LEVEL1_TEMPLATE_TASKS/, 'config center never falls back to the generic machine template')
 assert.match(configSource, /getDefaultLevel1TasksForProjectType\(selectedTemplateType,\s*false\)/, 'config fallbacks resolve the currently selected project type')
-assert.match(configSource, /const clonedTasks = isTechnicalTemplate[\s\S]{0,260}getDefaultLevel1TasksForProjectType\(selectedTemplateType,\s*false\)/, 'new standard revisions clone the currently selected project type')
+// Revision inheritance is exercised through the actual UI handler in verify-template-interval-ui.mjs.
 
 assert.match(planStoreSource, /projectPlanViewMode:\s*'horizontal'/, 'project plans default to horizontal view')
-assert.match(planStoreSource, /CONFIG_TABLE_COLUMNS[\s\S]*序号[\s\S]*任务名称[\s\S]*角色/, 'template configuration keeps sequence, task name, and role')
+assert.deepEqual(Array.from(plan.getConfigColumnsForView('table', 'level1'), column => column.key), ['id', 'taskName', 'intervalDays', 'intervalRatio'], 'level1 templates show interval metrics instead of role')
+assert.deepEqual(Array.from(plan.getConfigColumnsForView('table', 'subproject'), column => column.key), ['id', 'taskName', 'responsible'], 'subproject role columns remain unchanged')
 assert.match(configSource, /isTechnicalTemplate[\s\S]*TDT项目计划[\s\S]*子项目计划/, 'technical configuration retains TDT and subproject templates')
 assert.match(configSource, /items=\{isTechnicalTemplate[\s\S]*key: 'level1'[\s\S]*一级计划[\s\S]*\]\}/, 'standard project configuration only exposes the level1 tab')
 for (const label of ['阶段/节点', '计划开始时间', '计划完成时间', '预估工期', '实际开始时间', '实际完成时间', '实际工期', '是否延期']) {

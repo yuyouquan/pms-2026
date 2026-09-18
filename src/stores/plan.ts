@@ -856,6 +856,12 @@ export const TABLE_COLUMNS = ALL_COLUMNS
 export const CONFIG_TABLE_COLUMNS: PlanColumnDefinition[] = [
   { key: 'id', title: '序号', default: true, defaultVisible: true, hideable: false, fixed: 'left' },
   { key: 'taskName', title: '任务名称', default: true, defaultVisible: true, hideable: false },
+  { key: 'intervalDays', title: '间隔天数', default: true, defaultVisible: true },
+  { key: 'intervalRatio', title: '占比', default: true, defaultVisible: true },
+]
+
+const SUBPROJECT_CONFIG_TABLE_COLUMNS: PlanColumnDefinition[] = [
+  ...CONFIG_TABLE_COLUMNS.slice(0, 2),
   { key: 'responsible', title: '角色', default: true, defaultVisible: true },
 ]
 
@@ -874,9 +880,9 @@ export const getColumnsForView = (viewMode: string) => {
   return TABLE_COLUMNS
 }
 
-export const getConfigColumnsForView = (viewMode: string) => {
+export const getConfigColumnsForView = (viewMode: string, planLevel = 'level1') => {
   if (viewMode === 'gantt') return GANTT_COLUMNS
-  return CONFIG_TABLE_COLUMNS
+  return planLevel === 'subproject' ? SUBPROJECT_CONFIG_TABLE_COLUMNS : CONFIG_TABLE_COLUMNS
 }
 
 /** Initial L2 plan tasks (in-line data from page.tsx) */

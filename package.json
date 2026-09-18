@@ -60,7 +60,8 @@
     "verify:resource-expense-followup": "node scripts/verify-resource-expense-followup.mjs",
     "verify:non-labor-investment": "node scripts/verify-non-labor-investment.mjs",
     "verify:resource-versions": "node scripts/verify-resource-version-lifecycle.mjs && node scripts/verify-resource-version-workspace.mjs && node scripts/verify-resource-form-snapshots.cjs && node scripts/verify-resource-workspace-integration.mjs && node scripts/verify-resource-empty-project-persistence.mjs",
-    "verify:resource-inline": "node scripts/verify-resource-inline-editing.mjs && node scripts/verify-resource-inline-editor.mjs && node scripts/verify-resource-inline-render.mjs && node scripts/verify-resource-inline-date.mjs && node scripts/verify-resource-inline-import.mjs"
+    "verify:resource-inline": "node scripts/verify-resource-inline-editing.mjs && node scripts/verify-resource-inline-editor.mjs && node scripts/verify-resource-inline-render.mjs && node scripts/verify-resource-inline-date.mjs && node scripts/verify-resource-inline-import.mjs",
+    "verify:template-intervals": "node scripts/verify-template-intervals.mjs && node scripts/verify-template-interval-ui.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
