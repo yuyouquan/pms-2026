@@ -1,5 +1,6 @@
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import type { BudgetScheduleModelSnapshot } from '@/lib/budgetMilestoneScheduling'
+import type { DepartmentInvestmentRow } from '@/types/resourceInvestment'
 /* ── HR Machine Project Types ──────────────────────────────────────── */
 
 /** 品牌 */
@@ -83,6 +84,8 @@ export interface HrMachineVersion {
   estimatedInvestment: number
   /** 保存的模型输入；历史版本不再读取可变的配置中心数据。 */
   modelSnapshot?: import('@/types/hrConfig').ConfigRecord[]
+  /** Version-owned actual department allocation, materialized on the first manual edit. */
+  machineDepartmentInvestments?: DepartmentInvestmentRow[]
   /** 排布时使用的已发布计划模板快照；手工改日期不改变模型。 */
   scheduleModelSnapshot?: BudgetScheduleModelSnapshot
   /** 创建时间 */

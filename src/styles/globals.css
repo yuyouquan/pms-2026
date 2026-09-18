@@ -9222,7 +9222,10 @@ input.ant-input,
 .pms-resource-inline-detail .pms-hr-investment-table .ant-table-cell { text-align: center; }
 .pms-resource-inline-detail .pms-hr-investment-table .ant-input-number-input { text-align: center; }
 .pms-resource-inline-detail .pms-hr-investment-table .ant-select-selection-item,
-.pms-resource-inline-detail .pms-hr-investment-table .ant-select-placeholder { text-align: center; }
+.pms-resource-inline-detail .pms-hr-investment-table .ant-select-placeholder,
+.pms-resource-inline-detail .pms-hr-investment-table .ant-select-content { justify-content: center; text-align: center; }
+.pms-resource-inline-detail .pms-hr-investment-table .ant-select-input,
+.pms-resource-inline-detail .pms-hr-investment-table .ant-input { text-align: center; }
 
 /* Budget resource scheduling: template phases remain visible above their owned milestones. */
 .pms-budget-milestone-schedule { margin-bottom: 12px; }

@@ -13,11 +13,10 @@ import { useInlineImportSession } from '@/components/project-resources/useInline
 import { isHrVersionEditable } from '@/lib/hrVersionRules'
 import { inlineDateInputHandlers } from '@/components/project-resources/inlineFieldSession'
 import NonLaborInvestmentSection from '@/components/project-resources/NonLaborInvestmentSection'
-import { canEditResourceMilestone, resourceMilestoneFields, resourcePhaseFields, type InlineDepartment, type ResourceInlinePatch } from '@/lib/resourceInlineEditing'
+import { canEditResourceMilestone, resolveMachineDepartmentInvestments, resolveMachinePhaseFields, resourceMilestoneFields, resourcePhaseFields, type InlineDepartment, type ResourceInlinePatch } from '@/lib/resourceInlineEditing'
 import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import { isHrFormalRecord, getHrRegistryProject, canEditHrInScope } from '@/lib/hrProjectRegistry'
-import { calcMachineDepartmentInvestments, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
-import { machinePhaseFields } from '@/lib/hrMachinePeriods'
+import { getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
@@ -43,8 +42,9 @@ export default function ResourceInlineDetail({ category, project, version, scope
   const persist = (patch: ResourceInlinePatch) => resourceStore(category).getState().updateVersionInline(project.id, version.id, patch, scopeId)
   const action = (fn: () => void) => { try { fn() } catch (error) { message.warning(error instanceof Error ? error.message : '保存失败') } }
   const dates = ('projectStartTime' in version ? version : version.milestones) as unknown as Record<string, string | null>
-  const rows: InlineDepartment[] = 'departmentInvestments' in version ? version.departmentInvestments.map(row => ({ ...row })) : []
-  const phases = resourcePhaseFields[category]
+  const machine = 'hrModelVersion' in version ? version : null
+  const rows: InlineDepartment[] = machine ? resolveMachineDepartmentInvestments(machine) : 'departmentInvestments' in version ? version.departmentInvestments.map(row => ({ ...row })) : []
+  const phases = machine ? resolveMachinePhaseFields(machine) : resourcePhaseFields[category]
   const patchRow = (id: string, key: string, value: string | number) => persist({ type: 'departments', rows: rows.map(row => row.id === id ? { ...row, [key]: value, ...(key === 'primaryDepartment' && value !== row.primaryDepartment ? { secondaryDepartment: '' } : {}) } : row) })
   const fields: ColumnsType<InlineDepartment> = [
     ...[{ key: 'primaryDepartment', label: '一级部门' }, { key: 'secondaryDepartment', label: '二级部门' }].map(field => ({ title: field.label, key: field.key, width: 150, fixed: 'left' as const,
@@ -53,11 +53,14 @@ export default function ResourceInlineDetail({ category, project, version, scope
         : <ResourceInlineField label={field.label} value={row[field.key]} readOnly={readOnly} onSave={value => patchRow(row.id, field.key, String(value ?? ''))}
           renderEditor={(value, change, popup) => <Select autoFocus showSearch allowClear aria-label={field.label} value={value || undefined} optionFilterProp="label" getPopupContainer={popup} style={{ width: '100%' }}
             options={field.key === 'primaryDepartment' ? primaryOptions : getSecondaryOptions(row.primaryDepartment)} onChange={change} />} /> })),
+    ...(category === 'capability' ? [] : [{ title: '预估投入合计', key: 'total', width: 130, align: 'center' as const,
+      render: (_: unknown, row: InlineDepartment) => <ResourceInlineField label={`${row.primaryDepartment || '未选择一级部门'} ${row.secondaryDepartment || '未选择二级部门'} 预估投入合计（人月）`} value={row.estimatedInvestment} display={formatPersonMonth(row.estimatedInvestment)} readOnly={readOnly}
+        onSave={value => persist({ type: 'departmentTotal', rowId: row.id, value: value === null ? 0 : Number(value) })}
+        renderEditor={(value, change) => <InputNumber autoFocus aria-label={`${row.primaryDepartment || '未选择一级部门'} ${row.secondaryDepartment || '未选择二级部门'} 预估投入合计（人月）`} value={value as number} min={0} precision={1} step={0.1} style={{ width: '100%' }} onChange={change} />} /> }]),
     ...phases.map(field => ({ title: field.label, key: field.key, width: 145, align: 'center' as const,
       render: (_: unknown, row: InlineDepartment) => <ResourceInlineField label={field.label} value={row[field.key] ?? 0} readOnly={readOnly}
         onSave={value => patchRow(row.id, field.key, value === null ? 0 : Number(value))}
         renderEditor={(value, change) => <InputNumber autoFocus aria-label={field.label} value={value as number} step={0.1} style={{ width: '100%' }} onChange={change} />} /> })),
-    ...(category === 'capability' ? [] : [{ title: '预估投入合计', key: 'total', width: 130, render: (_: unknown, row: InlineDepartment) => formatPersonMonth(row.estimatedInvestment) }]),
     ...(!readOnly ? [{ title: '操作', key: 'actions', width: 64, fixed: 'right' as const, render: (_: unknown, row: InlineDepartment) => <Tooltip title="删除部门"><Button type="text" danger size="small" aria-label="删除部门" icon={<DeleteOutlined />} onClick={() => action(() => persist({ type: 'departments', rows: rows.filter(item => item.id !== row.id) }))} /></Tooltip> }] : []),
   ]
   const templateColumns = [{ key: 'primaryDepartment', title: '一级部门' }, { key: 'secondaryDepartment', title: '二级部门' }, ...phases.map(field => ({ key: field.key, title: field.label }))]
@@ -80,7 +83,6 @@ export default function ResourceInlineDetail({ category, project, version, scope
     } catch (error) { message.warning(error instanceof Error ? error.message : '文件解析失败，请检查模板格式') }
     return false
   }
-  const machine = 'hrModelVersion' in version ? version : null
   const machineProject = 'brand' in project ? project : null
   const registryProject = getHrRegistryProject(project)
   const metadataReadOnly = readOnly || isHrFormalRecord(project) || !!registryProject?.boundFormalProjectId
@@ -94,11 +96,15 @@ export default function ResourceInlineDetail({ category, project, version, scope
     children: <ResourceInlineField label={field.label} value={machine[field.key]} readOnly={readOnly || field.key === 'projectLevel' && isHrFormalRecord(project)} onSave={value => persist({ type: 'model', key: field.key, value: field.key === 'levelCoefficient' ? Number(value) : String(value ?? '') })}
       renderEditor={(value, change, popup) => field.key === 'levelCoefficient' ? <InputNumber autoFocus aria-label={field.label} value={value as number} step={0.1} onChange={change} />
         : <Select autoFocus aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ minWidth: 120 }} onChange={change} options={(field.key === 'projectLevel' ? getConfigProjectLevels(records) : getConfigModelVersions(records)).map(label => ({ label, value: label }))} />} /> })) : []
-  const machineRows = machine ? calcMachineDepartmentInvestments(machine.modelSnapshot ?? [], machine.projectLevel, machine.hrModelVersion, machine.levelCoefficient) : []
-  const machinePhases = machinePhaseFields(machine?.modelSnapshot ?? [])
+  const machineRows = machine ? resolveMachineDepartmentInvestments(machine) : []
+  const machinePhases = machine ? resolveMachinePhaseFields(machine) : []
   const machineColumns = [{ title: '一级部门', dataIndex: 'primaryDepartment', width: 150 }, { title: '二级部门', dataIndex: 'secondaryDepartment', width: 150 },
-    ...machinePhases.map(field => ({ title: field.label, key: field.key, width: 145, render: (_: unknown, row: typeof machineRows[number]) => formatPersonMonth(row.phases[field.key]) })),
-    { title: '预估投入合计', dataIndex: 'estimatedTotal', width: 130, render: (value: number) => formatPersonMonth(value) }]
+    { title: '预估投入合计', key: 'total', width: 130, align: 'center' as const, render: (_: unknown, row: typeof machineRows[number]) => <ResourceInlineField label={`${row.primaryDepartment} ${row.secondaryDepartment} 预估投入合计（人月）`} value={row.estimatedInvestment} display={formatPersonMonth(row.estimatedInvestment)} readOnly={readOnly}
+      onSave={value => persist({ type: 'departmentTotal', rowId: row.id, value: value === null ? 0 : Number(value) })}
+      renderEditor={(value, change) => <InputNumber autoFocus aria-label={`${row.primaryDepartment} ${row.secondaryDepartment} 预估投入合计（人月）`} value={value as number} min={0} precision={1} step={0.1} style={{ width: '100%' }} onChange={change} />} /> },
+    ...machinePhases.map(field => ({ title: field.label, key: field.key, width: 145, align: 'center' as const, render: (_: unknown, row: typeof machineRows[number]) => typeof row[field.key] !== 'number' ? '—' : <ResourceInlineField label={field.label} value={row[field.key]} display={formatPersonMonth(Number(row[field.key]))} readOnly={readOnly}
+      onSave={value => persist({ type: 'departments', rows: machineRows.map(item => item.id === row.id ? { ...item, [field.key]: value === null ? 0 : Number(value) } : item) })}
+      renderEditor={(value, change) => <InputNumber autoFocus aria-label={field.label} value={value as number} min={0} precision={1} step={0.1} style={{ width: '100%' }} onChange={change} />} /> }))]
   return <div className="pms-resource-inline-detail">
     {machine && <Descriptions size="small" column={3} bordered items={[...metadataFields, ...modelFields]} />}
     {isBudgetProject && category !== 'capability' ? <BudgetMilestoneSchedule
@@ -125,16 +131,17 @@ export default function ResourceInlineDetail({ category, project, version, scope
     </Space>}
     {machine ? machine.modelSnapshot ? <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={machineColumns} dataSource={machineRows} pagination={false} size="small" scroll={{ x: machineColumns.reduce((sum, column) => sum + column.width, 0) }}
         summary={() => <Table.Summary.Row><Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>
-          {machinePhases.map((field, index) => <Table.Summary.Cell key={field.key} index={index + 2}>{formatPersonMonth(Math.round(machineRows.reduce((sum, row) => sum + (row.phases[field.key] ?? 0), 0) * 10) / 10)}</Table.Summary.Cell>)}
-          <Table.Summary.Cell index={machinePhases.length + 2}>{formatPersonMonth(version.estimatedInvestment)}</Table.Summary.Cell>
+          <Table.Summary.Cell index={2} align="center">{formatPersonMonth(version.estimatedInvestment)}</Table.Summary.Cell>
+          {machinePhases.map((field, index) => <Table.Summary.Cell key={field.key} index={index + 3} align="center">{formatPersonMonth(Math.round(machineRows.reduce((sum, row) => sum + Number(row[field.key] ?? 0), 0) * 10) / 10)}</Table.Summary.Cell>)}
         </Table.Summary.Row>} />
       : <Alert type="info" showIcon title="该历史版本未保存模型明细，无法还原原始部门投入；版本总额和里程碑仍保留。" />
       : <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={fields} dataSource={rows} pagination={false} size="small" tableLayout="fixed" scroll={{ x: fields.reduce((sum, field) => sum + Number(field.width ?? 0), 0) }} locale={{ emptyText: '暂无部门预估投入数据' }}
         summary={() => <Table.Summary.Row><Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>
-          {phases.map((field, index) => <Table.Summary.Cell key={field.key} index={index + 2} align="center">{formatPersonMonth(Math.round(rows.reduce((sum, row) => sum + Number(row[field.key] ?? 0), 0) * 10) / 10)}</Table.Summary.Cell>)}
-          {category !== 'capability' && <Table.Summary.Cell index={phases.length + 2}>{formatPersonMonth(version.estimatedInvestment)}</Table.Summary.Cell>}
+          {category !== 'capability' && <Table.Summary.Cell index={2} align="center">{formatPersonMonth(version.estimatedInvestment)}</Table.Summary.Cell>}
+          {phases.map((field, index) => <Table.Summary.Cell key={field.key} index={index + (category === 'capability' ? 2 : 3)} align="center">{formatPersonMonth(Math.round(rows.reduce((sum, row) => sum + Number(row[field.key] ?? 0), 0) * 10) / 10)}</Table.Summary.Cell>)}
           {!readOnly && <Table.Summary.Cell index={phases.length + (category === 'capability' ? 2 : 3)} />}
         </Table.Summary.Row>} />}
-    <NonLaborInvestmentSection inline canImport={isImportCurrent} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly} onChange={value => persist({ type: 'nonLabor', value })} />
+    <NonLaborInvestmentSection inline canImport={isImportCurrent} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly}
+      onChange={value => persist({ type: 'nonLabor', value })} onItemTotalChange={(itemId, value) => persist({ type: 'nonLaborItemTotal', itemId, value })} />
   </div>
 }

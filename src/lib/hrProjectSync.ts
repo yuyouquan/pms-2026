@@ -15,6 +15,7 @@ interface SyncVersion extends HrVersionIdentity {
   levelCoefficient?: number
   hrModelVersion?: string
   estimatedInvestment: number
+  machineDepartmentInvestments?: Array<{ estimatedInvestment: number }>
 }
 interface SyncProject {
   id: string
@@ -47,7 +48,9 @@ export function synchronizeHrProjects<T extends SyncProject>(
       }
       if (category === 'machine') next.milestones = withMachineDerivedMilestones(next.milestones ?? {})
       if (category === 'machine' && calculateMachineInvestment) {
-        next.estimatedInvestment = calculateMachineInvestment(next.projectLevel || '', next.hrModelVersion || '', next.levelCoefficient ?? 1)
+        next.estimatedInvestment = next.machineDepartmentInvestments
+          ? Math.round(next.machineDepartmentInvestments.reduce((sum, row) => sum + row.estimatedInvestment, 0) * 10) / 10
+          : calculateMachineInvestment(next.projectLevel || '', next.hrModelVersion || '', next.levelCoefficient ?? 1)
       }
       next.nonLaborInvestment = withHrNonLaborRange(next.nonLaborInvestment, category, category === 'capability' ? next : next.milestones ?? {})
       return next

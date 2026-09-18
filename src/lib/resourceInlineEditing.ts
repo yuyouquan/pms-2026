@@ -5,14 +5,14 @@ import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import type { ConfigRecord } from '@/types/hrConfig'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { MILESTONE_FIELDS } from '@/constants/hrMachine'
-import { TECH_MILESTONE_FIELDS, TECH_PHASE_INVESTMENT_FIELDS } from '@/constants/hrTechnical'
-import { TOS_MILESTONE_FIELDS, TOS_PHASE_INVESTMENT_FIELDS } from '@/constants/hrTos'
+import { TECH_MILESTONE_FIELDS, TECH_PHASE_INVESTMENT_FIELDS, TECH_PHASE_SPLIT_RULES } from '@/constants/hrTechnical'
+import { TOS_MILESTONE_FIELDS, TOS_PHASE_INVESTMENT_FIELDS, TOS_PHASE_SPLIT_RULES } from '@/constants/hrTos'
 import { calcEstimatedInvestment, getAvailableHrModelSelection, isHrModelAvailable } from '@/constants/hrConfig'
 import { canEditHrInScope, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
 import { canCreateHrVersion, getHrVersionSeed, isHrBatch, isHrVersionEditable, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { HR_MANUAL_MILESTONE_KEYS, mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
 import { cloneNonLaborInvestment, nonLaborDepartmentPairs, nonLaborItemKey, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
-import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
+import { LEGACY_MACHINE_PHASES, MACHINE_INVESTMENT_PERIODS, withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import { normalizeHrEditedVersion } from '@/lib/hrProjectSync'
 import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import { useProjectStore } from '@/stores/project'
@@ -21,6 +21,8 @@ import { useHrTosStore } from '@/stores/hrTos'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
 import { validateBudgetScheduleSnapshot, type BudgetScheduleModelSnapshot } from '@/lib/budgetMilestoneScheduling'
+import { allocateLaborTotal, allocateNonLaborItemTotal, resolveMachineDepartmentInvestments, resolveMachinePhaseFields, type LaborPhaseRule } from '@/lib/resourceAllocation'
+export { allocateLaborTotal, allocateNonLaborItemTotal, resolveMachineDepartmentInvestments, resolveMachinePhaseFields }
 
 export const resourceMilestoneFields = { machine: MILESTONE_FIELDS, tos: TOS_MILESTONE_FIELDS, technical: TECH_MILESTONE_FIELDS,
   capability: [{ key: 'projectStartTime', label: '项目开始时间' }, { key: 'projectEndTime', label: '项目结束时间' }] }
@@ -34,7 +36,9 @@ export type ResourceInlinePatch =
   | { type: 'model'; key: 'projectLevel' | 'hrModelVersion' | 'levelCoefficient'; value: string | number }
   | { type: 'metadata'; key: 'brand' | 'productLine' | 'marketName'; value: string }
   | { type: 'departments'; rows: InlineDepartment[]; complete?: boolean }
+  | { type: 'departmentTotal'; rowId: string; value: number }
   | { type: 'nonLabor'; value: NonLaborInvestment }
+  | { type: 'nonLaborItemTotal'; itemId: string; value: number }
 export interface ResourceInlineActions {
   createVersionInline: (projectId: string, budgetType: 'annual' | 'projectEstimate' | 'projectBudget', scopeId: string) => string
   updateVersionInline: (projectId: string, versionId: string, patch: ResourceInlinePatch, scopeId: string) => void
@@ -94,6 +98,50 @@ export function validateInlineDepartments(category: HrProjectCategory, rows: Inl
     next.estimatedInvestment = Math.round(total * 10) / 10
     return next
   })
+}
+
+function laborRules(category: HrProjectCategory, row: InlineDepartment): readonly LaborPhaseRule[] {
+  if (category === 'machine') {
+    return MACHINE_INVESTMENT_PERIODS.every(field => typeof row[field.key] === 'number') ? MACHINE_INVESTMENT_PERIODS : LEGACY_MACHINE_PHASES
+  }
+  if (category === 'tos') return TOS_PHASE_SPLIT_RULES.map(({ configKey: key, startField, endField }) => ({ key, startField, endField }))
+  if (category === 'technical') return TECH_PHASE_SPLIT_RULES.map(({ configKey: key, startField, endField }) => ({ key, startField, endField }))
+  return []
+}
+
+function validateMachineDepartments(version: Extract<ResourceVersion, { hrModelVersion: string }>, rows: InlineDepartment[]): InlineDepartment[] {
+  const source = resolveMachineDepartmentInvestments(version)
+  if (rows.length !== source.length) throw new Error('整机部门列表来源于保存的人力模型，不支持新增或删除')
+  const byId = new Map(source.map(row => [row.id, row]))
+  const seen = new Set<string>()
+  return rows.map(row => {
+    const original = byId.get(row.id)
+    if (!original || seen.has(row.id) || row.primaryDepartment !== original.primaryDepartment || row.secondaryDepartment !== original.secondaryDepartment) {
+      throw new Error('整机部门身份来源于保存的人力模型，不可修改')
+    }
+    seen.add(row.id)
+    const next = { ...row }
+    const supported = new Set(laborRules('machine', original).map(phase => phase.key))
+    for (const phase of [...MACHINE_INVESTMENT_PERIODS, ...LEGACY_MACHINE_PHASES]) {
+      if (!supported.has(phase.key) && typeof next[phase.key] === 'number' && typeof original[phase.key] !== 'number') {
+        throw new Error('整机部门阶段字段来源于保存的人力模型，不可新增')
+      }
+    }
+    let total = 0
+    for (const phase of laborRules('machine', original)) {
+      const amount = next[phase.key]
+      if (typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0 || Math.abs(amount * 10 - Math.round(amount * 10)) > 0.000001) {
+        throw new Error('人力投入必须为非负数，最多保留一位小数')
+      }
+      total += amount
+    }
+    next.estimatedInvestment = Math.round(total * 10) / 10
+    return next
+  })
+}
+
+function departmentTotal(rows: readonly InlineDepartment[]) {
+  return Math.round(rows.reduce((sum, row) => sum + row.estimatedInvestment, 0) * 10) / 10
 }
 export function createInlineResourceVersion(category: HrProjectCategory, project: ResourceProject | undefined, budgetType: 'annual' | 'projectEstimate' | 'projectBudget', scopeId: string, config: Config): ResourceVersion {
   if (!project || !scopeId || !canEditHrInScope(project, scopeId) || !canCreateHrVersion(project, budgetType)) throw new Error('当前项目不可创建版本')
@@ -158,12 +206,36 @@ export function updateInlineResourceVersion(category: HrProjectCategory, project
     Object.assign(next, { [patch.key]: patch.value })
     if (!Number.isFinite(next.levelCoefficient) || next.levelCoefficient < 0 || Math.abs(next.levelCoefficient * 100 - Math.round(next.levelCoefficient * 100)) > 0.000001 || !isHrModelAvailable(config.hrModel ?? [], next.projectLevel, next.hrModelVersion)) throw new Error('请选择有效的项目等级、人力模型版本号和等级系数')
     next.modelSnapshot = (config.hrModel ?? []).filter(row => row.enabled !== false && String(row.projectLevel) === next.projectLevel && String(row.modelVersion) === next.hrModelVersion).map(row => ({ ...row }))
-    next.estimatedInvestment = calcEstimatedInvestment(next.modelSnapshot, next.projectLevel, next.hrModelVersion, next.levelCoefficient)
+    next.estimatedInvestment = next.machineDepartmentInvestments
+      ? departmentTotal(next.machineDepartmentInvestments) : calcEstimatedInvestment(next.modelSnapshot, next.projectLevel, next.hrModelVersion, next.levelCoefficient)
   } else if (patch.type === 'departments') {
-    if (!('departmentInvestments' in next)) throw new Error('整机部门投入由模型计算')
-    next.departmentInvestments = validateInlineDepartments(category, patch.rows, patch.complete, createHrDepartmentOptions(Object.values(config).flat(), [useHrTosStore.getState().projects, useHrTechnicalStore.getState().projects, useHrCapabilityStore.getState().projects])) as unknown as typeof next.departmentInvestments
-    next.estimatedInvestment = Math.round(next.departmentInvestments.reduce((sum, row) => sum + row.estimatedInvestment, 0) * 10) / 10
+    if ('hrModelVersion' in next) {
+      next.machineDepartmentInvestments = validateMachineDepartments(next, patch.rows)
+      next.estimatedInvestment = departmentTotal(next.machineDepartmentInvestments)
+    } else {
+      next.departmentInvestments = validateInlineDepartments(category, patch.rows, patch.complete, createHrDepartmentOptions(Object.values(config).flat(), [useHrTosStore.getState().projects, useHrTechnicalStore.getState().projects, useHrCapabilityStore.getState().projects])) as unknown as typeof next.departmentInvestments
+      next.estimatedInvestment = departmentTotal(next.departmentInvestments as InlineDepartment[])
+    }
+  } else if (patch.type === 'departmentTotal') {
+    const rows = ('hrModelVersion' in next ? resolveMachineDepartmentInvestments(next) : next.departmentInvestments.map(row => ({ ...row }))) as InlineDepartment[]
+    const row = rows.find(item => item.id === patch.rowId)
+    if (!row) throw new Error('部门投入行不存在')
+    const rules = laborRules(category, row)
+    const dates = ('milestones' in next ? next.milestones : next) as unknown as Record<string, unknown>
+    const allocated = rules.length ? allocateLaborTotal(patch.value, rules, dates) : (() => {
+      if (!Number.isFinite(patch.value) || patch.value < 0 || Math.abs(patch.value * 10 - Math.round(patch.value * 10)) > 0.000001) throw new Error('人力投入必须为非负数，最多保留一位小数')
+      return { estimatedInvestment: patch.value }
+    })()
+    const changed = rows.map(item => item.id === patch.rowId ? { ...item, ...allocated, estimatedInvestment: patch.value } : item)
+    if ('hrModelVersion' in next) {
+      next.machineDepartmentInvestments = validateMachineDepartments(next, changed)
+      next.estimatedInvestment = departmentTotal(next.machineDepartmentInvestments)
+    } else {
+      next.departmentInvestments = validateInlineDepartments(category, changed) as unknown as typeof next.departmentInvestments
+      next.estimatedInvestment = departmentTotal(next.departmentInvestments as InlineDepartment[])
+    }
   } else if (patch.type === 'nonLabor') next.nonLaborInvestment = validateInlineNonLabor(patch.value, version.nonLaborInvestment, config)
+  else if (patch.type === 'nonLaborItemTotal') next.nonLaborInvestment = validateInlineNonLabor(allocateNonLaborItemTotal(next.nonLaborInvestment ?? cloneNonLaborInvestment(), patch.itemId, patch.value), version.nonLaborInvestment, config)
   else if (patch.type === 'metadata') {
     const canonical = getHrRegistryProject(project)
     if (category !== 'machine' || !canonical || isHrFormalRecord(project) || canonical.boundFormalProjectId) throw new Error('项目信息由来源项目维护')

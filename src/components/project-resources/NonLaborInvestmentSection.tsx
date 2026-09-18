@@ -16,6 +16,7 @@ import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import type { NonLaborInvestment, NonLaborInvestmentItem } from '@/types/nonLaborInvestment'
 import { hrNonLaborMonthRange } from '@/lib/hrNonLaborRange'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
+import { allocateNonLaborItemTotal } from '@/lib/resourceInlineEditing'
 
 export function useNonLaborDraft(open: boolean, editorKey: string, seed: NonLaborInvestment | undefined, category: HrProjectCategory, dates: object) {
   const seedRef = useRef(seed)
@@ -27,8 +28,9 @@ export function useNonLaborDraft(open: boolean, editorKey: string, seed: NonLabo
   return { value: { ...value, ...hrNonLaborMonthRange(category, dates) }, onChange: setValue }
 }
 
-export default function NonLaborInvestmentSection({ value, onChange, readOnly = false, inline = false, canImport }: {
-  value: NonLaborInvestment; onChange?: (value: NonLaborInvestment) => void; readOnly?: boolean; inline?: boolean; canImport?: () => boolean
+export default function NonLaborInvestmentSection({ value, onChange, onItemTotalChange, readOnly = false, inline = false, canImport }: {
+  value: NonLaborInvestment; onChange?: (value: NonLaborInvestment) => void; onItemTotalChange?: (itemId: string, value: number) => void
+  readOnly?: boolean; inline?: boolean; canImport?: () => boolean
 }) {
   const { modal, message } = App.useApp()
   const config = useHrConfigStore(state => state.data)
@@ -43,6 +45,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
   currentValueRef.current = value
   const active = subjects.filter(subject => subject.enabled !== false)
   const months = nonLaborMonths(value)
+  const itemTotal = (item: NonLaborInvestmentItem) => Math.round(months.reduce((sum, month) => sum + (item.monthlyAmounts[month] ?? 0), 0) * 100) / 100
   const isDuplicate = (item: NonLaborInvestmentItem) => [item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject].every(Boolean)
     && value.items.some(other => other.id !== item.id && nonLaborItemKey(other) === nonLaborItemKey(item))
   const update = (id: string, change: Partial<NonLaborInvestmentItem>) => {
@@ -139,6 +142,11 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
             if (subject) update(item.id, { subjectId: id, tertiarySubject: String(subject.tertiarySubject) })
           }} />
       } },
+    { title: '预估投入合计', key: 'total', width: 140, align: 'center' as const,
+      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(itemTotal(item)) : <InputNumber
+        aria-label={`${item.secondaryDepartment || '未选择部门'} ${item.tertiarySubject || '未选择科目'} 预估投入合计（元）`}
+        min={0} precision={2} step={1} style={{ width: '100%' }} value={itemTotal(item)}
+        onChange={amount => onItemTotalChange ? onItemTotalChange(item.id, amount ?? 0) : onChange?.(allocateNonLaborItemTotal(value, item.id, amount ?? 0))} /> },
     ...months.map(month => ({ title: dayjs(month + '-01').format('YYYY年MM月'), key: month, width: 126, align: 'center' as const,
       render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(item.monthlyAmounts[month] ?? 0) : <InputNumber
         aria-label={[item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject, month, '非人力投入（元）'].join(' ')} min={0} precision={2} step={1}
@@ -185,14 +193,15 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
       </Space>
     </div>}
     <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={displayColumns} dataSource={value.items}
-      pagination={false} size="small" tableLayout="fixed" scroll={{ x: 600 + (readOnly ? 0 : 64) + months.length * 126, y: 320 }}
+      pagination={false} size="small" tableLayout="fixed" scroll={{ x: 740 + (readOnly ? 0 : 64) + months.length * 126, y: 320 }}
       locale={{ emptyText: readOnly ? '暂无非人力投入' : months.length ? '暂无非人力投入数据，请点击「添加」或「导入」' : '暂无非人力投入数据，可先点击「添加」配置部门和科目，填写里程碑后自动生成月份' }}
       summary={() => value.items.length > 0 ? <Table.Summary.Row>
         <Table.Summary.Cell index={0} colSpan={4}>合计</Table.Summary.Cell>
-        {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 4} align="center">
+        <Table.Summary.Cell index={4} align="center">{formatNonLaborAmount(nonLaborTotal(value))}</Table.Summary.Cell>
+        {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 5} align="center">
           {formatNonLaborAmount(value.items.reduce((sum, item) => sum + (item.monthlyAmounts[month] ?? 0), 0))}
         </Table.Summary.Cell>)}
-        {!readOnly && <Table.Summary.Cell index={months.length + 4} />}
+        {!readOnly && <Table.Summary.Cell index={months.length + 5} />}
       </Table.Summary.Row> : null} />
   </section>
 }

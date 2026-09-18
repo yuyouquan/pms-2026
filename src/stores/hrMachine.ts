@@ -62,6 +62,7 @@ function generateDepartmentMonthlyRecords(
     version.hrModelVersion,
     version.levelCoefficient,
     version.milestones,
+    version.machineDepartmentInvestments,
   )
 
   return splits.map((split: DepartmentMonthlySplit, idx: number) => ({
@@ -436,6 +437,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
                 updated.hrModelVersion,
                 updated.levelCoefficient,
               )
+              if (updated.machineDepartmentInvestments) updated.estimatedInvestment = Math.round(updated.machineDepartmentInvestments.reduce((sum, row) => sum + row.estimatedInvestment, 0) * 10) / 10
             }
 
             return normalizeHrEditedVersion(updated, 'machine')
@@ -483,6 +485,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           version.hrModelVersion,
           version.levelCoefficient,
           version.milestones,
+          version.machineDepartmentInvestments,
         )
       },
     }),
