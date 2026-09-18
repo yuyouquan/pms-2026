@@ -45,3 +45,10 @@
 ### 发布授权
 
 用户追加要求：feature推送后合并并推送dev，再合并主干master，发布Vercel。保留原始脏工作区和feature工作区，使用独立发布工作区完成合并。
+
+### 上线回归发现：多标签页同步循环
+
+首轮发布主干f207e61后，正式域多个标签页也发生卡顿。随后使用真实store与双window storage事件队列复现：初始化10个事件可清空；仅machine.activeTab不同，处理200个事件仍有pending，累计801次持久化写入。根因是HR store整对象持久化包含本地UI字段，hydrate保留各tab UI，随后无变化refresh仍触发persist，形成不同payload交替写入。本项是已证实同步缺陷；前述quota猜测未确认，不能作为定论。追加独立修复与重新发布验收。
+
+修复59ab48b：四类资源store只持久化projects/monthlyInvestments/registryMigrationComplete；三类refresh的无变化判断移到set之前，能力建设原有同样保护。没有修改dataset/store版本或删除存储。双window回归收敛：初始化0、不同UI0、真实投入修改1、复制1、配置源更新2个事件，无变化refresh写入0次；旧含UI字段payload兼容通过。`npm run verify:resource-totals`、`npm run verify:resource-versions`、`node scripts/verify-budget-cross-tab.mjs`、`npx tsc --noEmit`均通过。
+修复版独立审查PASS，无P1/P2；`npm run build`退出0。追加 `npm run verify:resource-cross-tab` 作为常规回归入口。浏览器旧标签仍运行旧bundle，后续验收使用最新部署页面；不得把旧页未刷新表现记为修复版通过或失败。

@@ -447,13 +447,14 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
         }
       }),
 
-      refreshFormalProjects: () => set((s) => {
+      refreshFormalProjects: () => {
+        const s = get()
         const reconciled = reconcileHrRegistry(s.projects, s.monthlyInvestments, 'technical', s.registryMigrationComplete)
         const projects = synchronizeProjects(reconciled.projects)
         const monthlyInvestments = syncMonthlyInvestments(projects, reconciled.monthlyInvestments)
-        if (s.registryMigrationComplete && JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return s
-        return { projects, monthlyInvestments, registryMigrationComplete: true }
-      }),
+        if (s.registryMigrationComplete && JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return
+        set({ projects, monthlyInvestments, registryMigrationComplete: true })
+      },
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
@@ -481,6 +482,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
     {
       storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-technical',
+      partialize: state => ({ projects: state.projects, monthlyInvestments: state.monthlyInvestments, registryMigrationComplete: state.registryMigrationComplete }),
       migrate: (persistedState: unknown, fromVersion: number) => {
         const s = (persistedState ?? {}) as Record<string, unknown>
         if (fromVersion < 2) {
