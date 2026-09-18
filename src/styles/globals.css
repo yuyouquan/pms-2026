@@ -9217,6 +9217,32 @@ input.ant-input,
 .pms-resource-inline-error { display: block; color: var(--pms-danger, #cf1322); font-size: 12px; white-space: normal; margin-top: 4px; }
 .pms-resource-inline-detail .ant-descriptions { margin-bottom: 12px; }
 .pms-resource-inline-detail .ant-table-cell .pms-resource-inline-field { justify-content: space-between; }
+
+/* Budget resource scheduling: template phases remain visible above their owned milestones. */
+.pms-budget-milestone-schedule { margin-bottom: 12px; }
+.pms-budget-milestone-heading { display: flex; align-items: flex-end; gap: 14px; margin-bottom: 8px; }
+.pms-budget-milestone-heading .pms-hr-investment-section-title { flex: 0 0 auto; margin: 0; padding-bottom: 4px; }
+.pms-budget-milestone-anchor-inputs { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.pms-budget-milestone-anchor-inputs label { display: grid; gap: 3px; color: var(--pms-text-secondary); font-size: 12px; }
+.pms-budget-milestone-anchor-inputs .ant-picker { width: 154px; }
+.pms-budget-milestone-anchor-inputs .ant-btn { margin-bottom: 1px; }
+.pms-budget-milestone-scroll { overflow-x: auto; border: 1px solid var(--pms-brand-border); border-radius: 12px; background: #fff; }
+.pms-budget-milestone-track { display: flex; width: max-content; min-width: 100%; }
+.pms-budget-milestone-stage { flex: 1 0 auto; border-right: 1px solid var(--pms-brand-border); }
+.pms-budget-milestone-stage:last-child { border-right: 0; }
+.pms-budget-milestone-stage-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 42px; padding: 7px 10px; color: #fff; background: var(--pms-budget-stage-color); }
+.pms-budget-milestone-stage-header strong { font-size: 13px; white-space: nowrap; }
+.pms-budget-milestone-stage-header span { font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; opacity: .92; }
+.pms-budget-milestone-stage dl { display: grid; margin: 0; }
+.pms-budget-milestone-stage dl > div { min-width: 0; border-right: 1px solid var(--pms-brand-border); }
+.pms-budget-milestone-stage dl > div:last-child { border-right: 0; }
+.pms-budget-milestone-stage dt,
+.pms-budget-milestone-stage dd { margin: 0; padding: 8px 7px; text-align: center; white-space: nowrap; }
+.pms-budget-milestone-stage dt { color: var(--pms-text-secondary); background: var(--pms-brand-surface); }
+.pms-budget-milestone-stage dd .pms-resource-inline-field { justify-content: center; }
+@media (max-width: 900px) {
+  .pms-budget-milestone-heading { align-items: flex-start; flex-direction: column-reverse; }
+}
 .pms-resource-department-actions { margin-bottom: 8px; }
 .pms-resource-batch-field { display: inline-flex; align-items: center; gap: 6px; }
 .pms-resource-version-tabs .ant-tabs-nav { margin-bottom: 4px; }

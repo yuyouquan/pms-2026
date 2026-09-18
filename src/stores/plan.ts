@@ -46,6 +46,7 @@ import type {
   ConfigTemplateVersionScope,
   TechnicalTemplateKind,
 } from '@/types/technicalPlan'
+import { withDefaultBudgetScheduleIntervals } from '@/lib/budgetMilestoneScheduling'
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
@@ -128,12 +129,17 @@ export const createInitialTemplatePublishedSnapshots = (
 ): Record<string, any[]> => {
   const snapshots = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
     if (projectType !== PROJECT_CATEGORY_TECH) {
-      result[getTemplateSnapshotKey(projectType, versionId)] = getDefaultLevel1TasksForProjectType(projectType, false)
+      const tasks = getDefaultLevel1TasksForProjectType(projectType, false)
+      result[getTemplateSnapshotKey(projectType, versionId)] = projectType === PROJECT_CATEGORY_MACHINE
+        ? withDefaultBudgetScheduleIntervals('machine', tasks)
+        : projectType === PROJECT_CATEGORY_TOS_VERSION
+          ? withDefaultBudgetScheduleIntervals('tos', tasks)
+          : tasks
     }
     return result
   }, {} as Record<string, any[]>)
-  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId)] = buildTdtTemplateTasks()
-  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId, 'tdt')] = buildTdtTemplateTasks()
+  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId)] = withDefaultBudgetScheduleIntervals('technical', buildTdtTemplateTasks())
+  snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId, 'tdt')] = withDefaultBudgetScheduleIntervals('technical', buildTdtTemplateTasks())
   snapshots[getTemplateSnapshotKey(PROJECT_CATEGORY_TECH, versionId, 'subproject')] = buildSubprojectTemplateTasks()
   return snapshots
 }
@@ -141,12 +147,17 @@ export const createInitialTemplatePublishedSnapshots = (
 const createInitialConfigTemplateTasks = () => {
   const templates = TEMPLATE_PROJECT_TYPES.reduce((result, projectType) => {
     if (projectType !== PROJECT_CATEGORY_TECH) {
-      result[projectType] = getDefaultLevel1TasksForProjectType(projectType, false)
+      const tasks = getDefaultLevel1TasksForProjectType(projectType, false)
+      result[projectType] = projectType === PROJECT_CATEGORY_MACHINE
+        ? withDefaultBudgetScheduleIntervals('machine', tasks)
+        : projectType === PROJECT_CATEGORY_TOS_VERSION
+          ? withDefaultBudgetScheduleIntervals('tos', tasks)
+          : tasks
     }
     return result
   }, {} as Record<string, any[]>)
-  templates[PROJECT_CATEGORY_TECH] = buildTdtTemplateTasks()
-  templates[TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt] = buildTdtTemplateTasks()
+  templates[PROJECT_CATEGORY_TECH] = withDefaultBudgetScheduleIntervals('technical', buildTdtTemplateTasks())
+  templates[TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt] = withDefaultBudgetScheduleIntervals('technical', buildTdtTemplateTasks())
   templates[TECHNICAL_TEMPLATE_STORAGE_KEYS.subproject] = buildSubprojectTemplateTasks()
   return templates
 }

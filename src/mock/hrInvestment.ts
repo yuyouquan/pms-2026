@@ -9,6 +9,16 @@ import type { HrMachineProject, HrMachineVersion, BudgetType, MilestoneNodes } f
 import type { HrTosProject, HrTosVersion, TosMilestoneNodes } from '@/types/hrTos'
 import type { HrTechnicalProject, HrTechnicalVersion, TechMilestoneNodes } from '@/types/hrTechnical'
 import type { HrCapabilityProject, HrCapabilityVersion } from '@/types/hrCapability'
+import { buildLevel1TasksForProjectType } from '@/lib/level1PlanRules'
+import { buildTdtTemplateTasks } from '@/lib/technicalPlanRules'
+import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TOS_VERSION } from '@/constants/projectTypes'
+import {
+  BUDGET_SCHEDULE_SOURCES,
+  createBudgetMilestoneSchedule,
+  resolvePublishedBudgetScheduleModel,
+  withDefaultBudgetScheduleIntervals,
+  type BudgetScheduleCategory,
+} from '@/lib/budgetMilestoneScheduling'
 
 /** Stable, additive fixtures: migrations never replace existing projects or resurrect later deletions. */
 export function appendHrMockProjects<T extends { id: string }>(existing: T[], additions: T[]): T[] {
@@ -26,6 +36,19 @@ const DEPARTMENTS = [
   { primaryDepartment: '研发中心', secondaryDepartment: '软件部' },
   { primaryDepartment: '硬件部', secondaryDepartment: '结构部' },
 ]
+
+const defaultScheduleTasks = {
+  machine: withDefaultBudgetScheduleIntervals('machine', buildLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, false)),
+  tos: withDefaultBudgetScheduleIntervals('tos', buildLevel1TasksForProjectType(PROJECT_CATEGORY_TOS_VERSION, false)),
+  technical: withDefaultBudgetScheduleIntervals('technical', buildTdtTemplateTasks()),
+}
+const DEFAULT_RESOURCE_SCHEDULE_MODELS = Object.fromEntries((Object.keys(defaultScheduleTasks) as BudgetScheduleCategory[]).map(category => {
+  const source = BUDGET_SCHEDULE_SOURCES[category]
+  return [category, resolvePublishedBudgetScheduleModel({
+    configTemplateVersionScopes: { [source.scopeKey]: { currentVersion: 'v3', versions: [{ id: 'v3', versionNo: 'V3', status: '已发布', publishedAt: '2026-06-25T02:00:00.000Z' }] } },
+    publishedSnapshots: { [source.snapshotKey('v3')]: defaultScheduleTasks[category] },
+  }, category)]
+})) as Record<BudgetScheduleCategory, ReturnType<typeof resolvePublishedBudgetScheduleModel>>
 
 function baseProject(category: Category, scenario: number, options: FormalOption[]) {
   const formal = [0, 1, 4].includes(scenario) ? options[scenario === 1 ? 1 : 0] ?? options[0] : undefined
@@ -174,11 +197,22 @@ function resourceProjects<T extends ResourceProject>(category: Category, templat
       if (index === 2) { d[0] = '2026-11-01'; d[1] = '2026-12-01' }
       if (version.minorVersion === 1) { d[4] = '2027-08-01'; d[5] = '2027-10-01' }
       if (category === 'tos' && index === 2 && version.minorVersion > 1) d[6] = null
-      const manualMilestones = category === 'machine' ? machineDates(d) : category === 'tos' ? tosDates(d) : techDates(d)
+      let manualMilestones = category === 'machine' ? machineDates(d) : category === 'tos' ? tosDates(d) : techDates(d)
+      const scheduleModelSnapshot = category !== 'capability' && index === 1 ? structuredClone(DEFAULT_RESOURCE_SCHEDULE_MODELS[category]) : undefined
+      if (scheduleModelSnapshot) {
+        const milestoneDates = manualMilestones as unknown as Record<string, string | null>
+        const firstDate = milestoneDates[scheduleModelSnapshot.firstAnchorKey]
+        const lastDate = milestoneDates[scheduleModelSnapshot.lastAnchorKey]
+        if (firstDate && lastDate) {
+          manualMilestones = { ...manualMilestones, ...createBudgetMilestoneSchedule(scheduleModelSnapshot, firstDate, lastDate) }
+          if (category === 'machine') manualMilestones = withMachineDerivedMilestones(manualMilestones as MilestoneNodes)
+        }
+      }
       const dates = category === 'capability'
         ? { projectStartTime: source?.projectStartTime ?? d[0], projectEndTime: source?.projectEndTime ?? d[5] }
         : { milestones: source?.milestones ? mergeHrFormalMilestones(category, source.milestones, manualMilestones) : manualMilestones }
       return { ...version, id: versionId, projectId: recordId, createdBy, createdAt, ...dates, nonLaborInvestment: mockNonLaborInvestment(versionId, version.minorVersion),
+        ...(scheduleModelSnapshot ? { scheduleModelSnapshot } : {}),
         ...('departmentInvestments' in version ? {
           departmentInvestments: version.departmentInvestments.map((department, i) => ({ ...department, id: `${versionId}-department-${i + 1}` })),
           operationLogs: [{ id: `${versionId}-created`, operation: 'created', operator: createdBy, timestamp: createdAt, description: `创建${version.versionNumber}预估投入版本` }],

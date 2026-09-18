@@ -44,6 +44,7 @@ const modules = {
   '@/components/project-resources/useInlineImportSession': { useInlineImportSession: () => sessionModule.createInlineImportSession() },
   '@/components/project-resources/inlineFieldSession': sessionModule,
   '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'Expenses' },
+  '@/components/project-resources/BudgetMilestoneSchedule': { __esModule: true, default: 'BudgetMilestones' },
   '@/lib/hrVersionRules': { isHrVersionEditable: () => true },
   '@/lib/hrProjectRegistry': { isHrFormalRecord: () => false, getHrRegistryProject: () => ({}), canEditHrInScope: () => true },
   '@/lib/resourceInlineEditing': { canEditResourceMilestone: () => true, resourceMilestoneFields: { capability: [{ key: 'projectStartTime', label: '项目开始时间' }] }, resourcePhaseFields: { capability: [] } },
@@ -53,6 +54,7 @@ const modules = {
   '@/hooks/useHrDepartmentOptions': { useHrDepartmentOptions: () => ({ primaryOptions: [], getSecondaryOptions: () => [] }) },
   '@/components/project-resources/HrReadonlyField': { HrReadonlyField: 'Readonly' },
   '@/lib/roadmapValidation': { PRODUCT_LINES_BY_BRAND: {} }, '@/constants/hrMachine': { formatPersonMonth: String }, '@/utils/exportExcel': {},
+  '@/types/projectRegistry': { getProjectAttribute: () => 'formal' },
 }
 const compiled = { exports: {} }
 const source = ts.transpileModule(fs.readFileSync('src/components/project-resources/ResourceInlineDetail.tsx', 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText

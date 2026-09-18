@@ -24,6 +24,8 @@ import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import { formatPersonMonth } from '@/constants/hrMachine'
 import { exportSheet } from '@/utils/exportExcel'
+import BudgetMilestoneSchedule from '@/components/project-resources/BudgetMilestoneSchedule'
+import { getProjectAttribute } from '@/types/projectRegistry'
 
 export default function ResourceInlineDetail({ category, project, version, scopeId, readOnly }: {
   category: HrProjectCategory; project: ResourceProject; version: ResourceVersion; scopeId: string; readOnly: boolean
@@ -80,7 +82,9 @@ export default function ResourceInlineDetail({ category, project, version, scope
   }
   const machine = 'hrModelVersion' in version ? version : null
   const machineProject = 'brand' in project ? project : null
-  const metadataReadOnly = readOnly || isHrFormalRecord(project) || !!getHrRegistryProject(project)?.boundFormalProjectId
+  const registryProject = getHrRegistryProject(project)
+  const metadataReadOnly = readOnly || isHrFormalRecord(project) || !!registryProject?.boundFormalProjectId
+  const isBudgetProject = !!registryProject && getProjectAttribute(registryProject) === 'budget'
   const metadataFields = machineProject ? [{ key: 'brand' as const, label: '品牌' }, { key: 'productLine' as const, label: '产品线' }, { key: 'marketName' as const, label: '市场名' }].map(field => ({ key: field.key, label: field.label,
     children: <ResourceInlineField label={field.label} value={machineProject[field.key]} readOnly={metadataReadOnly} onSave={value => persist({ type: 'metadata', key: field.key, value: String(value ?? '') })}
       renderEditor={(value, change, popup) => field.key === 'marketName' ? <Input autoFocus aria-label={field.label} value={String(value ?? '')} onChange={event => change(event.target.value)} />
@@ -97,12 +101,22 @@ export default function ResourceInlineDetail({ category, project, version, scope
     { title: '预估投入合计', dataIndex: 'estimatedTotal', width: 130, render: (value: number) => formatPersonMonth(value) }]
   return <div className="pms-resource-inline-detail">
     {machine && <Descriptions size="small" column={3} bordered items={[...metadataFields, ...modelFields]} />}
-    <section className="pms-hr-milestone-details" aria-label="里程碑信息"><h3 className="pms-hr-investment-section-title">里程碑信息</h3>
+    {isBudgetProject && category !== 'capability' ? <BudgetMilestoneSchedule
+      category={category}
+      versionId={version.id}
+      dates={dates}
+      fields={resourceMilestoneFields[category]}
+      modelSnapshot={'scheduleModelSnapshot' in version ? version.scheduleModelSnapshot : undefined}
+      readOnly={readOnly}
+      canEdit={key => canEditResourceMilestone(category, project, key)}
+      onSaveDate={(key, value) => persist({ type: 'milestone', key, value })}
+      onSchedule={(scheduledDates, modelSnapshot) => persist({ type: 'milestoneSchedule', dates: scheduledDates, modelSnapshot })}
+    /> : <section className="pms-hr-milestone-details" aria-label="里程碑信息"><h3 className="pms-hr-investment-section-title">里程碑信息</h3>
       <div className="pms-hr-milestone-details-scroll"><dl style={{ gridTemplateColumns: `repeat(${resourceMilestoneFields[category].length}, minmax(130px, 1fr))` }}>
         {resourceMilestoneFields[category].map(field => <div key={field.key}><dt>{field.label}</dt><dd><ResourceInlineField label={field.label} value={dates[field.key]} readOnly={readOnly || !canEditResourceMilestone(category, project, field.key)}
           onSave={value => persist({ type: 'milestone', key: field.key, value: value ? String(value) : null })}
           renderEditor={(value, change, popup) => <div {...inlineDateInputHandlers(change)}><DatePicker autoFocus aria-label={field.label} defaultValue={value ? dayjs(String(value)) : null} preserveInvalidOnBlur getPopupContainer={popup} style={{ width: '100%' }} onChange={date => change(date?.format('YYYY-MM-DD') ?? null)} /></div>} /></dd></div>)}
-      </dl></div></section>
+      </dl></div></section>}
     <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
     {!machine && !readOnly && <Space size="small" className="pms-resource-department-actions">
       <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => action(() => persist({ type: 'departments', rows: [...rows, { id: `department-${crypto.randomUUID()}`, primaryDepartment: '', secondaryDepartment: '', estimatedInvestment: 0 }] }))}>添加部门</Button>

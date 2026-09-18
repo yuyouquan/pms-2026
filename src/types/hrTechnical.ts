@@ -1,4 +1,5 @@
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
+import type { BudgetScheduleModelSnapshot } from '@/lib/budgetMilestoneScheduling'
 /* ── HR Pipeline - Technical Project Types ──────────────────────────── */
 
 /** 预算类型 */
@@ -112,6 +113,8 @@ export interface HrTechnicalVersion {
   estimatedInvestment: number
   /** 里程碑节点 */
   milestones: TechMilestoneNodes
+  /** 排布时使用的已发布计划模板快照；手工改日期不改变模型。 */
+  scheduleModelSnapshot?: BudgetScheduleModelSnapshot
   /** 版本详情：部门预估投入列表 */
   departmentInvestments: TechDepartmentInvestment[]
   /** 创建时间 */

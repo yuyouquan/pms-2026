@@ -20,6 +20,7 @@ import { createHrDepartmentOptions, type HrDepartmentOptions } from '@/lib/hrDep
 import { useHrTosStore } from '@/stores/hrTos'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { validateBudgetScheduleSnapshot, type BudgetScheduleModelSnapshot } from '@/lib/budgetMilestoneScheduling'
 
 export const resourceMilestoneFields = { machine: MILESTONE_FIELDS, tos: TOS_MILESTONE_FIELDS, technical: TECH_MILESTONE_FIELDS,
   capability: [{ key: 'projectStartTime', label: '项目开始时间' }, { key: 'projectEndTime', label: '项目结束时间' }] }
@@ -29,6 +30,7 @@ export type InlineDepartment = { id: string; primaryDepartment: string; secondar
 export type ResourceInlinePatch =
   | { type: 'batch'; value: number | null }
   | { type: 'milestone'; key: string; value: string | null }
+  | { type: 'milestoneSchedule'; dates: Record<string, string>; modelSnapshot: BudgetScheduleModelSnapshot }
   | { type: 'model'; key: 'projectLevel' | 'hrModelVersion' | 'levelCoefficient'; value: string | number }
   | { type: 'metadata'; key: 'brand' | 'productLine' | 'marketName'; value: string }
   | { type: 'departments'; rows: InlineDepartment[]; complete?: boolean }
@@ -116,6 +118,9 @@ export function createInlineResourceVersion(category: HrProjectCategory, project
     } else version = { ...common, milestones, departmentInvestments: seed && 'departmentInvestments' in seed ? seed.departmentInvestments.map(row => ({ ...row })) : [] } as unknown as ResourceVersion
   }
   if ('departmentInvestments' in version) version.estimatedInvestment = Math.round(version.departmentInvestments.reduce((sum, row) => sum + row.estimatedInvestment, 0) * 10) / 10
+  if (category !== 'capability' && seed && 'scheduleModelSnapshot' in seed && seed.scheduleModelSnapshot) {
+    Object.assign(version, { scheduleModelSnapshot: structuredClone(seed.scheduleModelSnapshot) })
+  }
   return normalizeHrEditedVersion(version, category)
 }
 export function updateInlineResourceVersion(category: HrProjectCategory, project: ResourceProject | undefined, version: ResourceVersion | undefined, patch: ResourceInlinePatch, scopeId: string, config: Config): ResourceVersion {
@@ -124,11 +129,22 @@ export function updateInlineResourceVersion(category: HrProjectCategory, project
   if (patch.type === 'batch') {
     if (patch.value !== null && !isHrBatch(patch.value)) throw new Error('请选择有效批次')
     next.batch = patch.value
-  } else if (patch.type === 'milestone') {
-    if (!resourceMilestoneFields[category].some(field => field.key === patch.key) || !canEditResourceMilestone(category, project, patch.key)) throw new Error('该日期由来源计划维护，不可编辑')
-    if (patch.value && (!/^\d{4}-\d{2}-\d{2}$/.test(patch.value) || !dayjs(patch.value).isValid() || dayjs(patch.value).format('YYYY-MM-DD') !== patch.value)) throw new Error('请选择有效日期')
-    if ('projectStartTime' in next) Object.assign(next, { [patch.key]: patch.value ?? '' })
-    else next.milestones = { ...next.milestones, [patch.key]: patch.value }
+  } else if (patch.type === 'milestone' || patch.type === 'milestoneSchedule') {
+    const scheduledDates = patch.type === 'milestoneSchedule' ? patch.dates : { [patch.key]: patch.value }
+    if (patch.type === 'milestoneSchedule') {
+      if (category === 'capability') throw new Error('能力建设项目不支持里程碑自动排布')
+      validateBudgetScheduleSnapshot(category, patch.modelSnapshot)
+      const expectedKeys = patch.modelSnapshot.milestones.map(milestone => milestone.fieldKey)
+      if (Object.keys(scheduledDates).length !== expectedKeys.length || expectedKeys.some(key => !(key in scheduledDates))) throw new Error('排布日期与模型里程碑不一致')
+    }
+    for (const [key, value] of Object.entries(scheduledDates)) {
+      if (!resourceMilestoneFields[category].some(field => field.key === key) || !canEditResourceMilestone(category, project, key)) throw new Error('该日期由来源计划维护，不可编辑')
+      if (value !== null && (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !dayjs(value).isValid() || dayjs(value).format('YYYY-MM-DD') !== value)) throw new Error('请选择有效日期')
+    }
+    if ('projectStartTime' in next) Object.assign(next, Object.fromEntries(Object.entries(scheduledDates).map(([key, value]) => [key, value ?? ''])))
+    else next.milestones = { ...next.milestones, ...scheduledDates }
+    if (category === 'machine' && 'milestones' in next) next.milestones = withMachineDerivedMilestones(next.milestones)
+    if (patch.type === 'milestoneSchedule') Object.assign(next, { scheduleModelSnapshot: structuredClone(patch.modelSnapshot) })
     const dates = ('projectStartTime' in next ? next : next.milestones) as unknown as Record<string, string | null>
     let previous: string | null = null
     for (const field of resourceMilestoneFields[category]) {
@@ -137,7 +153,6 @@ export function updateInlineResourceVersion(category: HrProjectCategory, project
       if (date && previous && date < previous) throw new Error('结束时间不能早于开始时间，请检查里程碑顺序')
       if (date) previous = date
     }
-    if (category === 'machine' && 'milestones' in next) next.milestones = withMachineDerivedMilestones(next.milestones)
   } else if (patch.type === 'model') {
     if (!('hrModelVersion' in next) || patch.key === 'projectLevel' && isHrFormalRecord(project)) throw new Error('项目等级由来源项目维护')
     Object.assign(next, { [patch.key]: patch.value })
