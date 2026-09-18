@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Alert, App, Button, Empty, Popconfirm, Select, Space, Tabs, Tag, Tooltip } from 'antd'
+import { Alert, App, Button, Empty, Popconfirm, Select, Space, Tabs, Tooltip } from 'antd'
 import { CheckCircleOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, LockOutlined, PlusOutlined, StopOutlined, UnlockOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { ProjectItem } from '@/types/app'
@@ -57,7 +57,7 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
   return <div className="pms-resource-workspace">
     <div className="pms-resource-version-toolbar"><h2>{label}</h2>{canCreate && <Button icon={<PlusOutlined />} type="primary" onClick={create}>新建版本</Button>}</div>
     {versions.length > 0 && <Tabs className="pms-resource-version-tabs" type="card" activeKey={version?.id} onChange={id => guard(() => setSelectedId(id))}
-      items={versions.map(item => ({ key: item.id, label: <Space size={6}><span>{item.versionNumber}</span><Tag color={item.isActive ? 'green' : 'default'}>{item.isActive ? '已激活' : '未激活'}</Tag><Tag color={item.lockState === 'locked' ? 'gold' : 'default'}>{item.lockState === 'locked' ? '已锁定' : '未锁定'}</Tag></Space> }))} />}
+      items={versions.map(item => ({ key: item.id, label: <Space size={6}><span>{item.versionNumber}</span>{item.isActive && <Tooltip title="已激活"><CheckCircleOutlined aria-label="已激活" className="pms-resource-version-active-icon" /></Tooltip>}<Tooltip title={item.lockState === 'locked' ? '已锁定' : '未锁定'}>{item.lockState === 'locked' ? <LockOutlined aria-label="已锁定" /> : <UnlockOutlined aria-label="未锁定" />}</Tooltip></Space> }))} />}
     {linked && <Alert showIcon type="info" title={<Space wrap><span>来源：</span><HrSourceLink project={owner} name={resourceProjectName(owner)} /><span>关联年度预算只读</span></Space>} />}
     {getProjectAttribute(project) === 'budget' && project.boundFormalProjectId && <Alert type="info" showIcon title="已绑定正式项目，当前预算只读；解绑后可新增或修改预算。" />}
     {version && owner ? <>

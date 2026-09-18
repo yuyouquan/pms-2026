@@ -70,7 +70,7 @@ export default function BudgetMilestoneSchedule({
     })),
     ...(() => {
       const manual = fields.filter(field => !scheduledKeys.has(field.key))
-      return manual.length ? [{ id: 'manual', label: '后续里程碑', fields: manual, metrics: undefined }] : []
+      return manual.length ? [{ id: 'manual', label: '后续阶段', fields: manual, metrics: undefined }] : []
     })(),
   ] : [{ id: 'pending', label: '待排布', fields: [...fields], metrics: undefined }]
 

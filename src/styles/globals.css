@@ -9212,11 +9212,17 @@ input.ant-input,
 .pms-resource-inline-field { display: flex; align-items: center; gap: 3px; min-height: 26px; min-width: 0; position: relative; }
 .pms-resource-inline-field.is-editing { display: block; min-width: 95px; }
 .pms-resource-inline-value { min-width: 0; overflow-wrap: anywhere; }
-.pms-resource-inline-trigger.ant-btn { flex: 0 0 22px; width: 22px; height: 22px; color: var(--pms-text-tertiary); }
-.pms-resource-inline-trigger.ant-btn:hover { color: var(--pms-brand-strong); }
+.pms-resource-inline-trigger { display: flex; align-items: center; justify-content: inherit; width: 100%; min-height: 28px; padding: 3px 6px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: inherit; cursor: pointer; transition: background .15s, border-color .15s; }
+.pms-resource-inline-trigger:hover { background: var(--pms-brand-surface); border-color: var(--pms-brand-border); }
+.pms-resource-inline-trigger:focus-visible { outline: 2px solid var(--pms-brand); outline-offset: -2px; }
+.pms-resource-version-active-icon { color: #389e0d; }
 .pms-resource-inline-error { display: block; color: var(--pms-danger, #cf1322); font-size: 12px; white-space: normal; margin-top: 4px; }
 .pms-resource-inline-detail .ant-descriptions { margin-bottom: 12px; }
-.pms-resource-inline-detail .ant-table-cell .pms-resource-inline-field { justify-content: space-between; }
+.pms-resource-inline-detail .ant-table-cell .pms-resource-inline-field { justify-content: center; }
+.pms-resource-inline-detail .pms-hr-investment-table .ant-table-cell { text-align: center; }
+.pms-resource-inline-detail .pms-hr-investment-table .ant-input-number-input { text-align: center; }
+.pms-resource-inline-detail .pms-hr-investment-table .ant-select-selection-item,
+.pms-resource-inline-detail .pms-hr-investment-table .ant-select-placeholder { text-align: center; }
 
 /* Budget resource scheduling: template phases remain visible above their owned milestones. */
 .pms-budget-milestone-schedule { margin-bottom: 12px; }

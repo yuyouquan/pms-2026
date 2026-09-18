@@ -53,3 +53,19 @@ for (let i = 0; i < 3; i++) {
 all.find(node => node.type === 'Tabs').props.onChange('1')
 validate(render())
 console.log('PASS actual workspace element tree: create/select renders one detail and one monthly view with distinct sibling identities')
+
+owner.versions[0].isActive = true
+owner.versions[0].lockState = 'locked'
+const tabs = elements(render()).find(node => node.type === 'Tabs').props.items
+const activeTab = tabs.find(tab => tab.key === '1')
+const activeNodes = elements(activeTab.label)
+assert.ok(activeNodes.some(node => node.type === 'CheckCircleOutlined' && node.props['aria-label'] === '已激活'))
+assert.ok(activeNodes.some(node => node.type === 'LockOutlined' && node.props['aria-label'] === '已锁定'))
+assert.equal(activeNodes.some(node => node.type === 'Tag'),false,'statuses are icons rather than text badges')
+const inactiveNodes = elements(tabs.find(tab => tab.key !== '1').label)
+assert.equal(inactiveNodes.some(node => node.type === 'CheckCircleOutlined'),false,'inactive versions have no activation marker')
+assert.ok(inactiveNodes.some(node => node.type === 'UnlockOutlined' && node.props['aria-label'] === '未锁定'))
+assert.equal(inactiveNodes.some(node => node.props?.children === '未激活'),false)
+assert.ok(activeNodes.some(node => node.type === 'Tooltip' && node.props.title === '已激活'))
+assert.ok(inactiveNodes.some(node => node.type === 'Tooltip' && node.props.title === '未锁定'))
+console.log('PASS actual version tabs: active-only icon, lock/unlock icons and accessible tooltip labels')

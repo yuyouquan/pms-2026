@@ -1,7 +1,6 @@
 'use client'
 import { cloneElement, useEffect, useId, useReducer, useRef, type ReactElement, type ReactNode } from 'react'
-import { Button, Tooltip } from 'antd'
-import { EditOutlined } from '@ant-design/icons'
+import { Tooltip } from 'antd'
 import { useUiStore } from '@/stores/ui'
 import { createInlineFieldSession } from '@/components/project-resources/inlineFieldSession'
 
@@ -58,8 +57,10 @@ export default function ResourceInlineField({ label, value, display, readOnly = 
         return popupRoot.current
       })}</div>
       {error && <span role="alert" id={id} className="pms-resource-inline-error">{error}</span>}</>
-      : <><span className="pms-resource-inline-value">{display ?? (value === null || value === undefined || value === '' ? '待填写' : String(value))}</span>
-        {!readOnly && <Tooltip title={`编辑${label}`}><Button type="text" size="small" className="pms-resource-inline-trigger" aria-label={`编辑${label}`} icon={<EditOutlined />} onClick={() => session.begin(value)} /></Tooltip>}</>}
+      : readOnly ? <span className="pms-resource-inline-value">{display ?? (value === null || value === undefined || value === '' ? '待填写' : String(value))}</span>
+        : <Tooltip title={`点击编辑${label}`}><button type="button" className="pms-resource-inline-trigger" aria-label={`编辑${label}`} onClick={() => session.begin(value)}>
+          <span className="pms-resource-inline-value">{display ?? (value === null || value === undefined || value === '' ? '待填写' : String(value))}</span>
+        </button></Tooltip>}
   </div>
 }
 
