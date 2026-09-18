@@ -1,5 +1,7 @@
 'use client'
 
+import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
+
 import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
@@ -110,7 +112,7 @@ function generateDepartmentMonthlyRecords(
 
 /* ── Store 定义 ───────────────────────────────────────────────────── */
 
-interface HrCapabilityState {
+interface HrCapabilityState extends ResourceInlineActions {
   registryMigrationComplete: boolean
   projects: HrCapabilityProject[]
   monthlyInvestments: CapabilityMonthlyInvestment[]
@@ -256,6 +258,21 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       setVersionActive: (projectId, versionId, active) => set(s => ({
         projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'active', active),
       })),
+      createVersionInline: (projectId, budgetType, scopeId) => {
+        const state = get()
+        const project = state.projects.find(item => item.id === projectId)
+        const version = createInlineResourceVersion('capability', project, budgetType, scopeId, useHrConfigStore.getState().data) as HrCapabilityVersion
+        const projects = synchronizeProjects(state.projects.map(item => item.id === projectId ? { ...item, versions: [...item.versions, version] } : item))
+        set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, state.monthlyInvestments) })
+        return version.id
+      },
+      updateVersionInline: (projectId, versionId, patch, scopeId) => {
+        const state = get()
+        const project = state.projects.find(item => item.id === projectId)
+        const updated = updateInlineResourceVersion('capability', project, project?.versions.find(item => item.id === versionId), patch, scopeId, useHrConfigStore.getState().data) as HrCapabilityVersion
+        const projects = synchronizeProjects(state.projects.map(item => item.id === projectId ? { ...item, versions: item.versions.map(version => version.id === versionId ? updated : version) } : item))
+        set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, state.monthlyInvestments) })
+      },
       copyVersion: (projectId, versionId) => set(s => copyHrVersionSnapshot(s.projects, s.monthlyInvestments, projectId, versionId, useProjectStore.getState().currentLoginUser)),
 
       addVersion: (projectId, form) => {

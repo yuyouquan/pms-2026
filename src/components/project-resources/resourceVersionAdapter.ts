@@ -1,5 +1,6 @@
 'use client'
 
+import type { ResourceInlineActions } from '@/lib/resourceInlineEditing'
 import { useStore, type StoreApi } from 'zustand'
 import { useHrMachineStore } from '@/stores/hrMachine'
 import { useHrTosStore } from '@/stores/hrTos'
@@ -14,7 +15,7 @@ import type { ResourceMonthlyRow } from '@/components/project-resources/resource
 
 export type ResourceVersion = HrMachineVersion | HrTosVersion | HrTechnicalVersion | HrCapabilityVersion
 export type ResourceProject = HrMachineProject | HrTosProject | HrTechnicalProject | HrCapabilityProject
-export interface ResourceStoreView {
+export interface ResourceStoreView extends ResourceInlineActions {
   projects: ResourceProject[]
   monthlyInvestments: ResourceMonthlyRow[]
   refreshFormalProjects: () => void

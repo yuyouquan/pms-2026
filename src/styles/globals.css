@@ -9207,3 +9207,17 @@ input.ant-input,
   .pms-resource-version-context, .pms-resource-monthly, .pms-hr-version-surface-content { padding: 12px; }
   .pms-resource-version-meta { gap: 10px 16px; }
 }
+
+/* Resource details keep saved values visible; only the active field becomes an input. */
+.pms-resource-inline-field { display: flex; align-items: center; gap: 3px; min-height: 26px; min-width: 0; position: relative; }
+.pms-resource-inline-field.is-editing { display: block; min-width: 95px; }
+.pms-resource-inline-value { min-width: 0; overflow-wrap: anywhere; }
+.pms-resource-inline-trigger.ant-btn { flex: 0 0 22px; width: 22px; height: 22px; color: var(--pms-text-tertiary); }
+.pms-resource-inline-trigger.ant-btn:hover { color: var(--pms-brand-strong); }
+.pms-resource-inline-error { display: block; color: var(--pms-danger, #cf1322); font-size: 12px; white-space: normal; margin-top: 4px; }
+.pms-resource-inline-detail .ant-descriptions { margin-bottom: 12px; }
+.pms-resource-inline-detail .ant-table-cell .pms-resource-inline-field { justify-content: space-between; }
+.pms-resource-department-actions { margin-bottom: 8px; }
+.pms-resource-batch-field { display: inline-flex; align-items: center; gap: 6px; }
+.pms-resource-version-tabs .ant-tabs-nav { margin-bottom: 4px; }
+.pms-resource-version-tabs .ant-tag { margin-inline-end: 0; font-size: 11px; }
