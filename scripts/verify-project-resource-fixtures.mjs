@@ -64,9 +64,9 @@ for(let i=0;i<4;i++)check(`${categories[i]}: published own dates, annual history
  assert.equal(access.canEditHrInScope(b,f.pmsProjectId),false)
  const monthly=store.getState().monthlyInvestments.filter(row=>row.versionId===b.versions[1].id)
  assert.ok(monthly.some(row=>row.isEdited),'source demonstrates persisted manual monthly allocation')
- const latest=store.getState().projects.flatMap(p=>rules.HR_BUDGET_TYPES.flatMap(type=>rules.getLatestHrVersion(p.versions,type)||[]))
- assert.equal(latest.length,i===0?5:4);assert.equal(Math.round(latest.reduce((n,v)=>n+v.estimatedInvestment,0)*10)/10,[525,444.6,328.5,192.6][i])
- console.log('SCENARIO',cat,JSON.stringify({formal:f.name,budget:b.name,latestVersionCount:latest.length,latestTotal:Math.round(latest.reduce((n,v)=>n+v.estimatedInvestment,0)*10)/10,annual:b.versions.map(v=>({id:v.id,total:v.estimatedInvestment,dates:date(cat,v)})),manualRow:monthly.find(row=>row.isEdited)}))
+ const active=store.getState().projects.flatMap(p=>rules.HR_BUDGET_TYPES.flatMap(type=>rules.getActiveHrVersion(p.versions,type)||[]))
+ assert.equal(active.length,i===0?5:4);assert.equal(Math.round(active.reduce((n,v)=>n+v.estimatedInvestment,0)*10)/10,[525,444.6,328.5,192.6][i])
+ console.log('SCENARIO',cat,JSON.stringify({formal:f.name,budget:b.name,activeVersionCount:active.length,activeTotal:Math.round(active.reduce((n,v)=>n+v.estimatedInvestment,0)*10)/10,annual:b.versions.map(v=>({id:v.id,total:v.estimatedInvestment,dates:date(cat,v)})),manualRow:monthly.find(row=>row.isEdited)}))
 })
 check('fresh multi-owner, partial milestones and cancelled budget retain distinct interaction states',()=>{
  const {buildProjectInfoValues}=load('src/lib/projectInfoValues.ts')

@@ -27,7 +27,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { canCreateHrVersion, isLatestHrVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, isLatestHrVersion, isHrVersionEditable } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrTechnicalStore } from '@/hooks/useHrResourceStores'
 import {
@@ -150,7 +150,7 @@ export default function HistoryVersionSpace() {
       for (const version of project.versions) {
         rows.push({
           ...version,
-          canEdit: canEditHrInScope(project, scopeId),
+          canEdit: canEditHrInScope(project, scopeId) && isHrVersionEditable(project, version),
           isLatest: isLatestHrVersion(project, version),
           isBound: isHrFormalRecord(project),
           sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
@@ -195,7 +195,7 @@ export default function HistoryVersionSpace() {
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
           value={record.milestones[field.key] ?? null}
-          editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
+          editable={record.canEdit && (record.budgetType === 'annual' || !record.isBound)}
           onSave={v =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<TechMilestoneNodes>,
@@ -295,7 +295,7 @@ export default function HistoryVersionSpace() {
                 />
               </Tooltip>
               {/* 编辑 */}
-              {record.isLatest && isActive ? (
+              {isActive ? (
                 <Tooltip title="编辑各部门各阶段预估投入">
                   <Button
                     type="text" aria-label="编辑"
@@ -312,7 +312,7 @@ export default function HistoryVersionSpace() {
                 </Tooltip>
               ) : null}
               {/* 复制 */}
-              {isActive ? (
+              {canEditHrInScope(project, scopeId) && canCreateHrVersion(project, record.budgetType) ? (
                 <Tooltip title={canCreateHrVersion(project, record.budgetType) ? '复制此版本创建新版本' : TECH_IPM_REQUIRED_TIP}>
                   <Button
                     type="text" aria-label="复制"

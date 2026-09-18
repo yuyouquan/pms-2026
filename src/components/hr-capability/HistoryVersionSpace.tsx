@@ -27,7 +27,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { canCreateHrVersion, isLatestHrVersion } from '@/lib/hrVersionRules'
+import { canCreateHrVersion, isLatestHrVersion, isHrVersionEditable } from '@/lib/hrVersionRules'
 import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
 import {
   CAPABILITY_IPM_REQUIRED_TIP,
@@ -151,7 +151,7 @@ export default function HistoryVersionSpace() {
       for (const version of project.versions) {
         rows.push({
           ...version,
-          canEdit: canEditHrInScope(project, scopeId),
+          canEdit: canEditHrInScope(project, scopeId) && isHrVersionEditable(project, version),
           isLatest: isLatestHrVersion(project, version),
           isBound: isHrFormalRecord(project),
           projectName: project.name,
@@ -242,7 +242,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableDateCell
             value={record.projectStartTime}
-            editable={record.canEdit && record.isLatest}
+            editable={record.canEdit}
             onSave={(v) =>
               updateVersion(record.projectId, record.id, {
                 projectStartTime: v ?? '',
@@ -259,7 +259,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableDateCell
             value={record.projectEndTime}
-            editable={record.canEdit && record.isLatest}
+            editable={record.canEdit}
             onSave={(v) =>
               updateVersion(record.projectId, record.id, {
                 projectEndTime: v ?? '',
@@ -312,7 +312,7 @@ export default function HistoryVersionSpace() {
                   }}
                 />
               </Tooltip>
-              {record.canEdit && record.isLatest && project?.status === 'active' ? (
+              {record.canEdit && project?.status === 'active' ? (
                 <Tooltip title="编辑版本信息及各部门预估投入">
                   <Button
                     type="text" aria-label="编辑"
@@ -328,7 +328,7 @@ export default function HistoryVersionSpace() {
                   />
                 </Tooltip>
               ) : null}
-              {record.canEdit && project?.status === 'active' ? (
+              {canEditHrInScope(project, scopeId) && canCreateHrVersion(project, record.budgetType) ? (
                 <Tooltip title={canCreateHrVersion(project, record.budgetType) ? '复制此版本创建新版本' : CAPABILITY_IPM_REQUIRED_TIP}>
                   <Button
                     type="text" aria-label="复制"

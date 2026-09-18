@@ -1,6 +1,7 @@
 'use client'
 
-import { withMachineDerivedMilestones, machinePhaseFields } from '@/lib/hrMachinePeriods'
+import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
+import { buildMachineInvestmentView } from '@/lib/resourceAllocation'
 
 import NewVersionModal from '@/components/hr-machine/NewVersionModal'
 
@@ -33,7 +34,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { isLatestHrVersion } from '@/lib/hrVersionRules'
+import { isLatestHrVersion, isHrVersionEditable } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import {
@@ -56,7 +57,7 @@ import type {
 } from '@/types/hrMachine'
 import { exportMultiSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import { useHrConfigStore } from '@/stores/hrConfig'
-import { calcMachineDepartmentInvestments, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
+import { getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 
 /** 扁平化版本行：版本数据 + 所属项目信息 */
 interface FlatVersionRow extends HrMachineVersion {
@@ -290,7 +291,7 @@ export default function HistoryVersionSpace() {
       for (const version of project.versions) {
         rows.push({
           ...version,
-          canEdit: canEditHrInScope(project, scopeId),
+          canEdit: canEditHrInScope(project, scopeId) && isHrVersionEditable(project, version),
           isLatest: isLatestHrVersion(project, version),
           isBound: isHrFormalRecord(project),
           sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
@@ -340,7 +341,7 @@ export default function HistoryVersionSpace() {
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
           value={withMachineDerivedMilestones(record.milestones)[field.key] ?? null}
-          editable={field.key !== 'str5Plus6Months' && record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.machine.includes(field.key))}
+          editable={field.key !== 'str5Plus6Months' && record.canEdit && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.machine.includes(field.key))}
           onSave={(v) =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<MilestoneNodes>,
@@ -394,7 +395,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableSelectCell
             value={record.projectLevel}
-            editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound)}
+            editable={record.canEdit && (record.budgetType === 'annual' || !record.isBound)}
             options={projectLevelOptions}
             onSave={(v) => updateVersion(record.projectId, record.id, { projectLevel: v })}
             renderDisplay={(v) =>
@@ -429,7 +430,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableNumberCell
             value={record.levelCoefficient}
-            editable={record.canEdit && record.isLatest}
+            editable={record.canEdit}
             formatter={(v) => (v ?? 0).toFixed(2)}
             onSave={(v) => updateVersion(record.projectId, record.id, { levelCoefficient: v })}
           />
@@ -442,7 +443,7 @@ export default function HistoryVersionSpace() {
         render: (_value: unknown, record: FlatVersionRow) => (
           <EditableSelectCell
             value={record.hrModelVersion}
-            editable={record.canEdit && record.isLatest}
+            editable={record.canEdit}
             options={modelVersionOptions}
             onSave={(v) => updateVersion(record.projectId, record.id, { hrModelVersion: v })}
           />
@@ -492,7 +493,7 @@ export default function HistoryVersionSpace() {
                   setShowVersionDetailModal(true)
                 }}
               />
-              {record.canEdit && project && isLatestHrVersion(project, record) && <Button
+              {record.canEdit && project && <Button
                 type="text" size="small" aria-label="编辑版本" title="编辑版本" icon={<EditOutlined />}
                 onClick={event => { event.stopPropagation(); setVersionToEdit({ projectId: record.projectId, versionId: record.id }) }} />}
               {record.canEdit && <Popconfirm
@@ -566,22 +567,21 @@ export default function HistoryVersionSpace() {
     // Sheet2: 配置中心人力模型数据 × 等级系数
     const sheet2Rows: Sheet2Row[] = []
     for (const version of filteredVersions) {
-      const departments = calcMachineDepartmentInvestments(version.modelSnapshot ?? [], version.projectLevel, version.hrModelVersion, version.levelCoefficient)
-      for (const department of departments) {
-        const { phases } = department
+      const investment = buildMachineInvestmentView(version)
+      for (const department of investment.rows) {
         sheet2Rows.push({
           projectName: version.projectName,
           versionNumber: version.versionNumber,
           budgetTypeLabel: BUDGET_TYPE_LABELS[version.budgetType],
           primaryDepartment: department.primaryDepartment,
           secondaryDepartment: department.secondaryDepartment,
-          phases,
-          total: department.estimatedTotal,
+          phases: Object.fromEntries(investment.phaseFields.flatMap(field => typeof department[field.key] === 'number' ? [[field.key, department[field.key] as number]] : [])),
+          total: department.estimatedInvestment,
         })
       }
     }
 
-    const exportPhases = [...new Map(filteredVersions.flatMap(version => machinePhaseFields(version.modelSnapshot ?? [])).map(field => [field.key, field])).values()]
+    const exportPhases = [...new Map(filteredVersions.flatMap(version => buildMachineInvestmentView(version).phaseFields).map(field => [field.key, field])).values()]
     const sheet2Columns: ExportColumn[] = [
       { key: 'projectName', title: '项目名称', formatter: (_v, row: Sheet2Row) => row.projectName },
       { key: 'versionNumber', title: '版本号', formatter: (_v, row: Sheet2Row) => row.versionNumber },

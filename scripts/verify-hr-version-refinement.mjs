@@ -22,8 +22,11 @@ const project = { pmsProjectId: 'budget', ipmProjectCode: 'FORMAL', versions }
 const changes = { milestones: { conceptStart: '2031-01-01' }, projectStartTime: '2031-01-01', projectLevel: 'A', levelCoefficient: 1.25 }
 eq(rules.allowedHrVersionUpdates(project, versions[0], changes), changes, 'bound annual latest allows manual dates and level')
 eq(rules.allowedHrVersionUpdates({ ...project, pmsProjectId:'formal' }, versions[1], changes), { levelCoefficient: 1.25 }, 'bound nonannual remains linked')
-eq(rules.allowedHrVersionUpdates(project, versions[2], changes), {}, 'historical annual remains read only')
-eq(rules.allowedHrVersionUpdates({ ...project, ipmProjectCode: null }, versions[1], changes), changes, 'unbound latest remains editable')
+eq(rules.allowedHrVersionUpdates(project, versions[2], changes), changes, 'unlocked historical annual remains editable')
+eq(rules.allowedHrVersionUpdates(project, { ...versions[2], lockState: 'locked' }, changes), {}, 'locked historical annual rejects all content changes')
+eq(rules.allowedHrVersionUpdates(project, { ...versions[0], lockState: 'locked' }, changes), {}, 'locked latest annual rejects all content changes')
+eq(rules.allowedHrVersionUpdates({ ...project, ipmProjectCode: null }, versions[0], changes), changes, 'unbound budget annual latest remains editable')
+eq(rules.allowedHrVersionUpdates({ ...project, ipmProjectCode: null }, versions[1], changes), {}, 'budget projects reject project-budget versions outside allowed budget types')
 const config = loadTypeScriptModule(root, 'src/constants/hrConfig.ts')
 const phaseValues = Object.fromEntries(config.HR_MODEL_PHASE_FIELDS.map(({ key }) => [key, 0]))
 const records = [

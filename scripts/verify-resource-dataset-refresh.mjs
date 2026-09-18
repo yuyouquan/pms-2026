@@ -50,7 +50,8 @@ for (const [index, store] of stores.entries()) {
 // Exercise a new budget version after the reset, then boot a new module graph.
 const { RESOURCE_BUDGET_IDS } = load('src/mock/projectRegistry.ts')
 const machine = stores[0]
-const budget = machine.getState().projects.find(p => p.pmsProjectId === RESOURCE_BUDGET_IDS.machine)
+const budget = machine.getState().projects.find(p => p.pmsProjectId === 'mock-budget-machine-unbound')
+assert.notEqual(budget.pmsProjectId, RESOURCE_BUDGET_IDS.machine, 'bound source stays readonly; creation uses the editable unbound budget fixture')
 const oldVersions = structuredClone(budget.versions)
 const latest = oldVersions.at(-1)
 machine.getState().addVersion(budget.id, 'annual', {

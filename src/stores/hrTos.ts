@@ -1,13 +1,14 @@
+import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
 import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
-import { preserveHrMonthlyEdits } from '@/lib/hrMonthlySync'
+import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalTosProjects, createResourceTosProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
-import { canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
-import { synchronizeHrProjects } from '@/lib/hrProjectSync'
+import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -120,7 +121,7 @@ function getLatestVersions(project: HrTosProject): HrTosVersion[] {
 }
 
 /**
- * 同步月度预估投入：每个预算类型只保留最新版本的数据。
+ * 同步月度预估投入：保留所有版本的记录，汇总由消费者按激活版本筛选。
  */
 
 function synchronizeProjects(projects: HrTosProject[]): HrTosProject[] {
@@ -129,9 +130,9 @@ function synchronizeProjects(projects: HrTosProject[]): HrTosProject[] {
 
 function syncMonthlyInvestments(projects: HrTosProject[], existingMonthly: TosMonthlyInvestment[]): TosMonthlyInvestment[] {
   const generated = synchronizeProjects(projects).flatMap(project =>
-    getLatestVersions(project).flatMap(version => generateDepartmentMonthlyRecords(project.id, version)),
+    project.versions.flatMap(version => generateDepartmentMonthlyRecords(project.id, version)),
   )
-  return preserveHrMonthlyEdits(generated, existingMonthly)
+  return preserveLockedHrMonthlyRows(generated, existingMonthly, projects)
 }
 
 
@@ -139,7 +140,7 @@ function syncMonthlyInvestments(projects: HrTosProject[], existingMonthly: TosMo
 
 export type TosTab = 'projectList' | 'monthlyInvestment' | 'historyVersion'
 
-export interface HrTosState {
+export interface HrTosState extends ResourceInlineActions {
   registryMigrationComplete: boolean
   projects: HrTosProject[]
   monthlyInvestments: TosMonthlyInvestment[]
@@ -183,6 +184,8 @@ export interface HrTosActions {
   /** 绑定IPM正式项目编码 */
   bindIpmProject: (projectId: string, ipmCode: string) => void
 
+  setVersionLocked: (projectId: string, versionId: string, locked: boolean) => void
+  setVersionActive: (projectId: string, versionId: string, active: boolean) => void
   addVersion: (projectId: string, form: TosNewVersionForm) => void
   deleteVersion: (projectId: string, versionId: string) => void
   /** 复制版本（直接新增一个同预算类型的版本，继承数据） */
@@ -280,6 +283,29 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
       bindIpmProject: () => { throw new Error('请在项目管理 → 项目配置中管理项目档案') },
 
+      setVersionLocked: (projectId, versionId, locked) => set(s => ({
+        projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'lock', locked),
+      })),
+      setVersionActive: (projectId, versionId, active) => set(s => ({
+        projects: changeHrVersionLifecycle(s.projects, projectId, versionId, 'active', active),
+      })),
+      createVersionInline: (projectId, budgetType, scopeId) => {
+        const state = get()
+        const project = state.projects.find(item => item.id === projectId)
+        const version = createInlineResourceVersion('tos', project, budgetType, scopeId, useHrConfigStore.getState().data) as HrTosVersion
+        const projects = synchronizeProjects(state.projects.map(item => item.id === projectId ? { ...item, versions: [...item.versions, version] } : item))
+        set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, state.monthlyInvestments) })
+        return version.id
+      },
+      updateVersionInline: (projectId, versionId, patch, scopeId) => {
+        const state = get()
+        const project = state.projects.find(item => item.id === projectId)
+        const updated = updateInlineResourceVersion('tos', project, project?.versions.find(item => item.id === versionId), patch, scopeId, useHrConfigStore.getState().data) as HrTosVersion
+        const projects = synchronizeProjects(state.projects.map(item => item.id === projectId ? { ...item, versions: item.versions.map(version => version.id === versionId ? updated : version) } : item))
+        set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, state.monthlyInvestments) })
+      },
+      copyVersion: (projectId, versionId) => set(s => copyHrVersionSnapshot(s.projects, s.monthlyInvestments, projectId, versionId, useProjectStore.getState().currentLoginUser)),
+
       addVersion: (projectId, form) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
         const project = s.projects.find(p => p.id === projectId)
@@ -300,6 +326,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
             versionNumber: `V0.${minorVersion}`,
             batch: null,
             lockState: 'unlocked',
+            isActive: false,
             majorVersion: 0,
             minorVersion,
             createdBy: useProjectStore.getState().currentLoginUser,
@@ -325,6 +352,8 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
       deleteVersion: (projectId, versionId) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        const targetProject = s.projects.find(p => p.id === projectId)
+        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId))) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.filter(v => v.id !== versionId)
@@ -337,58 +366,6 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       }),
 
 
-      copyVersion: (projectId, versionId) => set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
-        const project = s.projects.find(p => p.id === projectId)
-        if (!project) return s
-        const sourceVersion = project.versions.find(v => v.id === versionId)
-        if (!sourceVersion || !canCreateHrVersion(project, sourceVersion.budgetType)) return s
-
-        const minorVersion = nextHrMinorVersion(project.versions, sourceVersion.budgetType)
-
-        const newVersion: HrTosVersion = {
-          ...sourceVersion,
-          nonLaborInvestment: cloneNonLaborInvestment(sourceVersion.nonLaborInvestment),
-          createdBy: useProjectStore.getState().currentLoginUser,
-          id: `${projectId}-${sourceVersion.budgetType}-v${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          versionNumber: `V0.${minorVersion}`,
-            batch: null,
-          lockState: 'unlocked',
-          majorVersion: 0,
-          minorVersion,
-          lockedAt: null,
-          createdAt: new Date().toISOString(),
-          milestones: { ...sourceVersion.milestones },
-          departmentInvestments: sourceVersion.departmentInvestments.map(d => ({ ...d })),
-          operationLogs: [
-            makeLog('created', `从版本 ${sourceVersion.versionNumber} 复制创建 V0.${minorVersion}`),
-            makeLog('copied', `复制自 ${sourceVersion.versionNumber}`),
-          ],
-        }
-
-        const newProjects = s.projects.map(p => {
-          if (p.id !== projectId) return p
-          // 给被复制的源版本添加一条日志
-          const newVersions = p.versions.map(v => {
-            if (v.id === versionId) {
-              return {
-                ...v,
-                operationLogs: [
-                  ...v.operationLogs,
-                  makeLog('copied', `版本 ${v.versionNumber} 被复制为 V0.${minorVersion}`),
-                ],
-              }
-            }
-            return v
-          })
-          return { ...p, versions: [...newVersions, newVersion] }
-        })
-
-        return {
-          projects: synchronizeProjects(newProjects),
-          monthlyInvestments: syncMonthlyInvestments(newProjects, s.monthlyInvestments),
-        }
-      }),
 
       updateVersion: (projectId, versionId, updates) => set((s) => {
         if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
@@ -419,7 +396,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
               ]
             }
 
-            return updated
+            return normalizeHrEditedVersion(updated, 'tos')
           })
           return { ...p, versions: newVersions }
         })
@@ -438,10 +415,10 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
-            if (v.id !== versionId || !isLatestHrVersion(p, v)) return v
+            if (v.id !== versionId || !isHrVersionEditable(p, v)) return v
             const permittedMilestones = allowedHrVersionUpdates(p, v, { milestones }).milestones
             const milestonesChanged = permittedMilestones && Object.entries(permittedMilestones).some(([key, value]) => v.milestones[key as keyof TosMilestoneNodes] !== value)
-            return {
+            return normalizeHrEditedVersion({
               ...v,
               milestones: permittedMilestones ? { ...v.milestones, ...permittedMilestones } : v.milestones,
               nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
@@ -451,7 +428,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
                 ...v.operationLogs,
                 makeLog('deptUpdated', `更新部门预估投入（共${departmentInvestments.length}条）${milestonesChanged ? '、里程碑时间' : ''}`),
               ],
-            }
+            }, 'tos')
           })
           return { ...p, versions: newVersions }
         })
@@ -474,7 +451,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId && !mi.isArchived && canAccessHrProject(s.projects.find(p => p.id === mi.projectId), true)
+          mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(s.projects.find(p => p.id === mi.projectId), s.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId))
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),
@@ -501,7 +478,7 @@ export const useHrTosStore = create<HrTosState & HrTosActions>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }
-        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects))
+        const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects).map((project, index) => ({ ...project, versions: project.versions.map((version, vi) => merged.projects[index].versions[vi].lockState === 'locked' ? merged.projects[index].versions[vi] : version) })))
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
       version: 5,

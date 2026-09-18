@@ -1,10 +1,11 @@
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
+import type { BudgetScheduleModelSnapshot } from '@/lib/budgetMilestoneScheduling'
 /* ── HR Pipeline - tOS Project Types ───────────────────────────────── */
 
 /** 预算类型 */
 export type BudgetType = 'annual' | 'projectEstimate' | 'projectBudget'
 
-/** 旧数据兼容字段，不再用于控制编辑 */
+/** 锁定状态；锁定后版本内容只读 */
 export type VersionLockState = 'locked' | 'unlocked'
 
 /** 项目状态 */
@@ -99,9 +100,12 @@ export interface HrTosVersion {
   budgetType: BudgetType
   /** 版本号，如 V0.1、V0.2 */
   versionNumber: string
-  /** 所属批次，所有历史版本均可更新 */
+  /** 所属批次，仅未锁定版本可更新 */
   batch?: number | null
-  /** 旧数据兼容字段，不再用于控制编辑 */
+  /** 是否激活；同一预算类型至多一个激活版本 */
+  isActive: boolean
+  copiedFromVersionId?: string
+  copiedFromVersionNumber?: string
   lockState: VersionLockState
   /** 兼容旧数据的大版本字段；当前编号固定为 0 */
   majorVersion: number
@@ -113,6 +117,8 @@ export interface HrTosVersion {
   estimatedInvestment: number
   /** 里程碑节点 */
   milestones: TosMilestoneNodes
+  /** 排布时使用的已发布计划模板快照；手工改日期不改变模型。 */
+  scheduleModelSnapshot?: BudgetScheduleModelSnapshot
   /** 版本详情：部门预估投入列表 */
   departmentInvestments: TosDepartmentInvestment[]
   /** 创建时间 */
@@ -139,11 +145,11 @@ export interface HrTosProject {
   ipmProjectName: string | null
   /** 项目状态 */
   status: ProjectStatus
-  /** 年度预算（来自最新版本） */
+  /** 年度预算（来自激活版本） */
   annualBudget: number
-  /** 项目概算（来自最新版本） */
+  /** 项目概算（来自激活版本） */
   projectEstimate: number
-  /** 项目预算（来自最新版本） */
+  /** 项目预算（来自激活版本） */
   projectBudget: number
   /** 项目核算 */
   projectAccounting: number
@@ -166,9 +172,9 @@ export interface TosMonthlyInvestment {
   budgetType: BudgetType
   /** 版本号 */
   versionNumber: string
-  /** 所属批次，所有历史版本均可更新 */
+  /** 所属批次，仅未锁定版本可更新 */
   batch?: number | null
-  /** 旧数据兼容字段，不再用于控制编辑 */
+  /** 锁定状态；锁定后版本内容只读 */
   versionLockState: VersionLockState
   /** 预估合计 */
   estimatedTotal: number

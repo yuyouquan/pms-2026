@@ -1,5 +1,7 @@
 'use client'
 
+import { getActiveHrVersion } from '@/lib/hrVersionRules'
+
 import { useMemo, useState } from 'react'
 import { Card, Table, Button, Tooltip, Tag, Space, Select, Popover, App, Input } from 'antd'
 import { DownloadOutlined, SearchOutlined, LinkOutlined, PlusOutlined } from '@ant-design/icons'
@@ -123,7 +125,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       key: 'annualBudget',
       width: 110,
       align: 'right',
-      render: (value: number) => formatPersonMonth(value),
+      render: (value: number, record: HrCapabilityProject) => getActiveHrVersion(record.versions, 'annual') ? formatPersonMonth(value) : '未激活',
     },
     {
       title: '项目概算',
@@ -131,7 +133,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       key: 'projectEstimate',
       width: 110,
       align: 'right',
-      render: (value: number) => formatPersonMonth(value),
+      render: (value: number, record: HrCapabilityProject) => getActiveHrVersion(record.versions, 'projectEstimate') ? formatPersonMonth(value) : '未激活',
     },
     {
       title: '项目预算',
@@ -139,7 +141,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       key: 'projectBudget',
       width: 110,
       align: 'right',
-      render: (value: number) => formatPersonMonth(value),
+      render: (value: number, record: HrCapabilityProject) => getActiveHrVersion(record.versions, 'projectBudget') ? formatPersonMonth(value) : '未激活',
     },
     {
       title: '项目核算',

@@ -1,6 +1,7 @@
 // 版本对比工具函数
 
 import type { PlanTask, VersionDiff } from '@/types';
+import { formatTemplateIntervalRatio } from '@/lib/templateIntervals';
 
 // 辅助函数：转换为Date
 const toDate = (d: Date | string | undefined): Date | undefined => {
@@ -41,6 +42,8 @@ export interface CompareTableRow {
   planStartDate: string;
   planEndDate: string;
   estimatedDays: number | null;
+  intervalDays?: number | null;
+  intervalRatio?: number | null;
   actualStartDate: string;
   actualEndDate: string;
   actualDays: number | null;
@@ -55,6 +58,8 @@ export interface CompareTableRow {
 }
 
 export type CompareTask = PlanTask & {
+  intervalDays?: number | null;
+  intervalRatio?: number | null;
   stableId?: string;
   stageName?: string;
   milestoneName?: string;
@@ -75,6 +80,8 @@ const getCompareDisplayFields = (task: CompareTask) => ({
   planStartDate: (task.planStartDate as any) || '',
   planEndDate: (task.planEndDate as any) || '',
   estimatedDays: task.estimatedDays ?? null,
+  intervalDays: task.intervalDays,
+  intervalRatio: task.intervalRatio,
   actualStartDate: (task.actualStartDate as any) || '',
   actualEndDate: (task.actualEndDate as any) || '',
   actualDays: task.actualDays ?? null,
@@ -186,6 +193,12 @@ export function compareVersionsForTable(
       const newEstDays = normalizeDuration(newTask.estimatedDays);
       if (oldEstDays !== newEstDays) {
         fieldDiffs.push({ field: 'estimatedDays', oldValue: formatDuration(oldEstDays), newValue: formatDuration(newEstDays) });
+      }
+      for (const field of ['intervalDays', 'intervalRatio'] as const) {
+        if ((oldTask[field] ?? null) !== (newTask[field] ?? null)) {
+          const format = field === 'intervalRatio' ? formatTemplateIntervalRatio : (value: number | null | undefined) => value == null ? '-' : `${value}天`
+          fieldDiffs.push({ field, oldValue: format(oldTask[field]), newValue: format(newTask[field]) })
+        }
       }
       const oldActStart = (oldTask.actualStartDate as any) || '';
       const newActStart = (newTask.actualStartDate as any) || '';

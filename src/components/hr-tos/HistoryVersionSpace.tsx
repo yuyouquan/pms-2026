@@ -27,7 +27,7 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
-import { isLatestHrVersion } from '@/lib/hrVersionRules'
+import { isLatestHrVersion, isHrVersionEditable } from '@/lib/hrVersionRules'
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { useHrTosStore } from '@/hooks/useHrResourceStores'
 import {
@@ -150,7 +150,7 @@ export default function HistoryVersionSpace() {
       for (const version of project.versions) {
         rows.push({
           ...version,
-          canEdit: canEditHrInScope(project, scopeId),
+          canEdit: canEditHrInScope(project, scopeId) && isHrVersionEditable(project, version),
           isLatest: isLatestHrVersion(project, version),
           isBound: isHrFormalRecord(project),
           sourceHint: version.budgetType !== 'annual' && isLatestHrVersion(project, version) && source
@@ -197,7 +197,7 @@ export default function HistoryVersionSpace() {
       render: (_value: unknown, record: FlatVersionRow) => (
         <EditableDateCell
           value={record.milestones[field.key] ?? null}
-          editable={record.canEdit && record.isLatest && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.tos.includes(field.key))}
+          editable={record.canEdit && (record.budgetType === 'annual' || !record.isBound || HR_MANUAL_MILESTONE_KEYS.tos.includes(field.key))}
           onSave={(v) =>
             updateVersion(record.projectId, record.id, {
               milestones: { [field.key]: v } as Partial<TosMilestoneNodes>,
@@ -294,7 +294,7 @@ export default function HistoryVersionSpace() {
                   }}
                 />
               </Tooltip>
-              {record.canEdit && record.isLatest && project?.status === 'active' ? (
+              {record.canEdit && project?.status === 'active' ? (
                 <Tooltip title="编辑各部门各阶段预估投入">
                   <Button
                     type="text" aria-label="编辑"

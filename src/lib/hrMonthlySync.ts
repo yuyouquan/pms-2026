@@ -53,3 +53,13 @@ export function preserveHrMonthlyEdits<T extends MonthlyRow>(generated: T[], exi
   })
   return [...synchronized, ...existing.filter(row => !used.has(row.id) && !synchronized.some(next => next.id === row.id)).map(row => ({ ...row, isArchived: true }))]
 }
+
+/** A locked version's saved allocation rows are a snapshot, even when model configuration changes. */
+export function preserveLockedHrMonthlyRows<T extends MonthlyRow>(generated: T[], existing: T[], projects: readonly { versions: readonly { id: string; lockState?: string }[] }[]): T[] {
+  const locked = new Set(projects.flatMap(project => project.versions.filter(version => version.lockState === 'locked').map(version => version.id)))
+  const generatedIds = new Set(generated.map(row => row.id))
+  // Legacy latest-only synchronization archived historical versions. Restore source-present rows without changing their allocations.
+  const saved = existing.filter(row => locked.has(row.versionId)).map(row => row.isArchived && generatedIds.has(row.sourceRowId ?? row.id) ? { ...row, isArchived: false } : row)
+  const savedVersions = new Set(saved.map(row => row.versionId))
+  return [...preserveHrMonthlyEdits(generated.filter(row => !savedVersions.has(row.versionId)), existing.filter(row => !savedVersions.has(row.versionId))), ...saved]
+}

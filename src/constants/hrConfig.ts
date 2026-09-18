@@ -338,8 +338,19 @@ export function calcDepartmentMonthlySplit(
   modelVersion: string,
   levelCoefficient: number,
   milestones: MilestoneNodes,
+  manualDepartments?: Array<{ id: string; primaryDepartment: string; secondaryDepartment: string; estimatedInvestment: number; [key: string]: string | number }>,
 ): DepartmentMonthlySplit[] {
-  const departments = calcMachineDepartmentInvestments(records, projectLevel, modelVersion, levelCoefficient)
+  const departments = manualDepartments?.map(row => ({
+    id: row.id,
+    currentSchema: MACHINE_INVESTMENT_PERIODS.every(phase => typeof row[phase.key] === 'number'),
+    primaryDepartment: row.primaryDepartment,
+    secondaryDepartment: row.secondaryDepartment,
+    estimatedTotal: row.estimatedInvestment,
+    phases: Object.fromEntries([
+      ...MACHINE_INVESTMENT_PERIODS.map(phase => phase.key),
+      ...LEGACY_PHASE_DEFS.map(phase => phase.configKey),
+    ].map(key => [key, typeof row[key] === 'number' ? row[key] : 0])),
+  })) ?? calcMachineDepartmentInvestments(records, projectLevel, modelVersion, levelCoefficient)
   const results: DepartmentMonthlySplit[] = []
   for (const department of departments) {
     const { primaryDepartment, secondaryDepartment, estimatedTotal } = department
