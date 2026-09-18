@@ -70,7 +70,7 @@ export default function BudgetMilestoneSchedule({
     })),
     ...(() => {
       const manual = fields.filter(field => !scheduledKeys.has(field.key))
-      return manual.length ? [{ id: 'manual', label: '手动维护', fields: manual, metrics: undefined }] : []
+      return manual.length ? [{ id: 'manual', label: '后续里程碑', fields: manual, metrics: undefined }] : []
     })(),
   ] : [{ id: 'pending', label: '待排布', fields: [...fields], metrics: undefined }]
 
@@ -119,7 +119,7 @@ export default function BudgetMilestoneSchedule({
         >
           <div className="pms-budget-milestone-stage-header">
             <strong>{group.label}</strong>
-            <span>{group.metrics ? formatBudgetStageMetrics(group.metrics) : '排布不可用/模型不可用'}</span>
+            {group.metrics ? <span>{formatBudgetStageMetrics(group.metrics)}</span> : group.id === 'pending' ? <span>排布不可用/模型不可用</span> : null}
           </div>
           <dl style={{ gridTemplateColumns: `repeat(${Math.max(group.fields.length, 1)}, minmax(142px, 1fr))` }}>
             {group.fields.map(field => <div key={field.key}>

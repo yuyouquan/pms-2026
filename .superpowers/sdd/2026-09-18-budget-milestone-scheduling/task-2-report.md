@@ -4,7 +4,7 @@
 
 - Added a budget-only milestone scheduling flow for machine, tOS, and technical resources. The two category anchors are displayed before the `里程碑信息` heading and schedule all mapped intermediate milestones from the newest published template.
 - Saved each schedule with an immutable model snapshot containing the published template version, mapped milestones, stage ownership, intervals, and total model days. Later manual milestone edits update scheduled metrics while model metrics remain tied to the saved snapshot.
-- Rendered the milestone row by template stages with colored headers and `排布N天(xx.xx%)/模型N天(xx.xx%)`. Unmapped trailing lifecycle dates remain in a `手动维护` group and are never overwritten by auto scheduling.
+- Rendered the milestone row by template stages with colored headers and `排布N天（xx.xx%）/模型N天（xx.xx%）`. Unmapped trailing lifecycle dates remain in a `后续里程碑` group and are never overwritten by auto scheduling.
 - Added one atomic `milestoneSchedule` resource patch. The full snapshot, mapped keys, dates, source ownership, scope, editable version state, RBAC, and complete milestone order are validated before the store writes the new version. Machine derived `STR5+6个月` and non-labor month ranges still follow saved dates.
 - Added fresh-install mock models and examples for all three categories. Default drafts and default published V3 snapshots use the same 100-day interval models; bound budget fixtures include scheduled dates and a saved model snapshot.
 
@@ -32,6 +32,14 @@ All commands above exited 0 in the implementer worktree. Per controller instruct
 
 ## Review notes and remaining acceptance risk
 
-- Direct keyboard entry in the two anchor DatePickers uses the existing input-capture helper before blur/Enter. Browser acceptance still needs to confirm Ant Design's native input event sequence in the connected UI.
+- Direct keyboard entry in the two anchor DatePickers uses the existing input-capture helper before blur/Enter; controller browser acceptance confirmed the interaction in all three categories.
 - Stored schedules intentionally remain bound to their saved template snapshot. Publishing another template changes only the next schedule action, not existing model metrics.
 - Bound formal-source budget fixtures are readonly by design; their prefilled schedules demonstrate rendering. Editable unbound budget fixtures exercise the scheduling action.
+
+## Review remediation
+
+- Fail closed for every positive-weight nested template node that is not a direct milestone of a root stage. Direct lifecycle milestones outside the selected anchor window remain outside the schedule, as intended.
+- Strengthened persisted snapshot validation: every duplicated stage milestone must match the canonical milestone's `templateTaskId`, `stageId`, `fieldKey`, `label`, and `intervalDays`. A JSON-roundtrip regression now rejects a stage copy changed from its canonical weight to 999 days.
+- Changed metric punctuation to full-width Chinese parentheses. Renamed the non-model tail group to `后续里程碑` and removed unavailable model/schedule copy from that group; the pre-schedule `待排布` group retains its unavailable prompt.
+- Focused post-review verification: `node scripts/verify-budget-milestone-scheduling.mjs`, resource inline render/date checks, `npx tsc --noEmit`, and `git diff --check` all exited 0.
+- Controller browser acceptance covered all three anchor inputs and 100-day scheduling, machine manual edit/lock/copy, tOS reverse-order rejection, and fresh three-category seeds.

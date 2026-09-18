@@ -93,6 +93,10 @@ assert.throws(() => scheduling.resolvePublishedBudgetScheduleModel(publishedStat
   ...stage('1', '概念阶段', [['概念启动', 0], ['未知评审点', 5], ['STR5', 5]]),
 ]), 'machine'), /未知评审点.*无法映射/)
 assert.throws(() => scheduling.resolvePublishedBudgetScheduleModel(publishedState('machine', [
+  ...stage('1', '概念阶段', [['概念启动', 0], ['STR5', 5]]),
+  task('1.1.1', '未知深层节点', 9, '1.1', 1),
+]), 'machine'), /未知深层节点.*无法映射/, 'positive-weight nested nodes must not disappear outside direct stage traversal')
+assert.throws(() => scheduling.resolvePublishedBudgetScheduleModel(publishedState('machine', [
   ...stage('1', '概念阶段', [['STR5', 2], ['STR1', 1], ['概念启动', 0]]),
 ]), 'machine'), /锚点顺序/)
 assert.throws(() => scheduling.createBudgetMilestoneSchedule(roundingModel, '2026-02-01', '2026-01-01'), /结束时间不能早于开始时间/)
@@ -104,8 +108,11 @@ const manualMetrics = scheduling.calculateBudgetStageMetrics(roundingModel, { ..
 assert.equal(initialMetrics[0].modelDays, 3)
 assert.equal(manualMetrics[0].modelDays, 3, 'manual changes never alter model metrics')
 assert.notEqual(initialMetrics[0].scheduledSegments[0].days, manualMetrics[0].scheduledSegments[0].days, 'manual edit changes scheduled metric')
-assert.match(scheduling.formatBudgetStageMetrics(manualMetrics[0]), /^排布10天\(100\.00%\)\/模型3天\(100\.00%\)$/)
+assert.match(scheduling.formatBudgetStageMetrics(manualMetrics[0]), /^排布10天（100\.00%）\/模型3天（100\.00%）$/)
 assert.match(scheduling.formatBudgetStageMetrics(scheduling.calculateBudgetStageMetrics(roundingModel, { ...schedule, str1: null })[0]), /^排布不可用\//)
+const divergentSnapshot = JSON.parse(JSON.stringify(roundingModel))
+divergentSnapshot.stages[0].milestones[1].intervalDays = 999
+assert.throws(() => scheduling.validateBudgetScheduleSnapshot('machine', divergentSnapshot), /阶段里程碑与模型不一致/, 'JSON roundtrip stage copies must match canonical milestones')
 
 const planStore = get('src/stores/plan.ts').usePlanStore
 const intervalMath = get('src/lib/templateIntervals.ts')

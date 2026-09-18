@@ -152,9 +152,13 @@ export function resolvePublishedBudgetScheduleModel(
 
   const roots = sortTasks(tasks.filter(task => !task.parentId))
   const taskIds = new Set(tasks.map(task => String(task.id)))
+  const rootIds = new Set(roots.map(root => String(root.id)))
   const directChildren = new Map(roots.map(root => [String(root.id), sortTasks(tasks.filter(task => String(task.parentId ?? '') === String(root.id)))]))
-  const orphanWithWeight = tasks.find(task => task.parentId && !taskIds.has(String(task.parentId)) && isWeight(task.intervalDays) && task.intervalDays > 0)
-  if (orphanWithWeight) throw new Error(`模板节点“${orphanWithWeight.taskName || orphanWithWeight.id}”的阶段不存在，无法映射模型`)
+  const unsupportedWeightedNode = tasks.find(task => task.parentId && !rootIds.has(String(task.parentId)) && isWeight(task.intervalDays) && task.intervalDays > 0)
+  if (unsupportedWeightedNode) {
+    const parentExists = taskIds.has(String(unsupportedWeightedNode.parentId))
+    throw new Error(`模板节点“${unsupportedWeightedNode.taskName || unsupportedWeightedNode.id}”${parentExists ? '不是阶段直接里程碑' : '的阶段不存在'}，无法映射模型`)
+  }
   const flattened = roots.flatMap(root => (directChildren.get(String(root.id)) ?? []).map(child => ({ root, child })))
   const [firstAnchorLabel, lastAnchorLabel] = normalizedAnchorLabels[category]
   const firstMatches = flattened.map((item, index) => normalizeLabel(item.child.taskName) === firstAnchorLabel ? index : -1).filter(index => index >= 0)
@@ -296,7 +300,7 @@ export function calculateBudgetStageMetrics(model: BudgetScheduleModelSnapshot, 
 const formatDays = (value: number) => Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)))
 const formatRatio = (value: number) => `${value.toFixed(2)}%`
 export const formatBudgetStageMetrics = (metrics: Pick<BudgetStageMetrics, 'scheduledDays' | 'scheduledRatio' | 'modelDays' | 'modelRatio'>) => (
-  `${metrics.scheduledDays === null || metrics.scheduledRatio === null ? '排布不可用' : `排布${formatDays(metrics.scheduledDays)}天(${formatRatio(metrics.scheduledRatio)})`}/${Number.isFinite(metrics.modelDays) && Number.isFinite(metrics.modelRatio) ? `模型${formatDays(metrics.modelDays)}天(${formatRatio(metrics.modelRatio)})` : '模型不可用'}`
+  `${metrics.scheduledDays === null || metrics.scheduledRatio === null ? '排布不可用' : `排布${formatDays(metrics.scheduledDays)}天（${formatRatio(metrics.scheduledRatio)}）`}/${Number.isFinite(metrics.modelDays) && Number.isFinite(metrics.modelRatio) ? `模型${formatDays(metrics.modelDays)}天（${formatRatio(metrics.modelRatio)}）` : '模型不可用'}`
 )
 
 export function validateBudgetScheduleSnapshot(category: BudgetScheduleCategory, snapshot: BudgetScheduleModelSnapshot) {
@@ -311,9 +315,13 @@ export function validateBudgetScheduleSnapshot(category: BudgetScheduleCategory,
   if (snapshot.milestones.some((milestone, index) => !isWeight(milestone.intervalDays) || index === 0 && milestone.intervalDays !== 0)) throw new Error('排布模型间隔天数无效')
   const total = snapshot.milestones.slice(1).reduce((sum, milestone) => sum + milestone.intervalDays, 0)
   if (Math.abs(total - snapshot.totalModelDays) > 0.000001) throw new Error('排布模型周期汇总不一致')
-  const stagedFields = snapshot.stages.flatMap(stage => stage.milestones.map(milestone => {
+  const stagedMilestones = snapshot.stages.flatMap(stage => stage.milestones.map(milestone => {
     if (milestone.stageId !== stage.templateTaskId) throw new Error('排布模型阶段归属无效')
-    return milestone.fieldKey
+    return milestone
   }))
-  if (stagedFields.length !== fields.length || stagedFields.some((field, index) => field !== fields[index])) throw new Error('排布模型阶段映射不完整')
+  if (stagedMilestones.length !== snapshot.milestones.length) throw new Error('排布模型阶段映射不完整')
+  const milestoneProperties: (keyof BudgetScheduleMilestone)[] = ['templateTaskId', 'stageId', 'fieldKey', 'label', 'intervalDays']
+  if (stagedMilestones.some((milestone, index) => milestoneProperties.some(property => milestone[property] !== snapshot.milestones[index][property]))) {
+    throw new Error('排布模型阶段里程碑与模型不一致')
+  }
 }
