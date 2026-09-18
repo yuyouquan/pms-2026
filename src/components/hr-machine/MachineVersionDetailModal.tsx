@@ -13,6 +13,7 @@ import { Alert, Table, Tag, Descriptions } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useHrMachineStore } from '@/hooks/useHrResourceStores'
 import { buildMachineInvestmentView } from '@/lib/resourceAllocation'
+import { formatMachineDetailPhase } from '@/components/hr-machine/machineVersionDetailView'
 import {
   BUDGET_TYPE_LABELS,
   BUDGET_TYPE_COLORS,
@@ -77,7 +78,7 @@ export default function MachineVersionDetailModal({
       width: 145,
       align: 'center',
       render: (_v: unknown, record: DeptPhaseRow) => (
-        <span style={{ fontWeight: 500 }}>{formatPersonMonth(record.phases[f.key])}</span>
+        <span style={{ fontWeight: 500 }}>{formatMachineDetailPhase(record.phases, f.key)}</span>
       ),
     }))
 

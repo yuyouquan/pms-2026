@@ -31,6 +31,18 @@ assert.deepEqual(view.phaseFields.map(field => field.key), [
   'conceptToStr1', 'str1ToStr2', 'str2ToStr3', 'str3ToStr4', 'str4ToStr4a', 'str4aToStr5', 'str5ToSixMonths',
 ])
 
+const { formatMachineDetailPhase } = load(path.resolve('src/components/hr-machine/machineVersionDetailView.ts'))
+const mixedRows = [
+  { ...actualRows[0], id: 'current-zero', conceptToStr1: 0 },
+  { id: 'legacy-zero', primaryDepartment: '研发中心', secondaryDepartment: '软件部', estimatedInvestment: 6,
+    conceptPhase: 0, planningPhase: 1, developmentPhase: 1, validationPhase: 1, launchPhase: 1, lifecycle: 2 },
+]
+const mixedView = allocation.buildMachineInvestmentView({ ...changedModelVersion, machineDepartmentInvestments: mixedRows })
+assert.equal(formatMachineDetailPhase(mixedView.rows[0], 'conceptToStr1'), '-', 'detail keeps the supported-zero formatter output')
+assert.equal(formatMachineDetailPhase(mixedView.rows[0], 'conceptPhase'), '—', 'detail marks a current row legacy phase unsupported')
+assert.equal(formatMachineDetailPhase(mixedView.rows[1], 'conceptPhase'), '-', 'detail keeps the supported legacy-zero formatter output')
+assert.equal(formatMachineDetailPhase(mixedView.rows[1], 'conceptToStr1'), '—', 'detail marks a legacy row current phase unsupported')
+
 for (const file of [
   'src/components/hr-machine/HistoryVersionSpace.tsx',
   'src/components/hr-machine/MachineVersionDetailModal.tsx',
