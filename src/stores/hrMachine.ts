@@ -451,13 +451,14 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       })
       },
 
-      refreshFormalProjects: () => set((s) => {
+      refreshFormalProjects: () => {
+        const s = get()
         const reconciled = reconcileHrRegistry(s.projects, s.monthlyInvestments, 'machine', s.registryMigrationComplete)
         const projects = synchronizeProjects(reconciled.projects)
         const monthlyInvestments = syncMonthlyInvestments(projects, reconciled.monthlyInvestments)
-        if (s.registryMigrationComplete && JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return s
-        return { projects, monthlyInvestments, registryMigrationComplete: true }
-      }),
+        if (s.registryMigrationComplete && JSON.stringify(projects) === JSON.stringify(s.projects) && JSON.stringify(monthlyInvestments) === JSON.stringify(s.monthlyInvestments)) return
+        set({ projects, monthlyInvestments, registryMigrationComplete: true })
+      },
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
@@ -492,6 +493,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
     {
       storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-machine',
+      partialize: state => ({ projects: state.projects, monthlyInvestments: state.monthlyInvestments, registryMigrationComplete: state.registryMigrationComplete }),
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<typeof current>
         const merged = { ...current, projects: saved.projects ?? current.projects, monthlyInvestments: saved.monthlyInvestments ?? current.monthlyInvestments, registryMigrationComplete: saved.registryMigrationComplete ?? current.registryMigrationComplete }

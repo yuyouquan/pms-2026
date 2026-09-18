@@ -27,3 +27,7 @@ Implement human per-row total editing weighted by phase date durations; phase ed
 ## Task 3: Acceptance/release (controller)
 
 Independent task review, fixes and final integration review. At least two functional rounds plus focused regressions, TypeScript/build, real browser interaction including all new editable controls/status/locks/totals/dates/months. QA doc, commit, push current feature, verify remote/local parity and preserve local preview.
+
+## Post-deployment regression: cross-tab storage convergence
+
+Production acceptance exposed a two-tab storage loop, reproduced with real stores and storage events: two tabs with different machine activeTab values continue alternating persist payloads because UI fields are serialized, merge retains each tab's UI, and no-op refresh still invokes Zustand persist. Fix HR refresh no-ops to avoid writes and persist only durable project/version/monthly/migration data. Preserve legacy payload compatibility and true cross-tab data updates. Add a bounded event harness covering different local UI, actual total/phase/copy changes, source refresh, locks and reload. Re-review, rebuild, and release the same feature→dev→master route without deleting user storage.
