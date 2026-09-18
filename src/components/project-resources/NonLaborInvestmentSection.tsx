@@ -10,6 +10,7 @@ import { useHrConfigStore } from '@/stores/hrConfig'
 import { cloneNonLaborInvestment, formatNonLaborAmount, nonLaborDepartmentPairs, nonLaborItemKey, nonLaborMonths, nonLaborTotal } from '@/lib/nonLaborInvestment'
 import { nonLaborSpreadsheetColumns, parseNonLaborInvestmentRows } from '@/lib/nonLaborSpreadsheet'
 import { exportMultiSheet } from '@/utils/exportExcel'
+import { useInlineImportSession } from '@/components/project-resources/useInlineImportSession'
 import { ResourceInlineControl } from '@/components/project-resources/ResourceInlineField'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import type { NonLaborInvestment, NonLaborInvestmentItem } from '@/types/nonLaborInvestment'
@@ -26,8 +27,8 @@ export function useNonLaborDraft(open: boolean, editorKey: string, seed: NonLabo
   return { value: { ...value, ...hrNonLaborMonthRange(category, dates) }, onChange: setValue }
 }
 
-export default function NonLaborInvestmentSection({ value, onChange, readOnly = false, inline = false }: {
-  value: NonLaborInvestment; onChange?: (value: NonLaborInvestment) => void; readOnly?: boolean; inline?: boolean
+export default function NonLaborInvestmentSection({ value, onChange, readOnly = false, inline = false, canImport }: {
+  value: NonLaborInvestment; onChange?: (value: NonLaborInvestment) => void; readOnly?: boolean; inline?: boolean; canImport?: () => boolean
 }) {
   const { modal, message } = App.useApp()
   const config = useHrConfigStore(state => state.data)
@@ -35,6 +36,9 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
   const departmentRecords = config.techModuleDept ?? []
   const departments = nonLaborDepartmentPairs(departmentRecords)
   const [importing, setImporting] = useState(false)
+  const importSession = useInlineImportSession()
+  const importPermission = useRef({ readOnly, canImport })
+  importPermission.current = { readOnly, canImport }
   const currentValueRef = useRef(value)
   currentValueRef.current = value
   const active = subjects.filter(subject => subject.enabled !== false)
@@ -58,6 +62,7 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
     { sheetName: '科目选项', rows: active, columns: [{ key: 'secondarySubject', title: '二级科目' }, { key: 'tertiarySubject', title: '三级科目' }] },
   ], '非人力投入模板.xlsx')
   const handleImport = async (file: File) => {
+    const canApply = importSession.capture(() => currentValueRef.current === value && !importPermission.current.readOnly && (importPermission.current.canImport?.() ?? true))
     setImporting(true)
     try {
       const workbook = XLSX.read(await file.arrayBuffer())
@@ -65,13 +70,14 @@ export default function NonLaborInvestmentSection({ value, onChange, readOnly = 
       const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
       const parsed = parseNonLaborInvestmentRows(rows, value, subjects, departmentRecords, value)
       const apply = () => {
-        if (currentValueRef.current !== value) {
-          message.warning('当前投入数据或时间范围已变化，请重新导入')
+        if (!canApply()) {
+          message.warning('当前版本、投入数据或编辑权限已变化，请重新导入')
           return
         }
         onChange?.(parsed)
         message.success(`已导入 ${parsed.items.length} 条非人力投入数据`)
       }
+      if (!canApply()) { message.warning('当前版本、投入数据或编辑权限已变化，请重新导入'); return false }
       if (value.items.length) modal.confirm({
         centered: true,
         title: '确认导入非人力投入',

@@ -28,9 +28,14 @@ export default function ResourceInlineField({ label, value, display, readOnly = 
     const preventFailedLeave = (event: MouseEvent) => {
       if (session.state.error && !inside(event.target as Node)) { event.preventDefault(); event.stopImmediatePropagation() }
     }
+    const escape = (event: KeyboardEvent) => {
+      if (inside(event.target as Node) && session.captureEscape(event)) useUiStore.getState().setIsEditMode(false)
+    }
+    document.addEventListener('keydown', escape, true)
     document.addEventListener('pointerdown', outside, true)
     document.addEventListener('click', preventFailedLeave, true)
     return () => {
+      document.removeEventListener('keydown', escape, true)
       document.removeEventListener('pointerdown', outside, true)
       document.removeEventListener('click', preventFailedLeave, true)
       popupRoot.current?.remove(); popupRoot.current = null

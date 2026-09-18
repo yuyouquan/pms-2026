@@ -9,10 +9,13 @@ import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import type { ResourceProject, ResourceVersion } from '@/components/project-resources/resourceVersionAdapter'
 import { resourceStore } from '@/components/project-resources/resourceVersionAdapter'
 import ResourceInlineField from '@/components/project-resources/ResourceInlineField'
+import { useInlineImportSession } from '@/components/project-resources/useInlineImportSession'
+import { isHrVersionEditable } from '@/lib/hrVersionRules'
+import { inlineDateInputHandlers } from '@/components/project-resources/inlineFieldSession'
 import NonLaborInvestmentSection from '@/components/project-resources/NonLaborInvestmentSection'
 import { canEditResourceMilestone, resourceMilestoneFields, resourcePhaseFields, type InlineDepartment, type ResourceInlinePatch } from '@/lib/resourceInlineEditing'
 import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
-import { isHrFormalRecord, getHrRegistryProject } from '@/lib/hrProjectRegistry'
+import { isHrFormalRecord, getHrRegistryProject, canEditHrInScope } from '@/lib/hrProjectRegistry'
 import { calcMachineDepartmentInvestments, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 import { machinePhaseFields } from '@/lib/hrMachinePeriods'
 import { useHrConfigStore } from '@/stores/hrConfig'
@@ -29,6 +32,12 @@ export default function ResourceInlineDetail({ category, project, version, scope
   const { primaryOptions, getSecondaryOptions } = useHrDepartmentOptions()
   const records = useHrConfigStore(state => state.data.hrModel ?? [])
   const currentVersion = useRef(version); currentVersion.current = version
+  const importSession = useInlineImportSession()
+  const isImportCurrent = () => {
+    const current = resourceStore(category).getState().projects.find(item => item.id === project.id)
+    const saved = current?.versions.find(item => item.id === version.id)
+    return saved === version && canEditHrInScope(current, scopeId) && isHrVersionEditable(current, saved)
+  }
   const persist = (patch: ResourceInlinePatch) => resourceStore(category).getState().updateVersionInline(project.id, version.id, patch, scopeId)
   const action = (fn: () => void) => { try { fn() } catch (error) { message.warning(error instanceof Error ? error.message : '保存失败') } }
   const dates = ('projectStartTime' in version ? version : version.milestones) as unknown as Record<string, string | null>
@@ -52,6 +61,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
   const templateColumns = [{ key: 'primaryDepartment', title: '一级部门' }, { key: 'secondaryDepartment', title: '二级部门' }, ...phases.map(field => ({ key: field.key, title: field.label }))]
   const importDepartments = async (file: File) => {
     const original = version
+    const canApply = importSession.capture(() => currentVersion.current === original && isImportCurrent())
     try {
       const workbook = XLSX.read(await file.arrayBuffer())
       if (!workbook.SheetNames[0]) throw new Error('文件中没有工作表')
@@ -62,7 +72,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
         return item
       })
       if (!parsed.length) throw new Error('未解析到有效数据，请检查模板格式')
-      if (currentVersion.current !== original) throw new Error('当前版本数据已变化，请重新导入')
+      if (!canApply()) throw new Error('当前版本、数据或编辑权限已变化，请重新导入')
       persist({ type: 'departments', rows: parsed, complete: true })
       message.success(`已导入 ${parsed.length} 条部门数据`)
     } catch (error) { message.warning(error instanceof Error ? error.message : '文件解析失败，请检查模板格式') }
@@ -91,7 +101,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
       <div className="pms-hr-milestone-details-scroll"><dl style={{ gridTemplateColumns: `repeat(${resourceMilestoneFields[category].length}, minmax(130px, 1fr))` }}>
         {resourceMilestoneFields[category].map(field => <div key={field.key}><dt>{field.label}</dt><dd><ResourceInlineField label={field.label} value={dates[field.key]} readOnly={readOnly || !canEditResourceMilestone(category, project, field.key)}
           onSave={value => persist({ type: 'milestone', key: field.key, value: value ? String(value) : null })}
-          renderEditor={(value, change, popup) => <DatePicker autoFocus aria-label={field.label} value={value ? dayjs(String(value)) : null} getPopupContainer={popup} style={{ width: '100%' }} onChange={date => change(date?.format('YYYY-MM-DD') ?? null)} />} /></dd></div>)}
+          renderEditor={(value, change, popup) => <DatePicker autoFocus aria-label={field.label} defaultValue={value ? dayjs(String(value)) : null} preserveInvalidOnBlur {...inlineDateInputHandlers(change)} getPopupContainer={popup} style={{ width: '100%' }} onChange={date => change(date?.format('YYYY-MM-DD') ?? null)} />} /></dd></div>)}
       </dl></div></section>
     <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
     {!machine && !readOnly && <Space size="small" className="pms-resource-department-actions">
@@ -111,6 +121,6 @@ export default function ResourceInlineDetail({ category, project, version, scope
           {category !== 'capability' && <Table.Summary.Cell index={phases.length + 2}>{formatPersonMonth(version.estimatedInvestment)}</Table.Summary.Cell>}
           {!readOnly && <Table.Summary.Cell index={phases.length + (category === 'capability' ? 2 : 3)} />}
         </Table.Summary.Row>} />}
-    <NonLaborInvestmentSection inline value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly} onChange={value => persist({ type: 'nonLabor', value })} />
+    <NonLaborInvestmentSection inline canImport={isImportCurrent} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly} onChange={value => persist({ type: 'nonLabor', value })} />
   </div>
 }
