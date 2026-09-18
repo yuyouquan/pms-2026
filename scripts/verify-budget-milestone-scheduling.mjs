@@ -138,6 +138,8 @@ planStore.getState().setPublishedSnapshots(previous => ({ ...previous, [scheduli
 const registry = get('src/stores/project.ts').useProjectStore
 const registryRules = get('src/lib/hrProjectRegistry.ts')
 const versionRules = get('src/lib/hrVersionRules.ts')
+const authorizedActor = registry.getState().currentLoginUser
+let unauthorizedScheduleCase
 for (const [category, kind] of Object.entries({ machine: 'Machine', tos: 'Tos', technical: 'Technical' })) {
   const store = get(`src/stores/hr${kind}.ts`)[`useHr${kind}Store`]
   store.getState().refreshFormalProjects()
@@ -185,6 +187,13 @@ for (const [category, kind] of Object.entries({ machine: 'Machine', tos: 'Tos', 
   const copy = currentProject().versions.at(-1)
   assert.deepEqual(copy.scheduleModelSnapshot, model)
   assert.notEqual(copy.scheduleModelSnapshot, currentVersion().scheduleModelSnapshot, `${category}: copied snapshot is independent`)
+  if (category === 'machine') unauthorizedScheduleCase = {
+    store,
+    projectId: project.id,
+    versionId: copy.id,
+    scopeId: project.pmsProjectId,
+    patch: { ...patch, dates: scheduling.createBudgetMilestoneSchedule(model, '2021-01-01', '2021-03-01') },
+  }
   currentVersion().scheduleModelSnapshot.stages[0].label = 'source mutation probe'
   assert.notEqual(copy.scheduleModelSnapshot.stages[0].label, currentVersion().scheduleModelSnapshot.stages[0].label)
   await store.persist.rehydrate()
@@ -195,5 +204,28 @@ for (const [category, kind] of Object.entries({ machine: 'Machine', tos: 'Tos', 
   assert.deepEqual(currentVersion(), frozen, `${category}: locked schedule stays unchanged`)
 }
 
+assert.ok(unauthorizedScheduleCase, 'unauthorized schedule fixture captured')
+const unauthorizedProjectBefore = structuredClone(unauthorizedScheduleCase.store.getState().projects.find(item => item.id === unauthorizedScheduleCase.projectId))
 registry.setState({ currentLoginUser: 'unknown' })
+assert.throws(() => unauthorizedScheduleCase.store.getState().updateVersionInline(
+  unauthorizedScheduleCase.projectId,
+  unauthorizedScheduleCase.versionId,
+  unauthorizedScheduleCase.patch,
+  unauthorizedScheduleCase.scopeId,
+), /当前版本不可编辑/, 'milestoneSchedule enforces actor edit permission')
+assert.deepEqual(
+  unauthorizedScheduleCase.store.getState().projects.find(item => item.id === unauthorizedScheduleCase.projectId),
+  unauthorizedProjectBefore,
+  'unauthorized milestoneSchedule leaves the complete project unchanged',
+)
+registry.setState({ currentLoginUser: authorizedActor })
+assert.doesNotThrow(() => unauthorizedScheduleCase.store.getState().updateVersionInline(
+  unauthorizedScheduleCase.projectId,
+  unauthorizedScheduleCase.versionId,
+  unauthorizedScheduleCase.patch,
+  unauthorizedScheduleCase.scopeId,
+), 'the same valid unlocked schedule succeeds after restoring the authorized actor')
+const authorizedVersion = unauthorizedScheduleCase.store.getState().projects.find(item => item.id === unauthorizedScheduleCase.projectId).versions.find(item => item.id === unauthorizedScheduleCase.versionId)
+assert.equal(authorizedVersion.milestones.conceptStart, '2021-01-01')
+assert.equal(authorizedVersion.milestones.str5, '2021-03-01')
 console.log('PASS budget milestone scheduling: mappings, published snapshots, rounding, guards, atomic stores, metrics and copy/reload isolation')
