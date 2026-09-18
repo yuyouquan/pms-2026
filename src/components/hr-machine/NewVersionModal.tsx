@@ -7,7 +7,6 @@ import NonLaborInvestmentSection, { useNonLaborDraft } from '@/components/projec
 
 import { useEffect, useMemo, useState } from 'react'
 import { App, Form, Input, InputNumber, Select, Table, Alert } from 'antd'
-import { machinePhaseFields } from '@/lib/hrMachinePeriods'
 import { HrReadonlyField } from '@/components/project-resources/HrReadonlyField'
 import { useHrResourceScope } from '@/components/project-resources/HrResourceScope'
 import { HrVersionMilestoneRow, useHrVersionMilestones } from '@/components/project-resources/HrVersionMilestones'
@@ -18,7 +17,8 @@ import { canCreateHrVersion, isHrVersionEditable, getHrVersionSeed, nextHrMinorV
 import { resolveHrFormalSource } from '@/lib/hrFormalProjectSource'
 import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import { BUDGET_TYPES } from '@/constants/hrMachine'
-import { calcMachineDepartmentInvestments, isHrModelAvailable, getAvailableHrModelSelection, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
+import { isHrModelAvailable, getAvailableHrModelSelection, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
+import { buildMachineInvestmentView } from '@/lib/resourceAllocation'
 import type { BudgetType } from '@/types/hrMachine'
 
 export default function NewVersionModal({ open, projectId, versionId, embedded = false, fixedBudgetType, onSaved, onCancel }: { open: boolean; projectId: string; versionId?: string; embedded?: boolean; fixedBudgetType?: BudgetType; onSaved?: () => void; onCancel: () => void }) {
@@ -63,13 +63,16 @@ export default function NewVersionModal({ open, projectId, versionId, embedded =
 
   const modelUnchanged = editingVersion && effectiveProjectLevel === editingVersion.projectLevel && hrModelVersion === editingVersion.hrModelVersion && levelCoefficient === editingVersion.levelCoefficient
   const previewRecords = modelUnchanged ? editingVersion.modelSnapshot ?? [] : records
-  const departments = useMemo(() => calcMachineDepartmentInvestments(previewRecords, effectiveProjectLevel, hrModelVersion, levelCoefficient), [previewRecords, effectiveProjectLevel, hrModelVersion, levelCoefficient])
-  const total = Math.round(departments.reduce((sum, row) => sum + row.estimatedTotal, 0) * 10) / 10
+  const investment = useMemo(() => buildMachineInvestmentView(editingVersion?.machineDepartmentInvestments ? editingVersion : {
+    modelSnapshot: previewRecords, projectLevel: effectiveProjectLevel, hrModelVersion, levelCoefficient,
+  }), [editingVersion, previewRecords, effectiveProjectLevel, hrModelVersion, levelCoefficient])
+  const departments = investment.rows
+  const total = investment.total
   const columns = [
     { title: '一级部门', dataIndex: 'primaryDepartment', width: 140 },
     { title: '二级部门', dataIndex: 'secondaryDepartment', width: 140 },
-    ...machinePhaseFields(previewRecords.filter(row => row.enabled !== false && String(row.projectLevel) === effectiveProjectLevel && String(row.modelVersion) === hrModelVersion)).map(field => ({ title: field.label, key: field.key, width: 145, align: 'center' as const, render: (_: unknown, row: typeof departments[number]) => row.phases[field.key] ?? '—' })),
-    { title: '预估投入合计', dataIndex: 'estimatedTotal', width: 130, align: 'center' as const },
+    ...investment.phaseFields.map(field => ({ title: field.label, key: field.key, width: 145, align: 'center' as const, render: (_: unknown, row: typeof departments[number]) => row[field.key] ?? '—' })),
+    { title: '预估投入合计', dataIndex: 'estimatedInvestment', width: 130, align: 'center' as const },
   ]
   const budgetOptions = BUDGET_TYPES.filter(type => getHrAllowedBudgetTypes(project).includes(type.value))
   const productLines = PRODUCT_LINES_BY_BRAND[metadata.brand as keyof typeof PRODUCT_LINES_BY_BRAND] ?? []
@@ -100,6 +103,7 @@ export default function NewVersionModal({ open, projectId, versionId, embedded =
       <HrVersionMilestoneRow category="machine" {...milestoneForm} />
     </Form>
     <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
+    {investment.usesActualRows && <Alert type="info" showIcon style={{ marginBottom: 8 }} title="当前版本已有手工部门投入；项目等级、模型版本或等级系数调整后仍保留这些实际数值。" />}
     <Alert type="info" showIcon style={{ marginBottom: 8 }} title={`人力预估投入合计：${total} 人月。`} />
     <Table className="pms-table pms-hr-investment-table" rowKey="id" columns={columns} dataSource={departments} pagination={false} size="small" scroll={{ x: columns.reduce((sum, column) => sum + column.width, 0) }} locale={{ emptyText: '当前项目等级与模型版本无可用部门配置' }} />
     <NonLaborInvestmentSection {...nonLabor} />

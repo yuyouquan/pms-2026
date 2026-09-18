@@ -1,6 +1,7 @@
 'use client'
 
-import { withMachineDerivedMilestones, machinePhaseFields } from '@/lib/hrMachinePeriods'
+import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
+import { buildMachineInvestmentView } from '@/lib/resourceAllocation'
 
 import NewVersionModal from '@/components/hr-machine/NewVersionModal'
 
@@ -56,7 +57,7 @@ import type {
 } from '@/types/hrMachine'
 import { exportMultiSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import { useHrConfigStore } from '@/stores/hrConfig'
-import { calcMachineDepartmentInvestments, getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
+import { getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 
 /** 扁平化版本行：版本数据 + 所属项目信息 */
 interface FlatVersionRow extends HrMachineVersion {
@@ -566,22 +567,21 @@ export default function HistoryVersionSpace() {
     // Sheet2: 配置中心人力模型数据 × 等级系数
     const sheet2Rows: Sheet2Row[] = []
     for (const version of filteredVersions) {
-      const departments = calcMachineDepartmentInvestments(version.modelSnapshot ?? [], version.projectLevel, version.hrModelVersion, version.levelCoefficient)
-      for (const department of departments) {
-        const { phases } = department
+      const investment = buildMachineInvestmentView(version)
+      for (const department of investment.rows) {
         sheet2Rows.push({
           projectName: version.projectName,
           versionNumber: version.versionNumber,
           budgetTypeLabel: BUDGET_TYPE_LABELS[version.budgetType],
           primaryDepartment: department.primaryDepartment,
           secondaryDepartment: department.secondaryDepartment,
-          phases,
-          total: department.estimatedTotal,
+          phases: Object.fromEntries(investment.phaseFields.flatMap(field => typeof department[field.key] === 'number' ? [[field.key, department[field.key] as number]] : [])),
+          total: department.estimatedInvestment,
         })
       }
     }
 
-    const exportPhases = [...new Map(filteredVersions.flatMap(version => machinePhaseFields(version.modelSnapshot ?? [])).map(field => [field.key, field])).values()]
+    const exportPhases = [...new Map(filteredVersions.flatMap(version => buildMachineInvestmentView(version).phaseFields).map(field => [field.key, field])).values()]
     const sheet2Columns: ExportColumn[] = [
       { key: 'projectName', title: '项目名称', formatter: (_v, row: Sheet2Row) => row.projectName },
       { key: 'versionNumber', title: '版本号', formatter: (_v, row: Sheet2Row) => row.versionNumber },

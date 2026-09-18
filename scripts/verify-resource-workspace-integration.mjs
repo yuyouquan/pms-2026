@@ -36,6 +36,7 @@ assert.equal(evaluate({activeModule:'projectSpace',projectSpaceModule:'resources
 assert.equal(evaluate({activeModule:'projectSpace',projectSpaceModule:'plan'},plan),true)
 console.log('PASS actual user-switch predicate protects resource draft while allowing plan autosave')
 const {exportResourceVersion}=get('src/components/project-resources/exportResourceVersion.ts')
+const {nonLaborMonths}=get('src/lib/nonLaborInvestment.ts')
 for(const kind of ['Machine','Tos','Technical','Capability']){
  const store=get(`src/stores/hr${kind}.ts`)[`useHr${kind}Store`]
  store.getState().refreshFormalProjects()
@@ -53,10 +54,13 @@ for(const kind of ['Machine','Tos','Technical','Capability']){
  assert.ok(sheet('部门预估投入').rows.length)
  assert.ok(sheet('部门预估投入').columns.some(c=>c.title==='合计（人月）'))
  const expenses=sheet('非人力投入')
+ const currentExpenseMonths=nonLaborMonths(version.nonLaborInvestment)
  assert.equal(expenses.rows.length,version.nonLaborInvestment.items.length)
  for(const item of version.nonLaborInvestment.items){
   const row=expenses.rows.find(r=>r.id===item.id)
-  for(const [month,amount]of Object.entries(item.monthlyAmounts)){assert.equal(row[month],amount);assert.ok(expenses.columns.some(c=>c.key===month&&c.title.includes('（元）')))}
+  for(const month of currentExpenseMonths){assert.equal(row[month],item.monthlyAmounts[month]);assert.ok(expenses.columns.some(c=>c.key===month&&c.title.includes('（元）')))}
+  for(const month of Object.keys(item.monthlyAmounts).filter(month=>!currentExpenseMonths.includes(month))){assert.ok(!expenses.columns.some(c=>c.key===month),'hidden recovery month stays out of export columns')}
+  assert.equal(row.estimatedInvestment,currentExpenseMonths.reduce((sum,month)=>sum+(item.monthlyAmounts[month]??0),0))
  }
  assert.equal(JSON.stringify({version,rows}),before,'export must be readonly')
  console.log(`PASS independent ${kind} workbook metadata/selected rows/expense units/immutable data`)

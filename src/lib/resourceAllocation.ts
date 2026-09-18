@@ -82,3 +82,13 @@ export function resolveMachineDepartmentInvestments(version: MachineInvestmentSo
 export function resolveMachinePhaseFields(version: MachineInvestmentSource) {
   return machinePhaseFields(resolveMachineDepartmentInvestments(version))
 }
+
+export function buildMachineInvestmentView(version: MachineInvestmentSource) {
+  const rows = resolveMachineDepartmentInvestments(version)
+  return {
+    rows,
+    phaseFields: machinePhaseFields(rows),
+    total: Math.round(rows.reduce((sum, row) => sum + row.estimatedInvestment, 0) * 10) / 10,
+    usesActualRows: version.machineDepartmentInvestments !== undefined,
+  }
+}

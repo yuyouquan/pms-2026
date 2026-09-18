@@ -6,6 +6,7 @@ import { resolveMachineDepartmentInvestments, resolveMachinePhaseFields } from '
 import { formatHrBatch } from '@/lib/hrVersionRules'
 import type { ResourceVersion } from '@/components/project-resources/resourceVersionAdapter'
 import { buildResourceMonthlyView, type ResourceMonthlyRow } from '@/components/project-resources/resourceVersionViewData'
+import { nonLaborMonths } from '@/lib/nonLaborInvestment'
 
 export function buildResourceVersionExportData(projectName: string, version: ResourceVersion, rows: ResourceMonthlyRow[]) {
   const view = buildResourceMonthlyView(rows, version.id)
@@ -15,7 +16,7 @@ export function buildResourceVersionExportData(projectName: string, version: Res
   const phases = 'modelSnapshot' in version ? resolveMachinePhaseFields(version) : [...TOS_PHASE_INVESTMENT_FIELDS, ...TECH_PHASE_INVESTMENT_FIELDS].filter((field,index,all)=>all.findIndex(item=>item.key===field.key)===index)
   const departments = 'hrModelVersion' in version ? resolveMachineDepartmentInvestments(version) : version.departmentInvestments
   const phaseColumns = phases.filter(field=> departments.some(row=>field.key in row)).map(field=>({key:field.key,title:field.label}))
-  const moneyMonths = [...new Set(version.nonLaborInvestment?.items.flatMap(item=>Object.keys(item.monthlyAmounts)) ?? [])].sort()
+  const moneyMonths = nonLaborMonths(version.nonLaborInvestment ?? { startMonth: null, endMonth: null, items: [] })
   const metadata = [
     ['项目', projectName], ['预算类型', BUDGET_TYPE_LABELS[version.budgetType]], ['版本', version.versionNumber],
     ['激活状态',version.isActive?'已激活':'未激活'], ['锁定状态',version.lockState==='locked'?'已锁定':'未锁定'], ['批次',formatHrBatch(version.batch)],
@@ -24,7 +25,7 @@ export function buildResourceVersionExportData(projectName: string, version: Res
   ].map(([field,value])=>({field,value}))
   const nonLaborRows = version.nonLaborInvestment?.items.map(item => ({
     ...item,
-    estimatedInvestment: moneyMonths.reduce((sum, month) => sum + (item.monthlyAmounts[month] ?? 0), 0),
+    estimatedInvestment: Math.round(moneyMonths.reduce((sum, month) => sum + (item.monthlyAmounts[month] ?? 0), 0) * 100) / 100,
     ...item.monthlyAmounts,
   })) ?? []
   return { view, milestones, departments, phaseColumns, moneyMonths, metadata, nonLaborRows }
