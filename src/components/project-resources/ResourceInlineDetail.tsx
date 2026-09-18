@@ -101,7 +101,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
       <div className="pms-hr-milestone-details-scroll"><dl style={{ gridTemplateColumns: `repeat(${resourceMilestoneFields[category].length}, minmax(130px, 1fr))` }}>
         {resourceMilestoneFields[category].map(field => <div key={field.key}><dt>{field.label}</dt><dd><ResourceInlineField label={field.label} value={dates[field.key]} readOnly={readOnly || !canEditResourceMilestone(category, project, field.key)}
           onSave={value => persist({ type: 'milestone', key: field.key, value: value ? String(value) : null })}
-          renderEditor={(value, change, popup) => <DatePicker autoFocus aria-label={field.label} defaultValue={value ? dayjs(String(value)) : null} preserveInvalidOnBlur {...inlineDateInputHandlers(change)} getPopupContainer={popup} style={{ width: '100%' }} onChange={date => change(date?.format('YYYY-MM-DD') ?? null)} />} /></dd></div>)}
+          renderEditor={(value, change, popup) => <div {...inlineDateInputHandlers(change)}><DatePicker autoFocus aria-label={field.label} defaultValue={value ? dayjs(String(value)) : null} preserveInvalidOnBlur getPopupContainer={popup} style={{ width: '100%' }} onChange={date => change(date?.format('YYYY-MM-DD') ?? null)} /></div>} /></dd></div>)}
       </dl></div></section>
     <h3 className="pms-hr-investment-section-title">各部门人力投入</h3>
     {!machine && !readOnly && <Space size="small" className="pms-resource-department-actions">
