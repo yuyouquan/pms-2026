@@ -1,5 +1,7 @@
 'use client'
 
+import { isHrVersionEditable } from '@/lib/hrVersionRules'
+
 import { useEffect, useMemo, useState } from 'react'
 import { App, Modal, Form, InputNumber, Alert } from 'antd'
 import { useHrCapabilityStore } from '@/hooks/useHrResourceStores'
@@ -18,6 +20,7 @@ function formatMonthLabel(monthKey: string): string {
 
 export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyEditModalProps) {
   const { message } = App.useApp()
+  const projects = useHrCapabilityStore(s => s.projects)
   const monthlyInvestments = useHrCapabilityStore((s) => s.monthlyInvestments)
   const updateMonthlyInvestment = useHrCapabilityStore((s) => s.updateMonthlyInvestment)
   const setShowMonthlyEditModal = useHrCapabilityStore((s) => s.setShowMonthlyEditModal)
@@ -52,6 +55,7 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
   const isMatch = Math.round(editTotal * 10) === Math.round(estimatedTotal * 10)
 
   const handleOk = () => {
+    if (!isHrVersionEditable(projects.find(p => p.id === record?.projectId), projects.find(p => p.id === record?.projectId)?.versions.find(version => version.id === record?.versionId))) return
     if (!record) return
     if (!isMatch) {
       message.error(`月度投入合计 ${formatPersonMonth(editTotal)} 与预估合计 ${formatPersonMonth(estimatedTotal)} 不一致`)
@@ -78,7 +82,7 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
       onOk={handleOk}
       onCancel={handleCancel}
       okText="保存"
-      okButtonProps={{ disabled: !isMatch }}
+      okButtonProps={{ disabled: !isMatch || !isHrVersionEditable(projects.find(p => p.id === record?.projectId), projects.find(p => p.id === record?.projectId)?.versions.find(version => version.id === record?.versionId)) }}
       cancelText="取消"
       width={680}
     >

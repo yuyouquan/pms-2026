@@ -5,7 +5,7 @@ import type { ConfigModuleKey } from '@/types/hrConfig'
 import { useState, useMemo, useEffect } from 'react'
 import {
   Card, Tabs, Table, Row, Col, Space, Divider, Tag, Button, Select, Empty,
-  Input, Tooltip, Modal, Form, Checkbox, message, Progress, Popconfirm,
+  Input, InputNumber, Tooltip, Modal, Form, Checkbox, message, Progress, Popconfirm,
   DatePicker, Avatar, Dropdown,
 } from 'antd'
 import type { MenuProps } from 'antd'
@@ -59,6 +59,7 @@ import { compareMrTemplateSnapshots, type MrTemplateSnapshotDiff } from '@/lib/m
 import { createMrTemplateStorePermission, resolveMrTemplateConfigCapabilities } from '@/lib/mrTemplateConfigPermissions'
 import { resolveMrTemplateHistoryActivityLabel } from '@/lib/mrTemplateHistory'
 import type { MrTemplateChangeLog } from '@/types/mrVersionPlan'
+import { calculateTemplateIntervals, updateTemplateInterval, withTemplateIntervalSummary, formatTemplateIntervalRatio } from '@/lib/templateIntervals'
 import dayjs from 'dayjs'
 
 const { Option } = Select
@@ -261,7 +262,7 @@ export default function ConfigContainer() {
   const [newCustomTypeName, setNewCustomTypeName] = useState('')
 
   const allPlanTypes = [...LEVEL2_PLAN_TYPES, ...customTypes]
-  // 配置中心使用模板数据（按项目分类隔离，无日期/工期）
+  // 配置中心使用按项目分类隔离的模板数据。
   const selectedTemplateType = getProjectTypeFamilyKey(selectedProjectType)
   const isTechnicalTemplate = selectedTemplateType === PROJECT_CATEGORY_TECH
   const isMrTemplate = selectedTemplateType === PROJECT_TYPE_TOS_VERSION && planLevel === 'mr-version-plan'
@@ -308,10 +309,15 @@ export default function ConfigContainer() {
   }
 
   const technicalTemplateKey = TECHNICAL_TEMPLATE_STORAGE_KEYS[technicalTemplateKind]
-  const configTasks = isTechnicalTemplate
+  const storedConfigTasks = isTechnicalTemplate
     ? configTemplateTasksByType[technicalTemplateKey] || []
     : getTemplateTasksForProjectType(configTemplateTasksByType, selectedTemplateType)
       || getDefaultLevel1TasksForProjectType(selectedTemplateType, false)
+  const configTasks = isCurrentDraft ? storedConfigTasks
+    : getTemplateSnapshotForProjectType(publishedSnapshots, selectedTemplateType, currentVersion, templatePlanLevel) || []
+  const showTemplateIntervals = templatePlanLevel === 'level1' || templatePlanLevel === 'tdt'
+  const templateIntervals = useMemo(() => calculateTemplateIntervals(configTasks), [configTasks])
+  const canEditTemplate = canEditPlanTemplate && isCurrentDraft && isEditMode
   const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
     if (isTechnicalTemplate) {
       setTechnicalTemplateTasks(technicalTemplateKind, next)
@@ -343,7 +349,7 @@ export default function ConfigContainer() {
   // View columns
   const getViewKey = () => `config-${planLevel}-${viewMode}`
   const currentViewMode = viewMode
-  const currentViewColumns = getConfigColumnsForView(currentViewMode)
+  const currentViewColumns = getConfigColumnsForView(currentViewMode, templatePlanLevel)
   const currentViewKey = getViewKey()
   const storedColumnSettings = columnSettingsByView[currentViewKey]
   const columnSettings = useMemo(
@@ -432,7 +438,9 @@ export default function ConfigContainer() {
     const scopeKey = getScopeKey()
     const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
     const expandEnabled = scopeKey !== null
-    const visibleTasks = expandEnabled ? filterByCollapsed(flatTasks, collapsedSet) : flatTasks
+    const visibleTasks = searchText
+      ? flatTasks.filter((task: any) => String(task.id).toLowerCase().includes(searchText.toLowerCase()) || String(task.taskName || task.activityName || '').toLowerCase().includes(searchText.toLowerCase()))
+      : expandEnabled ? filterByCollapsed(flatTasks, collapsedSet) : flatTasks
 
     const getColumns = (): ColumnsType<any> => {
       const cols: ColumnsType<any> = []
@@ -471,6 +479,16 @@ export default function ConfigContainer() {
           ? <Select className="pms-edit-input" value={role || 'SPM'} size="small" style={{ width: '100%' }} options={PLAN_TEMPLATE_ROLE_OPTIONS} onChange={(value) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, role: value, responsible: value } : t); currentSetTasks(updated) }} />
           : (role ? <Tag color="processing" style={{ borderRadius: 4, fontSize: 12 }}>{role}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>)
       } })
+      if (showTemplateIntervals && visibleColumns.includes('intervalDays')) cols.push({ title: '间隔天数', key: 'intervalDays', width: 150, render: (_: unknown, record: any) => {
+        const summary = templateIntervals.byId[record.id]
+        return canEditTemplate && summary?.editable
+          ? <InputNumber aria-label={`${record.taskName}间隔天数`} className="pms-edit-input" min={0} precision={2} value={summary.intervalDays} placeholder="待填写" size="small" style={{ width: '100%' }} onChange={value => {
+              try { currentSetTasks(updateTemplateInterval(tableTasks, record.id, value)) }
+              catch (error) { message.error(error instanceof Error ? error.message : '间隔天数保存失败') }
+            }} />
+          : <span>{summary?.intervalDays ?? '-'}</span>
+      } })
+      if (showTemplateIntervals && visibleColumns.includes('intervalRatio')) cols.push({ title: '占比', key: 'intervalRatio', width: 130, render: (_: unknown, record: any) => formatTemplateIntervalRatio(templateIntervals.byId[record.id]?.intervalRatio) })
       if (visibleColumns.includes('predecessor')) cols.push({ title: '前置任务', dataIndex: 'predecessor', key: 'predecessor', width: 100, render: (val: string, record: any) => isEditMode ? <Input className="pms-edit-input" value={val} size="small" placeholder="如: 1.1" onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, predecessor: e.target.value } : t); currentSetTasks(updated) }} /> : (val ? <Tag style={{ borderRadius: 4, fontSize: 12 }}>{val}</Tag> : <span style={{ color: '#e5e7eb' }}>-</span>) })
       if (visibleColumns.includes('planStartDate')) cols.push({ title: '计划开始', dataIndex: 'planStartDate', key: 'planStartDate', width: 130, render: (val: string) => <span style={{ fontSize: 12, color: '#e5e7eb' }}>{val || '-'}</span> })
       if (visibleColumns.includes('planEndDate')) cols.push({ title: '计划完成', dataIndex: 'planEndDate', key: 'planEndDate', width: 130, render: (val: string) => <span style={{ fontSize: 12, color: '#e5e7eb' }}>{val || '-'}</span> })
@@ -612,9 +630,7 @@ export default function ConfigContainer() {
     }
     const newVersionNo = getNextPlanRevisionVersionNo(versions, revisionKind)
     const newVersionId = getPlanVersionId(newVersionNo)
-    const clonedTasks = isTechnicalTemplate
-      ? configTasks.map(task => ({ ...task }))
-      : getDefaultLevel1TasksForProjectType(selectedTemplateType, false)
+    const clonedTasks = configTasks.map(task => ({ ...task }))
     const newVersion = { id: newVersionId, versionNo: newVersionNo, status: '修订中' }
     setVersions([...versions, newVersion])
     setCurrentVersion(newVersionId)
@@ -817,7 +833,10 @@ export default function ConfigContainer() {
       { title: '序号', dataIndex: 'taskId', key: 'taskId', width: 70, render: (val: string, row: CompareTableRow) => (<span style={{ fontWeight: 600, fontSize: 12, color: row.changeType === '新增' ? '#52c41a' : row.changeType === '删除' ? '#ff4d4f' : row.changeType === '修改' ? 'var(--pms-brand)' : '#9ca3af' }}>{val}</span>) },
       { title: '变更类型', dataIndex: 'changeType', key: 'changeType', width: 80, render: (val: string) => { const conf: Record<string, { color: string; bg: string }> = { '新增': { color: '#52c41a', bg: '#f6ffed' }, '删除': { color: '#ff4d4f', bg: '#fff2f0' }, '修改': { color: 'var(--pms-brand)', bg: 'var(--pms-brand-surface)' }, '未变更': { color: '#9ca3af', bg: '#fafafa' } }; const c = conf[val]; return c ? <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500, color: c.color, background: c.bg, border: val === '修改' ? '1px solid var(--pms-brand-border)' : `1px solid ${c.color}20` }}>{val}</span> : null } },
       { title: '任务名称', dataIndex: 'taskName', key: 'taskName', width: 160, ellipsis: true, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'taskName', val) },
-      { title: '角色', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) },
+      ...(showTemplateIntervals ? [
+        { title: '间隔天数', dataIndex: 'intervalDays', key: 'intervalDays', width: 110, render: (val: number | null, row: CompareTableRow) => renderDiffCell(row, 'intervalDays', val == null ? '-' : `${val}天`) },
+        { title: '占比', dataIndex: 'intervalRatio', key: 'intervalRatio', width: 110, render: (val: number | null, row: CompareTableRow) => renderDiffCell(row, 'intervalRatio', formatTemplateIntervalRatio(val)) },
+      ] : [{ title: '角色', dataIndex: 'responsible', key: 'responsible', width: 100, render: (val: string, row: CompareTableRow) => renderDiffCell(row, 'responsible', val) }]),
     ]
     return (
       <div style={{ marginTop: 16 }}>
@@ -948,7 +967,8 @@ export default function ConfigContainer() {
                 </Col>
                 <Col>
                   <Space size={6}>
-                    <Input placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
+                    {showTemplateIntervals && <span aria-label="模板总周期" style={{ whiteSpace: 'nowrap', marginRight: 12, color: '#4b5563' }}>总周期：<strong style={{ color: '#111827' }}>{templateIntervals.totalDays}</strong> 天</span>}
+                    <Input value={searchText} placeholder="搜索任务..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} style={{ width: 200, borderRadius: 6 }} allowClear onChange={(e) => setSearchText(e.target.value)} />
                     <SortableColumnSettings
                       open={showColumnModal}
                       trigger={(
@@ -1057,7 +1077,7 @@ export default function ConfigContainer() {
               )
               const oldTasks = getVersionTasks(versionA)
               const newTasks = getVersionTasks(versionB)
-              const result = compareVersionsForTable(oldTasks as any, newTasks as any)
+              const result = compareVersionsForTable((showTemplateIntervals ? withTemplateIntervalSummary(oldTasks) : oldTasks) as any, (showTemplateIntervals ? withTemplateIntervalSummary(newTasks) : newTasks) as any)
               setCompareResult(result as CompareTableRow[])
               setCompareFilterType('all')
               message.success('对比完成')

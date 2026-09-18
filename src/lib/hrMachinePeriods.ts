@@ -19,9 +19,12 @@ export const MACHINE_INVESTMENT_PERIODS = [
 ] as const
 
 export const LEGACY_MACHINE_PHASES = [
-  { key: 'conceptPhase', label: '概念阶段' }, { key: 'planningPhase', label: '计划阶段' },
-  { key: 'developmentPhase', label: '开发阶段' }, { key: 'validationPhase', label: '验证阶段' },
-  { key: 'launchPhase', label: '上市阶段' }, { key: 'lifecycle', label: '生命周期阶段' },
+  { key: 'conceptPhase', label: '概念阶段', startField: 'conceptStart', endField: 'str1' },
+  { key: 'planningPhase', label: '计划阶段', startField: 'str1', endField: 'str3' },
+  { key: 'developmentPhase', label: '开发阶段', startField: 'str3', endField: 'str4' },
+  { key: 'validationPhase', label: '验证阶段', startField: 'str4', endField: 'str5' },
+  { key: 'launchPhase', label: '上市阶段', startField: 'str5', endField: 'productLaunch' },
+  { key: 'lifecycle', label: '生命周期阶段', startField: 'productLaunch', endField: 'lifecycleEnd' },
 ] as const
 
 export function isCurrentMachineModel(row: object): boolean {

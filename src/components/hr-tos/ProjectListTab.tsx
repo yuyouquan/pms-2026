@@ -1,5 +1,7 @@
 'use client'
 
+import { getActiveHrVersion } from '@/lib/hrVersionRules'
+
 import { useState, useMemo, useCallback } from 'react'
 import { Card, Table, Select, Button, Space, Tooltip, Popover } from 'antd'
 import { PlusOutlined, DownloadOutlined } from '@ant-design/icons'
@@ -32,7 +34,6 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
   const filters = useHrTosStore(s => s.filters)
   const setFilters = useHrTosStore(s => s.setFilters)
   const bindIpmProject = useHrTosStore(s => s.bindIpmProject)
-  const getLatestVersions = useHrTosStore(s => s.getLatestVersions)
 
   // 1. 按项目名称（多选）/ 是否取消暂停 过滤
   const filteredProjects = useMemo(() => {
@@ -42,11 +43,11 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
     })
   }, [projects, filters.projectName])
 
-  // 2. 为每个项目计算各预算类型的最新版本（通过 store 的 getLatestVersions）
-  const projectLatestVersions = useMemo(() => {
+  // 2. 为每个项目计算各预算类型的激活版本
+  const projectActiveVersions = useMemo(() => {
     const map = new Map<string, Record<BudgetType, HrTosVersion | null>>()
     for (const p of filteredProjects) {
-      const latest = getLatestVersions(p.id)
+      const latest = ['annual', 'projectEstimate', 'projectBudget'].flatMap(type => { const version = getActiveHrVersion(p.versions, type); return version ? [version] : [] })
       const byType: Record<BudgetType, HrTosVersion | null> = {
         annual: latest.find(v => v.budgetType === 'annual') ?? null,
         projectEstimate: latest.find(v => v.budgetType === 'projectEstimate') ?? null,
@@ -55,13 +56,13 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       map.set(p.id, byType)
     }
     return map
-  }, [filteredProjects, getLatestVersions])
+  }, [filteredProjects])
 
-  // 3. 合计行：三预算列取最新版本 estimatedInvestment 之和；项目核算取项目字段之和
+  // 3. 合计行：三预算列取激活版本 estimatedInvestment 之和；项目核算取项目字段之和
   const totals = useMemo(() => {
     return filteredProjects.reduce(
       (acc, p) => {
-        const byType = projectLatestVersions.get(p.id)
+        const byType = projectActiveVersions.get(p.id)
         acc.annualBudget += byType?.annual?.estimatedInvestment ?? 0
         acc.projectEstimate += byType?.projectEstimate?.estimatedInvestment ?? 0
         acc.projectBudget += byType?.projectBudget?.estimatedInvestment ?? 0
@@ -70,16 +71,16 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       },
       { annualBudget: 0, projectEstimate: 0, projectBudget: 0, projectAccounting: 0 },
     )
-  }, [filteredProjects, projectLatestVersions])
+  }, [filteredProjects, projectActiveVersions])
 
-  // 4. 列定义（数字列右对齐；三预算列展示最新版本数据）
+  // 4. 列定义（数字列右对齐；三预算列展示激活版本数据）
   const columns: ColumnsType<HrTosProject> = useMemo(() => {
-    /** 取指定项目+预算类型的最新版本 */
-    const getLatestForType = (
+    /** 取指定项目+预算类型的激活版本 */
+    const getActiveForType = (
       record: HrTosProject,
       budgetType: BudgetType,
     ): HrTosVersion | null => {
-      return projectLatestVersions.get(record.id)?.[budgetType] ?? null
+      return projectActiveVersions.get(record.id)?.[budgetType] ?? null
     }
 
     return [
@@ -130,8 +131,8 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         width: 120,
         align: 'right',
         render: (_value: number, record: HrTosProject) => {
-          const version = getLatestForType(record, 'annual')
-          if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
+          const version = getActiveForType(record, 'annual')
+          if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>未激活</span>
           return formatPersonMonth(version.estimatedInvestment)
         },
       },
@@ -141,8 +142,8 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         width: 120,
         align: 'right',
         render: (_value: number, record: HrTosProject) => {
-          const version = getLatestForType(record, 'projectEstimate')
-          if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
+          const version = getActiveForType(record, 'projectEstimate')
+          if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>未激活</span>
           return formatPersonMonth(version.estimatedInvestment)
         },
       },
@@ -152,8 +153,8 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         width: 120,
         align: 'right',
         render: (_value: number, record: HrTosProject) => {
-          const version = getLatestForType(record, 'projectBudget')
-          if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>-</span>
+          const version = getActiveForType(record, 'projectBudget')
+          if (!version) return <span style={{ color: 'var(--pms-text-tertiary)' }}>未激活</span>
           return formatPersonMonth(version.estimatedInvestment)
         },
       },
@@ -176,7 +177,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
             : '-',
       },
     ]
-  }, [projectLatestVersions, bindIpmProject])
+  }, [projectActiveVersions, bindIpmProject])
 
   // 5. 筛选器选项
   const projectNameOptions = useMemo(
@@ -201,7 +202,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         title: '年度预算',
         width: 12,
         formatter: (_v: any, row: any) => {
-          const byType = projectLatestVersions.get(row.id)
+          const byType = projectActiveVersions.get(row.id)
           return byType?.annual ? formatPersonMonth(byType.annual.estimatedInvestment) : '-'
         },
       },
@@ -210,7 +211,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         title: '项目概算',
         width: 12,
         formatter: (_v: any, row: any) => {
-          const byType = projectLatestVersions.get(row.id)
+          const byType = projectActiveVersions.get(row.id)
           return byType?.projectEstimate
             ? formatPersonMonth(byType.projectEstimate.estimatedInvestment)
             : '-'
@@ -221,7 +222,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         title: '项目预算',
         width: 12,
         formatter: (_v: any, row: any) => {
-          const byType = projectLatestVersions.get(row.id)
+          const byType = projectActiveVersions.get(row.id)
           return byType?.projectBudget
             ? formatPersonMonth(byType.projectBudget.estimatedInvestment)
             : '-'
@@ -249,7 +250,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
       `tOS项目列表_${exportTimestamp()}.xlsx`,
       'tOS项目列表',
     )
-  }, [filteredProjects, projectLatestVersions])
+  }, [filteredProjects, projectActiveVersions])
 
   return (
     <div className="pms-hr-tos-project-list">

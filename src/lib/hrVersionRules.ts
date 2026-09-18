@@ -1,7 +1,7 @@
 import { canAccessHrProject, getHrAllowedBudgetTypes, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
 import { PROJECT_CATEGORY_CAPABILITY } from '@/constants/projectTypes'
 import { getManualHrMilestoneKeysForType } from '@/lib/hrMilestoneOwnership'
-/** Shared HR version rules. Legacy lock fields remain readable only for data migration. */
+/** Shared HR version identity, activation, locking and write-scope rules. */
 export const HR_BUDGET_TYPES = ['annual', 'projectEstimate', 'projectBudget'] as const
 export const HR_BATCH_OPTIONS = Array.from({ length: 20 }, (_, index) => ({ value: index + 1, label: `第${index + 1}批` }))
 export const isHrBatch = (value: unknown): value is number => Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 20
@@ -14,6 +14,10 @@ export interface HrVersionIdentity {
   majorVersion: number
   versionNumber: string
   createdAt: string
+  isActive?: boolean
+  lockState?: string
+  copiedFromVersionId?: string
+  copiedFromVersionNumber?: string
   batch?: number | null
 }
 
@@ -22,6 +26,18 @@ export function getLatestHrVersion<T extends HrVersionIdentity>(versions: readon
     !latest || version.minorVersion > latest.minorVersion ? version : latest
   ), undefined)
 }
+/** Active state is independent of latest/default selection. */
+export function getActiveHrVersion<T extends HrVersionIdentity>(versions: readonly T[], budgetType: string): T | undefined {
+  return getLatestHrVersion(versions.filter(version => version.isActive === true), budgetType)
+}
+export function isHrVersionEditable(
+  project: { pmsProjectId?: string } | null | undefined,
+  version: Pick<HrVersionIdentity, 'lockState' | 'budgetType'> | null | undefined,
+): boolean {
+  return !!version && version.lockState !== 'locked' && canAccessHrProject(project, true)
+    && getHrAllowedBudgetTypes(project).some(type => type === version.budgetType)
+}
+
 export const isLatestHrVersion = (project: { versions: readonly HrVersionIdentity[] }, version: HrVersionIdentity) => (
   getLatestHrVersion(project.versions, version.budgetType)?.id === version.id
 )
@@ -40,9 +56,15 @@ export function normalizeHrVersionSequence<T extends HrVersionIdentity>(versions
     [...group].sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0))
       .forEach((version, index) => sequence.set(version.id, index + 1))
   }
-  return versions.map(version => {
+  const normalized = versions.map(version => {
     const minorVersion = sequence.get(version.id) ?? version.minorVersion
     return { ...version, majorVersion: 0, minorVersion, versionNumber: `V0.${minorVersion}`, batch: isHrBatch(version.batch) ? version.batch : null }
+  })
+  return normalized.map(version => {
+    const group = normalized.filter(item => item.budgetType === version.budgetType)
+    const legacy = group.every(item => typeof item.isActive !== 'boolean')
+    const active = legacy ? getLatestHrVersion(group, version.budgetType) : getActiveHrVersion(group, version.budgetType)
+    return { ...version, isActive: active?.id === version.id }
   })
 }
 
@@ -79,15 +101,13 @@ export function allowedHrVersionUpdates<T extends object>(
   version: HrVersionIdentity,
   updates: T,
 ): Partial<T> {
-  if (!canAccessHrProject(project, true)) return {}
+  if (!isHrVersionEditable(project, version)) return {}
   const allowed = { ...updates } as Record<string, unknown>
   const manualCapabilityDates = getHrRegistryProject(project)?.type === PROJECT_CATEGORY_CAPABILITY
   const manualMilestoneKeys = getManualHrMilestoneKeysForType(getHrRegistryProject(project)?.type)
   for (const key of Object.keys(allowed)) {
     if (key === 'batch') {
       if (allowed.batch !== null && !isHrBatch(allowed.batch)) delete allowed.batch
-    } else if (!isLatestHrVersion(project, version)) {
-      delete allowed[key]
     } else if (isHrFormalRecord(project) && version.budgetType !== 'annual') {
       if (key === 'milestones') {
         const dates = allowed.milestones
@@ -99,4 +119,56 @@ export function allowedHrVersionUpdates<T extends object>(
     }
   }
   return allowed as Partial<T>
+}
+
+interface LifecycleVersion extends HrVersionIdentity {
+  projectId: string
+  lockState: string
+  lockedAt: string | null
+  createdBy?: string
+  operationLogs?: unknown[]
+}
+interface LifecycleProject {
+  id: string
+  pmsProjectId?: string
+  ipmProjectCode: string | null
+  status: string
+  versions: LifecycleVersion[]
+}
+/** Pure lifecycle transforms retain business snapshots; synchronization is intentionally excluded. */
+export function changeHrVersionLifecycle<P extends LifecycleProject>(projects: P[], projectId: string, versionId: string, action: 'lock' | 'active', enabled: boolean): P[] {
+  return projects.map(project => {
+    if (project.id !== projectId || !canAccessHrProject(project, true)) return project
+    const target = project.versions.find(version => version.id === versionId)
+    if (!target || !getHrAllowedBudgetTypes(project).some(type => type === target.budgetType)) return project
+    const versions = project.versions.map(version => action === 'lock'
+      ? version.id === versionId ? { ...version, lockState: enabled ? 'locked' : 'unlocked', lockedAt: enabled ? new Date().toISOString() : null } : version
+      : version.budgetType === target.budgetType && (enabled || version.id === versionId) ? { ...version, isActive: enabled && version.id === versionId } : version)
+    const updated = { ...project, versions }
+    for (const type of HR_BUDGET_TYPES) {
+      const key = type === 'annual' ? 'annualBudget' : type
+      Object.assign(updated, { [key]: (getActiveHrVersion(versions, type) as LifecycleVersion & { estimatedInvestment: number } | undefined)?.estimatedInvestment ?? 0 })
+    }
+    return updated as P
+  })
+}
+export function copyHrVersionSnapshot<P extends LifecycleProject, M extends { id: string; versionId: string; sourceRowId?: string; versionNumber: string; versionLockState: string }>(
+  projects: P[], monthlyInvestments: M[], projectId: string, versionId: string, actor: string,
+): { projects: P[]; monthlyInvestments: M[] } {
+  const project = projects.find(item => item.id === projectId)
+  const source = project?.versions.find(version => version.id === versionId)
+  if (!project || !source || !canCreateHrVersion(project, source.budgetType)) return { projects, monthlyInvestments }
+  const minorVersion = nextHrMinorVersion(project.versions, source.budgetType)
+  const id = `${projectId}-${source.budgetType}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const version = { ...structuredClone(source), id, versionNumber: `V0.${minorVersion}`, majorVersion: 0, minorVersion,
+    isActive: false, lockState: 'unlocked', lockedAt: null, createdBy: actor, createdAt: new Date().toISOString(),
+    copiedFromVersionId: source.id, copiedFromVersionNumber: source.versionNumber, operationLogs: [] }
+  if ('departmentInvestments' in version && Array.isArray(version.departmentInvestments)) {
+    version.departmentInvestments = version.departmentInvestments.map(row => ({ ...row, id: String(row.id).replaceAll(source.id, id) }))
+  }
+  const rows = monthlyInvestments.filter(row => row.versionId === source.id).map(row => ({
+    ...structuredClone(row), id: row.id.includes(source.id) ? row.id.replaceAll(source.id, id) : `${id}-${row.id}`,
+    sourceRowId: row.sourceRowId?.replaceAll(source.id, id), versionId: id, versionNumber: version.versionNumber, versionLockState: 'unlocked',
+  }))
+  return { projects: projects.map(item => item.id === projectId ? { ...item, versions: [...item.versions, version] } as P : item), monthlyInvestments: [...monthlyInvestments, ...rows] }
 }

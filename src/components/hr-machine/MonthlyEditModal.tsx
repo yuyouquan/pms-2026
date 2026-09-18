@@ -1,5 +1,7 @@
 'use client'
 
+import { isHrVersionEditable } from '@/lib/hrVersionRules'
+
 import { useEffect, useState, useMemo } from 'react'
 import { App, Modal, InputNumber, Alert } from 'antd'
 import { useHrMachineStore } from '@/hooks/useHrResourceStores'
@@ -45,6 +47,7 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
   const isMatch = Math.abs(editTotal - estimatedTotal) < 0.01
 
   const handleOk = () => {
+    if (!isHrVersionEditable(project, project?.versions.find(version => version.id === investment?.versionId))) return
     if (!isMatch) {
       message.error(`月度合计 ${formatPersonMonth(editTotal)} 与预估合计 ${formatPersonMonth(estimatedTotal)} 不一致，不允许保存`)
       return
@@ -67,7 +70,7 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
       onOk={handleOk}
       okText="保存"
       cancelText="取消"
-      okButtonProps={{ disabled: !isMatch }}
+      okButtonProps={{ disabled: !isMatch || !isHrVersionEditable(project, project?.versions.find(version => version.id === investment?.versionId)) }}
       width={Math.max(640, months.length * 100 + 200)}
     >
       <div style={{ marginTop: 16 }}>

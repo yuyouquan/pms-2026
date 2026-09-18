@@ -2141,7 +2141,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const navigateWithEditGuard = (action: () => void) => {
-    if (basicInfoEditMode || (isEditMode && !isCurrentDraft)) {
+    if (basicInfoEditMode || (isEditMode && (projectSpaceModule === 'resources' || !isCurrentDraft))) {
       setPendingNavigation(() => {
         setBasicInfoEditMode(false)
         setEditingProjectFields({})
@@ -2154,8 +2154,10 @@ export default function ProjectSpaceContainer() {
   }
 
   // ═══════ Effects ═══════
+  // Resource forms own their unsaved draft state independently of plan versions.
   // Draft auto-edit mode
   useEffect(() => {
+    if (projectSpaceModule === 'resources') return
     if (shouldAutoEnablePlanEditMode({
       activeModule,
       projectSpaceModule,

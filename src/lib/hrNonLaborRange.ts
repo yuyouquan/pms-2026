@@ -15,8 +15,8 @@ const fields = {
 }
 
 /** Only the milestones shown for this category define its expense months. */
-export function hrNonLaborMonthRange(category: HrProjectCategory, values: object) {
-  const dates = (category === 'machine' ? withMachineDerivedMilestones(values) : values) as Record<string, unknown>
+export function hrNonLaborMonthRange(category: HrProjectCategory, values: object, frozen = false) {
+  const dates = (category === 'machine' && !frozen ? withMachineDerivedMilestones(values) : values) as Record<string, unknown>
   const months = fields[category].flatMap(({ key }) => {
     const value = dates[key]
     return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
