@@ -427,6 +427,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
     {
       storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-capability',
+      partialize: state => ({ projects: state.projects, monthlyInvestments: state.monthlyInvestments, registryMigrationComplete: state.registryMigrationComplete }),
       version: 2,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const s = (persistedState ?? {}) as Record<string, unknown>
