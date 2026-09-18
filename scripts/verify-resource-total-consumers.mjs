@@ -67,6 +67,35 @@ const exported = exportModule.buildResourceVersionExportData('费用范围', exp
 assert.deepEqual(exported.moneyMonths, ['2026-01', '2026-02'])
 assert.equal(exported.nonLaborRows[0].estimatedInvestment, 10, 'export total uses only the current displayed range')
 
+const { applyNonLaborItemTotalChange } = load(path.resolve('src/components/project-resources/nonLaborItemTotalChange.ts'))
+const missingMonths = { startMonth: null, endMonth: null, items: structuredClone(expenseVersion.nonLaborInvestment.items) }
+const missingBefore = structuredClone(missingMonths)
+const warnings = []
+const changes = []
+assert.doesNotThrow(() => applyNonLaborItemTotalChange({
+  value: missingMonths, itemId: 'expense', amount: 12, inline: false,
+  onChange: next => changes.push(next), onError: text => warnings.push(text),
+}))
+assert.deepEqual(missingMonths, missingBefore, 'invalid non-inline total callback leaves its input immutable')
+assert.deepEqual(changes, [], 'invalid non-inline total callback does not replace the draft')
+assert.deepEqual(warnings, ['请先完善里程碑日期以生成费用投入月份，再填写预估投入合计'])
+const validBefore = structuredClone(expenseVersion.nonLaborInvestment)
+applyNonLaborItemTotalChange({
+  value: expenseVersion.nonLaborInvestment, itemId: 'expense', amount: 10, inline: false,
+  onChange: next => changes.push(next), onError: text => warnings.push(text),
+})
+assert.deepEqual(changes.at(-1).items[0].monthlyAmounts, { '2025-12': 99, '2026-01': 5, '2026-02': 5, '2026-03': 88 })
+assert.deepEqual(expenseVersion.nonLaborInvestment, validBefore, 'valid non-inline callback returns a new draft')
+assert.throws(() => applyNonLaborItemTotalChange({
+  value: missingMonths, itemId: 'expense', amount: 12, inline: true,
+  onChange: next => changes.push(next), onError: text => warnings.push(text),
+}), /请先完善里程碑日期/)
+assert.throws(() => applyNonLaborItemTotalChange({
+  value: missingMonths, itemId: 'expense', amount: 12, inline: true,
+  onItemTotalChange: () => { throw new Error('inline session validation') }, onError: text => warnings.push(text),
+}), /inline session validation/, 'inline session errors keep propagating')
+assert.equal(warnings.length, 1, 'inline callback keeps propagating to the inline session')
+
 const projectStore = load(path.resolve('src/stores/project.ts')).useProjectStore
 const machineStore = load(path.resolve('src/stores/hrMachine.ts')).useHrMachineStore
 machineStore.getState().refreshFormalProjects()
@@ -87,4 +116,4 @@ const saved = machineStore.getState().projects.find(item => item.id === project.
 assert.equal(saved.levelCoefficient, 2, 'store persists coefficient 2')
 assert.equal(projectStore.getState().currentLoginUser, '演示用户01')
 
-console.log('PASS machine history/detail/edit consumers, current-range expense export, and reported numeric store writes')
+console.log('PASS machine consumers, current-range expense export, non-inline total callbacks, and reported numeric store writes')
