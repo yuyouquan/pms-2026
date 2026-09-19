@@ -129,6 +129,28 @@ inTab(0, () => a.registry.getState().setProjects(projects => projects.map(item =
 const canonicalEvents = settle('canonical project update')
 assert.equal(project().name, renamed)
 assert.equal(b.machine.getState().projects.find(item => item.id === project().id).name, renamed)
+// Activation must converge in both directions without resurrecting a cleared version.
+const access = a.load(path.resolve('src/lib/hrProjectRegistry.ts'))
+for (let index = 0; index < a.stores.length; index++) {
+  const left = a.stores[index], right = b.stores[index]
+  for (const type of ['annual', 'projectEstimate', 'projectBudget']) {
+    const own = left.getState().projects.find(p => access.canAccessHrProject(p, true) && access.getHrAllowedBudgetTypes(p).includes(type) && p.versions.some(v => v.budgetType === type))
+    assert.ok(own)
+    const target = own.versions.find(v => v.budgetType === type)
+    const remoteActive = () => right.getState().projects.find(p => p.id === own.id).versions.filter(v => v.budgetType === type && v.isActive).map(v => v.id)
+    inTab(0, () => left.getState().setVersionActive(own.id, target.id, true))
+    settle('activation replication')
+    assert.deepEqual(remoteActive(), [target.id])
+    inTab(1, () => right.getState().setVersionActive(own.id, target.id, false))
+    settle('deactivation replication')
+    assert.deepEqual(remoteActive(), [])
+    assert.deepEqual(left.getState().projects.find(p => p.id === own.id).versions.filter(v => v.budgetType === type && v.isActive), [])
+    inTab(0, () => { left.persist.rehydrate(); left.getState().refreshFormalProjects() })
+    settle('zero active reload')
+    assert.deepEqual(left.getState().projects.find(p => p.id === own.id).versions.filter(v => v.budgetType === type && v.isActive), [])
+    console.log(`PASS cross-tab activation/remote-deactivation/reload: ${['Machine','Tos','Technical','Capability'][index]}/${type}`)
+  }
+}
 
 a.stop()
 b.stop()

@@ -9248,7 +9248,10 @@ input.ant-input,
 .pms-budget-milestone-stage dt,
 .pms-budget-milestone-stage dd { margin: 0; padding: 8px 7px; text-align: center; white-space: nowrap; }
 .pms-budget-milestone-stage dt { color: var(--pms-text-secondary); background: var(--pms-brand-surface); }
+.pms-hr-milestone-details dd .pms-resource-inline-field,
 .pms-budget-milestone-stage dd .pms-resource-inline-field { justify-content: center; }
+.pms-hr-milestone-details dd .ant-picker-input > input,
+.pms-budget-milestone-stage dd .ant-picker-input > input { text-align: center; }
 @media (max-width: 900px) {
   .pms-budget-milestone-heading { align-items: flex-start; flex-direction: column-reverse; }
 }
