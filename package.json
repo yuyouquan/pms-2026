@@ -64,7 +64,8 @@
     "verify:template-intervals": "node scripts/verify-template-intervals.mjs && node scripts/verify-template-interval-ui.mjs",
     "verify:budget-scheduling": "node scripts/verify-budget-milestone-scheduling.mjs",
     "verify:resource-totals": "node scripts/verify-resource-total-editing.mjs && node scripts/verify-resource-total-consumers.mjs",
-    "verify:resource-cross-tab": "node scripts/verify-resource-cross-tab-storage.mjs"
+    "verify:resource-cross-tab": "node scripts/verify-resource-cross-tab-storage.mjs",
+    "verify:resource-activation": "node scripts/verify-resource-activation-interactions.mjs && node scripts/verify-resource-cross-tab-storage.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

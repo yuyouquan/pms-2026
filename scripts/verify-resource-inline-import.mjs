@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import path from 'node:path'
-import { createTypeScriptModuleLoader } from './lib/typescript-module-loader.mjs'
+import { createTypeScriptModuleLoader, resolveTypeScriptModule } from './lib/typescript-module-loader.mjs'
 const get = createTypeScriptModuleLoader()
 const module = get(path.resolve('src/components/project-resources/inlineFieldSession.ts'))
 assert.equal(typeof module.createInlineImportSession, 'function', 'imports need explicit owner lifetime validation')
@@ -69,7 +69,7 @@ const modules = {
 function compile(file) {
   const result = { exports: {} }
   const js = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText
-  new Function('require', 'module', 'exports', js)(id => modules[id] ?? require(id), result, result.exports)
+  new Function('require', 'module', 'exports', js)(id => modules[id] ?? (id.startsWith('@/') ? get(resolveTypeScriptModule(id, path.resolve(file))) : require(id)), result, result.exports)
   return result.exports
 }
 modules['@/components/project-resources/useInlineImportSession'] = compile('src/components/project-resources/useInlineImportSession.ts')
