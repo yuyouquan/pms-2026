@@ -55,14 +55,21 @@ export default function BudgetMilestoneSchedule({
     setLastDate(dates[anchors[1].key] ?? '')
   }, [versionId, dates[anchors[0].key], dates[anchors[1].key], anchors])
 
-  const metrics = useMemo(() => modelSnapshot?.category === category
-    ? calculateBudgetStageMetrics(modelSnapshot, dates)
-    : [], [category, dates, modelSnapshot])
+  const templateScopes = usePlanStore(state => state.configTemplateVersionScopes)
+  const templateSnapshots = usePlanStore(state => state.publishedSnapshots)
+  const displayModel = useMemo(() => {
+    if (modelSnapshot?.category === category) return modelSnapshot
+    try { return resolvePublishedBudgetScheduleModel({ configTemplateVersionScopes: templateScopes, publishedSnapshots: templateSnapshots }, category) }
+    catch { return undefined }
+  }, [category, modelSnapshot, templateScopes, templateSnapshots])
+  const metrics = useMemo(() => displayModel?.category === category
+    ? calculateBudgetStageMetrics(displayModel, dates)
+    : [], [category, dates, displayModel])
   const metricsByStage = new Map(metrics.map(metric => [metric.stageId, metric]))
   const fieldByKey = new Map(fields.map(field => [field.key, field]))
-  const scheduledKeys = new Set(modelSnapshot?.category === category ? modelSnapshot.milestones.map(milestone => milestone.fieldKey) : [])
-  const groups = modelSnapshot?.category === category ? [
-    ...modelSnapshot.stages.map(stage => ({
+  const scheduledKeys = new Set(displayModel?.category === category ? displayModel.milestones.map(milestone => milestone.fieldKey) : [])
+  const groups = displayModel?.category === category ? [
+    ...displayModel.stages.map(stage => ({
       id: stage.templateTaskId,
       label: stage.label,
       fields: stage.milestones.flatMap(milestone => fieldByKey.has(milestone.fieldKey) ? [fieldByKey.get(milestone.fieldKey)!] : []),
@@ -92,11 +99,11 @@ export default function BudgetMilestoneSchedule({
           const value = index === 0 ? firstDate : lastDate
           const setValue = index === 0 ? setFirstDate : setLastDate
           return <label key={anchor.key}>
-            <span>{anchor.label}计划完成时间</span>
+            <span>{anchor.label}</span>
             <div {...inlineDateInputHandlers(raw => setValue(raw ? String(raw) : ''))}>
               <DatePicker
                 key={`${versionId}-${anchor.key}-${dates[anchor.key] ?? ''}`}
-                aria-label={`${anchor.label}计划完成时间`}
+                aria-label={`${anchor.label}`}
                 defaultValue={value ? dayjs(value) : null}
                 disabled={readOnly}
                 allowClear
@@ -112,7 +119,7 @@ export default function BudgetMilestoneSchedule({
     </div>
     <div className="pms-budget-milestone-scroll">
       <div className="pms-budget-milestone-track">
-        {groups.map((group, index) => <div
+        {groups.filter(group => group.fields.length > 0).map((group, index) => <div
           key={group.id}
           className="pms-budget-milestone-stage"
           style={{ '--pms-budget-stage-color': STAGE_COLORS[index % STAGE_COLORS.length], minWidth: `${Math.max(group.fields.length, 1) * 142}px` } as CSSProperties}

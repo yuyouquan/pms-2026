@@ -92,6 +92,33 @@ for (const [category, kind] of Object.entries(stores)) {
   const versionId = project.versions.at(-1).id
   const scopeId = project.pmsProjectId
   const edit = patch => store.getState().updateVersionInline(project.id, versionId, patch, scopeId)
+  if (category === 'machine') {
+    const rows=editing.resolveMachineDepartmentInvestments(currentVersion())
+    const initial=structuredClone(currentVersion())
+    assert.throws(()=>edit({type:'departmentTotal',rowId:rows[0].id,value:10}),/只读/)
+    assert.throws(()=>edit({type:'departments',rows}),/只读/)
+    assert.deepEqual(currentVersion(),initial,'manual writes leave source unchanged')
+    // Historical overrides are retained by reload; only an explicit model edit removes that version override.
+    store.setState({projects:store.getState().projects.map(item=>item.id===project.id?{...item,versions:item.versions.map(v=>v.id===versionId?{...v,machineDepartmentInvestments:structuredClone(rows)}:v)}:item)})
+    store.getState().refreshFormalProjects()
+    await store.persist.rehydrate()
+    assert.deepEqual(currentVersion().machineDepartmentInvestments,rows)
+    store.getState().copyVersion(project.id,versionId)
+    const copy=currentProject().versions.at(-1)
+    store.getState().updateVersionInline(project.id,copy.id,{type:'model',key:'levelCoefficient',value:copy.levelCoefficient+0.01},scopeId)
+    assert.equal(currentProject().versions.at(-1).machineDepartmentInvestments,undefined)
+    assert.deepEqual(currentVersion().machineDepartmentInvestments,rows,'editing copied model never deletes original history')
+    const configStore=load(path.resolve('src/stores/hrConfig.ts')).useHrConfigStore
+    const originalConfig=structuredClone(configStore.getState().data)
+    const saved=structuredClone(currentVersion())
+    configStore.setState({data:{...originalConfig,hrModel:[]}})
+    store.getState().refreshFormalProjects()
+    await store.persist.rehydrate()
+    assert.deepEqual(currentVersion(),saved,'saved model snapshot remains stable when global config changes')
+    configStore.setState({data:originalConfig})
+    console.log('PASS machine: readonly amounts, history preservation, explicit model recalc and snapshot stability')
+    continue
+  }
   if (category === 'tos') edit({ type: 'milestone', key: 'maintenanceEnd', value: '2028-01-01' })
   const row = category === 'machine'
     ? editing.resolveMachineDepartmentInvestments(currentVersion())[0]
@@ -115,13 +142,6 @@ for (const [category, kind] of Object.entries(stores)) {
   const monthly = store.getState().monthlyInvestments.find(item => item.versionId === versionId && item.sourceRowId?.endsWith(row.id) || item.versionId === versionId && item.id.endsWith(row.id))
   assert.equal(monthly?.estimatedTotal, 10, `${category}: monthly source row uses edited total`)
 
-  if (category === 'machine' && monthly) {
-    const manualMonthly = { ...monthly.monthlyData, [Object.keys(monthly.monthlyData)[0]]: 7.7 }
-    store.getState().updateMonthlyInvestment(monthly.id, manualMonthly)
-    edit({ type: 'departmentTotal', rowId: row.id, value: 10.1 })
-    assert.deepEqual(store.getState().monthlyInvestments.find(item => item.id === monthly.id).monthlyData, manualMonthly, 'machine: manual monthly allocation survives total regeneration')
-  }
-
   if (category !== 'capability') {
     const firstPhase = phaseKeys[category][0]
     const rows = category === 'machine' ? currentVersion().machineDepartmentInvestments : currentVersion().departmentInvestments
@@ -133,23 +153,6 @@ for (const [category, kind] of Object.entries(stores)) {
   const expenseItem = currentVersion().nonLaborInvestment.items[0]
   edit({ type: 'nonLaborItemTotal', itemId: expenseItem.id, value: 12.34 })
   assert.equal(load(path.resolve('src/lib/nonLaborInvestment.ts')).nonLaborTotal({ ...currentVersion().nonLaborInvestment, items: [currentVersion().nonLaborInvestment.items[0]] }), 12.34, `${category}: saved expense item total`)
-
-  if (category === 'machine') {
-    const rowsBeforeModel = structuredClone(currentVersion().machineDepartmentInvestments)
-    edit({ type: 'model', key: 'levelCoefficient', value: currentVersion().levelCoefficient + 0.01 })
-    assert.deepEqual(currentVersion().machineDepartmentInvestments, rowsBeforeModel, 'machine: explicit model metadata changes preserve actual rows')
-    const beforeRows = structuredClone(currentVersion().machineDepartmentInvestments)
-    edit({ type: 'milestone', key: 'str4a', value: '2027-07-20' })
-    assert.deepEqual(currentVersion().machineDepartmentInvestments, beforeRows, 'machine: unrelated date edits preserve actual rows')
-    const tampered = beforeRows.map((item, index) => index ? item : { ...item, secondaryDepartment: '篡改部门' })
-    snapshot = JSON.stringify(store.getState())
-    assert.throws(() => edit({ type: 'departments', rows: tampered }), /部门|来源/)
-    assert.equal(JSON.stringify(store.getState()), snapshot, 'machine: source identity rejection is atomic')
-    store.getState().refreshFormalProjects()
-    assert.deepEqual(currentVersion().machineDepartmentInvestments, beforeRows, 'machine: unlocked source sync preserves actual rows')
-    const exported = load(path.resolve('src/components/project-resources/exportResourceVersion.ts')).buildResourceVersionExportData(project.name, currentVersion(), store.getState().monthlyInvestments)
-    assert.deepEqual(exported.departments, currentVersion().machineDepartmentInvestments, 'machine: export resolves saved actual rows')
-  }
 
   const administrator = projectStore.getState().currentLoginUser
   projectStore.getState().setCurrentLoginUser('无权限用户')
@@ -165,19 +168,11 @@ for (const [category, kind] of Object.entries(stores)) {
   assert.throws(() => edit({ type: 'departmentTotal', rowId: row.id, value: 8 }), /不可编辑/)
   store.getState().copyVersion(project.id, versionId)
   const copy = currentProject().versions.at(-1)
-  if (category === 'machine') {
-    assert.deepEqual(copy.machineDepartmentInvestments, currentVersion().machineDepartmentInvestments, 'machine: copy preserves actual rows')
-    const sourceRows = structuredClone(currentVersion().machineDepartmentInvestments)
-    store.getState().updateVersionInline(project.id, copy.id, { type: 'departmentTotal', rowId: copy.machineDepartmentInvestments[0].id, value: 7.7 }, scopeId)
-    assert.deepEqual(currentVersion().machineDepartmentInvestments, sourceRows, 'machine: editing the copy cannot mutate its locked source')
-    assert.equal(currentProject().versions.find(item => item.id === copy.id).machineDepartmentInvestments[0].estimatedInvestment, 7.7)
-  }
   assert.notEqual(copy.id, versionId)
   assert.equal(currentVersion().lockState, 'locked')
   await store.persist.rehydrate()
   store.getState().refreshFormalProjects()
   assert.deepEqual(currentVersion().nonLaborInvestment, frozen.nonLaborInvestment, `${category}: locked expense snapshot survives reload/sync`)
-  if (category === 'machine') assert.deepEqual(currentVersion().machineDepartmentInvestments, frozen.machineDepartmentInvestments, 'machine: locked actual rows survive reload/sync')
   console.log(`PASS ${category}: total/phase reverse calculation, monthly, expense, scope, lock, copy and reload`)
 }
 

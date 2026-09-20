@@ -16,6 +16,8 @@ import type { ResourceMonthlyRow } from '@/components/project-resources/resource
 export type ResourceVersion = HrMachineVersion | HrTosVersion | HrTechnicalVersion | HrCapabilityVersion
 export type ResourceProject = HrMachineProject | HrTosProject | HrTechnicalProject | HrCapabilityProject
 export interface ResourceStoreView extends ResourceInlineActions {
+  createResourceVersion: (projectId: string, budgetType: import('@/components/project-resources/resourceVersionViewData').ResourceBudgetType, scopeId: string, options: import('@/types/resourceOperations').ResourceVersionOptions) => string
+  updateResourceMonthlyInvestment: (projectId: string, versionId: string, rowId: string, month: string, value: number, scopeId: string) => void
   projects: ResourceProject[]
   monthlyInvestments: ResourceMonthlyRow[]
   refreshFormalProjects: () => void

@@ -75,7 +75,7 @@ function compile(file) {
 modules['@/components/project-resources/useInlineImportSession'] = compile('src/components/project-resources/useInlineImportSession.ts')
 const Detail = compile('src/components/project-resources/ResourceInlineDetail.tsx').default
 const Expenses = compile('src/components/project-resources/NonLaborInvestmentSection.tsx').default
-function elements(node) { return [node, ...[node?.props?.children].flat(Infinity).filter(item => item && typeof item === 'object').flatMap(elements)] }
+function elements(node) { return [node, ...[node?.props?.children, ...(node?.props?.items ?? []).map(item => item.children)].flat(Infinity).filter(item => item && typeof item === 'object').flatMap(elements)] }
 function deferredFile() { let resolve; const file = { arrayBuffer: () => new Promise(done => { resolve = done }) }; return { file, resolve: () => resolve(new ArrayBuffer(0)) } }
 function mount(Component, props) {
   cleanups = []

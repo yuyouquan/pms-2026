@@ -37,7 +37,7 @@ const require = createRequire(import.meta.url)
 const sessionModule = get(path.resolve('src/components/project-resources/inlineFieldSession.ts'))
 const modules = {
   react: { useRef: value => ({ current: value }) },
-  antd: { App: { useApp: () => ({ message: {} }) }, DatePicker: function DatePicker() {}, Descriptions: 'Descriptions', Input: 'Input', InputNumber: 'InputNumber', Select: 'Select', Space: 'Space', Table: 'Table', Tooltip: 'Tooltip', Upload: 'Upload', Button: 'Button' },
+  antd: { App: { useApp: () => ({ message: {} }) }, DatePicker: function DatePicker() {}, Descriptions: 'Descriptions', Input: 'Input', InputNumber: 'InputNumber', Select: 'Select', Space: 'Space', Table: 'Table', Tabs: 'Tabs', Tooltip: 'Tooltip', Upload: 'Upload', Button: 'Button' },
   '@ant-design/icons': new Proxy({}, { get: (_, key) => String(key) }),
   '@/components/project-resources/resourceVersionAdapter': { resourceStore: () => ({ getState: () => ({}) }) },
   '@/components/project-resources/ResourceInlineField': { __esModule: true, default: 'InlineField' },
@@ -47,6 +47,7 @@ const modules = {
   '@/components/project-resources/BudgetMilestoneSchedule': { __esModule: true, default: 'BudgetMilestones' },
   '@/lib/hrVersionRules': { isHrVersionEditable: () => true },
   '@/lib/hrProjectRegistry': { isHrFormalRecord: () => false, getHrRegistryProject: () => ({}), canEditHrInScope: () => true },
+  '@/lib/resourceRatios': { getResourceRatioFields: () => [], getResourcePhaseRatios: () => ({}) },
   '@/lib/resourceInlineEditing': { canEditResourceMilestone: () => true, resourceMilestoneFields: { capability: [{ key: 'projectStartTime', label: '项目开始时间' }] }, resourcePhaseFields: { capability: [] } },
   '@/lib/nonLaborInvestment': { cloneNonLaborInvestment: value => value },
   '@/constants/hrConfig': {}, '@/lib/hrMachinePeriods': { machinePhaseFields: () => [] },

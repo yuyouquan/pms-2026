@@ -101,14 +101,15 @@ const original = structuredClone(version())
 const actualRows = a.load(path.resolve('src/lib/resourceAllocation.ts')).resolveMachineDepartmentInvestments(version())
 const row = actualRows[0]
 inTab(0, () => a.machine.getState().updateVersionInline(project().id, version().id, {
-  type: 'departmentTotal', rowId: row.id, value: Math.round((row.estimatedInvestment + 1.1) * 10) / 10,
+  type: 'model', key: 'levelCoefficient', value: Math.round((version().levelCoefficient + 0.1) * 100) / 100,
 }, project().pmsProjectId))
 const editEvents = settle('actual investment edit')
 const edited = version()
 const remoteEdited = b.machine.getState().projects.find(item => item.id === project().id).versions.find(item => item.id === edited.id)
 assert.equal(remoteEdited.estimatedInvestment, edited.estimatedInvestment)
 assert.deepEqual(remoteEdited.machineDepartmentInvestments, edited.machineDepartmentInvestments)
-assert.notDeepEqual(edited.machineDepartmentInvestments, original.machineDepartmentInvestments, 'phase allocation changed with the total')
+assert.notEqual(edited.estimatedInvestment, original.estimatedInvestment, 'model coefficient recalculates readonly investment')
+assert.deepEqual(b.machine.getState().projects.find(item => item.id === project().id).resourceOperationLogs, project().resourceOperationLogs, 'audits converge atomically with edits')
 
 inTab(0, () => a.machine.getState().copyVersion(project().id, edited.id))
 const copyEvents = settle('copy version')

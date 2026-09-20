@@ -19,7 +19,7 @@ export function buildResourceVersionExportData(projectName: string, version: Res
   const moneyMonths = nonLaborMonths(version.nonLaborInvestment ?? { startMonth: null, endMonth: null, items: [] })
   const metadata = [
     ['项目', projectName], ['预算类型', BUDGET_TYPE_LABELS[version.budgetType]], ['版本', version.versionNumber],
-    ['激活状态',version.isActive?'已激活':'未激活'], ['锁定状态',version.lockState==='locked'?'已锁定':'未锁定'], ['批次',formatHrBatch(version.batch)],
+    ['正式版本',version.isActive?'是':'否'], ['锁定状态',version.lockState==='locked'?'已锁定':'未锁定'], ['批次',formatHrBatch(version.batch)],
     ['创建人',version.createdBy], ['创建时间',version.createdAt], ['复制来源',version.copiedFromVersionNumber ?? '-'], ['预估投入（人月）',version.estimatedInvestment],
     ...('hrModelVersion' in version ? [['项目等级',version.projectLevel],['等级系数',version.levelCoefficient],['人力模型版本',version.hrModelVersion]]:[]),
   ].map(([field,value])=>({field,value}))

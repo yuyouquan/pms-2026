@@ -14,6 +14,7 @@ interface SyncVersion extends HrVersionIdentity {
   projectLevel?: string
   levelCoefficient?: number
   hrModelVersion?: string
+  modelSnapshot?: object[]
   estimatedInvestment: number
   machineDepartmentInvestments?: Array<{ estimatedInvestment: number }>
 }
@@ -44,7 +45,7 @@ export function synchronizeHrProjects<T extends SyncProject>(
       const next = { ...version }
       if (source?.project && category !== 'capability' && version.budgetType !== 'annual') {
         next.milestones = mergeHrFormalMilestones(category, source.milestones, version.milestones)
-        if (category === 'machine') next.projectLevel = source.projectLevel
+        if (category === 'machine' && !version.modelSnapshot) next.projectLevel = source.projectLevel
       }
       if (category === 'machine') next.milestones = withMachineDerivedMilestones(next.milestones ?? {})
       if (category === 'machine' && calculateMachineInvestment) {

@@ -59,7 +59,10 @@ for (const kind of ['Machine', 'Tos', 'Technical', 'Capability']) {
  assert.equal(read().versions.find(v => v.id === initial.id).batch, 7, `${kind}: unlocked history edits`)
  const monthly = store.getState().monthlyInvestments.find(row => row.versionId === initial.id && !row.isArchived)
  assert.ok(monthly, `${kind}: historical monthly rows retained`)
- store.getState().updateMonthlyInvestment(monthly.id, { '2035-01': 123.4 })
+ const editMonth = Object.keys(monthly.monthlyData).sort()[0]
+ const editValue = monthly.estimatedTotal
+ assert.throws(() => store.getState().updateMonthlyInvestment(monthly.id, { '2035-01': 123.4 }), /月份/, 'out-of-range editing is now rejected')
+ store.getState().updateMonthlyInvestment(monthly.id, { [editMonth]: editValue })
  store.getState().setVersionLocked(project.id, initial.id, true)
  const frozen = structuredClone(read().versions.find(v => v.id === initial.id))
  const frozenRows = structuredClone(store.getState().monthlyInvestments.filter(row => row.versionId === initial.id))
@@ -84,11 +87,11 @@ for (const kind of ['Machine', 'Tos', 'Technical', 'Capability']) {
  assert.deepEqual(copy.operationLogs, [])
  assert.deepEqual(read().versions.find(v => v.id === initial.id), sourceBeforeCopy, 'copy never mutates source logs')
  const copyMonthly = store.getState().monthlyInvestments.find(row => row.versionId === copy.id && row.isEdited)
- assert.deepEqual(copyMonthly.monthlyData, { '2035-01': 123.4 })
+ assert.deepEqual(copyMonthly.monthlyData, { [editMonth]: editValue })
  assert.notEqual(copyMonthly.monthlyData, store.getState().monthlyInvestments.find(row => row.id === monthly.id).monthlyData)
  assert.notEqual(copy.nonLaborInvestment, read().versions.find(v => v.id === initial.id).nonLaborInvestment)
  store.getState().refreshFormalProjects()
- assert.deepEqual(store.getState().monthlyInvestments.find(row => row.id === copyMonthly.id).monthlyData, { '2035-01': 123.4 }, 'copy allocation survives sync')
+ assert.deepEqual(store.getState().monthlyInvestments.find(row => row.id === copyMonthly.id).monthlyData, { [editMonth]: editValue }, 'copy allocation survives sync')
  store.getState().setVersionLocked(project.id, initial.id, false)
  store.getState().updateVersion(project.id, initial.id, { batch: 9 })
  assert.equal(read().versions.find(v => v.id === initial.id).batch, 9)
@@ -146,6 +149,12 @@ for (const kind of ['Machine', 'Tos', 'Technical', 'Capability']) {
    store.getState().copyVersion(bound.id, id)
    store.getState().updateVersion(bound.id, id, { batch: 20 })
    assert.deepEqual(store.getState().projects.find(p => p.id === bound.id), before, `${kind}: bound source protected`)
+ }
+ // Model changes intentionally retain manual monthly values; rebalance before formalization.
+ for (const row of store.getState().monthlyInvestments.filter(row=>row.versionId===dependencyCopy.id && !row.isArchived)) {
+   const version=read().versions.find(v=>v.id===dependencyCopy.id)
+   const month=get('src/lib/hrNonLaborRange.ts').hrNonLaborMonthRange(kind.toLowerCase(),version.milestones??version).startMonth
+   if(month) store.getState().updateMonthlyInvestment(row.id,{[month]:row.estimatedTotal})
  }
  store.getState().setVersionActive(project.id, dependencyCopy.id, true)
  const retained = read().versions.filter(version => version.id !== dependencyCopy.id).map(version => version.id)

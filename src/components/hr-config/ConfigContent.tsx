@@ -6,6 +6,7 @@ import { SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import type { ConfigModuleKey } from '@/types/hrConfig'
 import { CONFIG_MODULE_MAP } from '@/constants/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
+import FeeRateConfig from '@/components/hr-config/FeeRateConfig'
 import ConfigTablePanel from './ConfigTablePanel'
 import ConfigEditModal from './ConfigEditModal'
 
@@ -14,6 +15,9 @@ interface ConfigContentProps {
 }
 
 export default function ConfigContent({ moduleKey }: ConfigContentProps) {
+  return moduleKey === 'feeRate' ? <FeeRateConfig /> : <RecordsConfigContent moduleKey={moduleKey} />
+}
+function RecordsConfigContent({ moduleKey }: ConfigContentProps) {
   const moduleMeta = CONFIG_MODULE_MAP[moduleKey]
   const { showEditModal, editingId, setShowEditModal, setEditingId } = useHrConfigStore()
 
