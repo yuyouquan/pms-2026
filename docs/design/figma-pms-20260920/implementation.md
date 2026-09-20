@@ -25,13 +25,14 @@
 | 合并系列按钮 min40px | min39px + 单元格底边1px | 防止单行41px；合并单元格自然扩展 |
 | 资源月度表12px、32px行、26px控件 | 共用14px/40px/32px | 不改变月份、阶段、计划时间轴数据 |
 | 弹层footer不统一 | 最小64px、左右24px、gap16px | 不统一弹窗宽度；低高度内部滚动 |
+| 普通弹窗默认top100px、按钮附加margin8px | 普通弹窗top24px/最大高度viewport−48px、相邻按钮margin0 | 工程建议；居中弹窗保持top0；以实际按钮边界验证16px间距 |
 | Form.Item默认/局部20/16/8px | row12px、column16px、label4px、group8px | 用户补充“表单之间行间距统一，要紧凑” |
 
 ## 表单紧凑规则
 
 Ant Form 的 `itemMarginBottom:12` 与 `verticalLabelPadding:'0 0 4px'` 使用已安装6.3.1 API。共享 CSS 同时修正旧项目详情、资源版本和行布局的局部覆盖；Form.Item 负责纵向间隔，包裹字段的 Row 不额外增加纵向 gutter，嵌套 Form.Item 不重复增加 margin。帮助、必填、错误内容仍在正常文档流中。Ant 的 `.ant-form-item-margin-offset` 会用 -12px 抵消错误行尾间隔；仅对非inline表单的可见帮助状态取消此负偏移，确保错误正文结束到下一字段仍有12px，未用固定高度压缩。
 
-主项目表单保持原有四列/六列及业务分组；HR版本保持各类别列数，列间统一16px。原生月度编辑字段的横向间距也映射同一变量。路标表单保留预估勾选与现有16px横向Row。
+主项目表单保持原有四列/六列及业务分组；HR版本保持各类别列数，独立字段列间统一16px，连续里程碑日期作为相关控件分组保持8px。原生月度编辑字段的横向间距也映射同一变量。路标表单保留预估勾选与现有16px横向Row。转维团队角色行使用12px间距；普通弹窗主体默认左右24px内边距，保留专用布局的显式覆盖。
 
 ## 未改变的合同
 
@@ -43,4 +44,4 @@ Ant Form 的 `itemMarginBottom:12` 与 `verticalLabelPadding:'0 0 4px'` 使用�
 
 实施阶段执行：`npx tsc --noEmit`；`npm run verify:liquid-glass`；`npm run verify:liquid-glass:self-test`；`npm run verify:compact-ui-density`；`npm run verify:project-surfaces-visual-refresh`。均通过。
 
-真实Chromium / localhost:3024 的项目管理与新增项目初步测量：Header50px、标签24px/12px/16px、新增项目footer64px/gap16px、字段标签控件组56px、Form.Item margin12px、label padding4px。最终全面浏览器、构建及独立评审证据由协调任务补充；此阶段未执行构建以免覆盖运行中的开发服务。
+应用源代码 `e951409` 的生产构建通过，包含lint和类型检查。真实Chromium / localhost:3024 的完整浏览器流程测量Header50px、标签24px/12px、footer64px、实际按钮间距16px、表单行12px、label padding4px、错误文案到下一字段12px、低高度弹窗内部滚动，以及1280/1440/1920视口。独立审查发现并修正了Ant默认弹窗偏移及按钮附加margin；每个表单都断言页脚和按钮完全留在视口中。完整覆盖、最终观察数量、复现命令和既有审计脚本问题见 `docs/reviews/2026-09-20-figma-ui.md`。
