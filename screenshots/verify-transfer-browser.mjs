@@ -73,6 +73,12 @@ try {
   observations.push({ initialRows: await page.$$eval('#section-transfer tr[data-row-key]', rows => rows.map(row=>({id:row.getAttribute('data-row-key'),text:row.textContent}))) })
   await clickText('申请转维')
   await page.waitForSelector('input[type="date"]')
+  const teamGeometry = await page.evaluate(() => [...document.querySelectorAll('.ant-card')]
+    .filter(card => ['在研团队','维护团队'].some(side => card.textContent.trim().startsWith(side)))
+    .map(card => { const controls = [...card.querySelectorAll('.ant-select')].map(e => {const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height}}); return {side:card.querySelector('.ant-card-head')?.textContent,controls,gaps:controls.slice(1).map((r,i)=>r.top-controls[i].bottom)} }))
+  for (const team of teamGeometry) for (const gap of team.gaps) assert.equal(gap, 12, `${team.side} role control gap12px`)
+  observations.push({teamGeometry})
+  console.log('Team form geometry',JSON.stringify(teamGeometry))
   await page.$eval('input[type="date"]', input => { const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set; setter.call(input,'2026-09-09'); input.dispatchEvent(new Event('input',{bubbles:true})); input.dispatchEvent(new Event('change',{bubbles:true})) })
   for (const [side,role,name] of [
     ['在研团队','SPM','演示用户01'],['在研团队','TPM','演示用户04'],['在研团队','SQA','演示用户07'],['在研团队','底软','演示用户08'],['在研团队','系统','演示外协03'],
@@ -120,7 +126,7 @@ try {
     return {bodyFont:cell&&getComputedStyle(cell).fontSize,headerFont:header&&getComputedStyle(header).fontSize,buttonHeight:button&&button.getBoundingClientRect().height,pageOverflow:document.documentElement.scrollWidth>innerWidth,roleTag:tag&&{foreground:getComputedStyle(tag).color,background:getComputedStyle(tag).backgroundColor}}
   })
   assert.equal(style.headerFont, '14px', 'transfer table headers use 14px')
-  assert.equal(style.bodyFont, '12px', 'transfer table content uses 12px')
+  assert.equal(style.bodyFont, '14px', 'transfer table content uses 14px')
   observations.push({style})
   console.log('Assigned entry saved',style)
   await clickText('返回')
