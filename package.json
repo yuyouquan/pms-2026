@@ -64,6 +64,7 @@
     "verify:template-intervals": "node scripts/verify-template-intervals.mjs && node scripts/verify-template-interval-ui.mjs",
     "verify:budget-scheduling": "node scripts/verify-budget-milestone-scheduling.mjs && node scripts/verify-machine-stage-split.mjs && node scripts/verify-plan-task-identity.mjs",
     "verify:resource-totals": "node scripts/verify-resource-total-editing.mjs && node scripts/verify-resource-total-consumers.mjs",
+    "verify:resource-monthly-reallocation": "node scripts/verify-resource-monthly-reallocation.mjs",
     "verify:resource-cross-tab": "node scripts/verify-resource-cross-tab-storage.mjs",
     "verify:resource-mixed-version": "node scripts/verify-resource-mixed-version-storage.mjs",
     "verify:resource-activation": "node scripts/verify-resource-activation-interactions.mjs && node scripts/verify-resource-cross-tab-storage.mjs",

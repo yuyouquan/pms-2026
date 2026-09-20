@@ -9277,12 +9277,16 @@ input.ant-input,
 .pms-resource-metadata dt { font-size: 12px; font-weight: 700; color: var(--pms-text-primary); margin-bottom: 2px; }
 .pms-resource-metadata dd { margin: 0; min-height: 28px; font-size: 13px; }
 .pms-resource-metadata .pms-resource-inline-trigger { padding-left: 0; }
-.pms-resource-basics-row { display: flex; align-items: flex-end; gap: 12px; overflow-x: auto; margin-bottom: 8px; padding-bottom: 2px; }
-.pms-resource-basics-row .pms-resource-metadata { flex: 1 0 780px; margin: 0; overflow: visible; }
+.pms-resource-basics-row { --pms-resource-field-width: 154px; display: flex; align-items: flex-end; gap: 12px; overflow-x: auto; margin-bottom: 8px; padding-bottom: 2px; }
+.pms-resource-basics-row .pms-resource-metadata { flex: 1 0 984px; grid-template-columns: repeat(6, var(--pms-resource-field-width)); justify-content: space-between; margin: 0; overflow: visible; }
+.pms-resource-basics-row .pms-resource-metadata dt { line-height: 18px; margin-bottom: 3px; }
+.pms-resource-basics-row .pms-resource-metadata dd { min-height: 32px; }
 .pms-resource-basics-row .pms-budget-milestone-heading { flex: 0 0 auto; margin: 0; }
 .pms-resource-basics-row .pms-budget-milestone-anchor-inputs { flex-wrap: nowrap; }
-.pms-resource-basics-separator { flex: 0 0 auto; align-self: stretch; display: flex; align-items: center; color: var(--pms-border); font-size: 24px; }
-.pms-resource-basics-row .pms-budget-milestone-anchor-inputs label > span { font-weight: 700; color: var(--pms-text-primary); }
+.pms-resource-basics-separator { flex: 0 0 0; align-self: stretch; border-left: 1px solid var(--pms-border); }
+.pms-resource-basics-row .pms-budget-milestone-anchor-inputs .ant-picker { width: var(--pms-resource-field-width); }
+.pms-resource-basics-row .pms-budget-milestone-anchor-inputs label > span { line-height: 18px; font-weight: 700; color: var(--pms-text-primary); }
+.pms-resource-investment-tabs > .ant-tabs-nav .ant-tabs-extra-content { margin-left: 16px; color: var(--pms-text-secondary); }
 .pms-resource-basics :is(.pms-budget-milestone-schedule, .pms-hr-milestone-details) { margin-bottom: 0; }
 .pms-resource-panel .pms-non-labor-section > h3 { display: none; }
 .pms-resource-workspace .ant-input-number-input,

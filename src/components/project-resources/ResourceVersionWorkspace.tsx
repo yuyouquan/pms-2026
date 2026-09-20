@@ -74,7 +74,7 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
           {canManage && <Tooltip title={version.lockState === 'locked' ? '解锁' : '锁定'}><Button type="text" aria-label={version.lockState === 'locked' ? '解锁' : '锁定'} icon={version.lockState === 'locked' ? <UnlockOutlined /> : <LockOutlined />} onClick={() => act(() => store.setVersionLocked(owner.id, version.id, version.lockState !== 'locked'))} /></Tooltip>}
           {canManage && <Tooltip title={version.isActive ? '取消设置为正式版本' : '设置为正式版本'}><Button type="text" aria-label={version.isActive ? '取消设置为正式版本' : '设置为正式版本'} icon={version.isActive ? <FlagFilled /> : <FlagOutlined />} onClick={() => act(() => store.setVersionActive(owner.id, version.id, !version.isActive))} /></Tooltip>}
           <Tooltip title="版本操作日志"><Button type="text" aria-label="版本操作日志" icon={<HistoryOutlined />} onClick={() => guard(() => setLogFilter(version.id))} /></Tooltip>
-          <Tooltip title="导出版本"><Button type="text" aria-label="导出版本" icon={<DownloadOutlined />} onClick={() => guard(() => exportResourceVersion(resourceProjectName(owner), version, store.monthlyInvestments, '万元'))} /></Tooltip>
+          <Tooltip title="导出版本"><Button type="text" aria-label="导出版本" icon={<DownloadOutlined />} onClick={() => guard(() => exportResourceVersion(resourceProjectName(owner), version, store.monthlyInvestments, '元'))} /></Tooltip>
           {canEdit && <Popconfirm title={`删除 ${version.versionNumber}？`} description="删除后无法恢复该版本及其月度投入。" okText="删除" cancelText="取消" onConfirm={() => guard(() => store.deleteVersion(owner.id, version.id))}><Tooltip title="删除"><Button type="text" danger aria-label="删除" icon={<DeleteOutlined />} /></Tooltip></Popconfirm>}
         </Space></div>
 

@@ -43,7 +43,7 @@ const modules = {
   '@/components/project-resources/ResourceInlineField': { __esModule: true, default: 'InlineField' },
   '@/components/project-resources/useInlineImportSession': { useInlineImportSession: () => sessionModule.createInlineImportSession() },
   '@/components/project-resources/inlineFieldSession': sessionModule,
-  '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'Expenses' },
+  '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'Expenses', NonLaborInvestmentRange: 'Range' },
   '@/components/project-resources/BudgetMilestoneSchedule': { __esModule: true, default: 'BudgetMilestones' },
   '@/lib/hrVersionRules': { isHrVersionEditable: () => true },
   '@/lib/hrProjectRegistry': { isHrFormalRecord: () => false, getHrRegistryProject: () => ({}), canEditHrInScope: () => true },
