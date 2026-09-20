@@ -2064,13 +2064,14 @@ assert.match(horizontalTableSource, /canEditLevel1HorizontalDateCell\(m\) && ver
 assert.match(horizontalTableSource, /canEditLevel1HorizontalDateCell\(actualTask\) && actualProjectionAccess\.canEdit/, 'actual-date editing delegates stage readonly enforcement to the tested cell rule and rendered-projection permission')
 assert.match(horizontalTableSource, /resolveLevel1HorizontalActualProjectionAccess\(\{[\s\S]{0,220}actualVersionId:\s*actualVersionProjection\.version\.id[\s\S]{0,120}canMaintain:\s*level1SurfaceCanMaintain/, 'actual-row edit permission is based on the rendered published projection rather than the selected revision')
 assert.match(horizontalTableSource, /targetPublishedVersionId:\s*actualProjectionAccess\.targetPublishedVersionId!/, 'actual-row writes explicitly target the rendered published snapshot selected by the access rule')
-const horizontalHeaderStart = projectSpaceSource.indexOf('{stageGroups.map(({ stage, colSpan }, i) => {')
+const horizontalHeaderStart = projectSpaceSource.indexOf('{stageGroups.map(({ stage, colSpan }) => {')
 const horizontalHeaderEnd = projectSpaceSource.indexOf('</thead>', horizontalHeaderStart)
 assert.ok(horizontalHeaderStart >= 0 && horizontalHeaderEnd > horizontalHeaderStart, 'horizontal stage header slice is present')
 const horizontalHeaderSource = projectSpaceSource.slice(horizontalHeaderStart, horizontalHeaderEnd)
 assert.match(horizontalHeaderSource, /const dynamicBusinessStage = selectedProject[\s\S]{0,180}isBusinessStage\(selectedProject\.type, stage\)/, 'horizontal headers recognize project-specific dynamic business stages')
-assert.match(horizontalHeaderSource, /!dynamicBusinessStage[\s\S]{0,240}stage\.estimatedDays/, 'dynamic business stages omit the duration badge while fixed stages retain it')
-assert.match(horizontalHeaderSource, /textAlign:\s*'center'/, 'horizontal stage names are centered')
+assert.match(horizontalHeaderSource, /!dynamicBusinessStage[\s\S]{0,240}stage\.estimatedDays/, 'dynamic business stages omit the duration while fixed stages retain it')
+assert.match(horizontalHeaderSource, /className="pms-phase-header-label"/, 'horizontal stage names use the shared centered header')
+assert.match(fs.readFileSync(path.join(root, 'src/styles/globals.css'), 'utf8'), /\.pms-phase-header-label\s*\{[^}]*justify-content:\s*center/, 'shared horizontal stage names are centered')
 assert.doesNotMatch(horizontalHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'horizontal stage headers omit percentages and date ranges')
 const basicInfoHorizontalCalls = [
   projectSpaceSource.slice(projectSpaceSource.indexOf('const renderWholeMachinePlanInfo ='), projectSpaceSource.indexOf('const anchorSections =')),

@@ -410,10 +410,11 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
             <Button
               type="link"
               className="pms-joint-mr-project-link"
+              title={metadata.projectName}
               aria-label={`打开项目-${metadata.projectName}`}
               onClick={() => handleOpenProject(row, metadata)}
             >
-              {metadata.projectName}
+              <span className="pms-joint-mr-project-link-label">{metadata.projectName}</span>
             </Button>
           </span>
         )

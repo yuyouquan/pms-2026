@@ -7135,6 +7135,38 @@ input.ant-input,
   font-size: var(--pms-font-size-compact);
 }
 
+/* Reference horizontal plan: compact lavender phase and milestone bands.
+   This scope leaves body geometry, sticky offsets and business-state colors alone. */
+.pms-page-shell table.pms-phase-header-table > thead > tr > th {
+  color: var(--pms-text-primary) !important;
+  background: #eceaff !important;
+  border: 1px solid #d6d1f0 !important;
+  font-weight: 400 !important;
+  text-align: center;
+}
+
+.pms-page-shell table.pms-phase-header-table > thead > tr > th:not([rowspan]),
+.pms-page-shell table.pms-phase-header-table > thead:has(> tr:nth-child(2)) > tr > th:not([rowspan]) {
+  height: 32px;
+  padding: 5px 12px !important;
+  line-height: 20px !important;
+}
+
+.pms-page-shell table.pms-phase-header-table > thead > tr > th[rowspan="2"] { height: 64px; }
+.pms-page-shell table.pms-phase-header-table > thead > tr > th.pms-phase-header-stage {
+  background: #d4d1ff !important;
+}
+
+.pms-phase-header-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.pms-phase-header-duration { font-weight: 400; }
+
 .pms-wide-table-toolbar {
   top: calc(var(--pms-header-height) + 6px);
 }
@@ -7944,13 +7976,12 @@ input.ant-input,
   display: inline-flex;
   min-height: 28px;
   align-items: center;
+  gap: 6px;
 }
 
 .pms-joint-mr-lock-icon {
-  position: absolute;
-  top: -3px;
-  left: -3px;
-  z-index: 1;
+  position: static;
+  flex: 0 0 12px;
   color: #6657c8;
   font-size: 12px;
 }
@@ -8077,8 +8108,20 @@ input.ant-input,
 
 .pms-joint-mr-project-link {
   height: auto;
-  max-width: 136px;
+  flex: 1;
+  min-width: 0;
+  max-width: 100%;
+  justify-content: flex-start;
+  text-align: left;
   padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pms-joint-mr-project-link-label {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8095,11 +8138,39 @@ input.ant-input,
    Shared project surfaces — cards, summary table, modal and basic info
    ================================================================ */
 
+/* The card grid sits directly on the page gradient; its filters keep a white surface. */
+.pms-project-management--cards > .pms-project-management__card.ant-card {
+  overflow: visible;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.pms-project-management--cards > .pms-project-management__card > .ant-card-body {
+  padding: 0;
+}
+
+.pms-project-management--cards .pms-project-management__view-mode {
+  padding: 12px 16px 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--pms-project-surface);
+}
+
+.pms-project-management--cards .pms-project-list-filter-grid {
+  border-radius: 16px !important;
+  background: var(--pms-project-surface);
+}
+
+.pms-project-management--cards:has(.pms-project-management__view-mode) .pms-project-list-filter-grid {
+  border-radius: 0 0 16px 16px !important;
+}
+
 .pms-project-card-surface.ant-card {
   height: 100%;
   overflow: hidden;
-  border: 1px solid var(--pms-project-surface-border);
-  border-radius: var(--pms-project-surface-radius);
+  border: 0 !important;
+  border-radius: 20px !important;
   background: var(--pms-project-surface);
   box-shadow: var(--pms-project-surface-shadow);
   cursor: pointer;
@@ -8121,20 +8192,16 @@ input.ant-input,
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 200px;
   padding: 12px;
 }
 
 .pms-project-card-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--pms-project-compact-space);
-  margin-bottom: 8px;
-}
-
-.pms-project-card-identity {
-  flex: 1;
-  min-width: 0;
+  margin-bottom: 4px;
 }
 
 .pms-project-card-title,
@@ -8145,11 +8212,12 @@ input.ant-input,
 }
 
 .pms-project-card-title {
-  margin-bottom: 3px;
+  min-width: 0;
+  flex: 1;
   color: var(--pms-text-primary);
-  font-size: var(--pms-font-size-body);
-  font-weight: 650;
-  line-height: var(--pms-line-height-body);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 24px;
 }
 
 .pms-project-card-market {
@@ -8168,26 +8236,35 @@ input.ant-input,
   text-overflow: ellipsis;
   white-space: nowrap;
   border: 0;
-  border-radius: 999px;
 }
+
+.pms-project-card-classification { margin-bottom: 16px; }
 
 .pms-project-card-type.ant-tag {
   max-width: 100%;
   padding-inline: 8px;
+  color: var(--pms-brand) !important;
+  background: var(--pms-brand-surface) !important;
+  border-radius: 4px !important;
+  box-shadow: inset 0 0 0 1px var(--pms-brand);
 }
 
 .pms-project-card-status.ant-tag {
   flex: none;
   padding-inline: 9px;
   font-weight: 600;
+  color: #fff !important;
+  background: var(--pms-card-status-fill, #666d75) !important;
+  border-radius: 999px !important;
+  box-shadow: none;
 }
 
 .pms-project-card-fields {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 4px 8px;
   min-height: 20px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .pms-project-card-field {
@@ -8206,7 +8283,7 @@ input.ant-input,
 .pms-project-card-field-value {
   overflow: hidden;
   color: var(--pms-text-secondary);
-  font-weight: 600;
+  font-weight: 400;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -8214,7 +8291,7 @@ input.ant-input,
 .pms-project-card-schedule {
   display: flex;
   gap: var(--pms-project-compact-space);
-  margin-bottom: 8px;
+  margin-bottom: 16px;
   color: var(--pms-text-tertiary);
   font-size: var(--pms-font-size-body);
   font-variant-numeric: tabular-nums;
@@ -8223,7 +8300,7 @@ input.ant-input,
 
 .pms-project-card-calendar {
   margin-right: 4px;
-  color: var(--pms-brand-strong);
+  color: #998fff;
 }
 
 .pms-project-card-footer {
@@ -8232,15 +8309,15 @@ input.ant-input,
   justify-content: space-between;
   gap: var(--pms-project-compact-space);
   margin-top: auto;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--pms-project-surface-border) 70%, transparent);
+  padding-top: 0;
+  border-top: 0;
 }
 
 .pms-project-card-owner {
   min-width: 0;
   color: var(--pms-text-secondary);
   font-size: var(--pms-font-size-body);
-  font-weight: 600;
+  font-weight: 400;
   line-height: var(--pms-line-height-body);
 }
 
@@ -8248,7 +8325,7 @@ input.ant-input,
   flex: none;
   color: #fff;
   font-size: 10px;
-  background: var(--pms-gradient-brand);
+  background: #8878ff;
 }
 
 .pms-project-card-updated {
