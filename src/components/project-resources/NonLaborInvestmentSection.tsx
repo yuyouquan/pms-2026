@@ -29,9 +29,16 @@ export function useNonLaborDraft(open: boolean, editorKey: string, seed: NonLabo
   return { value: { ...value, ...hrNonLaborMonthRange(category, dates) }, onChange: setValue }
 }
 
-export default function NonLaborInvestmentSection({ value, onChange, onItemTotalChange, readOnly = false, inline = false, canImport, unit = '元' }: {
+export function NonLaborInvestmentRange({ value }: { value: NonLaborInvestment }) {
+  return <div className="pms-non-labor-range">
+    <span>投入时间范围</span>
+    <span aria-label="费用投入时间范围" title="根据当前版本里程碑时间自动生成">{value.startMonth && value.endMonth ? dayjs(value.startMonth + '-01').format('YYYY年MM月') + '～' + dayjs(value.endMonth + '-01').format('YYYY年MM月') : '待填写里程碑时间'}</span>
+  </div>
+}
+
+export default function NonLaborInvestmentSection({ value, onChange, onItemTotalChange, readOnly = false, inline = false, canImport, unit = '元', showSummary = true }: {
   value: NonLaborInvestment; onChange?: (value: NonLaborInvestment) => void; onItemTotalChange?: (itemId: string, value: number) => void
-  readOnly?: boolean; inline?: boolean; canImport?: () => boolean; unit?: NonLaborAmountUnit
+  readOnly?: boolean; inline?: boolean; canImport?: () => boolean; unit?: NonLaborAmountUnit; showSummary?: boolean
 }) {
   const { modal, message } = App.useApp()
   const config = useHrConfigStore(state => state.data)
@@ -50,8 +57,8 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
   const storedAmount = (amount: number | null) => fromNonLaborDisplayAmount(amount ?? 0, unit)
   const formatAmount = (amount: number) => formatNonLaborDisplayAmount(amount, unit)
   const unitSuffix = unit === '万元' ? '（万元）' : ''
-  const inputFormatter = unit === '万元' ? (amount: number | string | undefined, info: { userTyping: boolean; input: string }) =>
-    info.userTyping ? info.input : Number(amount ?? 0).toLocaleString('zh-CN', { useGrouping: false, maximumFractionDigits: 6 }) : undefined
+  const inputFormatter = (amount: number | string | undefined, info: { userTyping: boolean; input: string }) =>
+    info.userTyping ? info.input : Number(amount ?? 0).toLocaleString('zh-CN', { useGrouping: false, minimumFractionDigits: unit === '元' ? 2 : 0, maximumFractionDigits: nonLaborAmountPrecision(unit) })
   const itemTotal = (item: NonLaborInvestmentItem) => Math.round(months.reduce((sum, month) => sum + (item.monthlyAmounts[month] ?? 0), 0) * 100) / 100
   const isDuplicate = (item: NonLaborInvestmentItem) => [item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject].every(Boolean)
     && value.items.some(other => other.id !== item.id && nonLaborItemKey(other) === nonLaborItemKey(item))
@@ -177,13 +184,10 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
   }) : columns
   return <section className="pms-non-labor-section" aria-label={`非人力投入${unitSuffix}`}>
     <h3>{`非人力投入${unitSuffix}`}</h3>
-    <Alert className="pms-non-labor-summary" type="info" showIcon title={<div className="pms-non-labor-toolbar">
+    {showSummary && <Alert className="pms-non-labor-summary" type="info" showIcon title={<div className="pms-non-labor-toolbar">
       <span>{'费用预估投入合计：' + formatAmount(nonLaborTotal(value)) + ` ${unit}。`}</span>
-      <div className="pms-non-labor-range">
-        <span>投入时间范围</span>
-        <span aria-label="费用投入时间范围" title="根据当前版本里程碑时间自动生成">{value.startMonth && value.endMonth ? dayjs(value.startMonth + '-01').format('YYYY年MM月') + '～' + dayjs(value.endMonth + '-01').format('YYYY年MM月') : '待填写里程碑时间'}</span>
-      </div>
-    </div>} />
+      <NonLaborInvestmentRange value={value} />
+    </div>} />}
     {!readOnly && <div className="pms-non-labor-actions">
       <Space size="small">
         <Button size="small" type="dashed" icon={<PlusOutlined />} disabled={importing}

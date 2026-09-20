@@ -12,7 +12,7 @@ import ResourceInlineField from '@/components/project-resources/ResourceInlineFi
 import { useInlineImportSession } from '@/components/project-resources/useInlineImportSession'
 import { isHrVersionEditable } from '@/lib/hrVersionRules'
 import { inlineDateInputHandlers } from '@/components/project-resources/inlineFieldSession'
-import NonLaborInvestmentSection from '@/components/project-resources/NonLaborInvestmentSection'
+import NonLaborInvestmentSection, { NonLaborInvestmentRange } from '@/components/project-resources/NonLaborInvestmentSection'
 import { canEditResourceMilestone, resolveMachineDepartmentInvestments, resolveMachinePhaseFields, resourceMilestoneFields, resourcePhaseFields, type InlineDepartment, type ResourceInlinePatch } from '@/lib/resourceInlineEditing'
 import { getResourcePhaseRatios, getResourceRatioFields } from '@/lib/resourceRatios'
 import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
@@ -103,12 +103,12 @@ export default function ResourceInlineDetail({ category, project, version, scope
   const metadataFields = machineProject ? [{ key: 'brand' as const, label: '品牌' }, { key: 'productLine' as const, label: '产品线' }, { key: 'marketName' as const, label: '市场名' }].map(field => ({ key: field.key, label: field.label,
     children: <ResourceInlineField label={field.label} value={machineProject[field.key]} readOnly={metadataReadOnly} onSave={value => persist({ type: 'metadata', key: field.key, value: String(value ?? '') })}
       renderEditor={(value, change, popup) => field.key === 'marketName' ? <Input aria-label={field.label} value={String(value ?? '')} onChange={event => change(event.target.value)} />
-        : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ minWidth: 140 }} onChange={change}
+        : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ width: '100%' }} onChange={change}
           options={[...new Set([...(field.key === 'brand' ? Object.keys(PRODUCT_LINES_BY_BRAND) : PRODUCT_LINES_BY_BRAND[machineProject.brand as keyof typeof PRODUCT_LINES_BY_BRAND] ?? []), ...(value ? [String(value)] : [])])].map(label => ({ label, value: label }))} />} /> })) : []
   const modelFields = machine ? [{ key: 'projectLevel' as const, label: '项目等级' }, { key: 'levelCoefficient' as const, label: '等级系数' }, { key: 'hrModelVersion' as const, label: '人力模型版本号' }].map(field => ({ key: field.key, label: field.label,
     children: <ResourceInlineField label={field.label} value={machine[field.key]} readOnly={readOnly || field.key === 'projectLevel' && isHrFormalRecord(project)} onSave={value => persist({ type: 'model', key: field.key, value: field.key === 'levelCoefficient' ? Number(value) : String(value ?? '') })}
-      renderEditor={(value, change, popup) => field.key === 'levelCoefficient' ? <InputNumber controls={false} aria-label={field.label} value={value as number} step={0.1} onChange={change} />
-        : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ minWidth: 120 }} onChange={change} options={(field.key === 'projectLevel' ? getConfigProjectLevels(records) : getConfigModelVersions(records)).map(label => ({ label, value: label }))} />} /> })) : []
+      renderEditor={(value, change, popup) => field.key === 'levelCoefficient' ? <InputNumber controls={false} aria-label={field.label} value={value as number} style={{ width: '100%' }} step={0.1} onChange={change} />
+        : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ width: '100%' }} onChange={change} options={(field.key === 'projectLevel' ? getConfigProjectLevels(records) : getConfigModelVersions(records)).map(label => ({ label, value: label }))} />} /> })) : []
   const machineRows = machine ? resolveMachineDepartmentInvestments(machine) : []
   const machinePhases = machine ? resolveMachinePhaseFields(machine) : []
   const machineColumns = [{ title: '一级部门', dataIndex: 'primaryDepartment', width: 150, align: 'center' as const }, { title: '二级部门', dataIndex: 'secondaryDepartment', width: 150, align: 'center' as const },
@@ -139,7 +139,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
       </dl></div></section>}
     </section>
     <section className="pms-resource-panel" aria-label="预估投入">
-    <Tabs items={[{ key: 'labor', label: '各部门人力（人月）投入', children: <>
+    <Tabs className="pms-resource-investment-tabs" tabBarExtraContent={{ right: <NonLaborInvestmentRange value={cloneNonLaborInvestment(version.nonLaborInvestment)} /> }} items={[{ key: 'labor', label: '各部门人力（人月）投入', children: <>
 
     {!machine && !readOnly && <Space size="small" className="pms-resource-department-actions">
       <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => action(() => saveDepartments([...rows, { id: `department-${crypto.randomUUID()}`, primaryDepartment: '', secondaryDepartment: '', estimatedInvestment: 0 }]))}>添加部门</Button>
@@ -159,7 +159,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
           <Table.Summary.Cell index={phases.length + 3} />
           {!readOnly && <Table.Summary.Cell index={phases.length + 4} />}
         </Table.Summary.Row>} />}
-    </> }, { key: 'nonLabor', label: '非人力投入（万元）', children: <NonLaborInvestmentSection inline unit="万元" canImport={isImportCurrent} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly}
+    </> }, { key: 'nonLabor', label: '非人力投入（元）', children: <NonLaborInvestmentSection inline unit="元" showSummary={false} canImport={isImportCurrent} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly}
       onChange={value => persist({ type: 'nonLabor', value })} onItemTotalChange={(itemId, value) => persist({ type: 'nonLaborItemTotal', itemId, value })} /> }]} />
     </section>
   </div>
