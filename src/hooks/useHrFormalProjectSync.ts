@@ -10,6 +10,7 @@ import { useHrMachineStore } from '@/stores/hrMachine'
 import { useHrTosStore } from '@/stores/hrTos'
 import { useHrTechnicalStore } from '@/stores/hrTechnical'
 import { useHrCapabilityStore } from '@/stores/hrCapability'
+import { withoutPmsHydrationWrites } from '@/lib/mockDatasetStorage'
 
 /** Subscribe to canonical sources; changing the selected market/type never changes the main-plan source. */
 export function startHrFormalProjectSync(eventTarget: Window = window) {
@@ -42,7 +43,11 @@ export function startHrFormalProjectSync(eventTarget: Window = window) {
     try {
       // These stores use synchronous localStorage adapters. Permissions precede the
       // registry because its hydration also initializes missing project roles.
-      for (const store of sharedStores) void store.persist.rehydrate()
+      // Older open builds can downgrade a schema stamp during migration. Echoing
+      // an upgraded stamp here would create an endless cross-version event loop.
+      withoutPmsHydrationWrites(() => {
+        for (const store of sharedStores) void store.persist.rehydrate()
+      })
     } finally { hydrating = false }
     refresh()
   }
