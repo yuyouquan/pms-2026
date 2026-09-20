@@ -917,7 +917,7 @@ export default function ConfigContainer() {
 
             {/* L2 plan type selector */}
             {planLevel === 'level2' && (
-              <Card className="pms-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
+              <Card className="pms-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: 'var(--pms-card-padding)' } }}>
                 <Space wrap size={[8, 8]}>
                   <span style={{ color: '#9ca3af', fontSize: 13, fontWeight: 500 }}>模板类型</span>
                   <Divider orientation="vertical" style={{ height: 16, margin: '0 4px' }} />
@@ -955,7 +955,7 @@ export default function ConfigContainer() {
             )}
 
             {/* Version control + toolbar */}
-            {!isMrTemplate && <Card className="pms-toolbar pms-config-template-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '10px 16px' } }}>
+            {!isMrTemplate && <Card className="pms-toolbar pms-config-template-toolbar" size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: 'var(--pms-card-padding)' } }}>
               <Row justify="space-between" align="middle">
                 <Col>
                   <Space size={8} separator={<Divider orientation="vertical" style={{ margin: 0 }} />}>

@@ -4419,24 +4419,23 @@ export default function ProjectSpaceContainer() {
     const cycleThStyle: CSSProperties = { ...thStyle, position: 'sticky', left: 80, zIndex: 2, minWidth: 80, background: '#f8fafc' }
     const versionTdStyle: CSSProperties = { ...tdStyle, position: 'sticky', left: 0, zIndex: 1, fontWeight: 600, background: '#fff', minWidth: 80 }
     const cycleTdStyle: CSSProperties = { ...tdStyle, position: 'sticky', left: 80, zIndex: 1, background: '#fff', minWidth: 80 }
-    const stageColors = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2']
     return (
       <div style={{ overflow: 'auto' }}>
-        <table aria-label="一级计划横版" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="pms-phase-header-table" aria-label="一级计划横版" style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
               <th style={{ ...versionThStyle, borderBottom: 'none' }} rowSpan={2}>版本</th>
               <th style={{ ...cycleThStyle, borderBottom: 'none' }} rowSpan={2}>开发周期</th>
-              {stageGroups.map(({ stage, colSpan }, i) => {
+              {stageGroups.map(({ stage, colSpan }) => {
                 const dynamicBusinessStage = selectedProject
                   ? isBusinessStage(selectedProject.type, stage)
                   : false
                 return (
-                  <th key={stage.stableId || stage.id} colSpan={colSpan} style={{ ...thStyle, background: `${stageColors[i % stageColors.length]}10`, color: stageColors[i % stageColors.length], borderBottom: `2px solid ${stageColors[i % stageColors.length]}` }}>
-                    <div style={{ position: 'relative', minHeight: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-                      <span data-stage-label style={{ display: 'block', width: '100%', textAlign: 'center', paddingRight: dynamicBusinessStage ? 0 : 54 }}>{stage.taskName}</span>
+                  <th key={stage.stableId || stage.id} scope="colgroup" className="pms-phase-header-stage" colSpan={colSpan} style={thStyle}>
+                    <div className="pms-phase-header-label">
+                      <span data-stage-label>{stage.taskName}</span>
                       {!dynamicBusinessStage && (
-                        <Tag color="blue" style={{ position: 'absolute', right: 0, margin: 0, fontSize: 11 }}>{stage.estimatedDays === null ? '-' : `${stage.estimatedDays}天`}</Tag>
+                        <span className="pms-phase-header-duration">{stage.estimatedDays == null ? '-' : `${stage.estimatedDays}天`}</span>
                       )}
                     </div>
                   </th>
@@ -5647,7 +5646,7 @@ export default function ProjectSpaceContainer() {
       {/* Header */}
       <ProjectSpaceHeader navigateWithEditGuard={navigateWithEditGuard} />
 
-      <div className="pms-project-space__body" style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
+      <div className="pms-project-space__body" style={{ display: 'flex', height: 'calc(100dvh - var(--pms-header-height))' }}>
         {/* Sidebar */}
         <CollapsibleSidebarShell
           className="pms-sidebar pms-project-space-sidebar pms-glass-surface"
@@ -5680,7 +5679,7 @@ export default function ProjectSpaceContainer() {
         </CollapsibleSidebarShell>
 
         {/* Content area */}
-        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 24, overflow: 'auto' }}>
+        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 'var(--pms-content-padding)', overflow: 'auto' }}>
           {transfer.transferView === 'apply' && <TransferApply {...transferProps} />}
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}

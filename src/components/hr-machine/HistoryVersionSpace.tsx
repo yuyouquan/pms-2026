@@ -612,7 +612,7 @@ export default function HistoryVersionSpace() {
         className="pms-toolbar"
         size="small"
         style={{ borderRadius: 8, marginBottom: 12 }}
-        styles={{ body: { padding: '10px 16px' } }}
+        styles={{ body: { padding: 'var(--pms-card-padding)' } }}
       >
         <div
           style={{

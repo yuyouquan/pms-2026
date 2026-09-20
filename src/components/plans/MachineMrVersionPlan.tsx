@@ -277,7 +277,7 @@ export default function MachineMrVersionPlan({
   }
 
   return (
-    <Card className="pms-machine-mr-card" styles={{ body: { padding: 16 } }}>
+    <Card className="pms-machine-mr-card" styles={{ body: { padding: 12 } }}>
       {messageContextHolder}
       <div className="pms-machine-mr-toolbar">
         <span className="pms-machine-mr-hint">主市场实时同步；{MARKET_LATER_MESSAGE}</span>

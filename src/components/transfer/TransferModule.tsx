@@ -510,14 +510,14 @@ export function TransferApply(props: TransferModuleProps) {
         {/* 团队配置 */}
         <div style={{ marginTop: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>团队配置</div>
-          <Row gutter={24}>
+          <Row gutter={16}>
             {(['research', 'maintenance'] as const).map(side => (
               <Col span={12} key={side}>
-                <Card size="small" title={<Tag color={side === 'research' ? 'blue' : 'green'}>{side === 'research' ? '在研团队' : '维护团队'}</Tag>} style={{ borderRadius: 8 }}>
+                <Card className="pms-transfer-team-form" size="small" title={<Tag color={side === 'research' ? 'blue' : 'green'}>{side === 'research' ? '在研团队' : '维护团队'}</Tag>} style={{ borderRadius: 8 }}>
                   {roleOrder.map(role => {
                     const members = props.tmApplyTeam[side].filter(m => m.role === role)
                     return (
-                      <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid #f3f4f6' }}>
+                      <div key={role} className="pms-transfer-team-form__row">
                         <Tag color={ROLE_COLORS[role] || '#999'} style={{ color: '#fff', minWidth: 40, textAlign: 'center', borderRadius: 4 }}>{role}</Tag>
                         <Select mode="multiple" placeholder={`选择${role}成员`} value={members.map(m => m.id)} style={{ flex: 1 }}
                           onChange={(vals: string[]) => {

@@ -1,0 +1,520 @@
+{
+  "metadata": {
+    "title": "项目管理系统 UI tokens",
+    "version": "0.1",
+    "date": "2026-09-20",
+    "scope": "Sampled project-management page only; not all B端 systems",
+    "method": "Read-only Chrome Figma Properties panel and visual inspection; connector denied edit access",
+    "sourceFileKey": "iUADTdAAn6AEAUW0LAxfLn",
+    "figmaNativeVariableExport": false
+  },
+  "figma": {
+    "brand.primary": {
+      "value": "#4D41FF",
+      "css": "--ui-primary",
+      "nodeId": "2214:79650",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79650",
+      "note": "Color/Indigo 60; primary button"
+    },
+    "brand.subtle": {
+      "value": "#F0EFFF",
+      "css": "--ui-primary-subtle",
+      "nodeId": "2214:79648",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79648",
+      "note": "Color/Indigo10; secondary button background"
+    },
+    "surface.base": {
+      "value": "#FFFFFF",
+      "css": "--ui-surface",
+      "nodeId": "2214:72490",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72490",
+      "note": "Main content card"
+    },
+    "canvas.start": {
+      "value": "#F1EEFF",
+      "css": "--ui-canvas-start",
+      "nodeId": "2214:72451",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72451",
+      "note": "Gradient endpoint; full gradient parameters unresolved"
+    },
+    "canvas.end": {
+      "value": "#ECF6FF",
+      "css": "--ui-canvas-end",
+      "nodeId": "2214:72451",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72451",
+      "note": "Gradient endpoint; full gradient parameters unresolved"
+    },
+    "text.primary": {
+      "value": "#000000",
+      "css": "--ui-text-primary",
+      "nodeId": "2214:72596",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72596",
+      "note": "Text/Primary; sampled table identifier"
+    },
+    "text.inverse": {
+      "value": "#FFFFFF",
+      "css": "--ui-text-inverse",
+      "nodeId": "2214:79651",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79651",
+      "note": "Primary button label"
+    },
+    "border.default": {
+      "value": "rgba(0, 0, 0, 0.12)",
+      "css": "--ui-border-default",
+      "nodeId": "2214:79539",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79539",
+      "note": "Form group border/Default"
+    },
+    "border.subtle": {
+      "value": "rgba(0, 0, 0, 0.03)",
+      "css": "--ui-border-subtle",
+      "nodeId": "2214:72591",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72591",
+      "note": "Table cell Border/Disable; not a global disabled state"
+    },
+    "card.shadow": {
+      "value": "0 0 20px 0 rgba(211, 208, 255, 0.5)",
+      "css": "--ui-shadow-card",
+      "nodeId": "2214:72490",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72490",
+      "note": "Drop shadow"
+    },
+    "card.accent": {
+      "value": "inset 0 2px 0 0 #4D41FF",
+      "css": "--ui-shadow-card-accent",
+      "nodeId": "2214:72490",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72490",
+      "note": "Inner shadow; sampled main card only"
+    },
+    "status.neutral.surface": {
+      "value": "#F2F2F2",
+      "css": "--ui-status-neutral-bg",
+      "nodeId": "481:10307",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10307",
+      "note": "Color/Gray 4"
+    },
+    "status.neutral.border": {
+      "value": "#808080",
+      "css": "--ui-status-neutral-border",
+      "nodeId": "481:10307",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10307",
+      "note": "Color/Gray 60; text color not directly inspected"
+    },
+    "status.info.surface": {
+      "value": "#EBF3FF",
+      "css": "--ui-status-info-bg",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Color/Blue10"
+    },
+    "status.info.border": {
+      "value": "#0A69FE",
+      "css": "--ui-status-info-border",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Color/Blue60"
+    },
+    "status.info.text": {
+      "value": "#0A69FE",
+      "css": "--ui-status-info-text",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Inspected descendant text in blue Tag"
+    },
+    "status.success.surface": {
+      "value": "#EBFAF2",
+      "css": "--ui-status-success-bg",
+      "nodeId": "481:10315",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10315",
+      "note": "Color/Green10"
+    },
+    "status.success.border": {
+      "value": "#14C764",
+      "css": "--ui-status-success-border",
+      "nodeId": "481:10315",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10315",
+      "note": "Color/Green60; text color not directly inspected"
+    },
+    "status.danger.surface": {
+      "value": "#FFEBEB",
+      "css": "--ui-status-danger-bg",
+      "nodeId": "552:19847",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=552-19847",
+      "note": "Color/Red10"
+    },
+    "status.danger.border": {
+      "value": "#FF3430",
+      "css": "--ui-status-danger-border",
+      "nodeId": "552:19847",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=552-19847",
+      "note": "Color/Red 60; text color not directly inspected"
+    },
+    "font.source": {
+      "value": "\"PingFang SC\"",
+      "css": "--ui-font-source",
+      "nodeId": "2214:72596",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72596",
+      "note": "Sampled font family"
+    },
+    "font.body.size": {
+      "value": "14px",
+      "css": "--ui-font-body",
+      "nodeId": "2214:72596",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72596",
+      "note": "Sampled table identifier"
+    },
+    "font.tableIdentifier.weight": {
+      "value": "500",
+      "css": "--ui-weight-table-identifier",
+      "nodeId": "2214:72596",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72596",
+      "note": "Not a global body weight"
+    },
+    "font.button.weight": {
+      "value": "400",
+      "css": "--ui-weight-button",
+      "nodeId": "2214:79651",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79651",
+      "note": "Primary button label"
+    },
+    "font.tag.size": {
+      "value": "12px",
+      "css": "--ui-font-tag",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Inspected descendant text"
+    },
+    "font.tag.lineHeight": {
+      "value": "16px",
+      "css": "--ui-line-tag",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Inspected descendant text"
+    },
+    "font.tag.weight": {
+      "value": "500",
+      "css": "--ui-weight-tag",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Inspected descendant text"
+    },
+    "layout.header.height": {
+      "value": "50px",
+      "css": "--ui-header-height",
+      "nodeId": "2472:20280",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2472-20280",
+      "note": "Header; 1440px frame"
+    },
+    "layout.page.gutter": {
+      "value": "32px",
+      "css": "--ui-page-gutter",
+      "nodeId": "2214:72484",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72484",
+      "note": "Content outer horizontal padding"
+    },
+    "layout.header.gap": {
+      "value": "20px",
+      "css": "--ui-header-gap",
+      "nodeId": "2472:20280",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2472-20280",
+      "note": "Header child gap"
+    },
+    "layout.content.gap": {
+      "value": "8px",
+      "css": "--ui-content-gap",
+      "nodeId": "2214:72484",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72484",
+      "note": "Outer content gap"
+    },
+    "card.padding": {
+      "value": "12px",
+      "css": "--ui-card-padding",
+      "nodeId": "2214:72490",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72490",
+      "note": "Main content card"
+    },
+    "card.gap": {
+      "value": "12px",
+      "css": "--ui-card-gap",
+      "nodeId": "2214:72490",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72490",
+      "note": "Main content card"
+    },
+    "card.radius": {
+      "value": "16px",
+      "css": "--ui-radius-card",
+      "nodeId": "2214:72490",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72490",
+      "note": "Main content card"
+    },
+    "button.height": {
+      "value": "32px",
+      "css": "--ui-button-height",
+      "nodeId": "2214:79650",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79650",
+      "note": "Primary and secondary samples"
+    },
+    "button.radius": {
+      "value": "6px",
+      "css": "--ui-radius-control",
+      "nodeId": "2214:79650",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79650",
+      "note": "Measured button radius; inputs unresolved"
+    },
+    "button.paddingX": {
+      "value": "16px",
+      "css": "--ui-button-padding-x",
+      "nodeId": "2214:79650",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79650",
+      "note": "Primary and secondary samples"
+    },
+    "button.primary.gap": {
+      "value": "6px",
+      "css": "--ui-button-primary-gap",
+      "nodeId": "2214:79650",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79650",
+      "note": "Primary sample"
+    },
+    "button.secondary.gap": {
+      "value": "8px",
+      "css": "--ui-button-secondary-gap",
+      "nodeId": "2214:79648",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79648",
+      "note": "Secondary sample"
+    },
+    "table.row.height": {
+      "value": "40px",
+      "css": "--ui-table-row-height",
+      "nodeId": "2214:72591",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72591",
+      "note": "Final rendered data-row height target"
+    },
+    "table.cell.paddingX": {
+      "value": "12px",
+      "css": "--ui-table-cell-padding-x",
+      "nodeId": "2214:72591",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72591",
+      "note": "Figma horizontal padding"
+    },
+    "table.cell.paddingY": {
+      "value": "10px",
+      "css": "--ui-table-cell-padding-y",
+      "nodeId": "2214:72591",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72591",
+      "note": "Figma padding; reconcile CSS border-box to final 40px"
+    },
+    "table.cell.gap": {
+      "value": "8px",
+      "css": "--ui-table-cell-gap",
+      "nodeId": "2214:72591",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-72591",
+      "note": "Sampled cell"
+    },
+    "tag.height": {
+      "value": "24px",
+      "css": "--ui-tag-height",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Includes Figma inner border"
+    },
+    "tag.paddingX": {
+      "value": "8px",
+      "css": "--ui-tag-padding-x",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Measured"
+    },
+    "tag.paddingY": {
+      "value": "4px",
+      "css": "--ui-tag-padding-y",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Measured; use inset border to preserve 24px height"
+    },
+    "tag.borderWidth": {
+      "value": "1px",
+      "css": "--ui-tag-border-width",
+      "nodeId": "481:10312",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312",
+      "note": "Inner border"
+    },
+    "form.group.radius": {
+      "value": "6px",
+      "css": "--ui-radius-form-group",
+      "nodeId": "2214:79539",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79539",
+      "note": "Measured form group"
+    },
+    "form.group.gap": {
+      "value": "8px",
+      "css": "--ui-form-group-gap",
+      "nodeId": "2214:79539",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79539",
+      "note": "Measured form group"
+    },
+    "modal.large.sampleWidth": {
+      "value": "1199px",
+      "css": "--ui-modal-large-sample-width",
+      "nodeId": "2214:79646",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79646",
+      "note": "Footer width confirms sample panel width; not universal modal width"
+    },
+    "modal.footer.height": {
+      "value": "64px",
+      "css": "--ui-modal-footer-height",
+      "nodeId": "2214:79646",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79646",
+      "note": "Measured footer"
+    },
+    "modal.footer.paddingX": {
+      "value": "24px",
+      "css": "--ui-modal-footer-padding-x",
+      "nodeId": "2214:79646",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79646",
+      "note": "Measured footer"
+    },
+    "modal.footer.gap": {
+      "value": "16px",
+      "css": "--ui-modal-footer-gap",
+      "nodeId": "2214:79646",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79646",
+      "note": "Measured footer"
+    },
+    "modal.footer.radiusBottom": {
+      "value": "12px",
+      "css": "--ui-modal-footer-radius-bottom",
+      "nodeId": "2214:79646",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=2214-79646",
+      "note": "Only bottom corners inspected"
+    }
+  },
+  "proposals": {
+    "font.webStack": {
+      "value": "\"PingFang SC\", \"Microsoft YaHei\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+      "css": "--ui-proposal-font-family",
+      "reason": "Cross-platform fallbacks"
+    },
+    "font.body.lineHeight": {
+      "value": "20px",
+      "css": "--ui-proposal-line-body",
+      "reason": "Figma displays 100% with 20px text bounds; web adaptation"
+    },
+    "font.heading.size": {
+      "value": "16px",
+      "css": "--ui-proposal-font-heading",
+      "reason": "Section/dialog heading; not measured"
+    },
+    "font.heading.lineHeight": {
+      "value": "24px",
+      "css": "--ui-proposal-line-heading",
+      "reason": "Not measured"
+    },
+    "font.pageTitle.size": {
+      "value": "20px",
+      "css": "--ui-proposal-font-page-title",
+      "reason": "Not measured"
+    },
+    "font.pageTitle.lineHeight": {
+      "value": "28px",
+      "css": "--ui-proposal-line-page-title",
+      "reason": "Not measured"
+    },
+    "font.heading.weight": {
+      "value": "600",
+      "css": "--ui-proposal-weight-heading",
+      "reason": "Not measured"
+    },
+    "input.height": {
+      "value": "32px",
+      "css": "--ui-proposal-input-height",
+      "reason": "Align with measured buttons; not inspected input height"
+    },
+    "input.radius": {
+      "value": "6px",
+      "css": "--ui-proposal-input-radius",
+      "reason": "Align with measured buttons; not inspected input radius"
+    },
+    "tag.radiusFallback": {
+      "value": "4px",
+      "css": "--ui-proposal-radius-tag",
+      "reason": "Radius/XXS unresolved; temporary fallback"
+    },
+    "table.header.background": {
+      "value": "#F0EFFF",
+      "css": "--ui-proposal-table-header-bg",
+      "reason": "Use measured secondary background as provisional mapping"
+    },
+    "canvas.gradient": {
+      "value": "linear-gradient(90deg, #F1EEFF, #ECF6FF)",
+      "css": "--ui-proposal-canvas-background",
+      "reason": "Endpoints measured; angle, stop positions and compositing are proposed"
+    }
+  },
+  "unresolved": {
+    "tag.radius": {
+      "value": null,
+      "figmaVariable": "Radius/XXS",
+      "source": "https://www.figma.com/design/iUADTdAAn6AEAUW0LAxfLn/B%25E7%25AB%25AF?node-id=481-10312"
+    },
+    "canvas.gradientFull": {
+      "value": null,
+      "fields": [
+        "angle",
+        "stop positions",
+        "compositing/opacity"
+      ]
+    },
+    "header.gradient": {
+      "value": null
+    },
+    "button.states": {
+      "value": null,
+      "states": [
+        "hover",
+        "pressed",
+        "disabled",
+        "focus"
+      ]
+    },
+    "input.measuredProperties": {
+      "value": null
+    },
+    "text.secondaryAndPlaceholder": {
+      "value": null
+    },
+    "table.header.measuredProperties": {
+      "value": null
+    },
+    "status.nonBlueText": {
+      "value": null,
+      "note": "Only blue text color directly read; do not claim all tag text colors inspected"
+    },
+    "icons.assets": {
+      "value": null
+    },
+    "responsive.breakpoints": {
+      "value": null
+    },
+    "otherSystems.audit": {
+      "value": null
+    }
+  },
+  "sampleStateSemantics": {
+    "neutral": [
+      "未开始",
+      "未变更"
+    ],
+    "info": [
+      "进行中",
+      "修改"
+    ],
+    "success": [
+      "已完成",
+      "新增"
+    ],
+    "danger": [
+      "删除"
+    ],
+    "note": "Canvas observations; not a replacement for application business enums"
+  }
+}

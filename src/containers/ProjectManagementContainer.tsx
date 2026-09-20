@@ -12,6 +12,7 @@ export default function ProjectManagementContainer() {
   const projectManagementTab = useUiStore(state => state.projectManagementTab)
   const setProjectManagementTab = useUiStore(state => state.setProjectManagementTab)
   const currentLoginUser = useProjectStore(state => state.currentLoginUser)
+  const projectListView = useProjectStore(state => state.projectListView)
   const isAdmin = usePermissionStore(state => state.globalRoles.some(
     role => role.name === '管理组' && role.members.includes(currentLoginUser),
   ))
@@ -22,7 +23,7 @@ export default function ProjectManagementContainer() {
   }, [isAdmin, projectManagementTab, setProjectManagementTab])
 
   return (
-    <section className="pms-project-management" aria-label="项目管理">
+    <section className={`pms-project-management${activeTab === 'view' && projectListView === 'card' ? ' pms-project-management--cards' : ''}`} aria-label="项目管理">
       <Card className="pms-project-management__card pms-solid-surface" variant="borderless">
         <Tabs
           id="project-management-views"

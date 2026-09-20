@@ -193,7 +193,7 @@ export default function TosMrVersionPlan({
 
   const noTemplate = !latestTemplate
   return (
-    <Card className="pms-mr-project-card" styles={{ body: { padding: 16 } }}>
+    <Card className="pms-mr-project-card" styles={{ body: { padding: 12 } }}>
       {messageContextHolder}
       <div className="pms-mr-project-toolbar">
         <Space size={8}>

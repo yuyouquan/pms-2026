@@ -288,7 +288,7 @@ export default function MonthlyInvestmentTab() {
         className="pms-toolbar"
         size="small"
         style={{ marginBottom: 12 }}
-        styles={{ body: { padding: '10px 16px' } }}
+        styles={{ body: { padding: 'var(--pms-card-padding)' } }}
       >
         {/* 第一行：左侧筛选 + 右侧导出 */}
         <div

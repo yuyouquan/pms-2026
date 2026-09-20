@@ -27,3 +27,6 @@ skills-lock.json
 .codegraph/
 .playwright-cli/
 .vercel
+
+# Reproducible local Figma UI browser evidence
+/output/playwright/figma-ui/

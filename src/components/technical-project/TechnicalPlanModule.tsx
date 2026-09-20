@@ -84,7 +84,6 @@ import type { TechnicalSubproject } from '@/types/technicalProject'
 
 const { Text } = Typography
 const FIXED_TDT_LABEL = 'TDT项目计划'
-const TECHNICAL_STAGE_COLORS = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2'] as const
 const TECHNICAL_GANTT_COLUMNS: Record<TechnicalTemplateKind, DHTMLXGanttColumn[]> = {
   tdt: buildVisiblePlanGanttColumns(getTechnicalPlanExportColumns('subproject').map(column => ({
     ...column,
@@ -202,7 +201,7 @@ function TechnicalHorizontalPlanTable({
       tabIndex={0}
     >
       <table
-        className="pms-level1-horizontal-table technical-horizontal-plan-table"
+        className="pms-level1-horizontal-table technical-horizontal-plan-table pms-phase-header-table"
         aria-label="技术项目横版计划表"
         style={{ width: '100%', borderCollapse: 'collapse' }}
       >
@@ -218,20 +217,20 @@ function TechnicalHorizontalPlanTable({
               <tr data-technical-plan-header="grouped">
                 <th scope="col" style={versionThStyle} rowSpan={2}>版本</th>
                 <th scope="col" style={cycleThStyle} rowSpan={2}>开发周期</th>
-                {groups.map(({ stage, colSpan }, index) => {
-                  const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
+                {groups.map(({ stage, colSpan }) => {
                   return (
                     <th
                       key={getTechnicalPlanRowKey(stage)}
                       scope="colgroup"
                       colSpan={colSpan}
-                      style={{ ...thStyle, background: `${stageColor}10`, color: stageColor, borderBottom: `2px solid ${stageColor}` }}
+                      className="pms-phase-header-stage"
+                      style={thStyle}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, textAlign: 'left' }}>
+                      <div className="pms-phase-header-label">
                         <span>{stage.taskName}</span>
-                        <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                        <span className="pms-phase-header-duration">
                           {stage.estimatedDays == null ? '-' : `${stage.estimatedDays}天`}
-                        </Tag>
+                        </span>
                       </div>
                     </th>
                   )
