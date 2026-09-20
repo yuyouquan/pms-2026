@@ -68,7 +68,7 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
-assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 15, 'plan store preserves technical-plan and canonical MR migrations through the tOS planning-phase upgrade')
+assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 16, 'plan store preserves technical-plan and canonical MR migrations through the machine stage split upgrade')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')

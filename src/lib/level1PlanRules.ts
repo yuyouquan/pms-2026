@@ -115,13 +115,47 @@ export const MACHINE_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
   templateTask('machine-stage-planning', null, 1, '计划阶段', 'stage'),
   templateTask('machine-ms-str2', 'machine-stage-planning', 0, 'STR2', 'fixed-milestone', 'SPM'),
   templateTask('machine-ms-str3', 'machine-stage-planning', 1, 'STR3', 'fixed-milestone', 'SPM'),
-  templateTask('machine-stage-development', null, 2, '开发验证阶段', 'stage'),
+  templateTask('machine-stage-development', null, 2, '开发阶段', 'stage'),
   templateTask('machine-ms-str4', 'machine-stage-development', 0, 'STR4', 'fixed-milestone', 'SPM'),
   templateTask('machine-ms-str4a', 'machine-stage-development', 1, 'STR4A', 'fixed-milestone', 'SPM'),
-  templateTask('machine-ms-str5', 'machine-stage-development', 2, 'STR5', 'fixed-milestone', 'SPM'),
-  templateTask('machine-stage-launch', null, 3, '上市阶段', 'stage'),
-  templateTask('machine-stage-lifecycle', null, 4, '生命周期阶段', 'stage'),
+  templateTask('machine-stage-validation', null, 3, '验证阶段', 'stage'),
+  templateTask('machine-ms-str5', 'machine-stage-validation', 0, 'STR5', 'fixed-milestone', 'SPM'),
+  templateTask('machine-stage-launch', null, 4, '上市阶段', 'stage'),
+  templateTask('machine-stage-lifecycle', null, 5, '生命周期阶段', 'stage'),
 ]
+
+/** Split the retired machine phase without renumbering saved task identities or rescheduling work. */
+export function splitMachineLevel1DevelopmentStage(tasks: readonly Level1PlanTask[]): Level1PlanTask[] {
+  if (tasks.some(task => !task || typeof task.id !== 'string' || typeof task.taskName !== 'string')) return [...tasks]
+  const isTemplate = (task: Level1PlanTask) => task.source === undefined || task.source === 'template'
+  const development = tasks.find(task => !task.parentId && isTemplate(task)
+    && ['开发验证阶段', '开发验证'].includes(task.taskName.trim())
+    && (!task.stableId || ['machine-stage-development', 'stage-development'].includes(task.stableId)))
+  if (!development) return tasks.map(task => ({ ...task }))
+  const str5Tasks = tasks.filter(task => task.parentId === development.id && isTemplate(task)
+    && (['machine-ms-str5', 'milestone-str5'].includes(task.stableId || '') || task.taskName.trim() === 'STR5'))
+  if (str5Tasks.length !== 1) return tasks.map(task => ({ ...task }))
+  const existingValidation = tasks.find(task => !task.parentId && isTemplate(task)
+    && task.stableId === 'machine-stage-validation')
+  const usedIds = new Set(tasks.map(task => task.id))
+  let validationId = existingValidation?.id || 'machine-stage-validation'
+  for (let suffix = 1; !existingValidation && usedIds.has(validationId); suffix += 1) {
+    validationId = `machine-stage-validation-${suffix}`
+  }
+  const validation = existingValidation || {
+    ...templateTask(validationId, null, development.order + 1, '验证阶段', 'stage'),
+    stableId: 'machine-stage-validation',
+    defaultRoadmap: false,
+  }
+  const migrated = tasks.map(task => {
+    if (task === development) return { ...task, taskName: '开发阶段' }
+    if (task === str5Tasks[0]) return { ...task, parentId: validationId, order: 0 }
+    return !existingValidation && !task.parentId && task.order > development.order
+      ? { ...task, order: task.order + 1 } : { ...task }
+  })
+  if (!existingValidation) migrated.splice(migrated.findIndex(task => task.id === str5Tasks[0].id), 0, validation)
+  return migrated
+}
 
 export const TOS_LEVEL1_TEMPLATE_TASKS: Level1PlanTask[] = [
   templateTask('tos-stage-planning', null, 0, '规划阶段', 'stage'),

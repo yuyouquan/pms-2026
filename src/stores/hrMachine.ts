@@ -32,6 +32,7 @@ import { useProjectStore } from '@/stores/project'
 import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import { isHrModelAvailable } from '@/constants/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
+import { normalizeMachineBudgetScheduleStages } from '@/lib/budgetMilestoneScheduling'
 
 /* ── Mock Data ──────────────────────────────────────────────────────── */
 
@@ -497,7 +498,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         const projects = synchronizeProjects(seedExistingMockNonLabor(merged.projects).map((project, index) => ({ ...project, versions: project.versions.map((version, vi) => merged.projects[index].versions[vi].lockState === 'locked' ? merged.projects[index].versions[vi] : version) })))
         return { ...merged, projects, monthlyInvestments: syncMonthlyInvestments(projects, merged.monthlyInvestments) }
       },
-      version: 12,
+      version: 13,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const s = (persistedState ?? {}) as Record<string, unknown>
         // version 8 → 9: projectName string → string[], add historyVersionFilters
@@ -541,6 +542,15 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         }
         if (fromVersion < 12) {
           s.projects = appendHrMockProjects((s.projects ?? []) as HrMachineProject[], ADDITIONAL_PROJECTS)
+        }
+        if (fromVersion < 13 && Array.isArray(s.projects)) {
+          s.projects = (s.projects as HrMachineProject[]).map(project => ({
+            ...project,
+            versions: project.versions.map(version => version.scheduleModelSnapshot ? {
+              ...version,
+              scheduleModelSnapshot: normalizeMachineBudgetScheduleStages(version.scheduleModelSnapshot),
+            } : version),
+          }))
         }
         return s as unknown as HrMachineState & HrMachineActions
       },

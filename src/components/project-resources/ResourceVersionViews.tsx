@@ -33,20 +33,19 @@ export default function ResourceVersionViews({ category, version, rows, readOnly
   const columns: ColumnsType<ResourceMonthlyRow> = [
     { title: '一级部门', dataIndex: 'primaryDepartment', width: 125, fixed: 'left', align: 'center' },
     { title: '二级部门', dataIndex: 'secondaryDepartment', width: 125, fixed: 'left', align: 'center' },
-    ...groups.map(group => ({ key: group.key, title: <span className="pms-resource-month-stage" style={{ color: group.color }}><span>{group.label}</span><small>{amount(group.months.reduce((sum, month) => sum + view.totals[month], 0))}{unit}</small></span>,
-      children: group.months.map(month => ({ title: <span className="pms-resource-month-label" style={{ color: group.color }}>{Number(month.slice(5))}月<small>{month.slice(0, 4)}</small></span>, key: month, width: 110, align: 'center' as const,
+    ...groups.flatMap(group => group.months.map(month => ({ title: <span className="pms-resource-month-label" style={{ color: group.color }}>{Number(month.slice(5))}月<small>{month.slice(0, 4)}</small></span>, key: month, width: 110, align: 'center' as const,
         render: (_: unknown, row: ResourceMonthlyRow) => {
           const label = `${row.primaryDepartment} ${row.secondaryDepartment} ${month}投入人月`
           return cost || readOnly ? amount(row.monthlyData[month] ?? 0) : <ResourceInlineField label={label} value={row.monthlyData[month] ?? 0} display={amount(row.monthlyData[month] ?? 0)}
             onSave={value => onSaveMonth(row.id, month, value === null ? 0 : Number(value))}
             renderEditor={(value, change) => <InputNumber controls={false} aria-label={label} min={0} precision={1} value={Number(value)} style={{ width: '100%' }} onChange={change} />} />
-        } })) })),
+        } }))),
     ...visibleYears.map(value => ({ title: `${value}小计`, key: value, width: 110, align: 'center' as const,
       render: (_: unknown, row: ResourceMonthlyRow) => amount(sumMonthlyRow(row, complete.months.filter(month => month.startsWith(`${value}-`)))) })),
     { title: '全周期合计', key: 'all', width: 110, align: 'center', render: (_, row) => amount(sumMonthlyRow(row)) },
     { title: '已分配合计', key: 'balance', width: 215, fixed: 'right', align: 'center', render: (_, row) => {
       const allocated = sumMonthlyRow(row), delta = Math.round((allocated - row.estimatedTotal) * 1000) / 1000
-      return <span className={`pms-resource-month-balance${Math.abs(delta) >= 0.0005 ? ' pms-resource-difference' : ''}`}><span>{amount(allocated)}</span><small>规定 {amount(row.estimatedTotal)}{Math.abs(delta) >= 0.0005 ? `（${delta > 0 ? '+' : '−'}${amount(Math.abs(delta))}）` : '（已平衡）'}</small></span>
+      return <span className={`pms-resource-month-balance${Math.abs(delta) >= 0.0005 ? ' pms-resource-difference' : ''}`}>{amount(allocated)}/{amount(row.estimatedTotal)}（{delta > 0 ? '+' : delta < 0 ? '-' : ''}{amount(Math.abs(delta))}）</span>
     } },
   ]
   const chartWidth = Math.max(640, view.months.length * 60)
@@ -81,7 +80,7 @@ export default function ResourceVersionViews({ category, version, rows, readOnly
           {view.months.map((month, index) => <Table.Summary.Cell key={month} index={index + 2} align="center">{amount(view.totals[month])}</Table.Summary.Cell>)}
           {visibleYears.map((value, index) => <Table.Summary.Cell key={value} index={view.months.length + index + 2} align="center">{amount(complete.months.filter(month => month.startsWith(`${value}-`)).reduce((sum, month) => sum + complete.totals[month], 0))}</Table.Summary.Cell>)}
           <Table.Summary.Cell index={view.months.length + visibleYears.length + 2} align="center">{amount(complete.allocatedTotal)}</Table.Summary.Cell>
-          <Table.Summary.Cell index={view.months.length + visibleYears.length + 3} align="center">{amount(complete.allocatedTotal)} / {amount(version.estimatedInvestment)}</Table.Summary.Cell>
+          <Table.Summary.Cell index={view.months.length + visibleYears.length + 3} align="center"><span className={Math.abs(complete.allocatedTotal - version.estimatedInvestment) >= 0.0005 ? 'pms-resource-difference' : ''}>{amount(complete.allocatedTotal)}/{amount(version.estimatedInvestment)}（{complete.allocatedTotal > version.estimatedInvestment ? '+' : complete.allocatedTotal < version.estimatedInvestment ? '-' : ''}{amount(Math.abs(complete.allocatedTotal - version.estimatedInvestment))}）</span></Table.Summary.Cell>
         </Table.Summary.Row>} />
     </> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="填写里程碑时间后生成月度视图" />}
   </section>

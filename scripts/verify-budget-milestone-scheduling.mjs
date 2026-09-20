@@ -117,17 +117,17 @@ const partialModel=scheduling.resolvePublishedBudgetScheduleModel(publishedState
 ]),'machine')
 const partialDates={conceptStart:'2026-09-02',str1:'2026-09-11'}
 let partialMetrics=scheduling.calculateBudgetStageMetrics(partialModel,partialDates)
-assert.deepEqual(partialMetrics.map(metric=>[metric.scheduledDays,metric.scheduledRatio]),[[9,100],[0,0],[0,0]],'one completed stage accounts for all known intervals')
+assert.deepEqual(partialMetrics.map(metric=>[metric.scheduledDays,metric.scheduledRatio]),[[9,100],[0,0],[0,0],[0,0]],'one completed stage accounts for all known intervals')
 partialMetrics=scheduling.calculateBudgetStageMetrics(partialModel,{...partialDates,str2:'2026-09-19',str3:'2026-09-25',str4:'2026-09-26',str4a:'2026-09-28'})
-assert.deepEqual(partialMetrics.map(metric=>metric.scheduledDays),[9,14,3],'incomplete last stage includes already filled intervals')
-assert.deepEqual(partialMetrics.map(metric=>metric.scheduledRatio),[9/26*100,14/26*100,3/26*100])
+assert.deepEqual(partialMetrics.map(metric=>metric.scheduledDays),[9,14,3,0],'incomplete last stage includes already filled intervals')
+assert.deepEqual(partialMetrics.map(metric=>metric.scheduledRatio),[9/26*100,14/26*100,3/26*100,0])
 assert.equal(scheduling.calculateBudgetStageMetrics(partialModel,{}).every(metric=>metric.scheduledRatio===0),true,'empty dates do not divide by zero')
 const divergentSnapshot = JSON.parse(JSON.stringify(roundingModel))
 divergentSnapshot.stages[0].milestones[1].intervalDays = 999
 assert.throws(() => scheduling.validateBudgetScheduleSnapshot('machine', divergentSnapshot), /阶段里程碑与模型不一致/, 'JSON roundtrip stage copies must match canonical milestones')
 
 const planStore = get('src/stores/plan.ts').usePlanStore
-for (const [category, expected] of Object.entries({ machine:['概念阶段','计划阶段','开发验证阶段'], tos:['规划阶段','概念阶段','计划阶段','开发验证阶段'], technical:['规划阶段','概念阶段','计划阶段','开发验证阶段','迁移阶段'] })) {
+for (const [category, expected] of Object.entries({ machine:['概念阶段','计划阶段','开发阶段','验证阶段'], tos:['规划阶段','概念阶段','计划阶段','开发验证阶段'], technical:['规划阶段','概念阶段','计划阶段','开发验证阶段','迁移阶段'] })) {
   const emptyState = {configTemplateVersionScopes:{},publishedSnapshots:{}}
   const display = scheduling.resolveBudgetScheduleDisplay(emptyState,category)
   assert.deepEqual(display.stages.map(stage=>stage.label),expected,`${category}: unconfigured template retains default stage headings`)

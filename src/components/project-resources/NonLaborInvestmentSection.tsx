@@ -7,7 +7,8 @@ import type { ColumnsType } from 'antd/es/table'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
 import { useHrConfigStore } from '@/stores/hrConfig'
-import { cloneNonLaborInvestment, formatNonLaborAmount, nonLaborDepartmentPairs, nonLaborItemKey, nonLaborMonths, nonLaborTotal } from '@/lib/nonLaborInvestment'
+import { cloneNonLaborInvestment, nonLaborDepartmentPairs, nonLaborItemKey, nonLaborMonths, nonLaborTotal } from '@/lib/nonLaborInvestment'
+import { formatNonLaborDisplayAmount, fromNonLaborDisplayAmount, nonLaborAmountPrecision, toNonLaborDisplayAmount, type NonLaborAmountUnit } from '@/lib/nonLaborAmountUnit'
 import { nonLaborSpreadsheetColumns, parseNonLaborInvestmentRows } from '@/lib/nonLaborSpreadsheet'
 import { exportMultiSheet } from '@/utils/exportExcel'
 import { useInlineImportSession } from '@/components/project-resources/useInlineImportSession'
@@ -28,9 +29,9 @@ export function useNonLaborDraft(open: boolean, editorKey: string, seed: NonLabo
   return { value: { ...value, ...hrNonLaborMonthRange(category, dates) }, onChange: setValue }
 }
 
-export default function NonLaborInvestmentSection({ value, onChange, onItemTotalChange, readOnly = false, inline = false, canImport }: {
+export default function NonLaborInvestmentSection({ value, onChange, onItemTotalChange, readOnly = false, inline = false, canImport, unit = '元' }: {
   value: NonLaborInvestment; onChange?: (value: NonLaborInvestment) => void; onItemTotalChange?: (itemId: string, value: number) => void
-  readOnly?: boolean; inline?: boolean; canImport?: () => boolean
+  readOnly?: boolean; inline?: boolean; canImport?: () => boolean; unit?: NonLaborAmountUnit
 }) {
   const { modal, message } = App.useApp()
   const config = useHrConfigStore(state => state.data)
@@ -39,12 +40,18 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
   const departments = nonLaborDepartmentPairs(departmentRecords)
   const [importing, setImporting] = useState(false)
   const importSession = useInlineImportSession()
-  const importPermission = useRef({ readOnly, canImport })
-  importPermission.current = { readOnly, canImport }
+  const importPermission = useRef({ readOnly, canImport, unit })
+  importPermission.current = { readOnly, canImport, unit }
   const currentValueRef = useRef(value)
   currentValueRef.current = value
   const active = subjects.filter(subject => subject.enabled !== false)
   const months = nonLaborMonths(value)
+  const displayAmount = (amount: number) => toNonLaborDisplayAmount(amount, unit)
+  const storedAmount = (amount: number | null) => fromNonLaborDisplayAmount(amount ?? 0, unit)
+  const formatAmount = (amount: number) => formatNonLaborDisplayAmount(amount, unit)
+  const unitSuffix = unit === '万元' ? '（万元）' : ''
+  const inputFormatter = unit === '万元' ? (amount: number | string | undefined, info: { userTyping: boolean; input: string }) =>
+    info.userTyping ? info.input : Number(amount ?? 0).toLocaleString('zh-CN', { useGrouping: false, maximumFractionDigits: 6 }) : undefined
   const itemTotal = (item: NonLaborInvestmentItem) => Math.round(months.reduce((sum, month) => sum + (item.monthlyAmounts[month] ?? 0), 0) * 100) / 100
   const isDuplicate = (item: NonLaborInvestmentItem) => [item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject].every(Boolean)
     && value.items.some(other => other.id !== item.id && nonLaborItemKey(other) === nonLaborItemKey(item))
@@ -60,18 +67,18 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
     onChange?.({ ...value, items: value.items.map(row => row.id === id ? next : row) })
   }
   const downloadTemplate = () => exportMultiSheet([
-    { sheetName: '非人力投入', rows: [], columns: nonLaborSpreadsheetColumns(value) },
+    { sheetName: '非人力投入', rows: [], columns: nonLaborSpreadsheetColumns(value, unit) },
     { sheetName: '部门选项', rows: departments, columns: [{ key: 'secondaryDepartment', title: '二级部门' }, { key: 'tertiaryDepartment', title: '三级部门' }] },
     { sheetName: '科目选项', rows: active, columns: [{ key: 'secondarySubject', title: '二级科目' }, { key: 'tertiarySubject', title: '三级科目' }] },
-  ], '非人力投入模板.xlsx')
+  ], `非人力投入模板${unitSuffix}.xlsx`)
   const handleImport = async (file: File) => {
-    const canApply = importSession.capture(() => currentValueRef.current === value && !importPermission.current.readOnly && (importPermission.current.canImport?.() ?? true))
+    const canApply = importSession.capture(() => currentValueRef.current === value && importPermission.current.unit === unit && !importPermission.current.readOnly && (importPermission.current.canImport?.() ?? true))
     setImporting(true)
     try {
       const workbook = XLSX.read(await file.arrayBuffer())
       if (!workbook.SheetNames[0]) throw new Error('文件中没有工作表')
       const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[workbook.SheetNames[0]], { header: 1 })
-      const parsed = parseNonLaborInvestmentRows(rows, value, subjects, departmentRecords, value)
+      const parsed = parseNonLaborInvestmentRows(rows, value, subjects, departmentRecords, value, unit)
       const apply = () => {
         if (!canApply()) {
           message.warning('当前版本、投入数据或编辑权限已变化，请重新导入')
@@ -142,16 +149,16 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
             if (subject) update(item.id, { subjectId: id, tertiarySubject: String(subject.tertiarySubject) })
           }} />
       } },
-    { title: '预估投入合计', key: 'total', width: 140, align: 'center' as const,
-      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(itemTotal(item)) : <InputNumber controls={false}
-        aria-label={`${item.secondaryDepartment || '未选择部门'} ${item.tertiarySubject || '未选择科目'} 预估投入合计（元）`}
-        min={0} precision={2} step={1} style={{ width: '100%' }} value={itemTotal(item)}
-        onChange={amount => applyNonLaborItemTotalChange({ value, itemId: item.id, amount, inline, onChange, onItemTotalChange, onError: text => message.warning(text) })} /> },
+    { title: `预估投入合计${unitSuffix}`, key: 'total', width: 140, align: 'center' as const,
+      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatAmount(itemTotal(item)) : <InputNumber controls={false}
+        aria-label={`${item.secondaryDepartment || '未选择部门'} ${item.tertiarySubject || '未选择科目'} 预估投入合计（${unit}）`}
+        min={0} precision={nonLaborAmountPrecision(unit)} formatter={inputFormatter} step={1} style={{ width: '100%' }} value={displayAmount(itemTotal(item))}
+        onChange={amount => applyNonLaborItemTotalChange({ value, itemId: item.id, amount: storedAmount(amount), inline, onChange, onItemTotalChange, onError: text => message.warning(text) })} /> },
     ...months.map(month => ({ title: dayjs(month + '-01').format('YYYY年MM月'), key: month, width: 126, align: 'center' as const,
-      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(item.monthlyAmounts[month] ?? 0) : <InputNumber controls={false}
-        aria-label={[item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject, month, '非人力投入（元）'].join(' ')} min={0} precision={2} step={1}
-        style={{ width: '100%' }} value={item.monthlyAmounts[month] ?? 0}
-        onChange={amount => update(item.id, { monthlyAmounts: { ...item.monthlyAmounts, [month]: amount ?? 0 } })} /> })),
+      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatAmount(item.monthlyAmounts[month] ?? 0) : <InputNumber controls={false}
+        aria-label={[item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject, month, `非人力投入（${unit}）`].join(' ')} min={0} precision={nonLaborAmountPrecision(unit)} formatter={inputFormatter} step={1}
+        style={{ width: '100%' }} value={displayAmount(item.monthlyAmounts[month] ?? 0)}
+        onChange={amount => update(item.id, { monthlyAmounts: { ...item.monthlyAmounts, [month]: storedAmount(amount) } })} /> })),
     ...(!readOnly ? [{ title: '操作', key: 'actions', width: 64, fixed: 'right' as const,
       render: (_: unknown, item: NonLaborInvestmentItem) => <Button type="text" danger size="small"
         aria-label={'删除非人力科目 ' + (item.tertiarySubject || '未选择')} icon={<DeleteOutlined />}
@@ -168,10 +175,10 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
       return <ResourceInlineControl label={label} control={control} display={display} />
     } }
   }) : columns
-  return <section className="pms-non-labor-section" aria-label="非人力投入">
-    <h3>非人力投入</h3>
+  return <section className="pms-non-labor-section" aria-label={`非人力投入${unitSuffix}`}>
+    <h3>{`非人力投入${unitSuffix}`}</h3>
     <Alert className="pms-non-labor-summary" type="info" showIcon title={<div className="pms-non-labor-toolbar">
-      <span>{'费用预估投入合计：' + formatNonLaborAmount(nonLaborTotal(value)) + ' 元。'}</span>
+      <span>{'费用预估投入合计：' + formatAmount(nonLaborTotal(value)) + ` ${unit}。`}</span>
       <div className="pms-non-labor-range">
         <span>投入时间范围</span>
         <span aria-label="费用投入时间范围" title="根据当前版本里程碑时间自动生成">{value.startMonth && value.endMonth ? dayjs(value.startMonth + '-01').format('YYYY年MM月') + '～' + dayjs(value.endMonth + '-01').format('YYYY年MM月') : '待填写里程碑时间'}</span>
@@ -185,10 +192,10 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
             subjectId: '', secondarySubject: '', tertiarySubject: '', monthlyAmounts: {},
           }] })}>添加</Button>
         <Button size="small" type="dashed" icon={<DownloadOutlined />} disabled={!months.length}
-          aria-label="下载非人力投入模板" onClick={downloadTemplate}>下载模板</Button>
+          aria-label={`下载非人力投入模板${unitSuffix}`} onClick={downloadTemplate}>下载模板</Button>
         <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={handleImport} disabled={!months.length || importing}>
           <Button size="small" type="dashed" icon={<UploadOutlined />} disabled={!months.length} loading={importing}
-            aria-label="导入非人力投入">导入</Button>
+            aria-label={`导入非人力投入${unitSuffix}`}>导入</Button>
         </Upload>
       </Space>
     </div>}
@@ -197,9 +204,9 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
       locale={{ emptyText: readOnly ? '暂无非人力投入' : months.length ? '暂无非人力投入数据，请点击「添加」或「导入」' : '暂无非人力投入数据，可先点击「添加」配置部门和科目，填写里程碑后自动生成月份' }}
       summary={() => value.items.length > 0 ? <Table.Summary.Row>
         <Table.Summary.Cell index={0} colSpan={4}>合计</Table.Summary.Cell>
-        <Table.Summary.Cell index={4} align="center">{formatNonLaborAmount(nonLaborTotal(value))}</Table.Summary.Cell>
+        <Table.Summary.Cell index={4} align="center">{formatAmount(nonLaborTotal(value))}</Table.Summary.Cell>
         {months.map((month, index) => <Table.Summary.Cell key={month} index={index + 5} align="center">
-          {formatNonLaborAmount(value.items.reduce((sum, item) => sum + (item.monthlyAmounts[month] ?? 0), 0))}
+          {formatAmount(value.items.reduce((sum, item) => sum + (item.monthlyAmounts[month] ?? 0), 0))}
         </Table.Summary.Cell>)}
         {!readOnly && <Table.Summary.Cell index={months.length + 5} />}
       </Table.Summary.Row> : null} />
