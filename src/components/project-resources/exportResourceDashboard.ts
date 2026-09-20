@@ -1,0 +1,22 @@
+import { exportMultiSheet, exportTimestamp } from '@/utils/exportExcel'
+import { DASHBOARD_BUDGETS, dashboardTrendSeries, type DashboardAnalysis } from '@/components/project-resources/resourceDashboardData'
+import { resourceProjectName } from '@/components/project-resources/resourceVersionAdapter'
+
+export function exportResourceDashboard(projectName: string, analyses: (DashboardAnalysis | undefined)[], focus: DashboardAnalysis | undefined, year: string, department: string, mode: 'labor' | 'cost' = 'labor', cumulative = false) {
+  const context = (analysis: DashboardAnalysis) => ({ type: DASHBOARD_BUDGETS.find(item => item.key === analysis.source.version.budgetType)!.label,
+    version: analysis.source.version.versionNumber, source: resourceProjectName(analysis.source.owner), year: year === 'all' ? '全周期' : year, department: department === 'all' ? '全部二级部门' : department })
+  const contextColumns = [{ key: 'type', title: '预算分类' }, { key: 'version', title: '版本' }, { key: 'source', title: '来源项目' }, { key: 'year', title: '分析年份' }, { key: 'department', title: '二级部门筛选' }]
+  const amountColumn = (key: string, title: string, precision: number) => ({ key, title, formatter: (value: number | undefined) => value === undefined ? '—' : Number(value.toFixed(precision)) })
+  const trend = dashboardTrendSeries(analyses, mode, cumulative)
+  exportMultiSheet([
+    { sheetName: '预算对比', columns: [...contextColumns, { key: 'status', title: '版本状态' }, amountColumn('labor', '所选期间人力（人月）', 1), amountColumn('laborCost', '人力费用（万元）', 2), amountColumn('nonLaborYuan', '非人力费用（元）', 2), amountColumn('cost', '所选期间费用合计（万元）', 2), amountColumn('target', '全周期目标（人月）', 1)],
+      rows: analyses.map((analysis, index) => analysis ? { ...context(analysis), status: analysis.source.version.isActive ? '正式版本' : '分析版本', labor: analysis.months.length ? analysis.labor : undefined, laborCost: analysis.months.length ? analysis.laborCost : undefined, nonLaborYuan: analysis.months.length ? analysis.nonLaborYuan : undefined, cost: analysis.months.length ? analysis.cost : undefined, target: analysis.target } : { type: DASHBOARD_BUDGETS[index].label, version: '未纳入' }) },
+    { sheetName: '月度对比', columns: [...contextColumns, { key: 'month', title: '月份' }, amountColumn('labor', '人力（人月）', 1), amountColumn('laborCost', '人力费用（万元）', 2), amountColumn('nonLaborYuan', '非人力费用（元）', 2), amountColumn('cost', '费用合计（万元）', 2)], rows: analyses.flatMap(analysis => analysis?.monthly.map(row => ({ ...context(analysis), ...row })) ?? []) },
+    { sheetName: '当前趋势', columns: [{ key: 'year', title: '分析年份' }, { key: 'department', title: '二级部门筛选' }, { key: 'scope', title: '趋势口径' }, { key: 'unit', title: '指标单位' }, { key: 'month', title: '月份' }, ...DASHBOARD_BUDGETS.map(item => amountColumn(item.key, item.label, mode === 'labor' ? 1 : 2))],
+      rows: trend.months.map((month, index) => ({ year: year === 'all' ? '全周期' : year, department: department === 'all' ? '全部二级部门' : department, scope: cumulative ? '所选期间累计' : '月度', unit: mode === 'labor' ? '人月' : '万元', month, ...Object.fromEntries(trend.series.map(item => [item.key, item.values[index]])) })) },
+    { sheetName: '部门结构', columns: [...contextColumns, { key: 'primary', title: '一级部门' }, { key: 'secondary', title: '二级部门' }, amountColumn('selected', '所选期间人力（人月）', 1), amountColumn('target', '全周期目标（人月）', 1), amountColumn('allocated', '全周期已分配（人月）', 1), amountColumn('delta', '全周期净偏差（人月）', 1), amountColumn('deficit', '逐条不足合计（人月）', 1), amountColumn('excess', '逐条超额合计（人月）', 1)], rows: focus?.departments.map(row => ({ ...context(focus), ...row, selected: focus.months.length ? row.selected : undefined })) ?? [] },
+    { sheetName: '阶段结构', columns: [...contextColumns, { key: 'label', title: '月份主阶段' }, amountColumn('amount', '人力（人月）', 1), amountColumn('ratio', '比例（%）', 2)], rows: focus?.months.length ? focus.stages.map(row => ({ ...context(focus), ...row })) : [] },
+    { sheetName: '非人力科目', columns: [...contextColumns, { key: 'secondary', title: '二级科目' }, { key: 'tertiary', title: '三级科目' }, amountColumn('amount', '金额（元）', 2), amountColumn('share', '占比（%）', 2)], rows: focus?.subjects.map(row => ({ ...context(focus), ...row })) ?? [] },
+    { sheetName: '数据检查', columns: [...contextColumns, { key: 'title', title: '检查项' }, { key: 'detail', title: '说明' }], rows: focus?.issues.map(row => ({ ...context(focus), ...row })) ?? [] },
+  ], `${projectName}_项目资源看板_${exportTimestamp()}.xlsx`)
+}
