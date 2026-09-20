@@ -1,3 +1,4 @@
+import { createResourceStoreState } from '@/lib/resourceStoreActions'
 import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
 import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
@@ -6,7 +7,7 @@ import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLa
 import { canAccessHrProject, getHrRegistryProject, isHrFormalRecord, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalMachineProjects, createResourceMachineProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
-import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, isLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
+import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
 import { getHrFormalProjectOptions } from '@/lib/hrFormalProjectSource'
 import { create } from 'zustand'
@@ -26,7 +27,7 @@ import {
   DEFAULT_PROJECT_FILTERS,
   DEFAULT_HISTORY_VERSION_FILTERS,
 } from '@/constants/hrMachine'
-import { calcEstimatedInvestment, refreshMachineModelFixtures, calcDepartmentMonthlySplit, type DepartmentMonthlySplit } from '@/constants/hrConfig'
+import { calcEstimatedInvestment, calcDepartmentMonthlySplit, type DepartmentMonthlySplit } from '@/constants/hrConfig'
 import { useProjectStore } from '@/stores/project'
 import { PRODUCT_LINES_BY_BRAND } from '@/lib/roadmapValidation'
 import { isHrModelAvailable } from '@/constants/hrConfig'
@@ -109,13 +110,8 @@ function getLatestVersions(project: HrMachineProject): HrMachineVersion[] {
 
 function synchronizeProjects(projects: HrMachineProject[]): HrMachineProject[] {
   const records = useHrConfigStore.getState().data.hrModel ?? []
-  const prepared = projects.map(project => ({ ...project, versions: project.versions.map(version => version.lockState !== 'locked' && !version.copiedFromVersionId && version.modelSnapshot
-    ? { ...version, modelSnapshot: refreshMachineModelFixtures(version.modelSnapshot) } : version) }))
-  return synchronizeHrProjects(prepared, 'machine', (level, model, coefficient) => calcEstimatedInvestment(records, level, model, coefficient))
-    .map(project => ({ ...project, versions: project.versions.map(version => version.lockState !== 'locked' && !version.copiedFromVersionId && isLatestHrVersion(project, version)
-      ? { ...version, modelSnapshot: records.filter(row => row.enabled !== false
-        && String(row.projectLevel) === version.projectLevel && String(row.modelVersion) === version.hrModelVersion).map(row => ({ ...row })) }
-      : version) }))
+  const prepared = projects.map(project => ({ ...project, versions: project.versions.map(version => version.modelSnapshot || version.lockState === 'locked' || version.copiedFromVersionId ? version : { ...version, modelSnapshot: records.filter(row => row.enabled !== false && String(row.projectLevel) === version.projectLevel && String(row.modelVersion) === version.hrModelVersion).map(row => ({ ...row })) }) }))
+  return synchronizeHrProjects(prepared, 'machine')
 }
 
 function syncMonthlyInvestments(projects: HrMachineProject[], existingMonthly: MonthlyInvestment[]): MonthlyInvestment[] {
@@ -209,7 +205,7 @@ const ALL_BUDGET_TYPES: BudgetType[] = ['annual', 'projectEstimate', 'projectBud
 
 export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
   persist(
-    (set, get) => ({
+    (rawSet, get) => createResourceStoreState('machine', rawSet, get, (set) => ({
       registryMigrationComplete: false,
       projects: synchronizeProjects(INITIAL_PROJECTS),
       monthlyInvestments: seedResourceMonthlyEdits(syncMonthlyInvestments(INITIAL_PROJECTS, [])),
@@ -385,6 +381,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         const version = project?.versions.find(item => item.id === versionId)
         if (!project || !version || !canAccessHrProject(project, true)) return
         const allowed = allowedHrVersionUpdates(project, version, updates)
+        if (allowed.estimatedInvestment !== undefined && allowed.estimatedInvestment !== version.estimatedInvestment) throw new Error('整机预估投入只读，请修改人力模型')
         if (allowed.nonLaborInvestment) validateNonLaborInvestment(allowed.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? [])
         if ((allowed.projectLevel !== undefined && allowed.projectLevel !== version.projectLevel) || (allowed.levelCoefficient !== undefined && allowed.levelCoefficient !== version.levelCoefficient) || (allowed.hrModelVersion !== undefined && allowed.hrModelVersion !== version.hrModelVersion)) {
           const coefficient = allowed.levelCoefficient ?? version.levelCoefficient
@@ -437,7 +434,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
                 updated.hrModelVersion,
                 updated.levelCoefficient,
               )
-              if (updated.machineDepartmentInvestments) updated.estimatedInvestment = Math.round(updated.machineDepartmentInvestments.reduce((sum, row) => sum + row.estimatedInvestment, 0) * 10) / 10
+              delete updated.machineDepartmentInvestments
             }
 
             return normalizeHrEditedVersion(updated, 'machine')
@@ -489,7 +486,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           version.machineDepartmentInvestments,
         )
       },
-    }),
+    }), (projects, rows) => syncMonthlyInvestments(projects as HrMachineProject[], rows as MonthlyInvestment[])),
     {
       storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-machine',

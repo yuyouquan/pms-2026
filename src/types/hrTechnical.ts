@@ -1,3 +1,4 @@
+import type { ResourceOperationLog } from '@/types/resourceOperations'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import type { BudgetScheduleModelSnapshot } from '@/lib/budgetMilestoneScheduling'
 /* ── HR Pipeline - Technical Project Types ──────────────────────────── */
@@ -89,6 +90,8 @@ export interface TechVersionOperationLog {
 
 /** 单项目版本 */
 export interface HrTechnicalVersion {
+  customVersionNumber?: boolean
+  departmentPhaseRatios?: Record<string, Record<string, number>>
   nonLaborInvestment?: NonLaborInvestment
   id: string
   projectId: string
@@ -127,6 +130,7 @@ export interface HrTechnicalVersion {
 
 /** 技术项目 */
 export interface HrTechnicalProject {
+  resourceOperationLogs?: ResourceOperationLog[]
   pmsProjectId?: string
   migrationIssue?: string
   legacyHrSnapshot?: unknown

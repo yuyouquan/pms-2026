@@ -1,5 +1,8 @@
 'use client'
 
+import { resourceRatiosAfterDepartmentWrite } from '@/lib/resourceRatios'
+import { createResourceStoreState } from '@/lib/resourceStoreActions'
+
 import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
 
 import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
@@ -206,7 +209,7 @@ function syncMonthlyInvestments(projects: HrCapabilityProject[], existingMonthly
 
 export const useHrCapabilityStore = create<HrCapabilityState>()(
   persist(
-    (set, get) => ({
+    (rawSet, get) => createResourceStoreState('capability', rawSet, get, (set) => ({
       registryMigrationComplete: false,
       projects: synchronizeProjects(INITIAL_PROJECTS),
       monthlyInvestments: seedResourceMonthlyEdits(syncMonthlyInvestments(INITIAL_PROJECTS, [])),
@@ -362,7 +365,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => version.id === versionId && isHrVersionEditable(project, version)
-            ? normalizeHrEditedVersion({ ...version, ...allowedHrVersionUpdates(project, version, dates ?? {}), nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : version.nonLaborInvestment, departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }, 'capability')
+            ? normalizeHrEditedVersion({ ...version, ...allowedHrVersionUpdates(project, version, dates ?? {}), nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : version.nonLaborInvestment, departmentPhaseRatios: resourceRatiosAfterDepartmentWrite('capability', version, departmentInvestments), departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }, 'capability')
             : version) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
@@ -423,7 +426,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       setFilters: (v) => set((state) => ({ filters: { ...state.filters, ...v } })),
       setHistoryVersionFilters: (v) =>
         set((state) => ({ historyVersionFilters: { ...state.historyVersionFilters, ...v } })),
-    }),
+    }), (projects, rows) => syncMonthlyInvestments(projects as HrCapabilityProject[], rows as CapabilityMonthlyInvestment[])),
     {
       storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-capability',
