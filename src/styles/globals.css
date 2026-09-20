@@ -4059,6 +4059,7 @@ body {
   background: #fff;
 }
 .ant-modal:not(.ant-modal-confirm) .ant-modal-body {
+  padding: var(--pms-overlay-padding);
   min-height: 0;
   flex: 1 1 auto;
   overflow-y: auto;
