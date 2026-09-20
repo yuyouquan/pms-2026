@@ -7,8 +7,15 @@ interface MonthlyRow {
   estimatedTotal: number
   monthlyData: Record<string, number>
   isEdited: boolean
+  allocationBasis?: string
   sourceRowId?: string
   isArchived?: boolean
+}
+
+/** Dates and metadata are excluded: only upstream effort changes replace manual allocations. */
+export function hrMonthlyAllocationBasis(total: number, phases: Record<string, number>, ratios: Record<string, number> = {}): string {
+  const ordered = (values: Record<string, number>) => Object.keys(values).sort().map(key => [key, values[key]])
+  return JSON.stringify([total, ordered(phases), ordered(ratios)])
 }
 
 /** Rows removed from the current source remain stored, but never enter live totals. */
@@ -49,7 +56,9 @@ export function preserveHrMonthlyEdits<T extends MonthlyRow>(generated: T[], exi
     const previous = byId.get(record.id) ?? existing.find(row => row.sourceRowId === record.id) ?? (sourceMatches.length === 1 ? sourceMatches[0] : undefined) ?? (byId.get(legacyId)?.sourceRowId ? undefined : byId.get(legacyId)) ?? (candidates.length === 1 ? candidates[0] : undefined)
     if (!previous || used.has(previous.id)) return { ...record, sourceRowId: record.id, isArchived: false }
     used.add(previous.id)
-    return previous.isEdited ? { ...record, id: previous.id, sourceRowId: record.id, isArchived: false, monthlyData: { ...previous.monthlyData }, isEdited: true } : { ...record, id: previous.id, sourceRowId: record.id, isArchived: false }
+    // Adopt a baseline for legacy saved rows; subsequent effort/ratio changes regenerate only this source row.
+    const effortChanged = previous.allocationBasis !== undefined && record.allocationBasis !== undefined && previous.allocationBasis !== record.allocationBasis
+    return previous.isEdited && !effortChanged ? { ...record, id: previous.id, sourceRowId: record.id, isArchived: false, monthlyData: { ...previous.monthlyData }, isEdited: true } : { ...record, id: previous.id, sourceRowId: record.id, isArchived: false }
   })
   return [...synchronized, ...existing.filter(row => !used.has(row.id) && !synchronized.some(next => next.id === row.id)).map(row => ({ ...row, isArchived: true }))]
 }
@@ -58,8 +67,18 @@ export function preserveHrMonthlyEdits<T extends MonthlyRow>(generated: T[], exi
 export function preserveLockedHrMonthlyRows<T extends MonthlyRow>(generated: T[], existing: T[], projects: readonly { versions: readonly { id: string; lockState?: string }[] }[]): T[] {
   const locked = new Set(projects.flatMap(project => project.versions.filter(version => version.lockState === 'locked').map(version => version.id)))
   const generatedIds = new Set(generated.map(row => row.id))
+  const lockedRows = existing.filter(row => locked.has(row.versionId))
+  // Reuse source/legacy identity matching without taking its regenerated amounts into locked rows.
+  const baselines = new Map(preserveHrMonthlyEdits(generated.filter(row => locked.has(row.versionId)), lockedRows).map(row => [row.id, row.allocationBasis]))
   // Legacy latest-only synchronization archived historical versions. Restore source-present rows without changing their allocations.
-  const saved = existing.filter(row => locked.has(row.versionId)).map(row => row.isArchived && generatedIds.has(row.sourceRowId ?? row.id) ? { ...row, isArchived: false } : row)
+  const saved = lockedRows.map(row => {
+    const sourceId = row.sourceRowId ?? row.id
+    const restored = row.isArchived && generatedIds.has(sourceId) ? { ...row, isArchived: false } : row
+    // Establish the old source baseline before a legacy locked version is unlocked and edited.
+    // This migration only adds metadata; the saved monthly amounts remain a locked snapshot.
+    const basis = baselines.get(row.id)
+    return restored.allocationBasis === undefined && basis !== undefined ? { ...restored, allocationBasis: basis } : restored
+  })
   const savedVersions = new Set(saved.map(row => row.versionId))
   return [...preserveHrMonthlyEdits(generated.filter(row => !savedVersions.has(row.versionId)), existing.filter(row => !savedVersions.has(row.versionId))), ...saved]
 }

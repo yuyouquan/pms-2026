@@ -98,7 +98,7 @@ export default function BudgetMilestoneSchedule({
   return <section className="pms-budget-milestone-schedule" aria-label="里程碑信息">
     {(headerContent || !readOnly && allowSchedule) && <div className="pms-resource-basics-row">
       {headerContent}
-      {headerContent && !readOnly && allowSchedule && <span className="pms-resource-basics-separator" aria-hidden="true">｜</span>}
+      {headerContent && !readOnly && allowSchedule && <span className="pms-resource-basics-separator" aria-hidden="true" />}
     {!readOnly && allowSchedule && <div className="pms-budget-milestone-heading">
       <div className="pms-budget-milestone-anchor-inputs" role="group" aria-label="排布日期范围">
         {anchors.map((anchor, index) => {

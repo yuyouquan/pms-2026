@@ -1,3 +1,4 @@
+import { resolveMachineDepartmentInvestments } from '@/lib/resourceAllocation'
 import { createResourceStoreState } from '@/lib/resourceStoreActions'
 import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
 import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
@@ -5,7 +6,7 @@ import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import { canAccessHrProject, getHrRegistryProject, isHrFormalRecord, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
-import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
+import { hrMonthlyAllocationBasis, preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalMachineProjects, createResourceMachineProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
@@ -67,6 +68,7 @@ function generateDepartmentMonthlyRecords(
     version.machineDepartmentInvestments,
   )
 
+  const departments = resolveMachineDepartmentInvestments({ ...version, modelSnapshot: configRecords })
   return splits.map((split: DepartmentMonthlySplit, idx: number) => ({
     id: `mi-${projectId}-${version.id}-source-${split.departmentId ?? idx}`,
     projectId,
@@ -78,6 +80,7 @@ function generateDepartmentMonthlyRecords(
             batch: version.batch ?? null,
     versionLockState: version.lockState,
     estimatedTotal: split.estimatedTotal,
+    allocationBasis: hrMonthlyAllocationBasis(split.estimatedTotal, Object.fromEntries(Object.entries(departments.find(row => row.id === split.departmentId) ?? {}).filter((entry): entry is [string, number] => typeof entry[1] === 'number'))),
     monthlyData: split.monthlyData,
     isEdited: false,
   }))

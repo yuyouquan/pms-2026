@@ -1,6 +1,6 @@
 'use client'
 
-import { resourceRatiosAfterDepartmentWrite } from '@/lib/resourceRatios'
+import { allocateResourceRatios, getResourcePhaseRatios, resourceRatiosAfterDepartmentWrite } from '@/lib/resourceRatios'
 import { createResourceStoreState } from '@/lib/resourceStoreActions'
 
 import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
@@ -13,7 +13,7 @@ import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLa
 import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
 
-import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
+import { hrMonthlyAllocationBasis, preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalCapabilityProjects, createResourceCapabilityProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { changeHrVersionLifecycle, copyHrVersionSnapshot, getActiveHrVersion, isHrVersionEditable, canCreateHrVersion, getHrVersionSeed, allowedHrVersionUpdates, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
@@ -89,8 +89,10 @@ function generateDepartmentMonthlyRecords(
   version: HrCapabilityVersion,
 ): CapabilityMonthlyInvestment[] {
   return version.departmentInvestments.map((dept) => {
+    const ratios = getResourcePhaseRatios('capability', version, dept)
+    const phases = allocateResourceRatios(dept.estimatedInvestment, ratios)
     const monthlyData = calcCapabilityMonthlySplit(
-      dept.estimatedInvestment,
+      phases.projectPeriod,
       version.projectStartTime,
       version.projectEndTime,
     )
@@ -105,6 +107,7 @@ function generateDepartmentMonthlyRecords(
       batch: version.batch ?? null,
       versionLockState: version.lockState,
       estimatedTotal: dept.estimatedInvestment,
+      allocationBasis: hrMonthlyAllocationBasis(dept.estimatedInvestment, phases, ratios),
       monthlyData,
       isEdited: false,
     }

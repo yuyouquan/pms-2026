@@ -1,4 +1,4 @@
-import { resourceRatiosAfterDepartmentWrite } from '@/lib/resourceRatios'
+import { getResourcePhaseRatios, getResourceRatioFields, resourceRatiosAfterDepartmentWrite } from '@/lib/resourceRatios'
 import { createResourceStoreState } from '@/lib/resourceStoreActions'
 import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
 import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
@@ -7,7 +7,7 @@ import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { cloneNonLaborInvestment, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
 import { useProjectStore } from '@/stores/project'
 import { canAccessHrProject, reconcileHrRegistry } from '@/lib/hrProjectRegistry'
-import { preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
+import { hrMonthlyAllocationBasis, preserveLockedHrMonthlyRows } from '@/lib/hrMonthlySync'
 import { appendHrMockProjects, createAdditionalTechnicalProjects, createResourceTechnicalProjects, seedResourceMonthlyEdits } from '@/mock/hrInvestment'
 import { changeHrVersionLifecycle, copyHrVersionSnapshot, isHrVersionEditable, canCreateHrVersion, allowedHrVersionUpdates, getHrVersionSeed, getLatestHrVersion, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { normalizeHrEditedVersion, synchronizeHrProjects } from '@/lib/hrProjectSync'
@@ -69,20 +69,25 @@ function generateDepartmentMonthlyRecords(
     version.milestones,
   )
 
-  return splits.map((split: DepartmentMonthlySplit, idx: number) => ({
-    id: `mi-${projectId}-${version.id}-source-${split.departmentId ?? idx}`,
-    projectId,
-    versionId: version.id,
-    primaryDepartment: split.primaryDepartment,
-    secondaryDepartment: split.secondaryDepartment,
-    budgetType: version.budgetType,
-    versionNumber: version.versionNumber,
-            batch: version.batch ?? null,
-    versionLockState: version.lockState,
-    estimatedTotal: version.departmentInvestments.find(row => row.id === split.departmentId)?.estimatedInvestment ?? split.estimatedTotal,
-    monthlyData: split.monthlyData,
-    isEdited: false,
-  }))
+  return splits.map((split: DepartmentMonthlySplit, idx: number) => {
+    const department = version.departmentInvestments.find(row => row.id === split.departmentId)!
+    const phases = Object.fromEntries(getResourceRatioFields('technical').map(field => [field.key, Number(department[field.key as keyof typeof department]) || 0]))
+    return {
+      id: `mi-${projectId}-${version.id}-source-${split.departmentId ?? idx}`,
+      projectId,
+      versionId: version.id,
+      primaryDepartment: split.primaryDepartment,
+      secondaryDepartment: split.secondaryDepartment,
+      budgetType: version.budgetType,
+      versionNumber: version.versionNumber,
+      batch: version.batch ?? null,
+      versionLockState: version.lockState,
+      estimatedTotal: department.estimatedInvestment,
+      allocationBasis: hrMonthlyAllocationBasis(department.estimatedInvestment, phases, getResourcePhaseRatios('technical', version, department)),
+      monthlyData: split.monthlyData,
+      isEdited: false,
+    }
+  })
 }
 
 const ADDITIONAL_PROJECTS = createAdditionalTechnicalProjects(getHrFormalProjectOptions('technical'))

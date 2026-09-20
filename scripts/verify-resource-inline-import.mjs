@@ -50,7 +50,7 @@ const modules = {
   '@/components/project-resources/resourceVersionAdapter': { resourceStore: () => ({ getState: () => state }) },
   '@/components/project-resources/ResourceInlineField': { __esModule: true, default: 'InlineField', ResourceInlineControl: 'InlineControl' },
   '@/components/project-resources/inlineFieldSession': module,
-  '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'Expenses' },
+  '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'Expenses', NonLaborInvestmentRange: 'Range' },
   '@/components/project-resources/BudgetMilestoneSchedule': { __esModule: true, default: 'BudgetMilestones' },
   '@/lib/hrVersionRules': { isHrVersionEditable: (_project, version) => version?.lockState !== 'locked' },
   '@/lib/hrProjectRegistry': { isHrFormalRecord: () => false, getHrRegistryProject: () => ({}), canEditHrInScope: (_project, id) => id === scope },

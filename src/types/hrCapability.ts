@@ -120,6 +120,8 @@ export interface HrCapabilityProject {
 
 /** 月度预估投入记录 */
 export interface CapabilityMonthlyInvestment {
+  /** 上游部门投入及比例快照，用于识别需要重新排布的月度行。 */
+  allocationBasis?: string
   id: string
   projectId: string
   versionId: string
