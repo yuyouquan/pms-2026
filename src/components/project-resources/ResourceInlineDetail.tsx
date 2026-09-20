@@ -64,14 +64,14 @@ export default function ResourceInlineDetail({ category, project, version, scope
         const ratio = getResourcePhaseRatios(category, version, row)[field.key] ?? 0
         const amount = category === 'capability' ? row.estimatedInvestment * ratio / 100 : Number(row[field.key] ?? 0)
         const label = `${row.primaryDepartment} ${row.secondaryDepartment} ${field.label}比例`
-        return <ResourceInlineField label={label} value={ratio} display={`${ratio.toFixed(2)}%（${formatPersonMonth(amount)}人月）`} readOnly={readOnly}
+        return <ResourceInlineField label={label} value={ratio} display={`${ratio.toFixed(2)}%（${formatPersonMonth(amount)}）`} readOnly={readOnly}
           onSave={value => persist({ type: 'departmentRatio', rowId: row.id, key: field.key, value: value === null ? 0 : Number(value) })}
-          renderEditor={(value, change) => <InputNumber controls={false} aria-label={label} value={Number(value)} min={0} max={100} precision={2} suffix={`%（${formatPersonMonth(amount)}人月）`} style={{ width: '100%' }} onChange={change} />} />
+          renderEditor={(value, change) => <InputNumber controls={false} aria-label={label} value={Number(value)} min={0} max={100} precision={2} suffix={`%（${formatPersonMonth(amount)}）`} style={{ width: '100%' }} onChange={change} />} />
       } })),
     { title: '比例合计', key: 'ratioTotal', width: 140, fixed: 'right', align: 'center', render: (_, row) => {
       const total = Object.values(getResourcePhaseRatios(category, version, row)).reduce((sum, value) => sum + value, 0)
       const difference = Math.round((total - 100) * 100) / 100
-      return <span className={difference ? 'pms-resource-difference' : ''}>{total.toFixed(2)}%{difference !== 0 && <small>{difference > 0 ? '超出' : '还差'} {Math.abs(difference).toFixed(2)}%</small>}</span>
+      return <span className={`pms-resource-ratio-total${difference ? ' pms-resource-difference' : ''}`}>{total.toFixed(2)}%/100%</span>
     } },
     ...(!readOnly ? [{ title: '操作', key: 'actions', width: 64, fixed: 'right' as const, render: (_: unknown, row: InlineDepartment) => <Tooltip title="删除部门"><Button type="text" danger size="small" aria-label="删除部门" icon={<DeleteOutlined />} onClick={() => action(() => saveDepartments(rows.filter(item => item.id !== row.id)))} /></Tooltip> }] : []),
   ]
@@ -112,21 +112,22 @@ export default function ResourceInlineDetail({ category, project, version, scope
   const machineRows = machine ? resolveMachineDepartmentInvestments(machine) : []
   const machinePhases = machine ? resolveMachinePhaseFields(machine) : []
   const machineColumns = [{ title: '一级部门', dataIndex: 'primaryDepartment', width: 150, align: 'center' as const }, { title: '二级部门', dataIndex: 'secondaryDepartment', width: 150, align: 'center' as const },
-    { title: '预估投入合计', key: 'total', width: 140, align: 'center' as const, render: (_: unknown, row: InlineDepartment) => `${formatPersonMonth(row.estimatedInvestment)}人月` },
+    { title: '预估投入合计', key: 'total', width: 140, align: 'center' as const, render: (_: unknown, row: InlineDepartment) => formatPersonMonth(row.estimatedInvestment) },
     ...machinePhases.map(field => ({ title: field.label, key: field.key, width: 170, align: 'center' as const, render: (_: unknown, row: InlineDepartment) => {
       const amount = Number(row[field.key] ?? 0)
-      return `${formatPersonMonth(amount)}人月（${(row.estimatedInvestment ? amount / row.estimatedInvestment * 100 : 0).toFixed(2)}%）`
+      return `${formatPersonMonth(amount)}（${(row.estimatedInvestment ? amount / row.estimatedInvestment * 100 : 0).toFixed(2)}%）`
     } }))]
   return <div className="pms-resource-inline-detail">
     <section className="pms-resource-panel pms-resource-basics" aria-label="基础信息与里程碑">
-    {machine && <dl className="pms-resource-metadata">{[...metadataFields, ...modelFields].map(field => <div key={field.key}><dt>{field.label}</dt><dd>{field.children}</dd></div>)}</dl>}
-    {isBudgetProject && category !== 'capability' ? <BudgetMilestoneSchedule
+    {category !== 'capability' ? <BudgetMilestoneSchedule
       category={category}
       versionId={version.id}
       dates={dates}
       fields={resourceMilestoneFields[category]}
       modelSnapshot={'scheduleModelSnapshot' in version ? version.scheduleModelSnapshot : undefined}
       readOnly={readOnly}
+      allowSchedule={isBudgetProject}
+      headerContent={machine && <dl className="pms-resource-metadata">{[...metadataFields, ...modelFields].map(field => <div key={field.key}><dt>{field.label}</dt><dd>{field.children}</dd></div>)}</dl>}
       canEdit={key => canEditResourceMilestone(category, project, key)}
       onSaveDate={(key, value) => persist({ type: 'milestone', key, value })}
       onSchedule={(scheduledDates, modelSnapshot) => persist({ type: 'milestoneSchedule', dates: scheduledDates, modelSnapshot })}
@@ -138,7 +139,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
       </dl></div></section>}
     </section>
     <section className="pms-resource-panel" aria-label="预估投入">
-    <Tabs items={[{ key: 'labor', label: '各部门人力投入', children: <>
+    <Tabs items={[{ key: 'labor', label: '各部门人力（人月）投入', children: <>
 
     {!machine && !readOnly && <Space size="small" className="pms-resource-department-actions">
       <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => action(() => saveDepartments([...rows, { id: `department-${crypto.randomUUID()}`, primaryDepartment: '', secondaryDepartment: '', estimatedInvestment: 0 }]))}>添加部门</Button>
@@ -158,7 +159,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
           <Table.Summary.Cell index={phases.length + 3} />
           {!readOnly && <Table.Summary.Cell index={phases.length + 4} />}
         </Table.Summary.Row>} />}
-    </> }, { key: 'nonLabor', label: '非人力投入', children: <NonLaborInvestmentSection inline canImport={isImportCurrent} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly}
+    </> }, { key: 'nonLabor', label: '非人力投入（万元）', children: <NonLaborInvestmentSection inline unit="万元" canImport={isImportCurrent} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly}
       onChange={value => persist({ type: 'nonLabor', value })} onItemTotalChange={(itemId, value) => persist({ type: 'nonLaborItemTotal', itemId, value })} /> }]} />
     </section>
   </div>

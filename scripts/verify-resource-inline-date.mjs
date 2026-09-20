@@ -78,3 +78,15 @@ for (const [raw, valid] of [['2027-01-31', true], ['2026-02-31', false]]) {
   else { assert.equal(session.state.value, raw); assert.equal(session.state.editing, true); assert.match(session.state.error, /日期/) }
 }
 console.log('PASS production date editor native wrapper captures valid/invalid input before outside commit')
+
+// Formal projects share stage presentation without gaining budget-only scheduling controls.
+modules['@/lib/resourceInlineEditing'].resourceMilestoneFields.technical=[{key:'planningStart',label:'规划启动'},{key:'edcp',label:'EDCP'}]
+const formalVersion={id:'formal-v',milestones:{planningStart:'2026-01-01',edcp:'2026-12-31'},departmentInvestments:[]}
+const renderTechnical=()=>compiled.exports.default({category:'technical',project:{id:'formal-p'},version:formalVersion,scopeId:'formal-p',readOnly:false})
+const formalSchedule=elements(renderTechnical()).find(node=>node.type==='BudgetMilestones')
+assert.ok(formalSchedule,'formal project milestones also use stage presentation')
+assert.equal(formalSchedule.props.allowSchedule,false,'formal project does not gain model scheduling permission')
+assert.equal(formalSchedule.props.dates,formalVersion.milestones)
+modules['@/types/projectRegistry'].getProjectAttribute=()=> 'budget'
+assert.equal(elements(renderTechnical()).find(node=>node.type==='BudgetMilestones').props.allowSchedule,true)
+console.log('PASS formal milestone stages reuse budget presentation while scheduling remains budget-only')

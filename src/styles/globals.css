@@ -9277,6 +9277,12 @@ input.ant-input,
 .pms-resource-metadata dt { font-size: 12px; font-weight: 700; color: var(--pms-text-primary); margin-bottom: 2px; }
 .pms-resource-metadata dd { margin: 0; min-height: 28px; font-size: 13px; }
 .pms-resource-metadata .pms-resource-inline-trigger { padding-left: 0; }
+.pms-resource-basics-row { display: flex; align-items: flex-end; gap: 12px; overflow-x: auto; margin-bottom: 8px; padding-bottom: 2px; }
+.pms-resource-basics-row .pms-resource-metadata { flex: 1 0 780px; margin: 0; overflow: visible; }
+.pms-resource-basics-row .pms-budget-milestone-heading { flex: 0 0 auto; margin: 0; }
+.pms-resource-basics-row .pms-budget-milestone-anchor-inputs { flex-wrap: nowrap; }
+.pms-resource-basics-separator { flex: 0 0 auto; align-self: stretch; display: flex; align-items: center; color: var(--pms-border); font-size: 24px; }
+.pms-resource-basics-row .pms-budget-milestone-anchor-inputs label > span { font-weight: 700; color: var(--pms-text-primary); }
 .pms-resource-basics :is(.pms-budget-milestone-schedule, .pms-hr-milestone-details) { margin-bottom: 0; }
 .pms-resource-panel .pms-non-labor-section > h3 { display: none; }
 .pms-resource-workspace .ant-input-number-input,
@@ -9326,7 +9332,8 @@ input.ant-input,
 .pms-resource-monthly-table .pms-resource-inline-trigger { min-height: 24px; }
 .pms-resource-monthly-table .pms-resource-inline-trigger { padding: 2px 4px; }
 .pms-resource-monthly-table .ant-table-summary .ant-table-cell { padding: 4px 6px; font-size: 12px; line-height: 1.25; }
-.pms-resource-difference { color: #a34c10; }
+.pms-resource-difference { color: #cf1322; }
+.pms-resource-ratio-total { white-space: nowrap; }
 .pms-resource-log-changes { max-width: 540px; max-height: 150px; overflow: auto; overflow-wrap: anywhere; font-size: 12px; }
 @media (max-width: 1050px) { .pms-resource-view-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .pms-resource-view-stats { grid-template-columns: 1fr; } .pms-resource-monthly-summary { gap: 10px; } }

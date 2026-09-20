@@ -40,13 +40,32 @@ export interface BudgetScheduleModelSnapshot {
 }
 
 type DisplayMilestone = Omit<BudgetScheduleMilestone, 'intervalDays'> & { intervalDays: number | null }
-interface BudgetScheduleDisplay {
+export interface BudgetScheduleDisplay {
   category: BudgetScheduleCategory
   firstAnchorKey: string
   lastAnchorKey: string
   totalModelDays: number | null
   milestones: DisplayMilestone[]
   stages: { templateTaskId: string; label: string; milestones: DisplayMilestone[] }[]
+}
+
+/** Preserve saved model weights/version identity while adopting the machine phase split. */
+export function normalizeMachineBudgetScheduleStages<T extends BudgetScheduleDisplay>(model: T): T {
+  if (model.category !== 'machine') return model
+  const development = model.stages.find(stage => ['开发验证阶段', '开发验证'].includes(stage.label.trim())
+    && stage.milestones.some(milestone => milestone.fieldKey === 'str4' || milestone.fieldKey === 'str4a')
+    && stage.milestones.at(-1)?.fieldKey === 'str5')
+  if (!development) return model
+  const usedIds = new Set(model.stages.map(stage => stage.templateTaskId))
+  let validationId = 'machine-stage-validation'
+  for (let suffix = 1; usedIds.has(validationId); suffix += 1) validationId = `machine-stage-validation-${suffix}`
+  const milestones = model.milestones.map(milestone => milestone.stageId === development.templateTaskId && milestone.fieldKey === 'str5'
+    ? { ...milestone, stageId: validationId } : { ...milestone })
+  const stages = model.stages.flatMap(stage => stage === development ? [
+    { ...stage, label: '开发阶段', milestones: milestones.filter(milestone => milestone.stageId === stage.templateTaskId) },
+    { templateTaskId: validationId, label: '验证阶段', milestones: milestones.filter(milestone => milestone.stageId === validationId) },
+  ] : [{ ...stage, milestones: stage.milestones.map(milestone => ({ ...milestone })) }])
+  return { ...model, milestones, stages }
 }
 
 interface PublishedTemplateVersion {
@@ -215,8 +234,8 @@ export function resolvePublishedBudgetScheduleModel(
     const children = byStage.get(String(root.id))
     return children?.length ? [{ templateTaskId: String(root.id), label: String(root.taskName ?? '').trim() || '未命名阶段', milestones: children }] : []
   })
-  return {
-    schemaVersion: 1,
+  return normalizeMachineBudgetScheduleStages({
+    schemaVersion: 1 as const,
     category,
     templateVersionId: latest.id,
     templateVersionNo: latest.versionNo,
@@ -226,7 +245,7 @@ export function resolvePublishedBudgetScheduleModel(
     totalModelDays,
     milestones,
     stages,
-  }
+  })
 }
 
 /** Display structure is independent of whether the published template can drive automatic scheduling.
@@ -256,8 +275,8 @@ export function resolveBudgetScheduleDisplay(state: PublishedTemplateState, cate
   const configuredStages = toStages(tasks)
   const stages = configuredStages.length ? configuredStages : toStages(defaults)
   const milestones = stages.flatMap(stage => stage.milestones)
-  return { category, firstAnchorKey: first.key, lastAnchorKey: last.key, stages, milestones,
-    totalModelDays: milestones.some(milestone => milestone.intervalDays === null) ? null : milestones.reduce((sum, milestone) => sum + (milestone.intervalDays ?? 0), 0) }
+  return normalizeMachineBudgetScheduleStages({ category, firstAnchorKey: first.key, lastAnchorKey: last.key, stages, milestones,
+    totalModelDays: milestones.some(milestone => milestone.intervalDays === null) ? null : milestones.reduce((sum, milestone) => sum + (milestone.intervalDays ?? 0), 0) })
 }
 
 const parseDate = (value: unknown): number | null => {
