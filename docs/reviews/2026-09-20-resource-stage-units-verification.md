@@ -30,3 +30,12 @@
 - `npm run build`：exit 0（8个静态页面），仅既有 caniuse-lite 数据过期提示。
 - `git diff --check`：通过。
 - 原根工作区未清理、重置或覆盖；在 feature 工作树实施。
+
+## 线上补验发现及修复
+
+- 首次发布后补验复制自定义版本和万元输入时，发现同时打开新旧构建会反复迁移存储，并导致保存的数据回退。
+- 根因是 Zustand 4 对任何 schema 版本差异都会迁移并写回，旧版 machine v12 与新版 v13 互相回写。外部 storage 事件同步读取期间禁止迁移回写，首次加载迁移和用户保存仍正常写入。
+- `PMS_CURRENT_REVISION=c969caa node scripts/verify-resource-mixed-version-storage.mjs` 在修复前 40 次事件后仍未收敛，exit 1。
+- `node scripts/verify-resource-mixed-version-storage.mjs` 修复后 exit 0：真实 aba37e2 与当前构建、c969caa 与当前构建，均覆盖版本创建、计划/自定义任务身份、费用双向编辑及重复读取，最多 4 次事件收敛，所有新增数据完整保留。
+- `npm run verify:resource-cross-tab`、`node scripts/verify-mock-dataset-storage.mjs`、类型检查和生产构建再次通过。
+- 已打开的两个未修复代际页面需要刷新到新构建，新的代码无法改变旧页面已运行的逻辑。

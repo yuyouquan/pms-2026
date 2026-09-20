@@ -31,6 +31,14 @@ const SESSION_STORAGE_KEYS = new Set(['pms:technical-project-list-target-child']
 
 type StorageArea = 'localStorage' | 'sessionStorage'
 
+let hydrationWriteDepth = 0
+
+/** Cross-tab hydration reads a snapshot; schema migration must not echo it back. */
+export function withoutPmsHydrationWrites<T>(hydrate: () => T): T {
+  hydrationWriteDepth += 1
+  try { return hydrate() } finally { hydrationWriteDepth -= 1 }
+}
+
 interface SynchronousStorage {
   getItem(name: string): string | null
   setItem(name: string, value: string): void
@@ -72,6 +80,7 @@ function safeStorage(area: StorageArea): SynchronousStorage {
       }
     },
     setItem(name, value) {
+      if (hydrationWriteDepth > 0) return
       try {
         prepareStorage(area).setItem(name, value)
       } catch {
