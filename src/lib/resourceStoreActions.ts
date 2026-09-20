@@ -75,9 +75,9 @@ export function createResourceStoreState<S extends DomainState>(category:HrProje
  result.createResourceVersion=(projectId,budgetType,scopeId,options)=>{
    const state=get(),project=state.projects.find(item=>item.id===projectId)
    if(!project || !scopeId || !canEditHrInScope(project,scopeId) || !canCreateHrVersion(project,budgetType))throw new Error('当前项目不可创建版本')
-   const input=options.versionNumber.trim().replace(/^V/i,'')
-   if(!/^\d+(\.\d+)*$/.test(input))throw new Error('版本号仅支持数字和点分段，例如 0.3、1、1.2')
-   const name=`V${input}`
+   const input=options.versionNumber.trim()
+   if(!input)throw new Error('请填写版本号')
+   const name=/^V/i.test(input)?`V${input.slice(1)}`:`V${input}`
    if(project.versions.some(version=>version.budgetType===budgetType && version.versionNumber===name))throw new Error('该预算分类已存在相同版本号')
    let projects:ResourceProject[],monthly:Monthly[],id:string
    if(options.sourceVersionId) {

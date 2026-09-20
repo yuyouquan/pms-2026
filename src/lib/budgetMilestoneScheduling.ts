@@ -1,4 +1,6 @@
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
+import { MACHINE_LEVEL1_TEMPLATE_TASKS, TOS_LEVEL1_TEMPLATE_TASKS } from '@/lib/level1PlanRules'
+import { buildTdtTemplateTasks } from '@/lib/technicalPlanRules'
 
 export type BudgetScheduleCategory = Exclude<HrProjectCategory, 'capability'>
 
@@ -35,6 +37,16 @@ export interface BudgetScheduleModelSnapshot {
   totalModelDays: number
   milestones: BudgetScheduleMilestone[]
   stages: BudgetScheduleStage[]
+}
+
+type DisplayMilestone = Omit<BudgetScheduleMilestone, 'intervalDays'> & { intervalDays: number | null }
+interface BudgetScheduleDisplay {
+  category: BudgetScheduleCategory
+  firstAnchorKey: string
+  lastAnchorKey: string
+  totalModelDays: number | null
+  milestones: DisplayMilestone[]
+  stages: { templateTaskId: string; label: string; milestones: DisplayMilestone[] }[]
 }
 
 interface PublishedTemplateVersion {
@@ -217,6 +229,37 @@ export function resolvePublishedBudgetScheduleModel(
   }
 }
 
+/** Display structure is independent of whether the published template can drive automatic scheduling.
+ * Defaults provide names and grouping only; missing intervals remain unknown and are never persisted.
+ */
+export function resolveBudgetScheduleDisplay(state: PublishedTemplateState, category: BudgetScheduleCategory): BudgetScheduleDisplay {
+  try { return resolvePublishedBudgetScheduleModel(state, category) } catch { /* Keep the stage structure when scheduling is unavailable. */ }
+  const source = BUDGET_SCHEDULE_SOURCES[category]
+  const latest = state.configTemplateVersionScopes[source.scopeKey]?.versions.filter(version => version.status === '已发布').sort(compareVersions).at(-1)
+  const defaults: readonly BudgetScheduleTemplateTask[] = category === 'machine' ? MACHINE_LEVEL1_TEMPLATE_TASKS
+    : category === 'tos' ? TOS_LEVEL1_TEMPLATE_TASKS : buildTdtTemplateTasks()
+  const tasks = latest ? state.publishedSnapshots[source.snapshotKey(latest.id)] ?? defaults : defaults
+  const [first, last] = BUDGET_SCHEDULE_ANCHORS[category]
+  const toStages = (items: readonly BudgetScheduleTemplateTask[]) => {
+    const seen = new Set<string>()
+    return sortTasks(items.filter(task => !task.parentId)).flatMap(root => {
+      const milestones = sortTasks(items.filter(task => String(task.parentId ?? '') === String(root.id))).flatMap(task => {
+        const fieldKey = normalizedFieldMaps[category][normalizeLabel(task.taskName)]
+        if (!fieldKey || seen.has(fieldKey)) return []
+        seen.add(fieldKey)
+        return [{ templateTaskId: String(task.id), stageId: String(root.id), fieldKey, label: String(task.taskName),
+          intervalDays: fieldKey === first.key ? 0 : isWeight(task.intervalDays) ? task.intervalDays : null }]
+      })
+      return milestones.length ? [{ templateTaskId: String(root.id), label: root.taskName || '未命名阶段', milestones }] : []
+    })
+  }
+  const configuredStages = toStages(tasks)
+  const stages = configuredStages.length ? configuredStages : toStages(defaults)
+  const milestones = stages.flatMap(stage => stage.milestones)
+  return { category, firstAnchorKey: first.key, lastAnchorKey: last.key, stages, milestones,
+    totalModelDays: milestones.some(milestone => milestone.intervalDays === null) ? null : milestones.reduce((sum, milestone) => sum + (milestone.intervalDays ?? 0), 0) }
+}
+
 const parseDate = (value: unknown): number | null => {
   if (typeof value !== 'string') return null
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
@@ -257,19 +300,16 @@ export interface BudgetScheduledSegment {
 export interface BudgetStageMetrics {
   stageId: string
   label: string
-  scheduledDays: number | null
-  scheduledRatio: number | null
-  modelDays: number
-  modelRatio: number
+  scheduledDays: number
+  scheduledRatio: number
+  modelDays: number | null
+  modelRatio: number | null
   scheduledSegments: BudgetScheduledSegment[]
 }
 
-export function calculateBudgetStageMetrics(model: BudgetScheduleModelSnapshot, dates: Record<string, string | null | undefined>): BudgetStageMetrics[] {
-  const first = parseDate(dates[model.firstAnchorKey])
-  const last = parseDate(dates[model.lastAnchorKey])
-  const scheduledTotal = first !== null && last !== null && last >= first ? Math.round((last - first) / DAY) : null
+export function calculateBudgetStageMetrics(model: BudgetScheduleDisplay, dates: Record<string, string | null | undefined>): BudgetStageMetrics[] {
   const milestoneIndex = new Map(model.milestones.map((milestone, index) => [milestone.fieldKey, index]))
-  return model.stages.map(stage => {
+  const stages = model.stages.map(stage => {
     const segments = stage.milestones.flatMap(milestone => {
       const index = milestoneIndex.get(milestone.fieldKey) ?? -1
       if (index <= 0) return []
@@ -281,26 +321,26 @@ export function calculateBudgetStageMetrics(model: BudgetScheduleModelSnapshot, 
         : null
       return [{ fieldKey: milestone.fieldKey, previousFieldKey: previous.fieldKey, days }]
     })
-    const scheduledDays = segments.some(segment => segment.days === null)
-      ? null
-      : segments.reduce((sum, segment) => sum + (segment.days ?? 0), 0)
-    const modelDays = stage.milestones.reduce((sum, milestone) => sum + (milestoneIndex.get(milestone.fieldKey) === 0 ? 0 : milestone.intervalDays), 0)
+    const scheduledDays = segments.reduce((sum, segment) => sum + (segment.days ?? 0), 0)
+    const modelDays = stage.milestones.some(milestone => milestone.intervalDays === null) ? null
+      : stage.milestones.reduce((sum, milestone) => sum + (milestoneIndex.get(milestone.fieldKey) === 0 ? 0 : milestone.intervalDays ?? 0), 0)
     return {
       stageId: stage.templateTaskId,
       label: stage.label,
       scheduledDays,
-      scheduledRatio: scheduledDays === null || scheduledTotal === null || scheduledTotal === 0 ? null : scheduledDays * 100 / scheduledTotal,
       modelDays,
-      modelRatio: modelDays * 100 / model.totalModelDays,
+      modelRatio: modelDays === null || model.totalModelDays === null ? null : model.totalModelDays > 0 ? modelDays * 100 / model.totalModelDays : 0,
       scheduledSegments: segments,
     }
   })
+  const scheduledTotal = stages.reduce((sum, stage) => sum + stage.scheduledDays, 0)
+  return stages.map(stage => ({ ...stage, scheduledRatio: scheduledTotal > 0 ? stage.scheduledDays * 100 / scheduledTotal : 0 }))
 }
 
 const formatDays = (value: number) => Number.isInteger(value) ? String(value) : String(Number(value.toFixed(2)))
 const formatRatio = (value: number) => `${value.toFixed(2)}%`
 export const formatBudgetStageMetrics = (metrics: Pick<BudgetStageMetrics, 'scheduledDays' | 'scheduledRatio' | 'modelDays' | 'modelRatio'>) => (
-  `${metrics.scheduledDays === null || metrics.scheduledRatio === null ? '排布不可用' : `排布${formatDays(metrics.scheduledDays)}天（${formatRatio(metrics.scheduledRatio)}）`}/${Number.isFinite(metrics.modelDays) && Number.isFinite(metrics.modelRatio) ? `模型${formatDays(metrics.modelDays)}天（${formatRatio(metrics.modelRatio)}）` : '模型不可用'}`
+  `排布${formatDays(metrics.scheduledDays)}天（${formatRatio(metrics.scheduledRatio)}）/${metrics.modelDays !== null && Number.isFinite(metrics.modelDays) ? `模型${formatDays(metrics.modelDays)}天（${metrics.modelRatio !== null && Number.isFinite(metrics.modelRatio) ? formatRatio(metrics.modelRatio) : '占比未配置'}）` : '模型未配置'}`
 )
 
 export function validateBudgetScheduleSnapshot(category: BudgetScheduleCategory, snapshot: BudgetScheduleModelSnapshot) {
