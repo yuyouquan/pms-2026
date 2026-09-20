@@ -1,20 +1,21 @@
 import type { NonLaborInvestment, NonLaborInvestmentItem } from '@/types/nonLaborInvestment'
 import type { ConfigRecord } from '@/types/hrConfig'
 import { nonLaborItemKey, nonLaborMonths, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
+import { fromNonLaborDisplayAmount, nonLaborAmountPrecision, type NonLaborAmountUnit } from '@/lib/nonLaborAmountUnit'
 
 type MonthRange = Pick<NonLaborInvestment, 'startMonth' | 'endMonth'>
 
-export function nonLaborSpreadsheetColumns(range: MonthRange) {
+export function nonLaborSpreadsheetColumns(range: MonthRange, unit: NonLaborAmountUnit = '元') {
   return [
     { key: 'secondaryDepartment', title: '二级部门' },
     { key: 'tertiaryDepartment', title: '三级部门' },
     { key: 'secondarySubject', title: '二级科目' },
     { key: 'tertiarySubject', title: '三级科目' },
-    ...nonLaborMonths(range).map(month => ({ key: month, title: `${month.slice(0, 4)}年${month.slice(5)}月（元）` })),
+    ...nonLaborMonths(range).map(month => ({ key: month, title: `${month.slice(0, 4)}年${month.slice(5)}月（${unit}）` })),
   ]
 }
 
-function parseAmount(value: unknown): number {
+function parseAmount(value: unknown, unit: NonLaborAmountUnit): number {
   if (value === null || value === undefined || value === '' || value === '-') return 0
   if (typeof value !== 'number' && typeof value !== 'string') throw new Error('金额格式不正确')
   let text = String(value).trim()
@@ -25,19 +26,20 @@ function parseAmount(value: unknown): number {
   }
   const amount = Number(text)
   if (!Number.isFinite(amount) || amount < 0) throw new Error('金额必须为非负数')
-  if (Math.abs(amount * 100 - Math.round(amount * 100)) > 0.000001) throw new Error('金额最多保留两位小数')
-  return amount
+  const factor = 10 ** nonLaborAmountPrecision(unit)
+  if (Math.abs(amount * factor - Math.round(amount * factor)) > 0.000001) throw new Error(unit === '万元' ? '金额（万元）最多保留六位小数' : '金额最多保留两位小数')
+  return fromNonLaborDisplayAmount(amount, unit)
 }
 
 /** Parse completely before replacing a draft; one invalid row rejects the whole import. */
-export function parseNonLaborInvestmentRows(rows: unknown[][], range: MonthRange, subjects: readonly ConfigRecord[], departments: readonly ConfigRecord[], previous?: NonLaborInvestment): NonLaborInvestment {
+export function parseNonLaborInvestmentRows(rows: unknown[][], range: MonthRange, subjects: readonly ConfigRecord[], departments: readonly ConfigRecord[], previous?: NonLaborInvestment, unit: NonLaborAmountUnit = '元'): NonLaborInvestment {
   const months = nonLaborMonths(range)
   if (!months.length) throw new Error('请先填写里程碑时间以生成费用投入月份')
-  const columns = nonLaborSpreadsheetColumns(range)
+  const columns = nonLaborSpreadsheetColumns(range, unit)
   const header = (rows[0] ?? []).map(cell => String(cell ?? '').trim())
   while (header.at(-1) === '') header.pop()
   if (header.length !== columns.length || columns.some((column, index) => header[index] !== column.title)) {
-    throw new Error('表头或月份与当前时间范围不一致，请下载当前模板后重新导入')
+    throw new Error('表头、金额单位或月份与当前模板不一致，请下载当前模板后重新导入')
   }
   const items: NonLaborInvestmentItem[] = []
   const keys = new Set<string>()
@@ -51,7 +53,7 @@ export function parseNonLaborInvestmentRows(rows: unknown[][], range: MonthRange
         id: 'non-labor-import-' + crypto.randomUUID(),
         secondaryDepartment, tertiaryDepartment, secondarySubject, tertiarySubject,
         subjectId: subject?.id ?? '',
-        monthlyAmounts: Object.fromEntries(months.map((month, monthIndex) => [month, parseAmount(row[monthIndex + 4])])),
+        monthlyAmounts: Object.fromEntries(months.map((month, monthIndex) => [month, parseAmount(row[monthIndex + 4], unit)])),
       }
       const validated = validateNonLaborInvestment({ ...range, items: [item] }, subjects, undefined, departments).items[0]
       const key = nonLaborItemKey(validated)

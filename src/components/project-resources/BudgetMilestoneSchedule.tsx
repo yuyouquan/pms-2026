@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { App, Button, DatePicker } from 'antd'
 import dayjs from 'dayjs'
 import ResourceInlineField from '@/components/project-resources/ResourceInlineField'
@@ -10,6 +10,7 @@ import {
   calculateBudgetStageMetrics,
   createBudgetMilestoneSchedule,
   formatBudgetStageMetrics,
+  normalizeMachineBudgetScheduleStages,
   resolveBudgetScheduleDisplay,
   resolvePublishedBudgetScheduleModel,
   type BudgetScheduleCategory,
@@ -29,6 +30,8 @@ interface Props {
   fields: readonly MilestoneField[]
   modelSnapshot?: BudgetScheduleModelSnapshot
   readOnly: boolean
+  allowSchedule?: boolean
+  headerContent?: ReactNode
   canEdit: (key: string) => boolean
   onSaveDate: (key: string, value: string | null) => void
   onSchedule: (dates: Record<string, string>, modelSnapshot: BudgetScheduleModelSnapshot) => void
@@ -43,6 +46,8 @@ export default function BudgetMilestoneSchedule({
   fields,
   modelSnapshot,
   readOnly,
+  allowSchedule = true,
+  headerContent,
   canEdit,
   onSaveDate,
   onSchedule,
@@ -59,7 +64,7 @@ export default function BudgetMilestoneSchedule({
   const templateScopes = usePlanStore(state => state.configTemplateVersionScopes)
   const templateSnapshots = usePlanStore(state => state.publishedSnapshots)
   const displayModel = useMemo(() => {
-    if (modelSnapshot?.category === category) return modelSnapshot
+    if (modelSnapshot?.category === category) return normalizeMachineBudgetScheduleStages(modelSnapshot)
     return resolveBudgetScheduleDisplay({ configTemplateVersionScopes: templateScopes, publishedSnapshots: templateSnapshots }, category)
   }, [category, modelSnapshot, templateScopes, templateSnapshots])
   const metrics = useMemo(() => calculateBudgetStageMetrics(displayModel, dates), [dates, displayModel])
@@ -75,7 +80,7 @@ export default function BudgetMilestoneSchedule({
     })),
     ...(() => {
       const manual = fields.filter(field => !scheduledKeys.has(field.key))
-      return manual.length ? [{ id: 'manual', label: '后续阶段', fields: manual, metrics: undefined }] : []
+      return manual.length ? [{ id: 'manual', label: category === 'machine' ? '上市&生命周期' : category === 'tos' ? '上市迭代&维护' : '后续阶段', fields: manual, metrics: undefined }] : []
     })(),
   ]
 
@@ -91,7 +96,10 @@ export default function BudgetMilestoneSchedule({
   }
 
   return <section className="pms-budget-milestone-schedule" aria-label="里程碑信息">
-    {!readOnly && <div className="pms-budget-milestone-heading">
+    {(headerContent || !readOnly && allowSchedule) && <div className="pms-resource-basics-row">
+      {headerContent}
+      {headerContent && !readOnly && allowSchedule && <span className="pms-resource-basics-separator" aria-hidden="true">｜</span>}
+    {!readOnly && allowSchedule && <div className="pms-budget-milestone-heading">
       <div className="pms-budget-milestone-anchor-inputs" role="group" aria-label="排布日期范围">
         {anchors.map((anchor, index) => {
           const value = index === 0 ? firstDate : lastDate
@@ -113,6 +121,7 @@ export default function BudgetMilestoneSchedule({
         })}
         <Button type="primary" size="small" disabled={readOnly || !firstDate || !lastDate} onClick={runSchedule}>按模型排布</Button>
       </div>
+    </div>}
     </div>}
     <div className="pms-budget-milestone-scroll">
       <div className="pms-budget-milestone-track">

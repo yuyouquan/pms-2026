@@ -21,7 +21,7 @@ import type {
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
 import { comparePlanVersions } from '@/lib/planVersioning'
-import { buildLevel1TasksForProjectType } from '@/lib/level1PlanRules'
+import { buildLevel1TasksForProjectType, splitMachineLevel1DevelopmentStage } from '@/lib/level1PlanRules'
 import { pickScopedPlanPersistence } from '@/lib/projectSpaceLevel1Rules'
 import { getTemplateSnapshotKey, isRetiredLevel3SnapshotKey } from '@/lib/projectTemplateCompatibility'
 import {
@@ -50,7 +50,7 @@ import { withDefaultBudgetScheduleIntervals } from '@/lib/budgetMilestoneSchedul
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 15
+export const PLAN_STORE_VERSION = 16
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -502,6 +502,13 @@ export const migrateLevel1TasksForProjectType = (
   const defaults = getDefaultLevel1TasksForProjectType(projectType, withMockDates)
   if (!Array.isArray(tasks) || tasks.length === 0) return defaults
   const input = tasks.map(task => ({ ...task }))
+  if (projectType === PROJECT_CATEGORY_MACHINE) {
+    if (input.some(task => task.stableId === 'machine-stage-development')) {
+      const split = splitMachineLevel1DevelopmentStage(input)
+      if (split.length !== input.length || split.some((task, index) => task.taskName !== input[index]?.taskName || task.parentId !== input[index]?.parentId)) return split
+    }
+    if (matchesStableLevel1SeedSignature(input.filter(task => task.source !== 'custom'), MACHINE_V8_LEVEL1_STABLE_SIGNATURE)) return input
+  }
   if (!isRecognizedLevel1Seed(input)) return input
 
   const fixedTasks = input.filter(task => task?.source !== 'custom')
@@ -560,9 +567,6 @@ export const migrateLevel1TasksForProjectType = (
   ]))
   const getMigratedParent = (parent: any) => {
     const semantic = getLevel1Semantic(parent)
-    if (projectType === PROJECT_CATEGORY_MACHINE && semantic === 'stage-validation') {
-      return targetBySemantic.get('stage-development')
-    }
     return targetBySemantic.get(semantic)
   }
   const compatibilityParentsById = new Map<string, any>()
@@ -596,11 +600,27 @@ export const migrateLevel1TasksForProjectType = (
   })
   customTemporaryIdBySourceId.forEach((temporaryId, sourceId) => sourceIdById.set(temporaryId, sourceId))
   compatibilityParentsById.forEach((parent, sourceId) => sourceIdById.set(parent.id, sourceId))
-  return renumberMigratedLevel1DisplayIds([
+  const result = [
     ...migratedDefaults,
     ...compatibilityParentsById.values(),
     ...customTasks,
-  ], sourceIdById)
+  ]
+  if (projectType === PROJECT_CATEGORY_MACHINE) {
+    // Older seed upgrades may add missing nodes, but saved identities still belong to the user.
+    const reservedIds = new Set(input.map(task => task.id))
+    const usedIds = new Set<string>()
+    const nextIds = new Map<string, string>()
+    result.forEach(task => {
+      const originalId = sourceIdById.get(task.id)
+      const baseId = originalId || (reservedIds.has(task.id) ? task.stableId : task.id) || task.id
+      let id = baseId
+      for (let suffix = 1; usedIds.has(id) || !originalId && reservedIds.has(id); suffix += 1) id = `${baseId}-${suffix}`
+      usedIds.add(id)
+      nextIds.set(task.id, id)
+    })
+    return result.map(task => ({ ...task, id: nextIds.get(task.id)!, parentId: task.parentId ? nextIds.get(task.parentId) || task.parentId : task.parentId }))
+  }
+  return renumberMigratedLevel1DisplayIds(result, sourceIdById)
 }
 
 const INITIAL_LEVEL1_PROJECT_TYPES_BY_ID = Object.fromEntries(initialProjects.map(project => [
@@ -623,6 +643,18 @@ const isTosLevel1Snapshot = (key: string) => {
 }
 
 const RESERVED_NON_MARKET_LEVEL1_SCOPES = new Set(['technical', 'tdt', 'subproject', 'tos-type'])
+
+const isMachineLevel1Snapshot = (key: string, value: unknown) => {
+  if (/^template::整机产品项目::level1::[^:]+$/.test(key)) return true
+  const market = /^project::([^:]+)::([^:]+)::level1::[^:]+$/.exec(key)
+  if (market) return !RESERVED_NON_MARKET_LEVEL1_SCOPES.has(market[2])
+    && INITIAL_LEVEL1_PROJECT_TYPES_BY_ID[market[1]] !== PROJECT_CATEGORY_TECH
+  const ordinary = /^project::([^:]+)::level1::[^:]+$/.exec(key)
+  if (!ordinary) return false
+  const projectType = INITIAL_LEVEL1_PROJECT_TYPES_BY_ID[ordinary[1]]
+  return projectType === PROJECT_CATEGORY_MACHINE || !projectType && Array.isArray(value)
+    && value.some(task => task?.stableId === 'machine-stage-development' && !task.parentId)
+}
 
 const migratePublishedLevel1Snapshot = (
   key: string,
@@ -683,6 +715,7 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     'current' + 'Level3Scope',
   ].forEach(key => delete migrated[key])
   const shouldMigrateFiveStageLevel1 = persistedVersion < 9
+  const shouldSplitMachineStages = persistedVersion < 16
   const shouldAddTosPlanningPhase = persistedVersion < 15
   const shouldMigrateCapabilityLevel1 = persistedVersion < 8
   const shouldBackfillDemoMarkets = persistedVersion < 7
@@ -693,11 +726,13 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
       ? shouldAddTosPlanningPhase
       : projectType === PROJECT_CATEGORY_CAPABILITY
       ? shouldMigrateCapabilityLevel1
-      : shouldMigrateFiveStageLevel1
+      : shouldSplitMachineStages
     if (shouldMigrateProjectType) {
       migratedConfigTemplates[projectType] = projectType === PROJECT_CATEGORY_TOS_VERSION && !shouldMigrateFiveStageLevel1
         ? addTosPlanningPhase(migratedConfigTemplates[projectType], false)
-        : migrateLevel1TasksForProjectType(
+        : projectType === PROJECT_CATEGORY_MACHINE && !shouldMigrateFiveStageLevel1 && Array.isArray(migratedConfigTemplates[projectType])
+          ? splitMachineLevel1DevelopmentStage(migratedConfigTemplates[projectType])
+          : migrateLevel1TasksForProjectType(
         migratedConfigTemplates[projectType],
         projectType,
         false,
@@ -708,13 +743,14 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
   })
   const migratedSnapshots = Object.fromEntries(Object.entries(migrated.publishedSnapshots || {})
     .filter(([key]) => !isRetiredLevel3SnapshotKey(key))
-    .map(([key, value]) => [
-      key,
-      shouldMigrateFiveStageLevel1
+    .map(([key, value]) => {
+      const snapshot = shouldMigrateFiveStageLevel1
         ? migratePublishedLevel1Snapshot(key, value, shouldMigrateCapabilityLevel1)
         : shouldAddTosPlanningPhase && isTosLevel1Snapshot(key)
-          ? addTosPlanningPhase(value, !key.startsWith('template::')) : value,
-    ])) as Record<string, any[]>
+          ? addTosPlanningPhase(value, !key.startsWith('template::')) : value
+      return [key, shouldSplitMachineStages && isMachineLevel1Snapshot(key, snapshot) && Array.isArray(snapshot)
+        ? splitMachineLevel1DevelopmentStage(snapshot) : snapshot]
+    })) as Record<string, any[]>
   const initialPublishedSnapshots = createInitialTemplatePublishedSnapshots()
   Object.entries(initialPublishedSnapshots).forEach(([key, value]) => {
     if (migratedSnapshots[key] === undefined) migratedSnapshots[key] = value.map(item => ({ ...item }))
@@ -733,7 +769,8 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
       ...planData,
       tasks: shouldMigrateFiveStageLevel1
         ? migrateLevel1TasksForProjectType(planData.tasks, PROJECT_CATEGORY_MACHINE, true)
-        : planData.tasks,
+        : shouldSplitMachineStages && Array.isArray(planData.tasks)
+          ? splitMachineLevel1DevelopmentStage(planData.tasks) : planData.tasks,
     }]
   }))
   const migratedTosTypePlanDataByProjectId = Object.fromEntries(
@@ -831,7 +868,7 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
     tasks: Array.isArray(migrated.tasks)
       ? (shouldMigrateFiveStageLevel1
           ? migrateLevel1TasksForProjectType(migrated.tasks, PROJECT_CATEGORY_MACHINE, true)
-          : migrated.tasks)
+          : shouldSplitMachineStages ? splitMachineLevel1DevelopmentStage(migrated.tasks) : migrated.tasks)
       : LEVEL1_TASKS.map(task => ({ ...task })),
     marketPlanData: migratedMarketPlanData,
     tosTypePlanDataByProjectId: migratedTosTypePlanDataByProjectId,

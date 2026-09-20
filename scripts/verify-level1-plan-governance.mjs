@@ -451,10 +451,11 @@ assert.deepEqual(
     ['machine-stage-planning', null, '计划阶段', 'stage'],
     ['machine-ms-str2', 'machine-stage-planning', 'STR2', 'fixed-milestone'],
     ['machine-ms-str3', 'machine-stage-planning', 'STR3', 'fixed-milestone'],
-    ['machine-stage-development', null, '开发验证阶段', 'stage'],
+    ['machine-stage-development', null, '开发阶段', 'stage'],
     ['machine-ms-str4', 'machine-stage-development', 'STR4', 'fixed-milestone'],
     ['machine-ms-str4a', 'machine-stage-development', 'STR4A', 'fixed-milestone'],
-    ['machine-ms-str5', 'machine-stage-development', 'STR5', 'fixed-milestone'],
+    ['machine-stage-validation', null, '验证阶段', 'stage'],
+    ['machine-ms-str5', 'machine-stage-validation', 'STR5', 'fixed-milestone'],
     ['machine-stage-launch', null, '上市阶段', 'stage'],
     ['machine-stage-lifecycle', null, '生命周期阶段', 'stage'],
   ],
@@ -508,7 +509,7 @@ assert.deepEqual(
   ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'],
   'capability projects retain their existing six-stage structure',
 )
-assert.notDeepEqual(describeTemplate(capabilityTemplateTasks), describeTemplate(machineUndatedTemplate), 'capability projects never fall through to the machine five-stage template')
+assert.notDeepEqual(describeTemplate(capabilityTemplateTasks), describeTemplate(machineUndatedTemplate), 'capability projects never fall through to the machine template')
 const capabilityDatedTasks = rules.buildLevel1TasksForProjectType('能力建设项目', true)
 assert.equal(
   capabilityDatedTasks.filter(task => task.parentId).every(task => task.planEndDate && task.actualEndDate),
@@ -1574,7 +1575,7 @@ assert.equal(secondDefaultTosTasks[0].taskName, '规划阶段', 'mutating a retu
 const rootNames = tasks => tasks.filter(task => !task.parentId).map(task => task.taskName)
 assert.deepEqual(
   rootNames(plan.getDefaultLevel1TasksForProjectType('整机产品项目', false)),
-  ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'],
+  ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'],
   'machine defaults use the approved stages',
 )
 assert.deepEqual(
@@ -1692,7 +1693,7 @@ const persistedV8FiveStageInput = {
 const persistedV8FiveStageInputCopy = structuredClone(persistedV8FiveStageInput)
 const migratedV9 = plan.migratePlanStoreState(persistedV8FiveStageInput, 8)
 assert.deepEqual(persistedV8FiveStageInput, persistedV8FiveStageInputCopy, 'V8 to V9 migration never mutates persisted input')
-assert.deepEqual(rootNames(migratedV9.tasks), ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'], 'root tasks migrate from machine V8 to V9')
+assert.deepEqual(rootNames(migratedV9.tasks), ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'], 'root tasks retain the split machine stages through the current migration')
 assert.deepEqual(
   rootNames(migratedV9.configTemplateTasksByType['tOS版本项目'].filter(task => task.source === 'template')),
   ['规划阶段', '概念阶段', '计划阶段', '开发验证阶段', '上市迭代阶段', '维护阶段'],
@@ -1700,16 +1701,16 @@ assert.deepEqual(
 )
 assert.equal(migratedV9.marketPlanData.OP.marker, 'market-v8', 'market V8 sibling metadata survives V9 migration')
 assert.equal(migratedV9.tosTypePlanDataByProjectId['2'].Full.marker, 'tos-type-v8', 'tOS type V8 sibling metadata survives V9 migration')
-assert.equal(migratedV9.publishedSnapshots['project::1::OP::level1::v8'].find(task => task.stableId === 'machine-ms-str5').planEndDate, '2033-05-05', 'historical fixed-node dates survive the machine merge')
+assert.equal(migratedV9.publishedSnapshots['project::1::OP::level1::v8'].find(task => task.stableId === 'machine-ms-str5').planEndDate, '2033-05-05', 'historical fixed-node dates survive machine migration')
 const migratedCustomMarketSnapshot = migratedV9.publishedSnapshots['project::custom-machine-1::EU::level1::v8']
-assert.deepEqual(rootNames(migratedCustomMarketSnapshot), ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'], 'unknown machine projects and later-added markets migrate their V8 level-one snapshots')
+assert.deepEqual(rootNames(migratedCustomMarketSnapshot), ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'], 'unknown machine projects and later-added markets migrate their V8 level-one snapshots')
 assert.equal(migratedCustomMarketSnapshot.find(task => task.stableId === 'machine-ms-str5').planEndDate, '2033-05-05', 'unknown-project market migration preserves fixed milestone dates')
 assert.equal(migratedCustomMarketSnapshot.find(task => task.stableId === 'custom-machine-validation').planStartDate, '2033-05-06', 'unknown-project market migration preserves custom task data')
 assert.deepEqual(migratedV9.publishedSnapshots['project::custom-machine-1::technical::level1::v8'], nonMarketSnapshot, 'reserved technical scopes never migrate as markets')
 assert.deepEqual(migratedV9.publishedSnapshots['project::custom-machine-1::EU::level2::v8'], nonMarketSnapshot, 'market level-two snapshots never migrate as level one')
 assert.equal(migratedV9.publishedSnapshots['project::custom-machine-1::EU::level3::v8'], undefined, 'retired market level-three snapshots are removed')
 const migratedMachineCustom = migratedV9.tasks.find(task => task.stableId === 'custom-machine-validation')
-assert.equal(migratedV9.tasks.find(task => task.id === migratedMachineCustom.parentId)?.stableId, 'machine-stage-development', 'custom validation children move beneath the merged machine development-validation stage')
+assert.equal(migratedV9.tasks.find(task => task.id === migratedMachineCustom.parentId)?.stableId, 'machine-stage-validation', 'custom validation children remain beneath the machine validation stage')
 const migratedTosConfig = migratedV9.configTemplateTasksByType['tOS版本项目']
 const migratedTosCustom = migratedTosConfig.find(task => task.stableId === 'custom-tos-planning')
 const migratedTosCompatParent = migratedTosConfig.find(task => task.id === migratedTosCustom.parentId)
@@ -1875,7 +1876,7 @@ const legacySimpleSeed = [
   { id: '4', order: 4, taskName: '上市保障' },
 ]
 const migratedSimpleMachine = plan.migrateLevel1TasksForProjectType(legacySimpleSeed, '整机产品项目', true)
-assert.deepEqual(rootNames(migratedSimpleMachine), ['概念阶段', '计划阶段', '开发验证阶段', '上市阶段', '生命周期阶段'], 'the exact legacy eight-row seed migrates to machine stages')
+assert.deepEqual(rootNames(migratedSimpleMachine), ['概念阶段', '计划阶段', '开发阶段', '验证阶段', '上市阶段', '生命周期阶段'], 'the exact legacy eight-row seed migrates to machine stages')
 assert.equal(migratedSimpleMachine.find(task => task.stableId === 'machine-ms-str2').planEndDate, '2030-02-01', 'legacy rows without stable IDs preserve fixed-node dates by name')
 assert.equal(migratedSimpleMachine.find(task => task.stableId === 'machine-ms-str2').ownerMemo, 'normalized-name', 'legacy name matching is normalized only after the exact eight-row signature is confirmed')
 

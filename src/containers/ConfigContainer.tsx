@@ -25,7 +25,8 @@ import { useProjectStore } from '@/stores/project'
 import { useHasGlobalPermission } from '@/stores/permission'
 import { TransferConfig } from '@/components/transfer/TransferModule'
 import MrTemplateTable from '@/components/plans/MrTemplateTable'
-import { PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION, getProjectTypeFamilyKey } from '@/constants/projectTypes'
+import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION, getProjectTypeFamilyKey } from '@/constants/projectTypes'
+import { nextPlanTaskId, planTaskDisplayNumbers } from '@/lib/planTaskDisplayNumbers'
 import { DHTMLXGantt, DragHandle, SortableRow, DragHandleContext, ClickToEditDate, getTaskDepth, hasChildren, filterByCollapsed, getAllExpandableIds, type DHTMLXGanttColumn } from '@/components/shared/PlanHelpers'
 import { SortableColumnSettings } from '@/components/shared/SortableColumnSettings'
 import { ConfigWorkspaceShell } from '@/components/shared/CollapsibleWorkspace'
@@ -434,12 +435,14 @@ export default function ConfigContainer() {
       }
     } : setConfigTasks
 
-    const flatTasks = tableTasks.map((task: any) => ({ ...task, indentLevel: getTaskDepth(task, tableTasks) }))
+    const displayNumbers = selectedTemplateType === PROJECT_CATEGORY_MACHINE && planLevel === 'level1'
+      ? planTaskDisplayNumbers(tableTasks) : new Map<string, string>()
+    const flatTasks = tableTasks.map((task: any) => ({ ...task, displayNumber: displayNumbers.get(task.id) || task.id, indentLevel: getTaskDepth(task, tableTasks) }))
     const scopeKey = getScopeKey()
     const collapsedSet = scopeKey ? (collapsedNodes[scopeKey] || new Set<string>()) : new Set<string>()
     const expandEnabled = scopeKey !== null
     const visibleTasks = searchText
-      ? flatTasks.filter((task: any) => String(task.id).toLowerCase().includes(searchText.toLowerCase()) || String(task.taskName || task.activityName || '').toLowerCase().includes(searchText.toLowerCase()))
+      ? flatTasks.filter((task: any) => String(task.displayNumber).toLowerCase().includes(searchText.toLowerCase()) || String(task.taskName || task.activityName || '').toLowerCase().includes(searchText.toLowerCase()))
       : expandEnabled ? filterByCollapsed(flatTasks, collapsedSet) : flatTasks
 
     const getColumns = (): ColumnsType<any> => {
@@ -459,7 +462,7 @@ export default function ConfigContainer() {
             )}
             {expandEnabled && !hasChildren(record.id, tableTasks) && <span style={{ display: 'inline-block', width: 14 }} />}
             {canAddChild && <Tooltip title="添加子项"><Button type="text" size="small" icon={<PlusOutlined />} style={{ color: 'var(--pms-brand)' }} onClick={(e) => { e.stopPropagation(); handleAddSubTask(record.id) }} /></Tooltip>}
-            <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{id}</span>
+            <span style={{ fontWeight: depth === 0 ? 600 : 500, color: depth === 0 ? '#111827' : '#4b5563', fontSize: 13 }}>{record.displayNumber}</span>
           </div>
         )
       } })
@@ -565,7 +568,7 @@ export default function ConfigContainer() {
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
               const parentTasks = tableTasks.filter((t: any) => !t.parentId)
               const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map((t: any) => parseInt(t.id) || t.order)) : 0
-              const newId = String(maxOrder + 1)
+              const newId = nextPlanTaskId(tableTasks, null, maxOrder + 1)
               const newTask: any = { id: newId, order: maxOrder + 1, taskName: '新活动', status: '未开始', progress: 0, responsible: 'SPM', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
               if (isLevel2Custom && customTasks?.[0]?.planId) newTask.planId = customTasks[0].planId
               currentSetTasks([...tableTasks, newTask]); message.success(`已添加一级活动: ${newId}`)
@@ -594,7 +597,7 @@ export default function ConfigContainer() {
     }
     const siblingTasks = currentTasks.filter((t: any) => t.parentId === parentId)
     const newOrder = siblingTasks.length + 1
-    const newId = `${parentId}.${newOrder}`
+    const newId = nextPlanTaskId(currentTasks, parentId, newOrder)
     const newTask: any = { id: newId, parentId, order: newOrder, taskName: '新子任务', status: '未开始', progress: 0, responsible: 'SPM', predecessor: '', planStartDate: '', planEndDate: '', estimatedDays: 0, actualDays: 0 }
     if (isLevel2TaskContext && parentTask.planId) newTask.planId = parentTask.planId
     const parentIndex = currentTasks.findIndex((t: any) => t.id === parentId)
@@ -619,7 +622,7 @@ export default function ConfigContainer() {
       newTasks.splice(globalInsertIndex, 0, newTask)
       setConfigTasks(newTasks)
     }
-    message.success(`已添加子任务: ${newId}`)
+    message.success('已添加子任务')
   }
 
   // Action buttons
