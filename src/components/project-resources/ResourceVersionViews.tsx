@@ -9,7 +9,7 @@ import { buildResourceMonthlyView, type ResourceMonthlyRow } from '@/components/
 import type { ResourceVersion } from '@/components/project-resources/resourceVersionAdapter'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import ResourceInlineField from '@/components/project-resources/ResourceInlineField'
-import { groupResourceMonths, resourceInvestmentStages, sumMonthlyRow } from '@/components/project-resources/resourceMonthlyPresentation'
+import { groupResourceMonths, resourceInvestmentStages, summarizeResourceMonths, sumMonthlyRow } from '@/components/project-resources/resourceMonthlyPresentation'
 
 export default function ResourceVersionViews({ category, version, rows, readOnly, onSaveMonth }: {
   category: HrProjectCategory; version: ResourceVersion; rows: ResourceMonthlyRow[]; readOnly: boolean
@@ -27,30 +27,31 @@ export default function ResourceVersionViews({ category, version, rows, readOnly
   const view = selectedYear === 'all' ? complete : buildResourceMonthlyView(rows, version.id, range.startMonth ?? undefined, range.endMonth ?? undefined, selectedYear)
   const stages = resourceInvestmentStages(category, version)
   const groups = groupResourceMonths(view.months, stages)
+  const stats = summarizeResourceMonths(view, stages)
+  const periodLabel = selectedYear === 'all' ? '全周期' : `${selectedYear} 年`
   const visibleYears = selectedYear === 'all' ? complete.years : [selectedYear]
   const columns: ColumnsType<ResourceMonthlyRow> = [
     { title: '一级部门', dataIndex: 'primaryDepartment', width: 125, fixed: 'left', align: 'center' },
     { title: '二级部门', dataIndex: 'secondaryDepartment', width: 125, fixed: 'left', align: 'center' },
-    ...groups.map(group => ({ key: group.key, title: <span style={{ color: group.color }}>{group.label} · {amount(group.months.reduce((sum, month) => sum + view.totals[month], 0))}{unit}</span>,
+    ...groups.map(group => ({ key: group.key, title: <span className="pms-resource-month-stage" style={{ color: group.color }}><span>{group.label}</span><small>{amount(group.months.reduce((sum, month) => sum + view.totals[month], 0))}{unit}</small></span>,
       children: group.months.map(month => ({ title: <span className="pms-resource-month-label" style={{ color: group.color }}>{Number(month.slice(5))}月<small>{month.slice(0, 4)}</small></span>, key: month, width: 110, align: 'center' as const,
         render: (_: unknown, row: ResourceMonthlyRow) => {
           const label = `${row.primaryDepartment} ${row.secondaryDepartment} ${month}投入人月`
           return cost || readOnly ? amount(row.monthlyData[month] ?? 0) : <ResourceInlineField label={label} value={row.monthlyData[month] ?? 0} display={amount(row.monthlyData[month] ?? 0)}
             onSave={value => onSaveMonth(row.id, month, value === null ? 0 : Number(value))}
-            renderEditor={(value, change) => <InputNumber autoFocus controls={false} aria-label={label} min={0} precision={1} value={Number(value)} style={{ width: '100%' }} onChange={change} />} />
+            renderEditor={(value, change) => <InputNumber controls={false} aria-label={label} min={0} precision={1} value={Number(value)} style={{ width: '100%' }} onChange={change} />} />
         } })) })),
     ...visibleYears.map(value => ({ title: `${value}小计`, key: value, width: 110, align: 'center' as const,
       render: (_: unknown, row: ResourceMonthlyRow) => amount(sumMonthlyRow(row, complete.months.filter(month => month.startsWith(`${value}-`)))) })),
     { title: '全周期合计', key: 'all', width: 110, align: 'center', render: (_, row) => amount(sumMonthlyRow(row)) },
-    { title: '已分配合计', key: 'balance', width: 175, fixed: 'right', align: 'center', render: (_, row) => {
+    { title: '已分配合计', key: 'balance', width: 215, fixed: 'right', align: 'center', render: (_, row) => {
       const allocated = sumMonthlyRow(row), delta = Math.round((allocated - row.estimatedTotal) * 1000) / 1000
-      return <span className={Math.abs(delta) >= 0.0005 ? 'pms-resource-difference' : ''}>{amount(allocated)}<small>规定 {amount(row.estimatedTotal)}{Math.abs(delta) >= 0.0005 ? `（${delta > 0 ? '+' : '−'}${amount(Math.abs(delta))}）` : '（已平衡）'}</small></span>
+      return <span className={`pms-resource-month-balance${Math.abs(delta) >= 0.0005 ? ' pms-resource-difference' : ''}`}><span>{amount(allocated)}</span><small>规定 {amount(row.estimatedTotal)}{Math.abs(delta) >= 0.0005 ? `（${delta > 0 ? '+' : '−'}${amount(Math.abs(delta))}）` : '（已平衡）'}</small></span>
     } },
   ]
   const chartWidth = Math.max(640, view.months.length * 60)
   const peak = Math.max(1, ...Object.values(view.totals))
   const slot = (chartWidth - 64) / Math.max(1, view.months.length)
-  const peakMonth = complete.months.reduce((selected, month) => (complete.totals[month] ?? 0) > (complete.totals[selected] ?? -1) ? month : selected, '')
   return <section className="pms-resource-panel pms-resource-monthly" aria-label="当前版本月度投入">
     <div className="pms-resource-section-head pms-resource-monthly-heading"><h3>月度人力投入</h3>
       <div className="pms-resource-monthly-summary"><span>版本预估 <strong>{formatPersonMonth(version.estimatedInvestment)}</strong></span><span>已分配 <strong>{formatPersonMonth(complete.allocatedTotal)}</strong></span><span>全周期投入 <strong>{formatPersonMonth(complete.visibleTotal)}</strong> 人月</span></div>
@@ -60,10 +61,10 @@ export default function ResourceVersionViews({ category, version, rows, readOnly
       ...complete.years.map(value => { const months = complete.months.filter(month => month.startsWith(`${value}-`)); const total = months.reduce((sum, month) => sum + complete.totals[month], 0); return { key: value, label: `${value} 年 · ${months.length} 个月 · ${formatPersonMonth(total)} 人月 / ${(total * rate).toFixed(2)} 万元` } }),
     ]} />
     <div className="pms-resource-view-stats">
-      <div><span>全周期总投入</span><strong>{(complete.visibleTotal * rate).toFixed(2)} <small>万元</small></strong><span>合计 {formatPersonMonth(complete.visibleTotal)} 人月</span></div>
-      <div><span>月均人力（全周期）</span><strong>{formatPersonMonth(complete.months.length ? complete.visibleTotal / complete.months.length : 0)} <small>人</small></strong><span>峰值 {formatPersonMonth(complete.totals[peakMonth] ?? 0)} 人{peakMonth && `（${peakMonth}）`}</span></div>
+      <div><span>{periodLabel}总投入</span><strong>{(stats.total * rate).toFixed(2)} <small>万元</small></strong><span>合计 {formatPersonMonth(stats.total)} 人月{selectedYear !== 'all' && ` · 全周期 ${formatPersonMonth(complete.visibleTotal)} 人月`}</span></div>
+      <div><span>月均人力（{periodLabel}）</span><strong>{formatPersonMonth(stats.average)} <small>人</small></strong><span>峰值 {formatPersonMonth(stats.peak)} 人{stats.peakMonth && `（${stats.peakMonth}）`}</span></div>
       <div><span>计划区间</span><strong className="pms-resource-period">{complete.months[0] ?? '待填写'} → {complete.months.at(-1) ?? '待填写'}</strong><span>{complete.months.length} 个月 · 跨 {complete.years.length} 个年度</span></div>
-      <div><span>阶段分布（全周期）</span><div className="pms-resource-stage-legend">{stages.map(stage => <span key={stage.key} style={{ '--stage-color': stage.color } as CSSProperties}>{stage.label} {version.estimatedInvestment ? (stage.amount / version.estimatedInvestment * 100).toFixed(1) : '0.0'}%</span>)}</div></div>
+      <div><span>阶段分布（{periodLabel}）</span><div className="pms-resource-stage-legend">{stats.stages.map(stage => <span key={stage.key} style={{ '--stage-color': stage.color } as CSSProperties}>{stage.label} {stage.ratio.toFixed(1)}%</span>)}</div></div>
     </div>
     <Tabs activeKey={mode} onChange={setMode} items={[{ key: 'labor', label: '投入人月' }, { key: 'cost', label: '费用(万元)' }]} />
     {view.months.length ? <>
@@ -75,7 +76,7 @@ export default function ResourceVersionViews({ category, version, rows, readOnly
           <text x={x + (slot - 20) / 2} y="159" textAnchor="middle" className="pms-resource-chart-label">{month}</text>
         </g> })}
       </svg></div>
-      <Table<ResourceMonthlyRow> className="pms-table pms-hr-investment-table pms-resource-monthly-table" size="small" rowKey="id" columns={columns} dataSource={view.rows} pagination={false} scroll={{ x: 535 + visibleYears.length * 110 + view.months.length * 110 }} locale={{ emptyText: '当前版本暂无部门月度投入' }}
+      <Table<ResourceMonthlyRow> className="pms-table pms-hr-investment-table pms-resource-monthly-table" size="small" rowKey="id" columns={columns} dataSource={view.rows} pagination={false} scroll={{ x: 575 + visibleYears.length * 110 + view.months.length * 110 }} locale={{ emptyText: '当前版本暂无部门月度投入' }}
         summary={() => <Table.Summary.Row><Table.Summary.Cell index={0} colSpan={2} align="center">合计</Table.Summary.Cell>
           {view.months.map((month, index) => <Table.Summary.Cell key={month} index={index + 2} align="center">{amount(view.totals[month])}</Table.Summary.Cell>)}
           {visibleYears.map((value, index) => <Table.Summary.Cell key={value} index={view.months.length + index + 2} align="center">{amount(complete.months.filter(month => month.startsWith(`${value}-`)).reduce((sum, month) => sum + complete.totals[month], 0))}</Table.Summary.Cell>)}

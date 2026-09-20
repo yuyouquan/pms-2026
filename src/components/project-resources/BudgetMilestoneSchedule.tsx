@@ -10,6 +10,7 @@ import {
   calculateBudgetStageMetrics,
   createBudgetMilestoneSchedule,
   formatBudgetStageMetrics,
+  resolveBudgetScheduleDisplay,
   resolvePublishedBudgetScheduleModel,
   type BudgetScheduleCategory,
   type BudgetScheduleModelSnapshot,
@@ -59,16 +60,13 @@ export default function BudgetMilestoneSchedule({
   const templateSnapshots = usePlanStore(state => state.publishedSnapshots)
   const displayModel = useMemo(() => {
     if (modelSnapshot?.category === category) return modelSnapshot
-    try { return resolvePublishedBudgetScheduleModel({ configTemplateVersionScopes: templateScopes, publishedSnapshots: templateSnapshots }, category) }
-    catch { return undefined }
+    return resolveBudgetScheduleDisplay({ configTemplateVersionScopes: templateScopes, publishedSnapshots: templateSnapshots }, category)
   }, [category, modelSnapshot, templateScopes, templateSnapshots])
-  const metrics = useMemo(() => displayModel?.category === category
-    ? calculateBudgetStageMetrics(displayModel, dates)
-    : [], [category, dates, displayModel])
+  const metrics = useMemo(() => calculateBudgetStageMetrics(displayModel, dates), [dates, displayModel])
   const metricsByStage = new Map(metrics.map(metric => [metric.stageId, metric]))
   const fieldByKey = new Map(fields.map(field => [field.key, field]))
-  const scheduledKeys = new Set(displayModel?.category === category ? displayModel.milestones.map(milestone => milestone.fieldKey) : [])
-  const groups = displayModel?.category === category ? [
+  const scheduledKeys = new Set(displayModel.milestones.map(milestone => milestone.fieldKey))
+  const groups = [
     ...displayModel.stages.map(stage => ({
       id: stage.templateTaskId,
       label: stage.label,
@@ -79,7 +77,7 @@ export default function BudgetMilestoneSchedule({
       const manual = fields.filter(field => !scheduledKeys.has(field.key))
       return manual.length ? [{ id: 'manual', label: '后续阶段', fields: manual, metrics: undefined }] : []
     })(),
-  ] : [{ id: 'pending', label: '待排布', fields: [...fields], metrics: undefined }]
+  ]
 
   const runSchedule = () => {
     try {
@@ -93,7 +91,7 @@ export default function BudgetMilestoneSchedule({
   }
 
   return <section className="pms-budget-milestone-schedule" aria-label="里程碑信息">
-    <div className="pms-budget-milestone-heading">
+    {!readOnly && <div className="pms-budget-milestone-heading">
       <div className="pms-budget-milestone-anchor-inputs" role="group" aria-label="排布日期范围">
         {anchors.map((anchor, index) => {
           const value = index === 0 ? firstDate : lastDate
@@ -115,8 +113,7 @@ export default function BudgetMilestoneSchedule({
         })}
         <Button type="primary" size="small" disabled={readOnly || !firstDate || !lastDate} onClick={runSchedule}>按模型排布</Button>
       </div>
-      <h3 className="pms-hr-investment-section-title">里程碑信息</h3>
-    </div>
+    </div>}
     <div className="pms-budget-milestone-scroll">
       <div className="pms-budget-milestone-track">
         {groups.filter(group => group.fields.length > 0).map((group, index) => <div
@@ -126,7 +123,7 @@ export default function BudgetMilestoneSchedule({
         >
           <div className="pms-budget-milestone-stage-header">
             <strong>{group.label}</strong>
-            {group.metrics ? <span>{formatBudgetStageMetrics(group.metrics)}</span> : group.id === 'pending' ? <span>排布不可用/模型不可用</span> : null}
+            {group.metrics ? <span>{formatBudgetStageMetrics(group.metrics)}</span> : null}
           </div>
           <dl style={{ gridTemplateColumns: `repeat(${Math.max(group.fields.length, 1)}, minmax(142px, 1fr))` }}>
             {group.fields.map(field => <div key={field.key}>
@@ -137,7 +134,6 @@ export default function BudgetMilestoneSchedule({
                 readOnly={readOnly || !canEdit(field.key)}
                 onSave={value => onSaveDate(field.key, value ? String(value) : null)}
                 renderEditor={(value, change, popup) => <div {...inlineDateInputHandlers(change)}><DatePicker
-                  autoFocus
                   aria-label={field.label}
                   defaultValue={value ? dayjs(String(value)) : null}
                   preserveInvalidOnBlur

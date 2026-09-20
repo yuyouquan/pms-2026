@@ -5,7 +5,7 @@ import { canAccessHrProject, getHrRegistryProject, type HrRegistryRecord } from 
 import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 import { useTransferStore } from '@/stores/transfer'
-export default function HrSourceLink({ project, name }: { project?: HrRegistryRecord; name: string }) {
+export default function HrSourceLink({ project, name }: { project?: Pick<HrRegistryRecord, 'pmsProjectId' | 'status' | 'migrationIssue'>; name: string }) {
   const scopeId = useHrResourceScope()
   const projectName = <span style={{ color: 'var(--pms-brand-strong)', fontWeight: 600 }}>{name}</span>
   const status = project?.status === 'cancelled' ? <Tag>已取消 · 不可新增版本</Tag> : null

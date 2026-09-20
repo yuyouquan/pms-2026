@@ -26,6 +26,8 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
   const { message } = App.useApp()
   const store = useResourceStore(category)
   useProjectStore(state => state.currentLoginUser)
+  const boundFormalProject = useProjectStore(state => getProjectAttribute(project) === 'budget'
+    ? state.projects.find(item => item.id === project.boundFormalProjectId && getProjectAttribute(item) === 'formal') : undefined)
   usePermissionStore()
   const [createSource, setCreateSource] = useState<string | null>(null)
   const [logFilter, setLogFilter] = useState<string | null>(null)
@@ -65,6 +67,7 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
       <div className="pms-resource-version-context"><div className="pms-resource-section-head">
         <div className="pms-resource-version-meta"><span>预估投入 <strong>{formatPersonMonth(version.estimatedInvestment)}</strong> 人月</span>
           <span>创建人 {version.createdBy || '-'}</span><span>创建时间 {dayjs(version.createdAt).isValid() ? dayjs(version.createdAt).format('YYYY-MM-DD HH:mm') : '-'}</span>
+          {boundFormalProject && <div className="pms-resource-bound-project"><span>绑定正式项目</span><HrSourceLink project={{ pmsProjectId: boundFormalProject.id }} name={boundFormalProject.name} /></div>}
           {version.copiedFromVersionNumber && <span>复制自 {version.copiedFromVersionNumber}</span>}
         </div><Space key={`${version.id}-${version.lockState}-${version.isActive}`} size={4} wrap>
           {canManage && canCreate && <Tooltip title="复制为新版本"><Button type="text" aria-label="复制为新版本" icon={<CopyOutlined />} onClick={copy} /></Tooltip>}

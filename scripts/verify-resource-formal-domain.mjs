@@ -19,6 +19,17 @@ for (const kind of ['Machine','Tos','Technical','Capability']) {
  assert.ok(p)
  const scope = p.pmsProjectId
  const read = () => store.getState().projects.find(item => item.id === p.id)
+ const namedId = store.getState().createResourceVersion(p.id,'annual',scope,{versionNumber:'  方案 A-评审/修订（九月）  '})
+ const customName = 'V方案 A-评审/修订（九月）'
+ assert.equal(read().versions.find(v=>v.id===namedId).versionNumber,customName,`${kind}: arbitrary version names are accepted`)
+ await store.persist.rehydrate()
+ assert.equal(read().versions.find(v=>v.id===namedId).versionNumber,customName,'custom name survives persistence')
+ const customCopy = store.getState().createResourceVersion(p.id,'annual',scope,{versionNumber:'候选_β',sourceVersionId:namedId})
+ assert.equal(read().versions.find(v=>v.id===customCopy).copiedFromVersionNumber,customName)
+ const namesBefore=JSON.stringify(store.getState().projects)
+ for(const duplicate of [customName,` ${customName} `,'方案 A-评审/修订（九月）']) assert.throws(()=>store.getState().createResourceVersion(p.id,'annual',scope,{versionNumber:duplicate}),/重复|存在/)
+ for(const blank of ['','  ']) assert.throws(()=>store.getState().createResourceVersion(p.id,'annual',scope,{versionNumber:blank}),/请填写/)
+ assert.equal(JSON.stringify(store.getState().projects),namesBefore,'failed creation leaves versions and audit unchanged')
  const id = store.getState().createResourceVersion(p.id,'annual',scope,{versionNumber:'7.2'})
  const version = () => read().versions.find(v => v.id === id)
  assert.equal(version().versionNumber,'V7.2')

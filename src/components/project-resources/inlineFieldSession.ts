@@ -1,7 +1,7 @@
 /** Actual field event handlers, kept independent of React for executable lifecycle tests. */
 export function createInlineFieldSession(notify: () => void) {
-  const state = { editing: false, value: undefined as unknown, error: '' }
-  const cancel = () => { state.editing = false; state.error = ''; notify() }
+  const state = { editing: false, value: undefined as unknown, error: '', revision: 0 }
+  const cancel = () => { state.editing = false; state.error = ''; state.revision++; notify() }
   const save = (persist: (value: unknown) => void): boolean => {
     if (!state.editing) return true
     try { persist(state.value); cancel(); return true }

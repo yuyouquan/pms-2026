@@ -20,8 +20,8 @@ export function ResourceVersionCreateDialog({ versions, sourceId, onCreate, onCa
       finally { setSaving(false) }
     }}>
     <Form form={form} layout="vertical" initialValues={{ sourceVersionId: sourceId ?? '' }}>
-      <Form.Item name="versionNumber" label="版本号" rules={[{ required: true, message: '请填写版本号' }, { pattern: /^\d+(\.\d+)*$/, message: '请填写数字版本号，例如 0.3 或 1.2' }]}>
-        <Input autoFocus prefix="V" aria-label="新版本号" placeholder="例如 0.3" />
+      <Form.Item name="versionNumber" label="版本号" rules={[{ required: true, whitespace: true, message: '请填写版本号' }]}>
+        <Input autoFocus prefix="V" aria-label="新版本号" placeholder="自由填写，同一预算分类下不可重复" />
       </Form.Item>
       <Form.Item name="sourceVersionId" label="初始化方式">
         <Select aria-label="版本初始化方式" options={[{ value: '', label: '初始化空白版本' }, ...versions.map(version => ({ value: version.id, label: `复制 ${version.versionNumber}` }))]} />
