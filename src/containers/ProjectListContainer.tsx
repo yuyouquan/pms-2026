@@ -780,7 +780,7 @@ export default function ProjectListContainer() {
               </>
             ) : projectListView === 'card' ? (
               <>
-                <Row gutter={[8, 8]}>
+                <Row gutter={[12, 12]}>
                   {projectTypeFilter === PROJECT_CATEGORY_TECH
                     ? pagedCardRows.map(row => {
                         const technicalRow = row as ProjectSummaryRow

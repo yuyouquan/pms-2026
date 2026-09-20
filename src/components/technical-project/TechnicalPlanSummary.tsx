@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { App, Card, Empty, Space, Tag, Tooltip } from 'antd'
+import { App, Card, Empty, Space, Tooltip } from 'antd'
 import { CalendarOutlined, EditOutlined } from '@ant-design/icons'
 import { ClickToEditDate } from '@/components/shared/PlanHelpers'
 import { projectLevel1Plan, sumLevel1EstimatedDays } from '@/lib/level1PlanRules'
@@ -22,7 +22,6 @@ interface TechnicalPlanSummaryProps {
   canEditPlan: boolean
 }
 
-const TECHNICAL_STAGE_COLORS = ['#1890ff', '#52c41a', '#722ed1', '#faad14', '#eb2f96', '#13c2c2'] as const
 
 const displayCycle = (days: number | null) => days === null ? '-' : days
 
@@ -106,7 +105,7 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
 
   return planCard(
     <div className="technical-plan-summary" role="region" aria-label={`${label}计划信息内容`} tabIndex={0}>
-      <table aria-label={projectionMode === 'technical-subproject' ? `${label}版本活动` : `${label}版本阶段里程碑`}>
+      <table className="pms-phase-header-table" aria-label={projectionMode === 'technical-subproject' ? `${label}版本活动` : `${label}版本阶段里程碑`}>
         <thead>
           {projectionMode === 'technical-subproject' ? (
             <tr data-technical-plan-header="single-row">
@@ -119,25 +118,19 @@ export default function TechnicalPlanSummary({ scope, label, canEditPlan }: Tech
               <tr data-technical-plan-header="grouped">
                 <th scope="col" className="technical-plan-summary-sticky-version" rowSpan={2}>版本</th>
                 <th scope="col" className="technical-plan-summary-sticky-cycle" rowSpan={2}>开发周期</th>
-                {groups.map((group, index) => {
-                  const stageColor = TECHNICAL_STAGE_COLORS[index % TECHNICAL_STAGE_COLORS.length]
+                {groups.map(group => {
                   return (
                     <th
                       key={getTechnicalPlanRowKey(group.stage)}
                       scope="colgroup"
-                      className="technical-plan-summary-stage"
+                      className="technical-plan-summary-stage pms-phase-header-stage"
                       colSpan={group.width}
-                      style={{
-                        background: `${stageColor}10`,
-                        color: stageColor,
-                        borderBottom: `2px solid ${stageColor}`,
-                      }}
                     >
-                      <div className="technical-plan-summary-stage-content">
+                      <div className="pms-phase-header-label">
                         <span>{group.stage.taskName}</span>
-                        <Tag color="blue" style={{ margin: 0, fontSize: 11 }}>
+                        <span className="pms-phase-header-duration">
                           {group.stage.estimatedDays == null ? '-' : `${group.stage.estimatedDays}天`}
-                        </Tag>
+                        </span>
                       </div>
                     </th>
                   )

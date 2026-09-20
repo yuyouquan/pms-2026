@@ -421,7 +421,7 @@ export default function HistoryVersionSpace() {
         className="pms-toolbar"
         size="small"
         style={{ borderRadius: 8, marginBottom: 12 }}
-        styles={{ body: { padding: '10px 16px' } }}
+        styles={{ body: { padding: 'var(--pms-card-padding)' } }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>

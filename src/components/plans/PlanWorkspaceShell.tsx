@@ -36,7 +36,7 @@ export function PlanWorkspaceShell({
         className="pms-plan-toolbar pms-toolbar"
         size="small"
         style={{ marginBottom: 8, borderRadius: 8 }}
-        styles={{ body: { padding: '8px 16px' } }}
+        styles={{ body: { padding: 'var(--pms-card-padding)' } }}
       >
         <Row justify="space-between" align="middle" gutter={[12, 8]}>
           <Col>

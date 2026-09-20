@@ -13,7 +13,7 @@ import {
   Empty,
   Progress,
 } from 'antd'
-import { CalendarOutlined } from '@ant-design/icons'
+import { CalendarOutlined, UserOutlined } from '@ant-design/icons'
 import {
   PROJECT_TYPE_COLORS,
   isMachineProjectType,
@@ -78,6 +78,16 @@ export type KanbanColumn = {
 
 // ========== ProjectCard ==========
 
+// Reference-card status hues, darkened enough to keep the white labels readable.
+const PROJECT_CARD_STATUS_FILLS: Record<string, string> = {
+  '待立项': '#006be6', '筹备中': '#006be6',
+  '在研': '#007da8', '进行中': '#007da8',
+  '上市': '#008675', '已完成': '#008675',
+  '转维': '#6047ff', 'EOS': '#9f28d3',
+  '暂停': '#d91553', '已暂停': '#d91553',
+  '已取消': '#666d75', '规划中': '#b95b00',
+}
+
 export interface ProjectCardProps {
   project: ProjectType
   setSelectedProject: (project: ProjectType) => void
@@ -107,8 +117,6 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
     ? `${classification.projectCategory} · ${classification.secondaryCategory}`
     : classification.projectCategory
 
-  // Project classification color mapping
-  const typeColor = PROJECT_TYPE_COLORS[classification.projectCategory] || { bg: 'rgba(140,140,140,0.08)', color: '#8c8c8c' }
   const openProject = () => {
     if (!canOpen) {
       onOpenDenied?.()
@@ -121,13 +129,6 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
     setSelectedProject(project)
     setProjectSpaceModule('basic')
     setActiveModule('projectSpace')
-  }
-
-  // Status tag gradient styles
-  const statusTagStyle: Record<string, React.CSSProperties> = {
-    '进行中': { background: 'var(--info-light)', color: '#1d4ed8', border: 'none' },
-    '已完成': { background: 'linear-gradient(135deg, #ecfdf5, #d1fae5)', color: '#065f46', border: 'none' },
-    '筹备中': { background: 'linear-gradient(135deg, #fffbeb, #fef3c7)', color: '#92400e', border: 'none' },
   }
 
   const fieldItem = (label: string, value: string | undefined) => value ? (
@@ -154,27 +155,21 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
     >
       {/* 头部: 项目名 + 状态 */}
       <div className="pms-project-card-header">
-        <div className="pms-project-card-identity">
-          <div className="pms-project-card-title">
-            {project.name}
-          </div>
-          {isWholeMachine && project.marketName && (
-            <div className="pms-project-card-market">市场名: {project.marketName}</div>
-          )}
-          <Tag
-            className="pms-project-card-type"
-            color="default"
-            title={classificationLabel}
-            style={{ background: typeColor.bg, color: typeColor.color }}
-          >
-            {classificationLabel}
-          </Tag>
+        <div className="pms-project-card-title" title={project.name}>
+          {project.name}
         </div>
         <Tag
           className="pms-project-card-status"
-          color={statusConf.tagColor}
-          style={statusTagStyle[project.status] || {}}
+          style={{ '--pms-card-status-fill': PROJECT_CARD_STATUS_FILLS[project.status] || statusConf.color } as React.CSSProperties}
         >{project.status}</Tag>
+      </div>
+      {isWholeMachine && project.marketName && (
+        <div className="pms-project-card-market" title={project.marketName}>市场名: {project.marketName}</div>
+      )}
+      <div className="pms-project-card-classification">
+        <Tag className="pms-project-card-type" title={classificationLabel}>
+          {classification.projectCategory}
+        </Tag>
       </div>
 
       {/* 中间: 类型差异化字段 */}
@@ -203,7 +198,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
       {/* 底部: 项目经理 + 更新时间 */}
       <div className="pms-project-card-footer">
         <Space size={6} className="pms-project-card-owner">
-          <Avatar size={20} className="pms-project-card-avatar">{project.spm[0]}</Avatar>
+          <Avatar size={20} icon={<UserOutlined />} className="pms-project-card-avatar" />
           <span>{project.spm}</span>
         </Space>
         <span className="pms-project-card-updated">{project.updatedAt}</span>
