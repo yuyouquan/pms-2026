@@ -163,7 +163,7 @@ const legacy = rules.normalizeHrVersionSequence([
  {id:'old-b',budgetType:'annual',minorVersion:1,majorVersion:0,versionNumber:'V0.1',createdAt:'2026-02-01',batch:5},
  {id:'old-c',budgetType:'projectEstimate',minorVersion:0,majorVersion:1,versionNumber:'V1.0',createdAt:'2026-01-01'},
 ])
-eq(legacy.map(v=>v.versionNumber),['V0.1','V0.2','V0.1'],'legacy lock numbers migrate per budget chronology')
+eq(legacy.map(v=>v.versionNumber),['V1.0','V0.1','V1.0'],'legacy display names remain historical data; internal sort sequence migrates independently')
 eq(legacy[0].milestones.conceptStart,'2025-01-01','migration preserves historical dates')
 eq(legacy[1].batch,5,'migration preserves batch')
 const rounding = load('src/lib/hrMonthlyRounding.ts')

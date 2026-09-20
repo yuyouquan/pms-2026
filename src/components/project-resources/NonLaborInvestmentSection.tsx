@@ -143,12 +143,12 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
           }} />
       } },
     { title: '预估投入合计', key: 'total', width: 140, align: 'center' as const,
-      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(itemTotal(item)) : <InputNumber
+      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(itemTotal(item)) : <InputNumber controls={false}
         aria-label={`${item.secondaryDepartment || '未选择部门'} ${item.tertiarySubject || '未选择科目'} 预估投入合计（元）`}
         min={0} precision={2} step={1} style={{ width: '100%' }} value={itemTotal(item)}
         onChange={amount => applyNonLaborItemTotalChange({ value, itemId: item.id, amount, inline, onChange, onItemTotalChange, onError: text => message.warning(text) })} /> },
     ...months.map(month => ({ title: dayjs(month + '-01').format('YYYY年MM月'), key: month, width: 126, align: 'center' as const,
-      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(item.monthlyAmounts[month] ?? 0) : <InputNumber
+      render: (_: unknown, item: NonLaborInvestmentItem) => readOnly ? formatNonLaborAmount(item.monthlyAmounts[month] ?? 0) : <InputNumber controls={false}
         aria-label={[item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject, month, '非人力投入（元）'].join(' ')} min={0} precision={2} step={1}
         style={{ width: '100%' }} value={item.monthlyAmounts[month] ?? 0}
         onChange={amount => update(item.id, { monthlyAmounts: { ...item.monthlyAmounts, [month]: amount ?? 0 } })} /> })),

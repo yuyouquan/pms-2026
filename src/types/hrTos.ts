@@ -1,3 +1,4 @@
+import type { ResourceOperationLog } from '@/types/resourceOperations'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import type { BudgetScheduleModelSnapshot } from '@/lib/budgetMilestoneScheduling'
 /* ── HR Pipeline - tOS Project Types ───────────────────────────────── */
@@ -93,6 +94,8 @@ export interface TosVersionOperationLog {
 
 /** 单项目版本 */
 export interface HrTosVersion {
+  customVersionNumber?: boolean
+  departmentPhaseRatios?: Record<string, Record<string, number>>
   nonLaborInvestment?: NonLaborInvestment
   id: string
   projectId: string
@@ -131,6 +134,7 @@ export interface HrTosVersion {
 
 /** tOS 项目 */
 export interface HrTosProject {
+  resourceOperationLogs?: ResourceOperationLog[]
   pmsProjectId?: string
   migrationIssue?: string
   legacyHrSnapshot?: unknown

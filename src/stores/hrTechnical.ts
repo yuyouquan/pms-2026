@@ -1,3 +1,5 @@
+import { resourceRatiosAfterDepartmentWrite } from '@/lib/resourceRatios'
+import { createResourceStoreState } from '@/lib/resourceStoreActions'
 import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
 import { seedExistingMockNonLabor } from '@/mock/nonLaborInvestment'
 import { useHrConfigStore } from '@/stores/hrConfig'
@@ -77,7 +79,7 @@ function generateDepartmentMonthlyRecords(
     versionNumber: version.versionNumber,
             batch: version.batch ?? null,
     versionLockState: version.lockState,
-    estimatedTotal: split.estimatedTotal,
+    estimatedTotal: version.departmentInvestments.find(row => row.id === split.departmentId)?.estimatedInvestment ?? split.estimatedTotal,
     monthlyData: split.monthlyData,
     isEdited: false,
   }))
@@ -233,7 +235,7 @@ const ALL_BUDGET_TYPES: BudgetType[] = ['annual', 'projectEstimate', 'projectBud
 
 export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>()(
   persist(
-    (set, get) => ({
+    (rawSet, get) => createResourceStoreState('technical', rawSet, get, (set) => ({
       registryMigrationComplete: false,
       projects: synchronizeProjects(INITIAL_PROJECTS),
       monthlyInvestments: seedResourceMonthlyEdits(syncMonthlyInvestments(INITIAL_PROJECTS, [])),
@@ -429,6 +431,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
               milestones: permittedMilestones ? { ...v.milestones, ...permittedMilestones } : v.milestones,
               nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
               estimatedInvestment: Math.round(newEstimatedTotal * 10) / 10,
+              departmentPhaseRatios: resourceRatiosAfterDepartmentWrite('technical', v, departmentInvestments),
               departmentInvestments,
               operationLogs: [
                 ...v.operationLogs,
@@ -478,7 +481,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
           version.milestones,
         )
       },
-    }),
+    }), (projects, rows) => syncMonthlyInvestments(projects as HrTechnicalProject[], rows as TechMonthlyInvestment[])),
     {
       storage: createJSONStorage(() => pmsLocalStorage),
       name: 'pms-hr-technical',

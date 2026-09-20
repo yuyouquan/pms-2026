@@ -1,3 +1,4 @@
+import type { ResourceOperationLog } from '@/types/resourceOperations'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import type { BudgetScheduleModelSnapshot } from '@/lib/budgetMilestoneScheduling'
 import type { DepartmentInvestmentRow } from '@/types/resourceInvestment'
@@ -52,6 +53,8 @@ export interface MilestoneNodes {
 
 /** 单项目版本 */
 export interface HrMachineVersion {
+  customVersionNumber?: boolean
+  departmentPhaseRatios?: Record<string, Record<string, number>>
   nonLaborInvestment?: NonLaborInvestment
   id: string
   projectId: string
@@ -96,6 +99,7 @@ export interface HrMachineVersion {
 
 /** 整机产品项目 */
 export interface HrMachineProject {
+  resourceOperationLogs?: ResourceOperationLog[]
   pmsProjectId?: string
   migrationIssue?: string
   legacyHrSnapshot?: unknown

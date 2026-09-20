@@ -1,3 +1,4 @@
+import type { ResourceOperationLog } from '@/types/resourceOperations'
 import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 /* ── HR Pipeline - Capability Building Project Types ────────────────── */
 
@@ -48,6 +49,8 @@ export interface CapabilityDepartmentInvestment {
 
 /** 单项目版本 */
 export interface HrCapabilityVersion {
+  customVersionNumber?: boolean
+  departmentPhaseRatios?: Record<string, Record<string, number>>
   nonLaborInvestment?: NonLaborInvestment
   id: string
   projectId: string
@@ -86,6 +89,7 @@ export interface HrCapabilityVersion {
 
 /** 能力建设项目 */
 export interface HrCapabilityProject {
+  resourceOperationLogs?: ResourceOperationLog[]
   pmsProjectId?: string
   migrationIssue?: string
   legacyHrSnapshot?: unknown

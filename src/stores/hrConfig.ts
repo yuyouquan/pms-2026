@@ -21,7 +21,7 @@ function inheritModelVersionStatus(records: ConfigRecord[], record: ConfigRecord
   return { ...record, enabled: (group[0] ?? record).enabled !== false }
 }
 
-export const canEditHrConfig = (moduleKey: ConfigModuleKey) => !['hrModel', 'nonLaborSubject'].includes(moduleKey) || hasGlobalPermission(useProjectStore.getState().currentLoginUser, moduleKey === 'hrModel' ? 'configCenter:hrModelEdit' : 'configCenter:nonLaborSubjectEdit')
+export const canEditHrConfig = (moduleKey: ConfigModuleKey) => !['hrModel', 'nonLaborSubject', 'feeRate'].includes(moduleKey) || hasGlobalPermission(useProjectStore.getState().currentLoginUser, moduleKey !== 'nonLaborSubject' ? 'configCenter:hrModelEdit' : 'configCenter:nonLaborSubjectEdit')
 
 /* ── State / Actions interfaces ────────────────────────────────────── */
 
@@ -35,6 +35,7 @@ export interface HrConfigState {
 }
 
 export interface HrConfigActions {
+  setFeeRate: (value: number) => void
   /** 新增记录 */
   addRecord: (moduleKey: ConfigModuleKey, values: ConfigFormValues) => void
   /** 更新记录 */
@@ -61,8 +62,13 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       editingId: null,
       showEditModal: false,
 
+      setFeeRate: value => {
+        if (!canEditHrConfig('feeRate')) throw new Error('无费率编辑权限')
+        if (!Number.isFinite(value) || value < 0) throw new Error('费率必须为非负数字')
+        set(s => ({ data: { ...s.data, feeRate: [{ id: 'resource-fee-rate', value, enabled: true }] } }))
+      },
       addRecord: (moduleKey, values) => set((s) => {
-        if (!canEditHrConfig(moduleKey)) return s
+        if (!canEditHrConfig(moduleKey) || moduleKey === 'feeRate') return s
         const record: ConfigRecord = {
           id: `cfg-${moduleKey}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           ...values,
@@ -86,7 +92,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       }),
 
       updateRecord: (moduleKey, recordId, values) => set((s) => {
-        if (!canEditHrConfig(moduleKey)) return s
+        if (!canEditHrConfig(moduleKey) || moduleKey === 'feeRate') return s
         const records = s.data[moduleKey] ?? []
         if (moduleKey === 'nonLaborSubject') {
           values = { ...values }
@@ -108,7 +114,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
         }
       }),
 
-      deleteRecord: (moduleKey, recordId) => set((s) => !canEditHrConfig(moduleKey) ? s : ({
+      deleteRecord: (moduleKey, recordId) => set((s) => (!canEditHrConfig(moduleKey) || moduleKey === 'feeRate') ? s : ({
         data: {
           ...s.data,
           [moduleKey]: (s.data[moduleKey] ?? []).filter(r => r.id !== recordId),
@@ -116,7 +122,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       })),
 
       toggleRecordStatus: (moduleKey, recordId, requestedEnabled) => set((s) => {
-        if (!canEditHrConfig(moduleKey)) return s
+        if (!canEditHrConfig(moduleKey) || moduleKey === 'feeRate') return s
         const records = s.data[moduleKey] ?? []
         const selected = records.find(record => record.id === recordId)
         if (!selected) return s
@@ -133,7 +139,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       }),
 
       importRecords: (moduleKey, records) => set((s) => {
-        if (!canEditHrConfig(moduleKey)) return s
+        if (!canEditHrConfig(moduleKey) || moduleKey === 'feeRate') return s
         const combined = [...(s.data[moduleKey] ?? [])]
         records.forEach(record => {
           const normalized = moduleKey === 'nonLaborSubject'

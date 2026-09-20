@@ -8,6 +8,7 @@ export const isHrBatch = (value: unknown): value is number => Number.isInteger(v
 export const formatHrBatch = (value?: number | null) => isHrBatch(value) ? `第${value}批` : '-'
 
 export interface HrVersionIdentity {
+  customVersionNumber?: boolean
   id: string
   budgetType: string
   minorVersion: number
@@ -41,16 +42,19 @@ export function isHrVersionEditable(
 export const isLatestHrVersion = (project: { versions: readonly HrVersionIdentity[] }, version: HrVersionIdentity) => (
   getLatestHrVersion(project.versions, version.budgetType)?.id === version.id
 )
-export const nextHrMinorVersion = (versions: readonly HrVersionIdentity[], budgetType: string) => (
-  Math.max(0, ...versions.filter(v => v.budgetType === budgetType).map(v => v.minorVersion)) + 1
-)
+export function nextHrMinorVersion(versions: readonly HrVersionIdentity[], budgetType: string) {
+  const group = versions.filter(version => version.budgetType === budgetType)
+  let sequence = Math.max(0, ...group.map(version => version.minorVersion)) + 1
+  while (group.some(version => version.versionNumber === `V0.${sequence}`)) sequence++
+  return sequence
+}
 
-/** Convert legacy major/lock numbering once, retaining record IDs and all historical values. */
+/** Normalize internal sort sequence without changing saved display names or historical snapshots. */
 export function normalizeHrVersionSequence<T extends HrVersionIdentity>(versions: readonly T[]): T[] {
   const sequence = new Map<string, number>()
   for (const budgetType of HR_BUDGET_TYPES) {
     const group = versions.filter(v => v.budgetType === budgetType)
-    const valid = group.every(v => v.majorVersion === 0 && v.minorVersion >= 1 && v.versionNumber === `V0.${v.minorVersion}`)
+    const valid = group.every(v => v.majorVersion === 0 && v.minorVersion >= 1)
       && new Set(group.map(v => v.minorVersion)).size === group.length
     if (valid) continue
     [...group].sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0))
@@ -58,7 +62,7 @@ export function normalizeHrVersionSequence<T extends HrVersionIdentity>(versions
   }
   const normalized = versions.map(version => {
     const minorVersion = sequence.get(version.id) ?? version.minorVersion
-    return { ...version, majorVersion: 0, minorVersion, versionNumber: `V0.${minorVersion}`, batch: isHrBatch(version.batch) ? version.batch : null }
+    return { ...version, majorVersion: 0, minorVersion, versionNumber: version.versionNumber || `V0.${minorVersion}`, batch: isHrBatch(version.batch) ? version.batch : null }
   })
   return normalized.map(version => {
     const group = normalized.filter(item => item.budgetType === version.budgetType)
@@ -165,6 +169,9 @@ export function copyHrVersionSnapshot<P extends LifecycleProject, M extends { id
     copiedFromVersionId: source.id, copiedFromVersionNumber: source.versionNumber, operationLogs: [] }
   if ('departmentInvestments' in version && Array.isArray(version.departmentInvestments)) {
     version.departmentInvestments = version.departmentInvestments.map(row => ({ ...row, id: String(row.id).replaceAll(source.id, id) }))
+  }
+  if ('departmentPhaseRatios' in version && version.departmentPhaseRatios) {
+    version.departmentPhaseRatios = Object.fromEntries(Object.entries(version.departmentPhaseRatios).map(([rowId, ratios]) => [rowId.replaceAll(source.id, id), ratios]))
   }
   const rows = monthlyInvestments.filter(row => row.versionId === source.id).map(row => ({
     ...structuredClone(row), id: row.id.includes(source.id) ? row.id.replaceAll(source.id, id) : `${id}-${row.id}`,

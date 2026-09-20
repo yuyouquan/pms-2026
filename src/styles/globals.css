@@ -9259,3 +9259,49 @@ input.ant-input,
 .pms-resource-batch-field { display: inline-flex; align-items: center; gap: 6px; }
 .pms-resource-version-tabs .ant-tabs-nav { margin-bottom: 4px; }
 .pms-resource-version-tabs .ant-tag { margin-inline-end: 0; font-size: 11px; }
+
+/* Resource workspace panels share the compact project-space rhythm. */
+.pms-resource-workspace { gap: 8px; }
+.pms-resource-version-context { padding: 6px 12px; }
+.pms-resource-version-meta { gap: 8px 20px; margin: 0; }
+.pms-resource-version-tabs > .ant-tabs-nav { margin: 0; }
+.pms-resource-version-tabs > .ant-tabs-content-holder { display: none; }
+.pms-resource-version-tabs .ant-tabs-extra-content { margin-left: 12px; }
+.pms-resource-inline-detail { display: grid; gap: 8px; min-width: 0; }
+.pms-resource-panel { padding: 12px; min-width: 0; background: var(--pms-surface-solid); border: 1px solid var(--pms-border); border-radius: var(--pms-radius-surface); }
+.pms-resource-panel > .ant-tabs > .ant-tabs-nav { margin-bottom: 8px; }
+.pms-resource-panel > .ant-tabs > .ant-tabs-nav .ant-tabs-tab { padding-top: 2px; padding-bottom: 8px; font-weight: 600; }
+.pms-resource-metadata { display: grid; grid-template-columns: repeat(6, minmax(110px, 1fr)); gap: 12px; margin: 0 0 10px; overflow-x: auto; }
+.pms-resource-metadata dt { font-size: 12px; font-weight: 700; color: var(--pms-text-primary); margin-bottom: 2px; }
+.pms-resource-metadata dd { margin: 0; min-height: 28px; font-size: 13px; }
+.pms-resource-metadata .pms-resource-inline-trigger { padding-left: 0; }
+.pms-resource-basics :is(.pms-budget-milestone-schedule, .pms-hr-milestone-details) { margin-bottom: 0; }
+.pms-resource-panel .pms-non-labor-section > h3 { display: none; }
+.pms-resource-workspace .ant-input-number-input,
+.pms-resource-fee-config .ant-input-number-input { border: 0 !important; box-shadow: none !important; outline: 0 !important; background: transparent !important; border-radius: 0 !important; }
+.pms-resource-workspace .ant-input-number-handler-wrap { display: none; }
+.pms-resource-workspace .ant-table-cell { text-align: center; }
+.pms-resource-workspace .ant-table-cell .pms-resource-inline-field { justify-content: center; }
+.pms-resource-workspace .ant-table-cell .ant-input-number-input { text-align: center; }
+.pms-resource-monthly-heading { justify-content: flex-start; gap: 20px; }
+.pms-resource-monthly-summary { padding: 0; gap: 18px; }
+.pms-resource-monthly-summary strong { font-size: 16px; }
+.pms-resource-year-tabs > .ant-tabs-nav { margin: 8px 0; }
+.pms-resource-year-tabs > .ant-tabs-nav .ant-tabs-tab { padding: 4px 10px; border: 1px solid var(--pms-border); border-radius: 16px; margin-left: 6px; font-size: 12px; }
+.pms-resource-year-tabs > .ant-tabs-nav .ant-tabs-tab:first-child { margin-left: 0; }
+.pms-resource-year-tabs > .ant-tabs-nav .ant-tabs-tab-active { background: var(--pms-brand-surface); border-color: var(--pms-brand); }
+.pms-resource-year-tabs .ant-tabs-ink-bar, .pms-resource-year-tabs > .ant-tabs-content-holder { display: none; }
+.pms-resource-year-tabs > .ant-tabs-nav::before { border-bottom: 0; }
+.pms-resource-view-stats { display: grid; grid-template-columns: 1fr 1fr 1fr 1.4fr; gap: 8px; margin: 4px 0 10px; }
+.pms-resource-view-stats > div { display: flex; flex-direction: column; justify-content: space-between; gap: 5px; padding: 10px 12px; border: 1px solid var(--pms-border); border-radius: 8px; font-size: 12px; color: var(--pms-text-secondary); }
+.pms-resource-view-stats strong { font-size: 21px; color: var(--pms-text-primary); font-variant-numeric: tabular-nums; }
+.pms-resource-view-stats strong small { font-size: 12px; font-weight: 400; }
+.pms-resource-view-stats .pms-resource-period { font-size: 16px; white-space: nowrap; }
+.pms-resource-stage-legend { display: flex; gap: 6px 12px; flex-wrap: wrap; color: var(--pms-text-primary); }
+.pms-resource-stage-legend span::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; background: var(--stage-color); }
+.pms-resource-month-label small, .pms-resource-monthly-table td small, .pms-resource-difference small { display: block; font-size: 11px; line-height: 1.5; }
+.pms-resource-month-label small { font-weight: 400; opacity: .75; }
+.pms-resource-difference { color: #a34c10; }
+.pms-resource-log-changes { max-width: 540px; max-height: 150px; overflow: auto; overflow-wrap: anywhere; font-size: 12px; }
+@media (max-width: 1050px) { .pms-resource-view-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 680px) { .pms-resource-view-stats { grid-template-columns: 1fr; } .pms-resource-monthly-summary { gap: 10px; } }

@@ -104,13 +104,7 @@ const version = project.versions.at(-1)
 const scopeId = project.pmsProjectId
 const edit = patch => machineStore.getState().updateVersionInline(project.id, version.id, patch, scopeId)
 const row = allocation.resolveMachineDepartmentInvestments(version)[0]
-edit({ type: 'departments', rows: allocation.resolveMachineDepartmentInvestments(version).map(item => item.id === row.id ? { ...item, ...actualRows[0], id: item.id, primaryDepartment: item.primaryDepartment, secondaryDepartment: item.secondaryDepartment } : item) })
-for (const value of [4.1, 5, 5.1]) {
-  const current = machineStore.getState().projects.find(item => item.id === project.id).versions.find(item => item.id === version.id)
-  edit({ type: 'departments', rows: current.machineDepartmentInvestments.map(item => item.id === row.id ? { ...item, str2ToStr3: value } : item) })
-  const saved = machineStore.getState().projects.find(item => item.id === project.id).versions.find(item => item.id === version.id)
-  assert.equal(saved.machineDepartmentInvestments.find(item => item.id === row.id).str2ToStr3, value, `store persists ${value} person-month phase edit`)
-}
+assert.throws(() => edit({ type: 'departments', rows: allocation.resolveMachineDepartmentInvestments(version) }), /只读/, 'machine resource cannot override configured department investments')
 edit({ type: 'model', key: 'levelCoefficient', value: 2 })
 const saved = machineStore.getState().projects.find(item => item.id === project.id).versions.find(item => item.id === version.id)
 assert.equal(saved.levelCoefficient, 2, 'store persists coefficient 2')
