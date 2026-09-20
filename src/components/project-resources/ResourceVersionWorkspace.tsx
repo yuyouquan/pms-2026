@@ -20,8 +20,8 @@ import ResourceInlineDetail from '@/components/project-resources/ResourceInlineD
 import { ResourceVersionCreateDialog, ResourceOperationLogDialog } from '@/components/project-resources/ResourceVersionDialogs'
 import { exportResourceVersion } from '@/components/project-resources/exportResourceVersion'
 
-export default function ResourceVersionWorkspace({ project, category, budgetType }: {
-  project: ProjectItem; category: HrProjectCategory; budgetType: ResourceBudgetType
+export default function ResourceVersionWorkspace({ project, category, budgetType, initialVersionId }: {
+  project: ProjectItem; category: HrProjectCategory; budgetType: ResourceBudgetType; initialVersionId?: string
 }) {
   const { message } = App.useApp()
   const store = useResourceStore(category)
@@ -31,7 +31,7 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
   usePermissionStore()
   const [createSource, setCreateSource] = useState<string | null>(null)
   const [logFilter, setLogFilter] = useState<string | null>(null)
-  const [selectedId, setSelectedId] = useState<string>()
+  const [selectedId, setSelectedId] = useState<string | undefined>(initialVersionId)
   useEffect(() => { resourceStore(category).getState().refreshFormalProjects() }, [category, project.id])
   const own = store.projects.find(item => item.pmsProjectId === project.id)
   const visibleProjects = store.projects.filter(item => isHrVersionVisible(item, budgetType, project.id))
