@@ -109,12 +109,42 @@ assert.equal(initialMetrics[0].modelDays, 3)
 assert.equal(manualMetrics[0].modelDays, 3, 'manual changes never alter model metrics')
 assert.notEqual(initialMetrics[0].scheduledSegments[0].days, manualMetrics[0].scheduledSegments[0].days, 'manual edit changes scheduled metric')
 assert.match(scheduling.formatBudgetStageMetrics(manualMetrics[0]), /^排布10天（100\.00%）\/模型3天（100\.00%）$/)
-assert.match(scheduling.formatBudgetStageMetrics(scheduling.calculateBudgetStageMetrics(roundingModel, { ...schedule, str1: null })[0]), /^排布不可用\//)
+assert.match(scheduling.formatBudgetStageMetrics(scheduling.calculateBudgetStageMetrics(roundingModel, { ...schedule, str1: null })[0]), /^排布0天（0\.00%）\//)
+const partialModel=scheduling.resolvePublishedBudgetScheduleModel(publishedState('machine',[
+  ...stage('1','概念阶段',[['概念启动',0],['STR1',10]]),
+  ...stage('2','计划阶段',[['STR2',20],['STR3',20]]),
+  ...stage('3','开发验证阶段',[['STR4',10],['STR4A',10],['STR5',30]]),
+]),'machine')
+const partialDates={conceptStart:'2026-09-02',str1:'2026-09-11'}
+let partialMetrics=scheduling.calculateBudgetStageMetrics(partialModel,partialDates)
+assert.deepEqual(partialMetrics.map(metric=>[metric.scheduledDays,metric.scheduledRatio]),[[9,100],[0,0],[0,0]],'one completed stage accounts for all known intervals')
+partialMetrics=scheduling.calculateBudgetStageMetrics(partialModel,{...partialDates,str2:'2026-09-19',str3:'2026-09-25',str4:'2026-09-26',str4a:'2026-09-28'})
+assert.deepEqual(partialMetrics.map(metric=>metric.scheduledDays),[9,14,3],'incomplete last stage includes already filled intervals')
+assert.deepEqual(partialMetrics.map(metric=>metric.scheduledRatio),[9/26*100,14/26*100,3/26*100])
+assert.equal(scheduling.calculateBudgetStageMetrics(partialModel,{}).every(metric=>metric.scheduledRatio===0),true,'empty dates do not divide by zero')
 const divergentSnapshot = JSON.parse(JSON.stringify(roundingModel))
 divergentSnapshot.stages[0].milestones[1].intervalDays = 999
 assert.throws(() => scheduling.validateBudgetScheduleSnapshot('machine', divergentSnapshot), /阶段里程碑与模型不一致/, 'JSON roundtrip stage copies must match canonical milestones')
 
 const planStore = get('src/stores/plan.ts').usePlanStore
+for (const [category, expected] of Object.entries({ machine:['概念阶段','计划阶段','开发验证阶段'], tos:['规划阶段','概念阶段','计划阶段','开发验证阶段'], technical:['规划阶段','概念阶段','计划阶段','开发验证阶段','迁移阶段'] })) {
+  const emptyState = {configTemplateVersionScopes:{},publishedSnapshots:{}}
+  const display = scheduling.resolveBudgetScheduleDisplay(emptyState,category)
+  assert.deepEqual(display.stages.map(stage=>stage.label),expected,`${category}: unconfigured template retains default stage headings`)
+  assert.equal(display.totalModelDays,null,'display fallback must not invent model weights')
+  assert.throws(()=>scheduling.resolvePublishedBudgetScheduleModel(emptyState,category),/未找到/,'display fallback never enables automatic scheduling')
+  const source = scheduling.BUDGET_SCHEDULE_SOURCES[category]
+  const tasks = planStore.getState().publishedSnapshots[source.snapshotKey('v3')].map(({intervalDays,...item})=>item)
+  tasks.find(task=>!task.parentId).taskName='自定义首阶段'
+  const retained = scheduling.resolveBudgetScheduleDisplay(publishedState(category,tasks),category)
+  assert.equal(retained.stages[0].label,'自定义首阶段','missing intervals preserve published stage structure')
+  const manualDates=Object.fromEntries(retained.milestones.map((milestone,index)=>[milestone.fieldKey,`2026-01-${String(index+1).padStart(2,'0')}`]))
+  const metrics=scheduling.calculateBudgetStageMetrics(retained,manualDates)
+  assert.ok(metrics.every(metric=>metric.scheduledDays!==null),'manual dates calculate without model interval days')
+  assert.equal(Math.round(metrics.reduce((sum,metric)=>sum+metric.scheduledRatio,0)),100)
+  assert.ok(metrics.every(metric=>metric.modelDays===null))
+  assert.match(scheduling.formatBudgetStageMetrics(metrics[0]),/排布\d+天.*\/模型未配置$/)
+}
 const intervalMath = get('src/lib/templateIntervals.ts')
 const draftKeys = { machine: '整机产品项目', tos: 'tOS版本项目', technical: '技术项目::TDT项目计划' }
 for (const category of ['machine', 'tos', 'technical']) {

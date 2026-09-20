@@ -9191,6 +9191,8 @@ input.ant-input,
 .pms-resource-version-context, .pms-resource-monthly { padding: 16px; }
 .pms-resource-version-meta { display: flex; gap: 14px 24px; align-items: center; flex-wrap: wrap; margin: 16px 0 10px; font-size: 12px; color: var(--pms-text-secondary); }
 .pms-resource-version-meta strong { color: var(--pms-text-primary); font-size: 16px; font-variant-numeric: tabular-nums; }
+.pms-resource-bound-project { display: inline-flex; align-items: center; gap: 6px; }
+.pms-resource-bound-project .ant-btn { font-size: inherit; }
 .pms-resource-version-context p { margin: 0; }
 .pms-hr-version-surface-header { padding: 14px 16px; border-bottom: 1px solid var(--pms-border); font-weight: 600; }
 .pms-hr-version-surface-content { padding: 16px; min-width: 0; overflow-x: auto; }
@@ -9208,9 +9210,9 @@ input.ant-input,
   .pms-resource-version-meta { gap: 10px 16px; }
 }
 
-/* Resource details keep saved values visible; only the active field becomes an input. */
+/* Editable resource fields remain inputs; focus only starts the autosave session. */
 .pms-resource-inline-field { display: flex; align-items: center; gap: 3px; min-height: 26px; min-width: 0; position: relative; }
-.pms-resource-inline-field.is-editing { display: block; min-width: 95px; }
+.pms-resource-inline-field.is-editable { display: block; min-width: 95px; }
 .pms-resource-inline-value { min-width: 0; overflow-wrap: anywhere; }
 .pms-resource-inline-trigger { display: flex; align-items: center; justify-content: inherit; width: 100%; min-height: 28px; padding: 3px 6px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: inherit; cursor: pointer; transition: background .15s, border-color .15s; }
 .pms-resource-inline-trigger:hover { background: var(--pms-brand-surface); border-color: var(--pms-brand-border); }
@@ -9280,6 +9282,8 @@ input.ant-input,
 .pms-resource-workspace .ant-input-number-input,
 .pms-resource-fee-config .ant-input-number-input { border: 0 !important; box-shadow: none !important; outline: 0 !important; background: transparent !important; border-radius: 0 !important; }
 .pms-resource-workspace .ant-input-number-handler-wrap { display: none; }
+.pms-resource-workspace .ant-input-number { display: inline-flex; align-items: center; }
+.pms-resource-workspace .ant-input-number-input { min-width: 0; }
 .pms-resource-workspace .ant-table-cell { text-align: center; }
 .pms-resource-workspace .ant-table-cell .pms-resource-inline-field { justify-content: center; }
 .pms-resource-workspace .ant-table-cell .ant-input-number-input { text-align: center; }
@@ -9299,8 +9303,29 @@ input.ant-input,
 .pms-resource-view-stats .pms-resource-period { font-size: 16px; white-space: nowrap; }
 .pms-resource-stage-legend { display: flex; gap: 6px 12px; flex-wrap: wrap; color: var(--pms-text-primary); }
 .pms-resource-stage-legend span::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 4px; background: var(--stage-color); }
-.pms-resource-month-label small, .pms-resource-monthly-table td small, .pms-resource-difference small { display: block; font-size: 11px; line-height: 1.5; }
+.pms-resource-monthly-table {
+  --pms-font-size-body: 12px;
+  --pms-table-font-size-header: 12px;
+  --pms-table-font-size-body: 12px;
+  --pms-table-head-height: 32px;
+  --pms-table-group-head-height: 32px;
+  --pms-table-row-height: 32px;
+  --pms-control-height: 26px;
+  --pms-table-head-padding: 4px 6px;
+  --pms-table-cell-padding: 4px 6px;
+  --pms-line-height-header: 15px;
+  --pms-line-height-body: 16px;
+}
+.pms-resource-month-stage { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; white-space: nowrap; }
+.pms-resource-month-stage small { font-size: 11px; font-weight: 500; line-height: 1.25; }
+.pms-resource-month-label small { display: block; font-size: 10px; line-height: 1.25; }
 .pms-resource-month-label small { font-weight: 400; opacity: .75; }
+.pms-resource-month-balance { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pms-resource-month-balance small { font-size: 11px; line-height: inherit; }
+.pms-resource-monthly-table .pms-resource-inline-field,
+.pms-resource-monthly-table .pms-resource-inline-trigger { min-height: 24px; }
+.pms-resource-monthly-table .pms-resource-inline-trigger { padding: 2px 4px; }
+.pms-resource-monthly-table .ant-table-summary .ant-table-cell { padding: 4px 6px; font-size: 12px; line-height: 1.25; }
 .pms-resource-difference { color: #a34c10; }
 .pms-resource-log-changes { max-width: 540px; max-height: 150px; overflow: auto; overflow-wrap: anywhere; font-size: 12px; }
 @media (max-width: 1050px) { .pms-resource-view-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

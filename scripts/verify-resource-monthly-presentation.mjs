@@ -5,7 +5,7 @@ import { createCurrentDatasetStorage } from './lib/mock-dataset-storage.mjs'
 globalThis.localStorage = createCurrentDatasetStorage()
 globalThis.window = { localStorage }
 const load = createTypeScriptModuleLoader(), get = file => load(path.resolve(file))
-const { groupResourceMonths, sumMonthlyRow, resourceInvestmentStages } = get('src/components/project-resources/resourceMonthlyPresentation.ts')
+const { groupResourceMonths, sumMonthlyRow, resourceInvestmentStages, summarizeResourceMonths } = get('src/components/project-resources/resourceMonthlyPresentation.ts')
 const { buildResourceMonthlyView } = get('src/components/project-resources/resourceVersionViewData.ts')
 const phases = [
  { key:'concept', label:'概念阶段', start:'2026-12-01', end:'2027-01-15', color:'green', amount:20 },
@@ -23,6 +23,20 @@ assert.equal(sumMonthlyRow(row)-row.estimatedTotal,2,'excess does not alter depa
 const year=buildResourceMonthlyView([row],'v','2026-12','2027-02','2027')
 assert.equal(year.visibleTotal,32)
 assert.equal(year.allocatedTotal,52,'year filter does not conceal cycle imbalance')
+const cycle=buildResourceMonthlyView([row],'v','2026-12','2027-02')
+const cycleStats=summarizeResourceMonths(cycle,phases)
+const yearStats=summarizeResourceMonths(year,phases)
+assert.equal(cycleStats.total,52)
+assert.equal(yearStats.total,32,'year cards use only selected months')
+assert.equal(yearStats.average,16,'average includes empty months in selected year')
+assert.equal(yearStats.peakMonth,'2027-01')
+assert.equal(yearStats.peak,32)
+assert.equal(yearStats.stages.find(stage=>stage.key==='plan').ratio,100,'year stage shares follow monthly amounts')
+assert.equal(cycleStats.stages.find(stage=>stage.key==='concept').ratio,20/52*100)
+const zeroStats=summarizeResourceMonths(buildResourceMonthlyView([],'v','2028-01','2028-02'),phases)
+assert.equal(zeroStats.average,0)
+assert.equal(zeroStats.peakMonth,'')
+assert.ok(zeroStats.stages.every(stage=>stage.ratio===0))
 assert.equal(sumMonthlyRow(row,['2026-12']),20)
 const store=get('src/stores/hrConfig.ts').useHrConfigStore
 const registry=get('src/stores/project.ts').useProjectStore

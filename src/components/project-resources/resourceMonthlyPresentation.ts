@@ -5,7 +5,7 @@ import { TECH_PHASE_SPLIT_RULES } from '@/constants/hrTechnical'
 import { resolveMachineDepartmentInvestments, resolveMachinePhaseFields } from '@/lib/resourceAllocation'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import type { ResourceVersion } from '@/components/project-resources/resourceVersionAdapter'
-import type { ResourceMonthlyRow } from '@/components/project-resources/resourceVersionViewData'
+import type { ResourceMonthlyRow, buildResourceMonthlyView } from '@/components/project-resources/resourceVersionViewData'
 
 export const RESOURCE_STAGE_COLORS = ['#25815b', '#346fd1', '#ad582c', '#8353ba', '#28868a', '#8d713f', '#6578a3']
 export const sumMonthlyRow = (row: ResourceMonthlyRow, months?: readonly string[]) => Math.round((months
@@ -43,4 +43,18 @@ export function groupResourceMonths(months: readonly string[], stages: readonly 
     else groups.push({ key: `${stageKey}-${month}`, stageKey, label: chosen?.label ?? '未归属阶段', color: chosen?.color ?? '#72778b', months: [month] })
   }
   return groups
+}
+
+/** Cards and table use the same selected months and boundary-month ownership. */
+export function summarizeResourceMonths(view: ReturnType<typeof buildResourceMonthlyView>, stages: readonly ResourceInvestmentStage[]) {
+  const amounts = new Map<string, number>(stages.map(stage => [stage.key, 0]))
+  for (const group of groupResourceMonths(view.months, stages)) {
+    amounts.set(group.stageKey, (amounts.get(group.stageKey) ?? 0) + group.months.reduce((sum, month) => sum + (view.totals[month] ?? 0), 0))
+  }
+  const peakMonth = view.months.reduce((selected, month) => (view.totals[month] ?? 0) > (view.totals[selected] ?? 0) ? month : selected, '')
+  const displayStages = [...stages.map(stage => ({ key: stage.key, label: stage.label, color: stage.color })),
+    ...(amounts.has('unassigned') ? [{ key: 'unassigned', label: '未归属阶段', color: '#72778b' }] : [])]
+  return { total: view.visibleTotal, average: view.months.length ? view.visibleTotal / view.months.length : 0,
+    peakMonth, peak: view.totals[peakMonth] ?? 0,
+    stages: displayStages.map(stage => ({ ...stage, ratio: view.visibleTotal ? (amounts.get(stage.key) ?? 0) / view.visibleTotal * 100 : 0 })) }
 }

@@ -53,12 +53,12 @@ export default function ResourceInlineDetail({ category, project, version, scope
       render: (_: unknown, row: InlineDepartment) => field.key === 'secondaryDepartment' && !row.primaryDepartment && !readOnly
         ? <HrReadonlyField label="二级部门" placeholder="请先选择一级部门" reason="选择一级部门后可编辑" />
         : <ResourceInlineField label={field.label} value={row[field.key]} readOnly={readOnly} onSave={value => patchRow(row.id, field.key, String(value ?? ''))}
-          renderEditor={(value, change, popup) => <Select autoFocus showSearch allowClear aria-label={field.label} value={value || undefined} optionFilterProp="label" getPopupContainer={popup} style={{ width: '100%' }}
+          renderEditor={(value, change, popup) => <Select showSearch allowClear aria-label={field.label} value={value || undefined} optionFilterProp="label" getPopupContainer={popup} style={{ width: '100%' }}
             options={field.key === 'primaryDepartment' ? primaryOptions : getSecondaryOptions(row.primaryDepartment)} onChange={change} />} /> })),
     ...[{ title: '预估投入合计', key: 'total', width: 130, align: 'center' as const,
       render: (_: unknown, row: InlineDepartment) => <ResourceInlineField label={`${row.primaryDepartment || '未选择一级部门'} ${row.secondaryDepartment || '未选择二级部门'} 预估投入合计（人月）`} value={row.estimatedInvestment} display={formatPersonMonth(row.estimatedInvestment)} readOnly={readOnly}
         onSave={value => persist({ type: 'departmentTotal', rowId: row.id, value: value === null ? 0 : Number(value) })}
-        renderEditor={(value, change) => <InputNumber autoFocus controls={false} aria-label={`${row.primaryDepartment || '未选择一级部门'} ${row.secondaryDepartment || '未选择二级部门'} 预估投入合计（人月）`} value={value as number} min={0} precision={1} step={0.1} style={{ width: '100%' }} onChange={change} />} /> }],
+        renderEditor={(value, change) => <InputNumber controls={false} aria-label={`${row.primaryDepartment || '未选择一级部门'} ${row.secondaryDepartment || '未选择二级部门'} 预估投入合计（人月）`} value={value as number} min={0} precision={1} step={0.1} style={{ width: '100%' }} onChange={change} />} /> }],
     ...phases.map(field => ({ title: field.label, key: field.key, width: 170, align: 'center' as const,
       render: (_: unknown, row: InlineDepartment) => {
         const ratio = getResourcePhaseRatios(category, version, row)[field.key] ?? 0
@@ -66,9 +66,9 @@ export default function ResourceInlineDetail({ category, project, version, scope
         const label = `${row.primaryDepartment} ${row.secondaryDepartment} ${field.label}比例`
         return <ResourceInlineField label={label} value={ratio} display={`${ratio.toFixed(2)}%（${formatPersonMonth(amount)}人月）`} readOnly={readOnly}
           onSave={value => persist({ type: 'departmentRatio', rowId: row.id, key: field.key, value: value === null ? 0 : Number(value) })}
-          renderEditor={(value, change) => <InputNumber autoFocus controls={false} aria-label={label} value={Number(value)} min={0} max={100} precision={2} suffix="%" style={{ width: '100%' }} onChange={change} />} />
+          renderEditor={(value, change) => <InputNumber controls={false} aria-label={label} value={Number(value)} min={0} max={100} precision={2} suffix={`%（${formatPersonMonth(amount)}人月）`} style={{ width: '100%' }} onChange={change} />} />
       } })),
-    { title: '比例合计', key: 'ratioTotal', width: 140, align: 'center', render: (_, row) => {
+    { title: '比例合计', key: 'ratioTotal', width: 140, fixed: 'right', align: 'center', render: (_, row) => {
       const total = Object.values(getResourcePhaseRatios(category, version, row)).reduce((sum, value) => sum + value, 0)
       const difference = Math.round((total - 100) * 100) / 100
       return <span className={difference ? 'pms-resource-difference' : ''}>{total.toFixed(2)}%{difference !== 0 && <small>{difference > 0 ? '超出' : '还差'} {Math.abs(difference).toFixed(2)}%</small>}</span>
@@ -102,13 +102,13 @@ export default function ResourceInlineDetail({ category, project, version, scope
   const isBudgetProject = !!registryProject && getProjectAttribute(registryProject) === 'budget'
   const metadataFields = machineProject ? [{ key: 'brand' as const, label: '品牌' }, { key: 'productLine' as const, label: '产品线' }, { key: 'marketName' as const, label: '市场名' }].map(field => ({ key: field.key, label: field.label,
     children: <ResourceInlineField label={field.label} value={machineProject[field.key]} readOnly={metadataReadOnly} onSave={value => persist({ type: 'metadata', key: field.key, value: String(value ?? '') })}
-      renderEditor={(value, change, popup) => field.key === 'marketName' ? <Input autoFocus aria-label={field.label} value={String(value ?? '')} onChange={event => change(event.target.value)} />
-        : <Select autoFocus aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ minWidth: 140 }} onChange={change}
+      renderEditor={(value, change, popup) => field.key === 'marketName' ? <Input aria-label={field.label} value={String(value ?? '')} onChange={event => change(event.target.value)} />
+        : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ minWidth: 140 }} onChange={change}
           options={[...new Set([...(field.key === 'brand' ? Object.keys(PRODUCT_LINES_BY_BRAND) : PRODUCT_LINES_BY_BRAND[machineProject.brand as keyof typeof PRODUCT_LINES_BY_BRAND] ?? []), ...(value ? [String(value)] : [])])].map(label => ({ label, value: label }))} />} /> })) : []
   const modelFields = machine ? [{ key: 'projectLevel' as const, label: '项目等级' }, { key: 'levelCoefficient' as const, label: '等级系数' }, { key: 'hrModelVersion' as const, label: '人力模型版本号' }].map(field => ({ key: field.key, label: field.label,
     children: <ResourceInlineField label={field.label} value={machine[field.key]} readOnly={readOnly || field.key === 'projectLevel' && isHrFormalRecord(project)} onSave={value => persist({ type: 'model', key: field.key, value: field.key === 'levelCoefficient' ? Number(value) : String(value ?? '') })}
-      renderEditor={(value, change, popup) => field.key === 'levelCoefficient' ? <InputNumber autoFocus controls={false} aria-label={field.label} value={value as number} step={0.1} onChange={change} />
-        : <Select autoFocus aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ minWidth: 120 }} onChange={change} options={(field.key === 'projectLevel' ? getConfigProjectLevels(records) : getConfigModelVersions(records)).map(label => ({ label, value: label }))} />} /> })) : []
+      renderEditor={(value, change, popup) => field.key === 'levelCoefficient' ? <InputNumber controls={false} aria-label={field.label} value={value as number} step={0.1} onChange={change} />
+        : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ minWidth: 120 }} onChange={change} options={(field.key === 'projectLevel' ? getConfigProjectLevels(records) : getConfigModelVersions(records)).map(label => ({ label, value: label }))} />} /> })) : []
   const machineRows = machine ? resolveMachineDepartmentInvestments(machine) : []
   const machinePhases = machine ? resolveMachinePhaseFields(machine) : []
   const machineColumns = [{ title: '一级部门', dataIndex: 'primaryDepartment', width: 150, align: 'center' as const }, { title: '二级部门', dataIndex: 'secondaryDepartment', width: 150, align: 'center' as const },
@@ -134,7 +134,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
       <div className="pms-hr-milestone-details-scroll"><dl style={{ gridTemplateColumns: `repeat(${resourceMilestoneFields[category].length}, minmax(130px, 1fr))` }}>
         {resourceMilestoneFields[category].map(field => <div key={field.key}><dt>{field.label}</dt><dd><ResourceInlineField label={field.label} value={dates[field.key]} readOnly={readOnly || !canEditResourceMilestone(category, project, field.key)}
           onSave={value => persist({ type: 'milestone', key: field.key, value: value ? String(value) : null })}
-          renderEditor={(value, change, popup) => <div {...inlineDateInputHandlers(change)}><DatePicker autoFocus aria-label={field.label} defaultValue={value ? dayjs(String(value)) : null} preserveInvalidOnBlur getPopupContainer={popup} style={{ width: '100%' }} onChange={date => change(date?.format('YYYY-MM-DD') ?? null)} /></div>} /></dd></div>)}
+          renderEditor={(value, change, popup) => <div {...inlineDateInputHandlers(change)}><DatePicker aria-label={field.label} defaultValue={value ? dayjs(String(value)) : null} preserveInvalidOnBlur getPopupContainer={popup} style={{ width: '100%' }} onChange={date => change(date?.format('YYYY-MM-DD') ?? null)} /></div>} /></dd></div>)}
       </dl></div></section>}
     </section>
     <section className="pms-resource-panel" aria-label="预估投入">
