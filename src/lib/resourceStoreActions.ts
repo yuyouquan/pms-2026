@@ -5,7 +5,7 @@ import { createInlineResourceVersion } from '@/lib/resourceInlineEditing'
 import { appendResourceOperation, resourceVersionChanges } from '@/lib/resourceOperations'
 import { getResourceFormalValidationErrors } from '@/lib/resourceRatios'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
-import { canAccessHrProject, canEditHrInScope } from '@/lib/hrProjectRegistry'
+import { canAccessHrProject, canEditHrInScope, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
 import { canCreateHrVersion, copyHrVersionSnapshot, isHrVersionEditable } from '@/lib/hrVersionRules'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { useProjectStore } from '@/stores/project'
@@ -112,7 +112,8 @@ export function createResourceStoreState<S extends DomainState>(category:HrProje
      const project=state.projects.find(item=>item.id===projectId)
      if(name==='setVersionActive' && args[2]===true && project && canAccessHrProject(project,true)) {
        const version=project.versions.find(item=>item.id===args[1])
-       if(version && !version.isActive && canCreateHrVersion(project,version.budgetType)) {
+       // Lifecycle eligibility is independent of project creation status (active/paused/cancelled).
+       if(version && !version.isActive && getHrAllowedBudgetTypes(project).includes(version.budgetType)) {
          const errors=getResourceFormalValidationErrors(category,version,state.monthlyInvestments)
          if(errors.length)throw new Error(errors.join('；'))
        }

@@ -51,3 +51,19 @@ Formal-domain coverage includes named creation/copy/reload, duplicate rejection 
 ## Remaining ownership
 
 Controller retains UI/config, fixture integration, independent review, production build, browser rounds and release. No build, dev server, browser or release commands were executed by this domain worker. Exact frozen source commit is supplied in the completion message; this report is included in that commit.
+
+## Independent-review P2 follow-up
+
+Review finding: formalization validation incorrectly reused `canCreateHrVersion`, whose active-project prerequisite did not match the existing lifecycle operation's eligibility. Paused/cancelled records could therefore skip both formal balance gates.
+
+RED: `node scripts/verify-resource-formal-status.mjs` passed Machine/active, then failed Machine/paused with `Missing expected exception: monthly gate applies to every executable formal transition`.
+
+Fix: the shared action wrapper now uses exactly the lifecycle's authorized-edit and allowed-budget conditions for non-formal → formal transitions, independently of creation eligibility. Existing paused/cancelled lifecycle permission semantics remain unchanged; balanced records can still be set/cleared as formal. New-version creation still requires an active project.
+
+GREEN:
+
+- `node scripts/verify-resource-formal-status.mjs` — all four categories × active/paused/cancelled. All categories reject monthly imbalance; non-machine categories also reject incomplete phase ratios. Failed attempts preserve version/formal state, monthly data and audit history. Restoring balance allows formalization and cancellation without changing project status.
+- `node scripts/verify-resource-formal-domain.mjs`
+- `npx tsc --noEmit --incremental false`
+
+Follow-up changes are limited to the domain wrapper, this focused regression and this report. No controller UI/config files were changed.
