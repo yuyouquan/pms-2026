@@ -7,7 +7,18 @@ import puppeteer from 'puppeteer'
 
 const baseUrl = process.env.PMS_BASE_URL || 'http://127.0.0.1:3024'
 const output = path.resolve(process.env.PMS_BROWSER_OUTPUT || 'output/playwright/figma-ui/final')
-const selected = process.env.PMS_UI_SUITES?.split(',')
+const suiteNames = new Set([
+  'workbench', 'project-management', 'project-machine', 'project-tos', 'project-technical',
+  'plan-validation', 'resources', 'hr-machine', 'hr-tos', 'hr-technical', 'hr-capability',
+  'hr-config', 'roadmap', 'config', 'nonadmin', 'standalone',
+])
+const selected = process.env.PMS_UI_SUITES === undefined
+  ? undefined : process.env.PMS_UI_SUITES.split(',').map(name => name.trim())
+if (selected) {
+  assert.ok(selected.length > 0 && selected.every(name => name.length > 0), 'PMS_UI_SUITES must contain non-empty suite names')
+  const unknown = selected.filter(name => !suiteNames.has(name))
+  assert.deepEqual(unknown, [], `Unknown PMS_UI_SUITES: ${unknown.join(', ')}`)
+}
 fs.mkdirSync(output, { recursive: true })
 const browser = await puppeteer.launch({ headless: true, protocolTimeout: 30000,
   executablePath: process.env.PMS_CHROME_EXECUTABLE || process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
@@ -141,7 +152,16 @@ try {
     await click('权限配置','[role="menuitem"]'); await visibleText('角色'); await capture(`${key}-permissions`)
   })
   await suite('plan-validation',async()=>{await openProject('整机产品项目','1');await click('计划','[role="menuitem"]');await press('[aria-label="竖版表格"]');const selector='input[aria-label="planEndDate STR4"]';await page.waitForSelector(selector,{visible:true});await page.$eval(selector,e=>{e.focus();e.select()});await page.keyboard.type('2020-01-01');await page.keyboard.press('Enter');await page.keyboard.press('Tab');await page.keyboard.press('Escape');await page.waitForSelector('.pms-cell-invalid',{visible:true});assert.equal(await page.$eval(selector,e=>e.value),'2020-01-01','invalid edited date stays visible');await capture('plan-invalid-date');const state=await page.$eval('.pms-cell-invalid',e=>({background:getComputedStyle(e).backgroundColor,border:getComputedStyle(e).borderColor}));results.push({name:'plan-invalid-style',...state});assert.notEqual(state.background,'rgba(0, 0, 0, 0)','invalid cell has visible background')})
-  await suite('resources',async()=>{ await openProject('整机产品项目','1'); await click('资源','[role="menuitem"]'); await visibleText('项目资源看板'); await capture('resources-dashboard'); for(const label of ['年度预算','项目概算','项目预算','项目核算']) { await click(label); await capture(`resources-${label}`); await visibleText(label); if(label==='项目概算'){await click('新建版本');await form('resource-new-version');await click('创建版本','.ant-modal-footer button');await page.waitForSelector('.ant-form-item-explain-error',{visible:true});await form('resource-new-version-errors');await closeModal()} } })
+  await suite('resources',async()=>{ await openProject('整机产品项目','1'); await click('资源','[role="menuitem"]'); await visibleText('项目资源看板'); await capture('resources-dashboard'); for(const label of ['年度预算','项目概算','项目预算','项目核算']) { await click(label); await capture(`resources-${label}`); await visibleText(label); if(label==='项目概算'){await click('新建版本');await form('resource-new-version');await click('创建版本','.ant-modal-footer button');await page.waitForSelector('.ant-form-item-explain-error',{visible:true});await form('resource-new-version-errors');
+      await page.type('input[aria-label="新版本号"]','qa-cancelled-draft');
+      await click('取消','.ant-modal-footer button');
+      await page.waitForFunction(()=>![...document.querySelectorAll('.ant-modal')].some(e=>e.getBoundingClientRect().height && getComputedStyle(e).visibility!=='hidden'));
+      assert.ok(!(await text()).includes('qa-cancelled-draft'),'cancel does not create a version');
+      await click('新建版本');
+      assert.equal(await page.$eval('input[aria-label="新版本号"]',e=>e.value),'','cancelled version draft is cleared when reopened');
+      await form('resource-new-version-after-cancel');
+      results.push({name:'resource-footer-cancel',modalClosed:true,versionCreated:false,reopenedDraft:''});
+      await closeModal()} } })
   for(const [label,key] of [['整机产品项目','machine'],['tOS项目','tos'],['技术项目','technical'],['能力建设项目','capability']]) await suite(`hr-${key}`,async()=>{
     await click('人力资源管道','[role="menuitem"]'); await click(label,'.pms-hr-sidebar-leaf'); await visibleText('新建项目'); await capture(`hr-${key}-projects`)
     await click('新建项目'); await visibleText('项目配置'); await click('新项目'); await form(`hr-${key}-new-project`); await closeModal(); await click('人力资源管道','[role="menuitem"]'); await click(label,'.pms-hr-sidebar-leaf')
@@ -152,7 +172,22 @@ try {
     await press('.ant-table-tbody button:not([disabled]):has(.anticon-edit)'); await form(`hr-${key}-monthly-edit`); await closeModal()
   })
   await suite('hr-config',async()=>{await click('人力资源管道','[role="menuitem"]'); for(const [i,label] of ['tOS阶段投入比','品牌&产品线分摊比','模块与部门','TMG及技术领域','技术阶段投入比'].entries()){await click(label,'.pms-hr-sidebar-leaf');await capture(`hr-config-${i}`);await visibleText('新增')} await click('新增');await form('hr-config-new');await closeModal()})
-  await suite('roadmap',async()=>{await click('tOS路标','[role="menuitem"]');await capture('roadmap');await click('版本演进视图');await capture('roadmap-evolution');await click('表单视图');await click('筛选');await page.waitForSelector('[aria-label="关闭筛选"]',{visible:true});await capture('roadmap-filter');await press('[aria-label="关闭筛选"]')})
+  await suite('roadmap',async()=>{await click('tOS路标','[role="menuitem"]');await capture('roadmap');
+    const sortSnapshot = () => page.evaluate(() => {
+      const header=[...document.querySelectorAll('.roadmap-table th')].find(e=>e.getBoundingClientRect().height>0 && e.textContent.trim()==='项目名');
+      if(!header) throw new Error('visible roadmap 项目名 sortable header required');
+      const rows=[...header.closest('.ant-table-wrapper').querySelectorAll('.ant-table-tbody tr[data-row-key]')]
+        .map(e=>({key:e.getAttribute('data-row-key'),text:e.innerText}));
+      return {ariaSort:header.getAttribute('aria-sort'),rows};
+    });
+    const before=await sortSnapshot();assert.equal(before.ariaSort,'none');assert.ok(before.rows.length>1,'roadmap has multiple sortable rows');
+    await click('项目名','.roadmap-table th');const ascending=await sortSnapshot();
+    assert.equal(ascending.ariaSort,'ascending');assert.notDeepEqual(ascending.rows.map(r=>r.key),before.rows.map(r=>r.key),'ascending sort changes actual visible row order');
+    await capture('roadmap-sort-ascending');
+    await click('项目名','.roadmap-table th');const descending=await sortSnapshot();
+    assert.equal(descending.ariaSort,'descending');assert.notDeepEqual(descending.rows.map(r=>r.key),ascending.rows.map(r=>r.key),'descending sort changes actual visible row order');
+    await capture('roadmap-sort-descending');results.push({name:'roadmap-sort-orders',before,ascending,descending});
+    await click('版本演进视图');await capture('roadmap-evolution');await click('表单视图');await click('筛选');await page.waitForSelector('[aria-label="关闭筛选"]',{visible:true});await capture('roadmap-filter');await press('[aria-label="关闭筛选"]')})
   await suite('config',async()=>{await click('配置中心','[role="menuitem"]');await capture('config-template');await click('转维材料模板配置','.pms-config-navigation [role="menuitem"]');await click('转维材料','.pms-config-navigation [role="menuitem"]');await visibleText('交接资料');await capture('config-transfer');await click('枚举值配置','.pms-config-navigation [role="menuitem"]');await click('项目分类','.pms-config-navigation [role="menuitem"]');await visibleText('IPM项目分类');await capture('config-enums');await click('人力资源管道','.pms-config-navigation [role="menuitem"]');for(const [i,label] of ['整机人力模型','非人力资源科目','费率'].entries()){await click(label,'.pms-config-navigation [role="menuitem"]');await capture(`config-hr-${i}`);if(label==='费率'){await page.waitForSelector('input[role="spinbutton"]',{visible:true});assert.equal(await page.$eval('.ant-input-number',e=>e.getBoundingClientRect().height),32,'fee rate inline control32')}else{await visibleText('新增');if(label==='非人力资源科目'){await click('新增');await form('config-nonlabor-new');await closeModal()}}}})
   await suite('nonadmin',async()=>{await press('[aria-label="切换当前用户"]');await click('演示用户02','.pms-user-menu__name');await page.waitForFunction(()=>document.querySelector('[aria-label="切换当前用户"]')?.getAttribute('data-current-user')==='演示用户02');await openProject('整机产品项目','1');assert.equal(await page.$$eval('button',es=>es.find(e=>e.textContent.trim()==='编辑')?.disabled),true,'nonadmin basic edit denied');await capture('nonadmin-basic')})
   await suite('standalone',async()=>{await page.goto(`${baseUrl}/share/plan?projectId=mock-tech-aios-v3&technical=1&kind=tdt`,{waitUntil:'networkidle0'});await visibleText('TDR1');await capture('share-technical');await click('横版表格');await capture('share-horizontal');await click('甘特图');await page.waitForSelector('.gantt_grid_head_cell',{visible:true});await capture('share-gantt');for(const route of ['level1-template','level2-template']){await page.goto(`${baseUrl}/config/${route}`,{waitUntil:'networkidle0'});await page.waitForSelector('[aria-label="配置菜单"]');await visibleText('计划模板配置');await capture(`standalone-${route}`)}})
