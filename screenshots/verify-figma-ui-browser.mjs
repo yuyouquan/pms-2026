@@ -88,7 +88,8 @@ const form = async (name, {lowHeight=false}={}) => {
     const modal=[...document.querySelectorAll('.ant-modal')].find(e=>e.getBoundingClientRect().height && getComputedStyle(e).visibility!=='hidden')
     const rect=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom}}
     const body=modal.querySelector('.ant-modal-body'),footer=modal.querySelector('.ant-modal-footer')
-    return {footer:footer&&{...rect(footer),padding:getComputedStyle(footer).padding,gap:getComputedStyle(footer).gap},body:{...rect(body),padding:getComputedStyle(body).padding,paddingLeft:getComputedStyle(body).paddingLeft,paddingRight:getComputedStyle(body).paddingRight,scrollHeight:body.scrollHeight,clientHeight:body.clientHeight,overflow:getComputedStyle(body).overflowY},
+    const footerButtons=footer ? [...footer.querySelectorAll('.ant-btn')].filter(e=>e.getBoundingClientRect().width>0 && e.getBoundingClientRect().height>0 && getComputedStyle(e).visibility!=='hidden').map(e=>({label:e.textContent.trim(),...rect(e)})).sort((a,b)=>a.x-b.x) : []
+    return {footer:footer&&{...rect(footer),padding:getComputedStyle(footer).padding,gap:getComputedStyle(footer).gap,marginTop:getComputedStyle(footer).marginTop,buttons:footerButtons},body:{...rect(body),padding:getComputedStyle(body).padding,paddingLeft:getComputedStyle(body).paddingLeft,paddingRight:getComputedStyle(body).paddingRight,scrollHeight:body.scrollHeight,clientHeight:body.clientHeight,overflow:getComputedStyle(body).overflowY},
       items:[...modal.querySelectorAll('.ant-form-item')].filter(e=>e.getBoundingClientRect().height && !e.parentElement.closest('.ant-form-item')).map(e=>({label:e.querySelector('label')?.textContent,margin:getComputedStyle(e).marginBottom,labelPadding:e.querySelector('.ant-form-item-label')&&getComputedStyle(e.querySelector('.ant-form-item-label')).paddingBottom,...rect(e),error:e.querySelector('.ant-form-item-explain-error')&&rect(e.querySelector('.ant-form-item-explain-error'))})),
       nativeMonthFields:[...modal.querySelectorAll('label')].filter(e=>/年.*月/.test(e.textContent) && e.parentElement.querySelector(':scope > .ant-input-number')).map(e=>({label:rect(e),control:rect(e.parentElement.querySelector(':scope > .ant-input-number'))})),
       grids:[...modal.querySelectorAll('.pms-project-info-form-grid,.pms-hr-version-form')].map(e=>({columns:getComputedStyle(e).gridTemplateColumns,gap:getComputedStyle(e).columnGap})),
@@ -96,12 +97,23 @@ const form = async (name, {lowHeight=false}={}) => {
   })
   results.push({name:`${name}-form`,...m})
   assert.ok(m.footer,`${name}: footer present`); assert.equal(m.footer.height,64,`${name}: footer64`)
-  assert.equal(m.footer.gap,'16px',`${name}: footer gap16`); assert.equal(m.body.paddingLeft,'24px',`${name}: body left inset24px`); assert.equal(m.body.paddingRight,'24px',`${name}: body right inset24px`)
+  assert.ok(m.footer.y>=0 && m.footer.bottom<=m.height+1,`${name}: footer bounds ${m.footer.y}..${m.footer.bottom} remain inside viewport ${m.height}`)
+  assert.equal(m.footer.gap,'16px',`${name}: footer gap16`)
+  for(const button of m.footer.buttons) assert.ok(button.y>=0 && button.bottom<=m.height+1,`${name}: ${button.label} action remains in viewport`)
+  if(m.footer.buttons.length===2) {
+    const [left,right]=m.footer.buttons
+    assert.ok(Math.abs(left.y-right.y)<=1,`${name}: footer actions share a row`)
+    const actualGap=right.x-(left.x+left.width)
+    assert.ok(Math.abs(actualGap-16)<=1,`${name}: actual footer button gap16, got ${actualGap}`)
+  }
+  assert.equal(m.footer.marginTop,'0px',`${name}: footer has no extra top margin`)
+  assert.ok(Math.abs(m.footer.y-m.body.bottom)<=1,`${name}: body meets footer without an extra margin`)
+  assert.equal(m.body.paddingLeft,'24px',`${name}: body left inset24px`); assert.equal(m.body.paddingRight,'24px',`${name}: body right inset24px`)
   for(const item of m.items) { assert.equal(item.margin,'12px',`${name}: ${item.label} margin12`); if(item.labelPadding) assert.equal(item.labelPadding,'4px',`${name}: label padding4`) }
   if(name.endsWith('monthly-edit') && !name.includes('capability')) assert.ok(m.nativeMonthFields.length>1,`${name}: native month fields measured`);
   for(const [index,field] of m.nativeMonthFields.entries()){ assert.equal(field.control.y-field.label.bottom,4,`${name}: month label gap4`); if(index>0) assert.equal(field.control.x-(m.nativeMonthFields[index-1].control.x+m.nativeMonthFields[index-1].control.width),16,`${name}: month horizontal gap16`) }
   for(const grid of m.grids) assert.equal(grid.gap,'16px',`${name}: horizontal form gap16`);
-  if(lowHeight) { assert.ok(m.footer.bottom<=m.height,`${name}: footer in viewport`); assert.ok(m.body.scrollHeight>m.body.clientHeight,`${name}: long form scrolls internally`); assert.equal(m.body.overflow,'auto') }
+  if(lowHeight) { assert.ok(m.body.scrollHeight>m.body.clientHeight,`${name}: long form scrolls internally`); assert.equal(m.body.overflow,'auto') }
   return m
 }
 const openProject = async (category,id) => {
@@ -169,7 +181,11 @@ try {
     await click('新增版本'); await form(`hr-${key}-new-version`); await closeModal()
     await press(key==='machine'?'button[aria-label="编辑版本"]':'button[aria-label="编辑"]'); await form(`hr-${key}-edit-version`); await closeModal()
     await click('项目月度预估投入','.ant-segmented-item-label'); await capture(`hr-${key}-monthly`); assert.ok(await page.$('.ant-table-tbody tr[data-row-key]'),'seeded HR monthly rows rendered')
-    await press('.ant-table-tbody button:not([disabled]):has(.anticon-edit)'); await form(`hr-${key}-monthly-edit`); await closeModal()
+    await press('.ant-table-tbody button:not([disabled]):has(.anticon-edit)'); await form(`hr-${key}-monthly-edit`)
+    if(key==='capability') {
+      await page.setViewport({width:1280,height:800}); await form('hr-capability-monthly-edit-lowheight',{lowHeight:true})
+      await closeModal(); await page.setViewport({width:1440,height:900})
+    } else await closeModal()
   })
   await suite('hr-config',async()=>{await click('人力资源管道','[role="menuitem"]'); for(const [i,label] of ['tOS阶段投入比','品牌&产品线分摊比','模块与部门','TMG及技术领域','技术阶段投入比'].entries()){await click(label,'.pms-hr-sidebar-leaf');await capture(`hr-config-${i}`);await visibleText('新增')} await click('新增');await form('hr-config-new');await closeModal()})
   await suite('roadmap',async()=>{await click('tOS路标','[role="menuitem"]');await capture('roadmap');

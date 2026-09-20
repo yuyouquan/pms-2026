@@ -3588,7 +3588,9 @@ body {
   padding: 15px 24px 16px !important;
 }
 
-.ant-modal-footer > .ant-btn + .ant-btn { margin-inline-start: 0; }
+/* Ant 6 gives adjacent footer buttons an 8px margin; flex gap is the sole owner. */
+.ant-modal .ant-modal-footer > .ant-btn + .ant-btn { margin-inline-start: 0 !important; }
+.ant-modal:not(.ant-modal-confirm) .ant-modal-footer { margin: 0; }
 .ant-modal-footer > .ant-space { gap: 16px !important; }
 
 .ant-modal-mask {
@@ -4046,6 +4048,12 @@ body {
 /* ================================================================
    PMS Custom — Modal (.pms-modal)
    ================================================================ */
+
+/* Ant Design 6 defaults ordinary dialogs to top:100px. Match the 24px
+   viewport inset to the container's available height so long-dialog actions
+   stay visible. Centered and explicit component/inline layouts retain priority. */
+.ant-modal:not(.ant-modal-confirm) { top: 24px; }
+.ant-modal-centered .ant-modal:not(.ant-modal-confirm) { top: 0; }
 
 /* Ant Design 6 uses container instead of content. The body owns its 24px
    inset; flexible content scrolls while the header and footer remain visible. */
