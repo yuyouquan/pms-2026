@@ -46,3 +46,45 @@ assert.equal(elements(render(true)).some(n=>n.type==='Editor'),false,'readonly f
 saved='同步值'; tree=render()
 assert.equal(elements(tree).find(n=>n.type==='Editor').props.value,'同步值','idle input follows saved data updates')
 console.log('PASS always-visible fields: initial input, clean mount, blur save, Escape reset, validation and readonly')
+
+// Keyboard blur may move to B while A retains an invalid draft. B finishing must not clear A's guard.
+let activeInstance, hook = 0, isEditMode = false
+const instances = { A: { id: 'A', refs: [], effects: [] }, B: { id: 'B', refs: [], effects: [] } }
+const lifecycleReact = {
+  useId: () => activeInstance.id,
+  useReducer: () => [0, () => {}],
+  useRef: value => { const i=hook++; return activeInstance.refs[i] ?? (activeInstance.refs[i]={current:value}) },
+  useEffect: (run,deps) => {
+    const i=hook++, previous=activeInstance.effects[i]
+    if (!previous || deps.some((dep,j)=>dep!==previous.deps[j])) {
+      previous?.cleanup?.(); activeInstance.effects[i]={deps,cleanup:run()}
+    }
+  },
+}
+const lifecycleModules = {...modules, react:lifecycleReact, '@/stores/ui':{useUiStore:{getState:()=>({setIsEditMode(value){isEditMode=value}})}}}
+const lifecycleMod={exports:{}}
+const previousDocument=globalThis.document
+globalThis.document={addEventListener(){},removeEventListener(){}}
+try {
+  new Function('require','module','exports',code)(id=>lifecycleModules[id]??require(id),lifecycleMod,lifecycleMod.exports)
+  const renderField=id=>{
+    activeInstance=instances[id];hook=0
+    return lifecycleMod.exports.default({label:id,value:'saved',onSave:value=>{if(value==='invalid')throw Error('invalid date')},renderEditor:(value,change)=>({type:'Editor',props:{value,change}})})
+  }
+  let A=renderField('A'), B=renderField('B')
+  A.props.onFocusCapture(); A=renderField('A')
+  elements(A).find(n=>n.type==='Editor').props.change('invalid'); A=renderField('A')
+  A.props.onBlur({relatedTarget:{},currentTarget:{contains:()=>false}}); A=renderField('A')
+  B.props.onFocusCapture(); B=renderField('B')
+  B.props.onKeyDown({key:'Escape',preventDefault(){},stopPropagation(){}}); B=renderField('B')
+  assert.equal(instances.A.refs[0].current.state.editing,true)
+  assert.equal(instances.A.refs[0].current.state.error,'invalid date')
+  assert.equal(isEditMode,true,'cancelling B preserves the guard for invalid A')
+  B.props.onFocusCapture(); B=renderField('B')
+  elements(B).find(n=>n.type==='Editor').props.change('valid')
+  B.props.onBlur({relatedTarget:{},currentTarget:{contains:()=>false}}); B=renderField('B')
+  assert.equal(isEditMode,true,'saving B also preserves the guard for invalid A')
+  A.props.onKeyDown({key:'Escape',preventDefault(){},stopPropagation(){}}); renderField('A')
+  assert.equal(isEditMode,false,'finishing the last field releases the guard')
+} finally { globalThis.document=previousDocument }
+console.log('PASS multiple field sessions preserve unsaved guards until the final draft is finished')

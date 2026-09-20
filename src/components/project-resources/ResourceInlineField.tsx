@@ -3,6 +3,14 @@ import { cloneElement, useEffect, useId, useReducer, useRef, type ReactElement, 
 import { useUiStore } from '@/stores/ui'
 import { createInlineFieldSession } from '@/components/project-resources/inlineFieldSession'
 
+// A failed field can retain its draft while keyboard focus moves to another field.
+const activeFields = new Set<string>()
+const setFieldEditing = (id: string, editing: boolean) => {
+  if (editing) activeFields.add(id)
+  else activeFields.delete(id)
+  useUiStore.getState().setIsEditMode(activeFields.size > 0)
+}
+
 export default function ResourceInlineField({ label, value, display, readOnly = false, onSave, renderEditor }: {
   label: string; value: unknown; display?: ReactNode; readOnly?: boolean; onSave: (value: unknown) => void
   renderEditor: (value: unknown, change: (value: unknown) => void, popup: () => HTMLElement) => ReactNode
@@ -16,18 +24,18 @@ export default function ResourceInlineField({ label, value, display, readOnly = 
   const { editing, error } = session.state
   useEffect(() => {
     if (!editing) return
-    useUiStore.getState().setIsEditMode(true)
+    setFieldEditing(id, true)
     const inside = (target: Node) => !!(root.current?.contains(target) || popupRoot.current?.contains(target))
     const outside = (event: PointerEvent) => {
       if (!session.leave(inside(event.target as Node), saveRef.current)) {
         event.preventDefault(); event.stopImmediatePropagation()
-      } else if (!session.state.editing) useUiStore.getState().setIsEditMode(false)
+      } else if (!session.state.editing) setFieldEditing(id, false)
     }
     const preventFailedLeave = (event: MouseEvent) => {
       if (session.state.error && !inside(event.target as Node)) { event.preventDefault(); event.stopImmediatePropagation() }
     }
     const escape = (event: KeyboardEvent) => {
-      if (inside(event.target as Node) && session.captureEscape(event)) useUiStore.getState().setIsEditMode(false)
+      if (inside(event.target as Node) && session.captureEscape(event)) setFieldEditing(id, false)
     }
     document.addEventListener('keydown', escape, true)
     document.addEventListener('pointerdown', outside, true)
@@ -37,9 +45,9 @@ export default function ResourceInlineField({ label, value, display, readOnly = 
       document.removeEventListener('pointerdown', outside, true)
       document.removeEventListener('click', preventFailedLeave, true)
       popupRoot.current?.remove(); popupRoot.current = null
-      useUiStore.getState().setIsEditMode(false)
+      setFieldEditing(id, false)
     }
-  }, [editing, session])
+  }, [editing, session, id])
   useEffect(() => { if (readOnly && session.state.editing) session.cancel() }, [readOnly, session])
   const change = (next: unknown) => {
     if (readOnly) return
