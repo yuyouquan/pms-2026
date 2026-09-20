@@ -138,9 +138,9 @@ export function MainHeader() {
 
   return (
     <div className="pms-main-header pms-topbar" style={{ padding: '0 32px', position: 'sticky', top: 0, zIndex: 100 }}>
-      <Row className="pms-main-header__row" align="middle" justify="space-between" style={{ height: 56 }}>
+      <Row className="pms-main-header__row" align="middle" justify="space-between" style={{ height: 'var(--pms-header-height)' }}>
         <Col className="pms-main-header__primary">
-          <Space className="pms-main-header__content" size={32} align="center">
+          <Space className="pms-main-header__content" size={20} align="center">
             <Space className="pms-main-header__brand" size={10}>
               <div className="pms-topbar__brand-mark" style={{ width: 30, height: 30, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <AppstoreOutlined style={{ color: '#fff', fontSize: 16 }} />
@@ -249,8 +249,8 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
   }, [showProjectSearch])
 
   return (
-    <div className="pms-project-space-header pms-topbar" style={{ padding: '0 24px', position: 'sticky', top: 0, zIndex: 100 }}>
-      <Row align="middle" style={{ height: 56 }}>
+    <div className="pms-project-space-header pms-topbar" style={{ padding: '0 32px', position: 'sticky', top: 0, zIndex: 100 }}>
+      <Row align="middle" style={{ height: 'var(--pms-header-height)' }}>
         <Col flex="none">
           <Button
             type="text"

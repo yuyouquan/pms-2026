@@ -263,7 +263,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
         className="pms-toolbar"
         size="small"
         style={{ marginBottom: 12 }}
-        styles={{ body: { padding: '10px 16px' } }}
+        styles={{ body: { padding: 'var(--pms-card-padding)' } }}
       >
         <div
           style={{

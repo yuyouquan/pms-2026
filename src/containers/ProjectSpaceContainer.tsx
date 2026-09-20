@@ -5647,7 +5647,7 @@ export default function ProjectSpaceContainer() {
       {/* Header */}
       <ProjectSpaceHeader navigateWithEditGuard={navigateWithEditGuard} />
 
-      <div className="pms-project-space__body" style={{ display: 'flex', height: 'calc(100vh - 56px)' }}>
+      <div className="pms-project-space__body" style={{ display: 'flex', height: 'calc(100dvh - var(--pms-header-height))' }}>
         {/* Sidebar */}
         <CollapsibleSidebarShell
           className="pms-sidebar pms-project-space-sidebar pms-glass-surface"
@@ -5680,7 +5680,7 @@ export default function ProjectSpaceContainer() {
         </CollapsibleSidebarShell>
 
         {/* Content area */}
-        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 24, overflow: 'auto' }}>
+        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 'var(--pms-content-padding)', overflow: 'auto' }}>
           {transfer.transferView === 'apply' && <TransferApply {...transferProps} />}
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}

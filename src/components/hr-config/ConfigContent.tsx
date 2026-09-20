@@ -48,7 +48,7 @@ function RecordsConfigContent({ moduleKey }: ConfigContentProps) {
         className="pms-hr-config-header"
         size="small"
         style={{ marginBottom: 12 }}
-        styles={{ body: { padding: '14px 20px' } }}
+        styles={{ body: { padding: 'var(--pms-card-padding)' } }}
       >
         <div
           style={{

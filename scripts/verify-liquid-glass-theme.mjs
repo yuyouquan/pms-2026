@@ -560,23 +560,23 @@ function stripCssComments(css) {
 }
 
 const CSS_ROOT_EXPECTATIONS = [
-  { label: '--pms-brand-strong token', pattern: /^\s*--pms-brand-strong:\s*#5d49f6;$/im },
-  { label: '--pms-brand token', pattern: /^\s*--pms-brand:\s*#7562ff;$/im },
+  { label: '--pms-brand-strong token', pattern: /^\s*--pms-brand-strong:\s*#4d41ff;$/im },
+  { label: '--pms-brand token', pattern: /^\s*--pms-brand:\s*#4d41ff;$/im },
   { label: '--pms-brand-soft token', pattern: /^\s*--pms-brand-soft:\s*#ad98ee;$/im },
-  { label: '--pms-brand-surface token', pattern: /^\s*--pms-brand-surface:\s*#f5f3ff;$/im },
+  { label: '--pms-brand-surface token', pattern: /^\s*--pms-brand-surface:\s*#f0efff;$/im },
   { label: '--pms-brand-border token', pattern: /^\s*--pms-brand-border:\s*#dcd6ff;$/im },
   { label: 'approved brand gradient', pattern: /^\s*--pms-gradient-brand:\s*linear-gradient\(106deg,\s*#5d49f6\s+0%,\s*#7562ff\s+50%,\s*#ad98ee\s+100%\);$/im },
-  { label: '--pms-page token', pattern: /^\s*--pms-page:\s*#f4f6fb;$/im },
+  { label: '--pms-page token', pattern: /^\s*--pms-page:\s*linear-gradient\(90deg,\s*#f1eeff,\s*#ecf6ff\);$/im },
   { label: '--pms-surface-solid token', pattern: /^\s*--pms-surface-solid:\s*#fff;$/im },
-  { label: '--pms-surface-glass token', pattern: /^\s*--pms-surface-glass:\s*rgb\(255\s+255\s+255\s*\/\s*76%\);$/im },
-  { label: '--pms-text-primary token', pattern: /^\s*--pms-text-primary:\s*#27243a;$/im },
+  { label: '--pms-surface-glass token', pattern: /^\s*--pms-surface-glass:\s*#fff;$/im },
+  { label: '--pms-text-primary token', pattern: /^\s*--pms-text-primary:\s*#000;$/im },
   { label: '--pms-text-secondary token', pattern: /^\s*--pms-text-secondary:\s*#625d70;$/im },
   { label: '--pms-text-tertiary token', pattern: /^\s*--pms-text-tertiary:\s*#817b90;$/im },
-  { label: '--pms-border token', pattern: /^\s*--pms-border:\s*#e6e3ef;$/im },
+  { label: '--pms-border token', pattern: /^\s*--pms-border:\s*rgb\(0\s+0\s+0\s*\/\s*12%\);$/im },
   { label: '--pms-radius-control token', pattern: /^\s*--pms-radius-control:\s*6px;$/im },
   { label: '--pms-radius-surface token', pattern: /^\s*--pms-radius-surface:\s*16px;$/im },
-  { label: '--pms-glass-filter token', pattern: /^\s*--pms-glass-filter:\s*blur\(14px\)\s+saturate\(145%\);$/im },
-  { label: '--pms-shadow-glass token', pattern: /^\s*--pms-shadow-glass:\s*0\s+12px\s+32px\s+rgb\(75\s+59\s+148\s*\/\s*8%\);$/im },
+  { label: '--pms-glass-filter token', pattern: /^\s*--pms-glass-filter:\s*none;$/im },
+  { label: '--pms-shadow-glass token', pattern: /^\s*--pms-shadow-glass:\s*0 0 20px 0 rgb\(211 208 255\s*\/\s*50%\);$/im },
   { label: '--pms-shadow-floating token', pattern: /^\s*--pms-shadow-floating:\s*0\s+22px\s+60px\s+rgb\(79\s+62\s+158\s*\/\s*12%\);$/im },
   { label: '--primary compatibility mapping', pattern: /^\s*--primary:\s*var\(--pms-brand-strong\);$/m },
   { label: '--accent compatibility mapping', pattern: /^\s*--accent:\s*var\(--pms-brand\);$/m },
@@ -852,8 +852,8 @@ const CSS_PRIMITIVE_RULES = [
   ] },
   { label: '.pms-topbar primitive', selector: '.pms-topbar', declarations: [
     { property: 'background', value: 'var\\(--pms-gradient-brand\\)' },
-    { property: 'border-bottom', value: '1px\\s+solid\\s+rgb\\(255\\s+255\\s+255\\s*\\/\\s*24%\\)' },
-    { property: 'box-shadow', value: '0\\s+10px\\s+28px\\s+rgb\\(92\\s+73\\s+214\\s*\\/\\s*24%\\)' },
+    { property: 'border-bottom', value: '0' },
+    { property: 'box-shadow', value: 'none' },
   ] },
   { label: '.pms-glass-surface primitive', selector: '.pms-glass-surface', declarations: [
     { property: 'background', value: 'var\\(--pms-surface-glass\\)' },
@@ -888,10 +888,10 @@ const CSS_PRIMITIVE_RULES = [
     { property: 'transition', value: 'transform\\s+160ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*box-shadow\\s+180ms\\s+cubic-bezier\\(\\.16,\\s*1,\\s*\\.3,\\s*1\\),\\s*border-color\\s+160ms\\s+ease' },
   ] },
   { label: '.pms-interactive-surface hover state', selector: '.pms-interactive-surface:hover', declarations: [
-    { property: 'transform', value: 'translateY\\(-1px\\)' },
+    { property: 'transform', value: 'none' },
   ] },
   { label: '.pms-interactive-surface active state', selector: '.pms-interactive-surface:active', declarations: [
-    { property: 'transform', value: 'scale\\(\\.98\\)' },
+    { property: 'transform', value: 'none' },
   ] },
 ]
 
@@ -1079,14 +1079,14 @@ function primitiveContractSelfTestFailures() {
   }
 }`
   const primitiveRules = `.pms-page-shell { min-height: 100dvh; background: var(--pms-page); color: var(--pms-text-primary); }
-.pms-topbar { background: var(--pms-gradient-brand); border-bottom: 1px solid rgb(255 255 255 / 24%); box-shadow: 0 10px 28px rgb(92 73 214 / 24%); }
+.pms-topbar { background: var(--pms-gradient-brand); border-bottom: 0; box-shadow: none; }
 .pms-glass-surface, .pms-toolbar { background: var(--pms-surface-glass); border: 1px solid rgb(255 255 255 / 96%); backdrop-filter: var(--pms-glass-filter); -webkit-backdrop-filter: var(--pms-glass-filter); box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-glass); }
 .pms-project-list-calendar .pms-project-calendar-header.pms-toolbar { background: var(--pms-surface-glass); border: 1px solid rgb(255 255 255 / 96%); backdrop-filter: var(--pms-glass-filter); -webkit-backdrop-filter: var(--pms-glass-filter); box-shadow: inset 0 1px 0 #fff, var(--pms-shadow-glass); }
 .pms-project-list-calendar .pms-project-calendar-cell { background: var(--pms-surface-solid); }
 .pms-solid-surface { background: var(--pms-surface-solid); border: 1px solid var(--pms-border); box-shadow: 0 10px 30px rgb(58 45 115 / 6%); }
 .pms-interactive-surface { transition: transform 160ms cubic-bezier(.16, 1, .3, 1), box-shadow 180ms cubic-bezier(.16, 1, .3, 1), border-color 160ms ease; }
-.pms-interactive-surface:hover { transform: translateY(-1px); }
-.pms-interactive-surface:active { transform: scale(.98); }`
+.pms-interactive-surface:hover { transform: none; }
+.pms-interactive-surface:active { transform: none; }`
   const validCss = [primitiveRules, focusRule, oneLineRule, compactRule, reducedMotionRule, reducedTransparencyRule].join('\n')
   const cases = [
     {
@@ -1270,16 +1270,16 @@ function verifyContract(root) {
 
   expectPatterns(failures, root, 'src/theme/pmsTheme.ts', [
     { label: 'PMS_COLORS export', pattern: /^export const PMS_COLORS\s*=\s*{/m },
-    { label: "brandStrong: '#5D49F6'", pattern: /^\s*brandStrong:\s*'#5D49F6',$/m },
-    { label: "brandMain: '#7562FF'", pattern: /^\s*brandMain:\s*'#7562FF',$/m },
+    { label: "brandStrong: '#4D41FF'", pattern: /^\s*brandStrong:\s*'#4D41FF',$/m },
+    { label: "brandMain: '#4D41FF'", pattern: /^\s*brandMain:\s*'#4D41FF',$/m },
     { label: "brandSoft: '#AD98EE'", pattern: /^\s*brandSoft:\s*'#AD98EE',$/m },
-    { label: "brandSurface: '#F5F3FF'", pattern: /^\s*brandSurface:\s*'#F5F3FF',$/m },
+    { label: "brandSurface: '#F0EFFF'", pattern: /^\s*brandSurface:\s*'#F0EFFF',$/m },
     { label: "brandBorder: '#DCD6FF'", pattern: /^\s*brandBorder:\s*'#DCD6FF',$/m },
-    { label: "page: '#F4F6FB'", pattern: /^\s*page:\s*'#F4F6FB',$/m },
-    { label: "textPrimary: '#27243A'", pattern: /^\s*textPrimary:\s*'#27243A',$/m },
+    { label: "page: '#F1EEFF'", pattern: /^\s*page:\s*'#F1EEFF',$/m },
+    { label: "textPrimary: '#000000'", pattern: /^\s*textPrimary:\s*'#000000',$/m },
     { label: "textSecondary: '#625D70'", pattern: /^\s*textSecondary:\s*'#625D70',$/m },
     { label: "textTertiary: '#817B90'", pattern: /^\s*textTertiary:\s*'#817B90',$/m },
-    { label: "border: '#E6E3EF'", pattern: /^\s*border:\s*'#E6E3EF',$/m },
+    { label: 'form border token', pattern: /^\s*border:\s*'rgba\(0, 0, 0, 0\.12\)',$/m },
     { label: 'pmsTheme export', pattern: /^export const pmsTheme:\s*ThemeConfig\s*=\s*{/m },
     { label: 'colorPrimary brand mapping', pattern: /^\s*colorPrimary:\s*PMS_COLORS\.brandMain,$/m },
     { label: 'colorInfo brand mapping', pattern: /^\s*colorInfo:\s*PMS_COLORS\.brandMain,$/m },
@@ -1293,11 +1293,11 @@ function verifyContract(root) {
     { label: 'borderRadius: 6', pattern: /^\s*borderRadius:\s*6,$/m },
     { label: 'borderRadiusLG: 16', pattern: /^\s*borderRadiusLG:\s*16,$/m },
     { label: 'controlHeight: 32', pattern: /^\s*controlHeight:\s*32,$/m },
-    { label: 'approved Chinese font stack', pattern: /^\s*fontFamily:\s*'-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',$/m },
-    { label: 'Button component mapping', pattern: /Button:\s*{\s*borderRadius:\s*6,[^}]*primaryShadow:\s*'0 5px 14px rgba\(96, 76, 226, \.22\)',\s*}/ },
-    { label: 'Card component mapping', pattern: /Card:\s*{\s*borderRadiusLG:\s*16,[^}]*bodyPadding:\s*16,[^}]*headerFontSize:\s*16,[^}]*}/ },
+    { label: 'approved Chinese font stack', pattern: /^\s*fontFamily:\s*'"PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',$/m },
+    { label: 'Button component mapping', pattern: /Button:\s*{\s*borderRadius:\s*6,[^}]*fontWeight:\s*400,[^}]*primaryShadow:\s*'none',\s*}/ },
+    { label: 'Card component mapping', pattern: /Card:\s*{\s*borderRadiusLG:\s*16,[^}]*bodyPadding:\s*12,[^}]*headerFontSize:\s*16,[^}]*}/ },
     { label: 'Modal component mapping', pattern: /Modal:\s*{\s*borderRadiusLG:\s*16,[^}]*titleFontSize:\s*16,[^}]*}/ },
-    { label: 'Table component mapping', pattern: /Table:\s*{\s*headerBg:\s*PMS_COLORS\.brandSurface,\s*headerColor:\s*'#514A70',\s*rowHoverBg:\s*'#FAF9FF',[^}]*cellPaddingBlock:\s*8,[^}]*cellPaddingInline:\s*12,[^}]*}/ },
+    { label: 'Table component mapping', pattern: /Table:\s*{\s*headerBg:\s*PMS_COLORS\.brandSurface,[^}]*cellFontSize:\s*14,[^}]*cellPaddingBlock:\s*9\.5,[^}]*cellPaddingInline:\s*12,[^}]*}/ },
     { label: 'Tabs component mapping', pattern: /Tabs:\s*{\s*inkBarColor:\s*PMS_COLORS\.brandMain,\s*itemSelectedColor:\s*PMS_COLORS\.brandStrong,\s*}/ },
   ])
 
@@ -1311,7 +1311,7 @@ function verifyContract(root) {
 
   expectPatterns(failures, root, 'src/app/layout.tsx', [
     { label: 'PmsThemeProvider import', pattern: /^import\s+PmsThemeProvider\s+from\s+'@\/components\/shared\/PmsThemeProvider'$/m },
-    { label: 'Chinese document language', pattern: /<html\s+lang="zh-CN">/ },
+    { label: 'Chinese document language', pattern: /<html\s+lang="zh-CN"\s+data-ui="figma-pms">/ },
     { label: 'root PmsThemeProvider wrapper', pattern: /<PmsThemeProvider>\{children\}<\/PmsThemeProvider>/ },
   ])
 
@@ -1346,7 +1346,7 @@ if (cssRoot !== null) {
     process.exit(1)
   }
 
-  finish(cssContractFailures(path.resolve(cssRoot)), 'Liquid glass CSS contract passed')
+  finish(cssContractFailures(path.resolve(cssRoot)), 'Figma PMS CSS contract passed')
 } else if (scanRoot !== null) {
   if (!scanRoot) {
     console.error('--scan-root requires a directory')
@@ -1359,5 +1359,5 @@ if (cssRoot !== null) {
     'Liquid glass raw-brand scanner passed',
   )
 } else {
-  finish(verifyContract(process.cwd()), 'Liquid glass theme contract passed for all interface groups')
+  finish(verifyContract(process.cwd()), 'Figma PMS theme contract passed for all interface groups')
 }

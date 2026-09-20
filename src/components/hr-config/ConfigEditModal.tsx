@@ -92,7 +92,7 @@ export default function ConfigEditModal({
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginTop: 8 }}>{LEGACY_MACHINE_PHASES.map(field => <span key={field.key}>{field.label}：{String(editingRecord[field.key] ?? 0)}</span>)}</div>
       </details>}
       <Form form={form} layout="vertical" style={isHrModel ? undefined : { marginTop: 16 }}>
-        {(isHrModel ? [moduleMeta.columns.slice(0, 4), moduleMeta.columns.slice(4)] : [moduleMeta.columns]).map((columns, groupIndex) => <Row key={groupIndex} gutter={12}>
+        {(isHrModel ? [moduleMeta.columns.slice(0, 4), moduleMeta.columns.slice(4)] : [moduleMeta.columns]).map((columns, groupIndex) => <Row key={groupIndex} gutter={16}>
           {columns.map(col => {
             const isPrimaryDepartment = isHrModel && col.key === 'primaryDepartment'
             const isSecondaryDepartment = isHrModel && col.key === 'secondaryDepartment'

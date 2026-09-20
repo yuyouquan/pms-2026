@@ -123,7 +123,7 @@ function SharePlanContent() {
         size="small"
         className="pms-glass-surface"
         style={{ marginBottom: 24, borderRadius: 16 }}
-        styles={{ body: { padding: 16 } }}
+        styles={{ body: { padding: 12 } }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <Space size={8} wrap>
@@ -154,7 +154,7 @@ function SharePlanContent() {
         className="pms-toolbar"
         size="small"
         style={{ marginBottom: 12, borderRadius: 16 }}
-        styles={{ body: { padding: 16 } }}
+        styles={{ body: { padding: 12 } }}
       >
         <Row justify="space-between" align="middle" gutter={[8, 8]}>
           <Col>
@@ -217,7 +217,7 @@ function SharePlanContent() {
       </Card>
 
       {/* Content Area */}
-      <Card className="pms-solid-surface" style={{ borderRadius: 16 }} styles={{ body: { padding: 16 } }}>
+      <Card className="pms-solid-surface" style={{ borderRadius: 16 }} styles={{ body: { padding: 12 } }}>
         {!latestVersion && <Empty description="当前范围暂无可查看的已发布计划" />}
         {latestVersion && viewMode === 'table' && (
           <Table

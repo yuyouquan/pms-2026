@@ -93,7 +93,7 @@ export default function MonthlyEditModal({ open, monthlyId, onCancel }: MonthlyE
           }
         />
 
-        <div style={{ display: 'flex', overflowX: 'auto', gap: 12, paddingBottom: 8 }}>
+        <div style={{ display: 'flex', overflowX: 'auto', gap: 'var(--pms-form-column-gap)', paddingBottom: 8 }}>
           {months.map(month => {
             const value = editData[month] ?? 0
             const year = month.split('-')[0]

@@ -316,7 +316,7 @@ export default function ProjectListTab({ onSelectProject, onNewProject }: Projec
         className="pms-toolbar"
         size="small"
         style={{ borderRadius: 8, marginBottom: 12 }}
-        styles={{ body: { padding: '10px 16px' } }}
+        styles={{ body: { padding: 'var(--pms-card-padding)' } }}
       >
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
           <Space size={12} wrap style={{ flex: 1, minWidth: 0 }}>
