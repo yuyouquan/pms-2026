@@ -10,6 +10,7 @@ import type { TechMilestoneNodes, TechDepartmentInvestment, TechPhaseKey } from 
 /* ── 模块元信息 & 列定义 ───────────────────────────────────────────── */
 
 export const CONFIG_MODULES: ConfigModuleMeta[] = [
+  { key: 'feeRate', label: '费率', category: '人力资源管道', description: '配置每人月对应的费用，单位：万元', columns: [{ key: 'value', label: '费率（万元）', inputType: 'number', editable: true }] },
   {
     key: 'nonLaborSubject', label: '非人力资源科目', category: '人力资源管道',
     description: '配置非人力投入使用的二级科目及其三级科目',
@@ -441,6 +442,7 @@ export const LEGACY_MOCK_HR_MODELS: ConfigRecord[] = [
   ]
 
 export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
+  feeRate: [{ id: 'resource-fee-rate', value: 5, enabled: true }],
   nonLaborSubject: [
     { id: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票', enabled: true },
     { id: 'non-labor-transport-rail', secondarySubject: '交通费', tertiarySubject: '火车票', enabled: true },

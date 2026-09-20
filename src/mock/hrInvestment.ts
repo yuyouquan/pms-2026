@@ -1,5 +1,6 @@
 import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import { mockNonLaborInvestment } from '@/mock/nonLaborInvestment'
+import { getResourcePhaseRatios } from '@/lib/resourceRatios'
 import { mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
 import { MOCK_CONFIG_DATA } from '@/constants/hrConfig'
 import { RESOURCE_FORMAL_IDS, RESOURCE_BUDGET_IDS } from '@/mock/projectRegistry'
@@ -215,6 +216,7 @@ function resourceProjects<T extends ResourceProject>(category: Category, templat
         ...(scheduleModelSnapshot ? { scheduleModelSnapshot } : {}),
         ...('departmentInvestments' in version ? {
           departmentInvestments: version.departmentInvestments.map((department, i) => ({ ...department, id: `${versionId}-department-${i + 1}` })),
+          departmentPhaseRatios: Object.fromEntries(version.departmentInvestments.map((department, i) => [`${versionId}-department-${i + 1}`, getResourcePhaseRatios(category, {}, department)])),
           operationLogs: [{ id: `${versionId}-created`, operation: 'created', operator: createdBy, timestamp: createdAt, description: `创建${version.versionNumber}预估投入版本` }],
         } : {}),
       }
@@ -222,6 +224,13 @@ function resourceProjects<T extends ResourceProject>(category: Category, templat
     return [{ ...template, id: recordId, pmsProjectId: id, name: canonical.name, tdtName: canonical.name,
       projectTarget: canonical.projectDescription || '', ipmProjectCode: null, ipmProjectName: null,
       createdBy: canonical.createdBy, createdAt: canonical.createdAt!, status: cancelled ? 'cancelled' : 'active', versions,
+      resourceOperationLogs: versions.flatMap(version => {
+        const base = { versionId: version.id, versionNumber: version.versionNumber, budgetType: version.budgetType, operator: version.createdBy, timestamp: version.createdAt }
+        return [
+          { ...base, id: `${version.id}-resource-created`, action: '创建版本', changes: [{ field: '版本号', before: '—', after: version.versionNumber }, { field: '预估投入合计', before: '—', after: String(version.estimatedInvestment) }] },
+          ...(version.isActive ? [{ ...base, id: `${version.id}-resource-formal`, action: '设置为正式版本', changes: [{ field: '正式版本', before: '否', after: '是' }] }] : []),
+        ]
+      }),
       brand: canonical.brand || '', productLine: canonical.productLine || '', marketName: canonical.marketName || '',
     } as T]
   })

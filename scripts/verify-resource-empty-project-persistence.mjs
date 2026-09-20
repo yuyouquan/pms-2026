@@ -16,8 +16,11 @@ for (const kind of ['Tos', 'Technical']) {
  const project = store.getState().projects.find(p => p.versions.length === 0 && access.isHrFormalRecord(p) && access.canAccessHrProject(p, true))
  assert.ok(project, `${kind}: actual empty formal project exists`)
  const seed = store.getState().projects.flatMap(p => p.versions).find(v => v.budgetType === 'projectEstimate')
- const deps = structuredClone(seed.departmentInvestments).map((row, i) => ({ ...row, id: `first-${kind}-${i}`, estimatedInvestment: i === 0 ? 17.1 : 0 }))
+ const fields = load('src/lib/resourceRatios.ts').getResourceRatioFields(kind.toLowerCase())
+ const deps = structuredClone(seed.departmentInvestments).map((row, i) => ({ ...row, id: `first-${kind}-${i}`, ...Object.fromEntries(fields.map((field,index)=>[field.key,index===0 && i===0 ? 17.1 : 0])), estimatedInvestment: i === 0 ? 17.1 : 0 }))
  store.getState().addVersion(project.id, { budgetType: 'projectEstimate', milestones: structuredClone(seed.milestones), departmentInvestments: deps })
+ const initial = store.getState().projects.find(p => p.id === project.id).versions[0]
+ store.getState().updateVersionInline(project.id, initial.id, { type:'departments', rows: deps, phaseRatios:Object.fromEntries(deps.map(row=>[row.id,Object.fromEntries(fields.map((field,index)=>[field.key,index===0?100:0]))])) }, project.pmsProjectId)
  const first = store.getState().projects.find(p => p.id === project.id).versions[0]
  assert.ok(first)
  assert.equal(first.estimatedInvestment, 17.1)
