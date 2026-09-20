@@ -6877,6 +6877,19 @@ body,
   margin-bottom: 0 !important;
 }
 
+/* Transfer team role selectors are native field rows, outside Ant Form.Item. */
+.pms-transfer-team-form > .ant-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pms-form-row-gap);
+}
+
+.pms-transfer-team-form__row {
+  display: flex;
+  align-items: center;
+  gap: var(--pms-form-group-gap);
+}
+
 /* Controls retain their own icon sizing; only the text-bearing root changes. */
 .ant-btn,
 .ant-input,
