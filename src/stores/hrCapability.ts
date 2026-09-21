@@ -1,4 +1,5 @@
 'use client'
+import { canEditHrInScope, canResourceAction } from '@/lib/hrProjectRegistry'
 
 import { allocateResourceRatios, getResourcePhaseRatios, resourceRatiosAfterDepartmentWrite } from '@/lib/resourceRatios'
 import { createResourceStoreState } from '@/lib/resourceStoreActions'
@@ -282,7 +283,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       copyVersion: (projectId, versionId) => set(s => copyHrVersionSnapshot(s.projects, s.monthlyInvestments, projectId, versionId, useProjectStore.getState().currentLoginUser)),
 
       addVersion: (projectId, form) => {
-        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
+        if (!canEditHrInScope(get().projects.find(p => p.id === projectId))) return
         const project = get().projects.find((p) => p.id === projectId)
         if (!project || !canCreateHrVersion(project, form.budgetType)) return
 
@@ -326,9 +327,9 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
 
 
       deleteVersion: (projectId, versionId) => {
-        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
+        if (!canResourceAction(get().projects.find(p => p.id === projectId), 'deleteVersion')) return
         const targetProject = get().projects.find(p => p.id === projectId)
-        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId))) return
+        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId), 'deleteVersion')) return
         const updatedProjects = get().projects.map((p) => {
           if (p.id !== projectId) return p
           const updated = {
@@ -348,7 +349,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
 
 
       updateVersion: (projectId, versionId, updates) => {
-        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
+        if (!canEditHrInScope(get().projects.find(p => p.id === projectId))) return
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => {
@@ -364,7 +365,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
 
       updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments, nonLaborInvestment, dates) => {
         if (dates && (!dates.projectStartTime || !dates.projectEndTime || dates.projectStartTime > dates.projectEndTime)) return
-        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
+        if (!canEditHrInScope(get().projects.find(p => p.id === projectId))) return
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => version.id === versionId && isHrVersionEditable(project, version)
@@ -385,7 +386,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       updateMonthlyInvestment: (monthlyId, monthlyData) => {
         set((state) => ({
           monthlyInvestments: state.monthlyInvestments.map((mi) =>
-            mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(state.projects.find(p => p.id === mi.projectId), state.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId))
+            mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(state.projects.find(p => p.id === mi.projectId), state.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId), 'laborEdit')
               ? { ...mi, monthlyData, isEdited: true }
               : mi,
           ),
@@ -402,11 +403,11 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
       },
 
       calculateMonthlySplit: (projectId, versionId) => {
-        if (!canAccessHrProject(get().projects.find(p => p.id === projectId), true)) return
+        if (!canResourceAction(get().projects.find(p => p.id === projectId), 'laborEdit')) return
         const project = get().projects.find((p) => p.id === projectId)
         if (!project) return
         const version = project.versions.find((v) => v.id === versionId)
-        if (!version || !isHrVersionEditable(project, version)) return
+        if (!version || !isHrVersionEditable(project, version, 'laborEdit')) return
 
         const newRecords = generateDepartmentMonthlyRecords(project, version)
         const otherRecords = get().monthlyInvestments.filter(

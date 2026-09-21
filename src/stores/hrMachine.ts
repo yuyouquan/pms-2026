@@ -1,3 +1,4 @@
+import { canEditHrInScope, canResourceAction } from '@/lib/hrProjectRegistry'
 import { resolveMachineDepartmentInvestments } from '@/lib/resourceAllocation'
 import { createResourceStoreState } from '@/lib/resourceStoreActions'
 import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
@@ -305,12 +306,12 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
             const lines = PRODUCT_LINES_BY_BRAND[metadata.brand as keyof typeof PRODUCT_LINES_BY_BRAND]
             const retained = metadata.brand === project.brand && metadata.productLine === project.productLine
             if (!retained && (!lines || !(lines as readonly string[]).includes(metadata.productLine))) throw new Error('请选择有效的品牌和对应产品线')
-            const saved = useProjectStore.getState().updateProject(canonical.id, previous => ({ ...previous, ...metadata, fieldValues: { ...previous.fieldValues, ...metadata } }))
+            const saved = useProjectStore.getState().updateProject(canonical.id, previous => ({ ...previous, ...metadata, fieldValues: { ...previous.fieldValues, ...metadata } }), undefined, { resourceMetadata: { kind: 'create', budgetType: 'annual' } })
             if (!saved) throw new Error('项目信息保存失败，请检查字段或编辑权限')
           }
         }
         set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        if (!canEditHrInScope(s.projects.find(p => p.id === projectId))) return s
         const project = s.projects.find(p => p.id === projectId)
         if (!project || !canCreateHrVersion(project, budgetType)) return s
 
@@ -365,9 +366,9 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       },
 
       deleteVersion: (projectId, versionId) => set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        if (!canResourceAction(s.projects.find(p => p.id === projectId), 'deleteVersion')) return s
         const targetProject = s.projects.find(p => p.id === projectId)
-        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId))) return s
+        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId), 'deleteVersion')) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.filter(v => v.id !== versionId)
@@ -383,7 +384,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
       updateVersion: (projectId, versionId, updates) => {
         const project = get().projects.find(item => item.id === projectId)
         const version = project?.versions.find(item => item.id === versionId)
-        if (!project || !version || !canAccessHrProject(project, true)) return
+        if (!project || !version || !canEditHrInScope(project)) return
         const allowed = allowedHrVersionUpdates(project, version, updates)
         if (allowed.estimatedInvestment !== undefined && allowed.estimatedInvestment !== version.estimatedInvestment) throw new Error('整机预估投入只读，请修改人力模型')
         if (allowed.nonLaborInvestment) validateNonLaborInvestment(allowed.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? [])
@@ -399,12 +400,12 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
           const retained = metadata.brand === project.brand && metadata.productLine === project.productLine
           if (!retained && (!lines || !(lines as readonly string[]).includes(metadata.productLine))) throw new Error('请选择有效的品牌和对应产品线')
           if (Object.entries(metadata).some(([key, value]) => canonical[key as keyof typeof metadata] !== value)) {
-            const saved = useProjectStore.getState().updateProject(canonical.id, previous => ({ ...previous, ...metadata, fieldValues: { ...previous.fieldValues, ...metadata } }))
+            const saved = useProjectStore.getState().updateProject(canonical.id, previous => ({ ...previous, ...metadata, fieldValues: { ...previous.fieldValues, ...metadata } }), undefined, { resourceMetadata: { kind: 'edit', versionId } })
             if (!saved) throw new Error('项目信息保存失败，请检查字段或编辑权限')
           }
         }
         set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        if (!canEditHrInScope(s.projects.find(p => p.id === projectId))) return s
         const configRecords = useHrConfigStore.getState().data.hrModel ?? []
 
         const newProjects = s.projects.map(p => {
@@ -463,7 +464,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(s.projects.find(p => p.id === mi.projectId), s.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId))
+          mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(s.projects.find(p => p.id === mi.projectId), s.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId), 'laborEdit')
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),

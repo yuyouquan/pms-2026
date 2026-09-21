@@ -1,11 +1,13 @@
+import { withResourceMutationContext } from '@/lib/resourceMutationContext'
+import { canUpdateResourceFields, resourceInlinePermission } from '@/lib/resourceActionPermissions'
 import type { StoreApi } from 'zustand'
 import type { ResourceProject, ResourceVersion } from '@/components/project-resources/resourceVersionAdapter'
-import type { ResourceInlineActions } from '@/lib/resourceInlineEditing'
+import type { ResourceInlineActions, ResourceInlinePatch } from '@/lib/resourceInlineEditing'
 import { createInlineResourceVersion } from '@/lib/resourceInlineEditing'
 import { appendResourceOperation, resourceVersionChanges } from '@/lib/resourceOperations'
 import { getResourceFormalValidationErrors } from '@/lib/resourceRatios'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
-import { canAccessHrProject, canEditHrInScope, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
+import { canResourceAction, getHrAllowedBudgetTypes } from '@/lib/hrProjectRegistry'
 import { canCreateHrVersion, copyHrVersionSnapshot, isHrVersionEditable } from '@/lib/hrVersionRules'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { useProjectStore } from '@/stores/project'
@@ -24,7 +26,7 @@ type AddedActions = 'createResourceVersion'|'updateResourceMonthlyInvestment'
  * Background refresh, hydration and cross-tab setState never enter the user-action context.
  */
 export function createResourceStoreState<S extends DomainState>(category:HrProjectCategory,rawSet:StoreApi<S>['setState'],get:()=>S,factory:(set:StoreApi<S>['setState'])=>Omit<S,AddedActions>,syncMonthly:(projects:S['projects'],rows:S['monthlyInvestments'])=>S['monthlyInvestments']):S {
- const actions:Record<string,string>={createResourceVersion:'创建版本',createVersionInline:'创建版本',addVersion:'创建版本',copyVersion:'复制版本',deleteVersion:'删除版本',updateVersion:'修改版本',updateVersionInline:'修改版本',updateVersionDepartmentInvestments:'修改部门人力投入',updateMonthlyInvestment:'修改月度人力投入',updateResourceMonthlyInvestment:'修改月度人力投入',setVersionLocked:'锁定状态',setVersionActive:'正式版本状态'}
+ const actions:Record<string,string>={createResourceVersion:'创建版本',createVersionInline:'创建版本',addVersion:'创建版本',copyVersion:'复制版本',deleteVersion:'删除版本',updateVersion:'修改版本',updateVersionInline:'修改版本',updateVersionDepartmentInvestments:'修改部门人力投入',updateMonthlyInvestment:'修改月度人力投入',updateResourceMonthlyInvestment:'修改月度人力投入',...(category==='capability'?{calculateMonthlySplit:'重新分配月度人力投入'}:{}),setVersionLocked:'锁定状态',setVersionActive:'正式版本状态'}
  let action=''
  let targetProject=''
  let targetVersion=''
@@ -58,7 +60,7 @@ export function createResourceStoreState<S extends DomainState>(category:HrProje
        if(before && after && !changes.length && 'operationLogs' in before && 'operationLogs' in after) audited={...audited,versions:audited.versions.map(item=>item.id===id?{...item,operationLogs:before.operationLogs}:item)} as ResourceProject
        audited=appendResourceOperation(audited,version,label,changes)
      }
-     if(action==='updateMonthlyInvestment' || action==='updateResourceMonthlyInvestment') {
+     if(action==='updateMonthlyInvestment' || action==='updateResourceMonthlyInvestment' || action==='calculateMonthlySplit') {
        for(const row of next.monthlyInvestments.filter(row=>row.projectId===project.id)) {
          const oldRow=baseline.monthlyInvestments.find(item=>item.id===row.id)
          const version=project.versions.find(v=>v.id===row.versionId)
@@ -74,7 +76,7 @@ export function createResourceStoreState<S extends DomainState>(category:HrProje
  const result=factory(set) as S
  result.createResourceVersion=(projectId,budgetType,scopeId,options)=>{
    const state=get(),project=state.projects.find(item=>item.id===projectId)
-   if(!project || !scopeId || !canEditHrInScope(project,scopeId) || !canCreateHrVersion(project,budgetType))throw new Error('当前项目不可创建版本')
+   if(!project || !scopeId || !canResourceAction(project,'createVersion',scopeId) || !canCreateHrVersion(project,budgetType))throw new Error('当前项目不可创建版本')
    const input=options.versionNumber.trim()
    if(!input)throw new Error('请填写版本号')
    const name=/^V/i.test(input)?`V${input.slice(1)}`:`V${input}`
@@ -98,7 +100,7 @@ export function createResourceStoreState<S extends DomainState>(category:HrProje
  result.updateResourceMonthlyInvestment=(projectId,versionId,rowId,month,value,scopeId)=>{
    const state=get(),project=state.projects.find(item=>item.id===projectId),version=project?.versions.find(item=>item.id===versionId)
    const row=state.monthlyInvestments.find(item=>item.id===rowId && item.projectId===projectId && item.versionId===versionId && !item.isArchived)
-   if(!project || !version || !row || !scopeId || !canEditHrInScope(project,scopeId) || !isHrVersionEditable(project,version))throw new Error('当前月度投入不可编辑')
+   if(!project || !version || !row || !scopeId || !canResourceAction(project,'laborEdit',scopeId) || !isHrVersionEditable(project,version,'laborEdit'))throw new Error('当前月度投入不可编辑')
    validateMonthlyValue(category,version,month,value,row.monthlyData)
    value=Math.round(value*10)/10
    if((row.monthlyData[month]??0)===value)return
@@ -110,7 +112,28 @@ export function createResourceStoreState<S extends DomainState>(category:HrProje
    ;(result as unknown as Record<string,unknown>)[name]=(...args:unknown[])=>{
      const state=get(),projectId=name==='updateMonthlyInvestment'?state.monthlyInvestments.find(row=>row.id===args[0])?.projectId:String(args[0])
      const project=state.projects.find(item=>item.id===projectId)
-     if(name==='setVersionActive' && args[2]===true && project && canAccessHrProject(project,true)) {
+     if(!project)return
+     const monthlyRow=name==='updateMonthlyInvestment'?state.monthlyInvestments.find(row=>row.id===args[0]):undefined
+     const version=project.versions.find(item=>item.id===(monthlyRow?.versionId ?? args[1]))
+     let permitted=false
+     if(['createResourceVersion','createVersionInline','addVersion','copyVersion'].includes(name)) permitted=canResourceAction(project,'createVersion')
+     else if(name==='setVersionLocked') permitted=canResourceAction(project,'lockVersion')
+     else if(name==='setVersionActive') permitted=canResourceAction(project,'setOfficialVersion')
+     else if(name==='deleteVersion') permitted=isHrVersionEditable(project,version,'deleteVersion')
+     else if(['updateMonthlyInvestment','updateResourceMonthlyInvestment','calculateMonthlySplit'].includes(name)) permitted=isHrVersionEditable(project,version,'laborEdit')
+     else if(name==='updateVersionInline') permitted=isHrVersionEditable(project,version,resourceInlinePermission(args[2] as ResourceInlinePatch))
+     else if(name==='updateVersion') permitted=!!version && isHrVersionEditable(project,version) && canUpdateResourceFields(project,version,args[2] as Record<string,unknown>)
+     else if(name==='updateVersionDepartmentInvestments') {
+       const dates=args[4] as Record<string,unknown>|undefined
+       const updates={...(category==='capability'?dates:{milestones:dates}),departmentInvestments:args[2],nonLaborInvestment:args[3]}
+       const validDates=category!=='capability' || !dates || Object.keys(dates).every(key=>key==='projectStartTime'||key==='projectEndTime')
+       permitted=validDates && !!version && isHrVersionEditable(project,version) && canUpdateResourceFields(project,version,updates)
+     }
+     if(!permitted) {
+       if(['createResourceVersion','createVersionInline','updateVersionInline','updateResourceMonthlyInvestment'].includes(name))throw new Error('无当前资源操作权限，或版本不可编辑')
+       return
+     }
+     if(name==='setVersionActive' && args[2]===true) {
        const version=project.versions.find(item=>item.id===args[1])
        // Lifecycle eligibility is independent of project creation status (active/paused/cancelled).
        if(version && !version.isActive && getHrAllowedBudgetTypes(project).includes(version.budgetType)) {
@@ -121,11 +144,11 @@ export function createResourceStoreState<S extends DomainState>(category:HrProje
      // Legacy bulk monthly API remains supported, with the same numeric/month contract.
      if(name==='updateMonthlyInvestment') {
        const row=state.monthlyInvestments.find(item=>item.id===args[0]),version=project?.versions.find(item=>item.id===row?.versionId)
-       if(row && version && isHrVersionEditable(project,version))for(const [month,value] of Object.entries(args[1] as Record<string,number>))validateMonthlyValue(category,version,month,value,row.monthlyData)
+       if(row && version && isHrVersionEditable(project,version,'laborEdit'))for(const [month,value] of Object.entries(args[1] as Record<string,number>))validateMonthlyValue(category,version,month,value,row.monthlyData)
      }
      const previousAction=action,previousProject=targetProject,previousVersion=targetVersion,previousBefore=actionBefore
      action=name;targetProject=projectId??'';targetVersion=['updateVersion','updateVersionInline','updateVersionDepartmentInvestments','setVersionLocked','setVersionActive'].includes(name)?String(args[1]):'';actionBefore=state
-     try{return original(...args)}finally{action=previousAction;targetProject=previousProject;targetVersion=previousVersion;actionBefore=previousBefore}
+     try{return withResourceMutationContext({ category, projectId: project.pmsProjectId, versionId: version?.id, action: name }, () => original(...args))}finally{action=previousAction;targetProject=previousProject;targetVersion=previousVersion;actionBefore=previousBefore}
    }
  }
  const refresh=result.refreshFormalProjects

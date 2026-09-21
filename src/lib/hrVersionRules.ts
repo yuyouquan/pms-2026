@@ -1,4 +1,5 @@
-import { canAccessHrProject, getHrAllowedBudgetTypes, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { canUpdateResourceFields } from '@/lib/resourceActionPermissions'
+import { canEditHrInScope, canResourceAction, type ResourcePermissionAction, getHrAllowedBudgetTypes, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
 import { PROJECT_CATEGORY_CAPABILITY } from '@/constants/projectTypes'
 import { getManualHrMilestoneKeysForType } from '@/lib/hrMilestoneOwnership'
 /** Shared HR version identity, activation, locking and write-scope rules. */
@@ -34,8 +35,9 @@ export function getActiveHrVersion<T extends HrVersionIdentity>(versions: readon
 export function isHrVersionEditable(
   project: { pmsProjectId?: string } | null | undefined,
   version: Pick<HrVersionIdentity, 'lockState' | 'budgetType'> | null | undefined,
+  action?: ResourcePermissionAction,
 ): boolean {
-  return !!version && version.lockState !== 'locked' && canAccessHrProject(project, true)
+  return !!version && version.lockState !== 'locked' && (action ? canResourceAction(project, action) : canEditHrInScope(project))
     && getHrAllowedBudgetTypes(project).some(type => type === version.budgetType)
 }
 
@@ -96,7 +98,7 @@ export function canCreateHrVersion(
   budgetType: string | null,
 ): boolean {
   return project?.status === 'active' && !!budgetType
-    && canAccessHrProject(project, true) && getHrAllowedBudgetTypes(project).some(type => type === budgetType)
+    && canResourceAction(project, 'createVersion') && getHrAllowedBudgetTypes(project).some(type => type === budgetType)
 }
 
 /** Enforce edit scope in the store as well as in every UI entry point. */
@@ -105,7 +107,7 @@ export function allowedHrVersionUpdates<T extends object>(
   version: HrVersionIdentity,
   updates: T,
 ): Partial<T> {
-  if (!isHrVersionEditable(project, version)) return {}
+  if (!isHrVersionEditable(project, version) || !canUpdateResourceFields(project, version, updates as Record<string, unknown>)) return {}
   const allowed = { ...updates } as Record<string, unknown>
   const manualCapabilityDates = getHrRegistryProject(project)?.type === PROJECT_CATEGORY_CAPABILITY
   const manualMilestoneKeys = getManualHrMilestoneKeysForType(getHrRegistryProject(project)?.type)
@@ -142,7 +144,7 @@ interface LifecycleProject {
 /** Pure lifecycle transforms retain business snapshots; synchronization is intentionally excluded. */
 export function changeHrVersionLifecycle<P extends LifecycleProject>(projects: P[], projectId: string, versionId: string, action: 'lock' | 'active', enabled: boolean): P[] {
   return projects.map(project => {
-    if (project.id !== projectId || !canAccessHrProject(project, true)) return project
+    if (project.id !== projectId || !canResourceAction(project, action === 'lock' ? 'lockVersion' : 'setOfficialVersion')) return project
     const target = project.versions.find(version => version.id === versionId)
     if (!target || !getHrAllowedBudgetTypes(project).some(type => type === target.budgetType)) return project
     const versions = project.versions.map(version => action === 'lock'

@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, type CSSProperties } from 'react'
-import { Button, Empty, Select, Segmented, Table, Tag, Tooltip } from 'antd'
+import { App, Button, Empty, Select, Segmented, Table, Tag, Tooltip } from 'antd'
 import { ArrowRightOutlined, CheckCircleOutlined, DownloadOutlined, ExclamationCircleOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { ProjectItem } from '@/types/app'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
@@ -9,6 +9,7 @@ import { resourceStore, useResourceStore, resourceProjectName } from '@/componen
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
 import { useHrConfigStore } from '@/stores/hrConfig'
+import { canResourceAction } from '@/lib/hrProjectRegistry'
 import { buildDashboardAnalysis, dashboardDelta, dashboardSources, DASHBOARD_BUDGETS, selectDashboardSource } from '@/components/project-resources/resourceDashboardData'
 import { DashboardCostMix, DashboardStageBars, DashboardTrend } from '@/components/project-resources/ResourceDashboardCharts'
 import { exportResourceDashboard } from '@/components/project-resources/exportResourceDashboard'
@@ -17,6 +18,7 @@ import HrSourceLink from '@/components/project-resources/HrSourceLink'
 export default function ProjectResourceDashboard({ project, category, onOpenVersion }: {
   project: ProjectItem; category: HrProjectCategory; onOpenVersion: (type: ResourceBudgetType, versionId?: string) => void
 }) {
+  const { message } = App.useApp()
   const store = useResourceStore(category)
   useProjectStore(state => state.currentLoginUser)
   useProjectStore(state => state.projects)
@@ -45,11 +47,28 @@ export default function ProjectResourceDashboard({ project, category, onOpenVers
   const focusLabel = DASHBOARD_BUDGETS.find(item => item.key === focus?.source.version.budgetType)?.label
   const period = effectiveYear === 'all' ? '全周期' : `${effectiveYear} 年`
   const hasAny = sources.some(Boolean)
+  const canExport = canResourceAction({ pmsProjectId: project.id }, 'export', project.id)
+  const exportAnalysis = () => {
+    if (!canResourceAction({ pmsProjectId: project.id }, 'export', project.id)) {
+      message.warning('当前项目资源导出权限已变化')
+      return
+    }
+    const current = resourceStore(category).getState()
+    const currentSources = sources.map(source => source && dashboardSources(current.projects, project.id, source.version.budgetType).find(item => item.version.id === source.version.id))
+    if (!currentSources.some(Boolean) || sources.some((source, index) => source && (!currentSources[index] || !canResourceAction(currentSources[index]?.owner, 'export', project.id)))) {
+      message.warning('分析来源版本或查看权限已变化，请重新选择')
+      return
+    }
+    const currentRate = Number(useHrConfigStore.getState().data.feeRate?.[0]?.value ?? 5)
+    const currentAnalyses = currentSources.map(source => source && buildDashboardAnalysis(category, source, current.monthlyInvestments, currentRate, { year: effectiveYear, department: effectiveDepartment }))
+    const currentFocus = currentAnalyses.find(analysis => analysis?.source.version.budgetType === focusType) ?? [...currentAnalyses].reverse().find(Boolean)
+    exportResourceDashboard(project.name, currentAnalyses, currentFocus, effectiveYear, effectiveDepartment, mode, cumulative)
+  }
   const warnings = focus?.issues.filter(issue => issue.severity === 'warning') ?? []
   return <section className="pms-resource-dashboard" aria-label="项目资源看板">
     <div className="pms-dashboard-toolbar">
       <div><h2>资源概览</h2><Tooltip title={`计划费用 = 月度人月 × 费率 ${rate} 万元/人月 + 非人力费用；三类预算独立比较，不合并累计。`}><span className="pms-dashboard-definition"><InfoCircleOutlined /> 计划投入分析</span></Tooltip></div>
-      <div><Button icon={<ReloadOutlined />} onClick={() => { setSelected({}); setYear('all'); setDepartment('all') }}>恢复正式版本</Button><Button icon={<DownloadOutlined />} disabled={!hasAny} onClick={() => exportResourceDashboard(project.name, analyses, focus, effectiveYear, effectiveDepartment, mode, cumulative)}>导出分析</Button></div>
+      <div><Button icon={<ReloadOutlined />} onClick={() => { setSelected({}); setYear('all'); setDepartment('all') }}>恢复正式版本</Button>{canExport && <Button icon={<DownloadOutlined />} disabled={!hasAny} onClick={exportAnalysis}>导出分析</Button>}</div>
     </div>
     <div className="pms-dashboard-filters">
       <label><span>年份</span><Select aria-label="看板年份" value={effectiveYear} onChange={setYear} options={[{ value: 'all', label: '全周期' }, ...years.map(value => ({ value, label: `${value} 年` }))]} /></label>

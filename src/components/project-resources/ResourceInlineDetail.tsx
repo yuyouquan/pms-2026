@@ -16,7 +16,7 @@ import NonLaborInvestmentSection, { NonLaborInvestmentRange } from '@/components
 import { canEditResourceMilestone, resolveMachineDepartmentInvestments, resolveMachinePhaseFields, resourceMilestoneFields, resourcePhaseFields, type InlineDepartment, type ResourceInlinePatch } from '@/lib/resourceInlineEditing'
 import { getResourcePhaseRatios, getResourceRatioFields } from '@/lib/resourceRatios'
 import { cloneNonLaborInvestment } from '@/lib/nonLaborInvestment'
-import { isHrFormalRecord, getHrRegistryProject, canEditHrInScope } from '@/lib/hrProjectRegistry'
+import { isHrFormalRecord, getHrRegistryProject, canResourceAction } from '@/lib/hrProjectRegistry'
 import { getConfigProjectLevels, getConfigModelVersions } from '@/constants/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
@@ -27,18 +27,18 @@ import { exportSheet } from '@/utils/exportExcel'
 import BudgetMilestoneSchedule from '@/components/project-resources/BudgetMilestoneSchedule'
 import { getProjectAttribute } from '@/types/projectRegistry'
 
-export default function ResourceInlineDetail({ category, project, version, scopeId, readOnly }: {
-  category: HrProjectCategory; project: ResourceProject; version: ResourceVersion; scopeId: string; readOnly: boolean
+export default function ResourceInlineDetail({ category, project, version, scopeId, laborReadOnly, nonLaborReadOnly, setupReadOnly }: {
+  category: HrProjectCategory; project: ResourceProject; version: ResourceVersion; scopeId: string; laborReadOnly: boolean; nonLaborReadOnly: boolean; setupReadOnly: boolean
 }) {
   const { message } = App.useApp()
   const { primaryOptions, getSecondaryOptions } = useHrDepartmentOptions()
   const records = useHrConfigStore(state => state.data.hrModel ?? [])
   const currentVersion = useRef(version); currentVersion.current = version
   const importSession = useInlineImportSession()
-  const isImportCurrent = () => {
+  const isImportCurrent = (permission: 'laborEdit' | 'nonLaborEdit') => {
     const current = resourceStore(category).getState().projects.find(item => item.id === project.id)
     const saved = current?.versions.find(item => item.id === version.id)
-    return saved === version && canEditHrInScope(current, scopeId) && isHrVersionEditable(current, saved)
+    return saved === version && canResourceAction(current, permission, scopeId) && isHrVersionEditable(current, saved, permission)
   }
   const persist = (patch: ResourceInlinePatch) => resourceStore(category).getState().updateVersionInline(project.id, version.id, patch, scopeId)
   const action = (fn: () => void) => { try { fn() } catch (error) { message.warning(error instanceof Error ? error.message : '保存失败') } }
@@ -50,13 +50,13 @@ export default function ResourceInlineDetail({ category, project, version, scope
   const patchRow = (id: string, key: string, value: string | number) => saveDepartments(rows.map(row => row.id === id ? { ...row, [key]: value, ...(key === 'primaryDepartment' && value !== row.primaryDepartment ? { secondaryDepartment: '' } : {}) } : row))
   const fields: ColumnsType<InlineDepartment> = [
     ...[{ key: 'primaryDepartment', label: '一级部门' }, { key: 'secondaryDepartment', label: '二级部门' }].map(field => ({ title: field.label, key: field.key, width: 150, fixed: 'left' as const,
-      render: (_: unknown, row: InlineDepartment) => field.key === 'secondaryDepartment' && !row.primaryDepartment && !readOnly
+      render: (_: unknown, row: InlineDepartment) => field.key === 'secondaryDepartment' && !row.primaryDepartment && !laborReadOnly
         ? <HrReadonlyField label="二级部门" placeholder="请先选择一级部门" reason="选择一级部门后可编辑" />
-        : <ResourceInlineField label={field.label} value={row[field.key]} readOnly={readOnly} onSave={value => patchRow(row.id, field.key, String(value ?? ''))}
+        : <ResourceInlineField label={field.label} value={row[field.key]} readOnly={laborReadOnly} onSave={value => patchRow(row.id, field.key, String(value ?? ''))}
           renderEditor={(value, change, popup) => <Select showSearch allowClear aria-label={field.label} value={value || undefined} optionFilterProp="label" getPopupContainer={popup} style={{ width: '100%' }}
             options={field.key === 'primaryDepartment' ? primaryOptions : getSecondaryOptions(row.primaryDepartment)} onChange={change} />} /> })),
     ...[{ title: '预估投入合计', key: 'total', width: 130, align: 'center' as const,
-      render: (_: unknown, row: InlineDepartment) => <ResourceInlineField label={`${row.primaryDepartment || '未选择一级部门'} ${row.secondaryDepartment || '未选择二级部门'} 预估投入合计（人月）`} value={row.estimatedInvestment} display={formatPersonMonth(row.estimatedInvestment)} readOnly={readOnly}
+      render: (_: unknown, row: InlineDepartment) => <ResourceInlineField label={`${row.primaryDepartment || '未选择一级部门'} ${row.secondaryDepartment || '未选择二级部门'} 预估投入合计（人月）`} value={row.estimatedInvestment} display={formatPersonMonth(row.estimatedInvestment)} readOnly={laborReadOnly}
         onSave={value => persist({ type: 'departmentTotal', rowId: row.id, value: value === null ? 0 : Number(value) })}
         renderEditor={(value, change) => <InputNumber controls={false} aria-label={`${row.primaryDepartment || '未选择一级部门'} ${row.secondaryDepartment || '未选择二级部门'} 预估投入合计（人月）`} value={value as number} min={0} precision={1} step={0.1} style={{ width: '100%' }} onChange={change} />} /> }],
     ...phases.map(field => ({ title: field.label, key: field.key, width: 170, align: 'center' as const,
@@ -64,7 +64,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
         const ratio = getResourcePhaseRatios(category, version, row)[field.key] ?? 0
         const amount = category === 'capability' ? row.estimatedInvestment * ratio / 100 : Number(row[field.key] ?? 0)
         const label = `${row.primaryDepartment} ${row.secondaryDepartment} ${field.label}比例`
-        return <ResourceInlineField label={label} value={ratio} display={`${ratio.toFixed(2)}%（${formatPersonMonth(amount)}）`} readOnly={readOnly}
+        return <ResourceInlineField label={label} value={ratio} display={`${ratio.toFixed(2)}%（${formatPersonMonth(amount)}）`} readOnly={laborReadOnly}
           onSave={value => persist({ type: 'departmentRatio', rowId: row.id, key: field.key, value: value === null ? 0 : Number(value) })}
           renderEditor={(value, change) => <InputNumber controls={false} aria-label={label} value={Number(value)} min={0} max={100} precision={2} suffix={`%（${formatPersonMonth(amount)}）`} style={{ width: '100%' }} onChange={change} />} />
       } })),
@@ -73,12 +73,12 @@ export default function ResourceInlineDetail({ category, project, version, scope
       const difference = Math.round((total - 100) * 100) / 100
       return <span className={`pms-resource-ratio-total${difference ? ' pms-resource-difference' : ''}`}>{total.toFixed(2)}%/100%</span>
     } },
-    ...(!readOnly ? [{ title: '操作', key: 'actions', width: 64, fixed: 'right' as const, render: (_: unknown, row: InlineDepartment) => <Tooltip title="删除部门"><Button type="text" danger size="small" aria-label="删除部门" icon={<DeleteOutlined />} onClick={() => action(() => saveDepartments(rows.filter(item => item.id !== row.id)))} /></Tooltip> }] : []),
+    ...(!laborReadOnly ? [{ title: '操作', key: 'actions', width: 64, fixed: 'right' as const, render: (_: unknown, row: InlineDepartment) => <Tooltip title="删除部门"><Button type="text" danger size="small" aria-label="删除部门" icon={<DeleteOutlined />} onClick={() => action(() => saveDepartments(rows.filter(item => item.id !== row.id)))} /></Tooltip> }] : []),
   ]
   const templateColumns = [{ key: 'primaryDepartment', title: '一级部门' }, { key: 'secondaryDepartment', title: '二级部门' }, { key: 'estimatedInvestment', title: '预估投入合计（人月）' }, ...phases.map(field => ({ key: field.key, title: `${field.label}（%）` }))]
   const importDepartments = async (file: File) => {
     const original = version
-    const canApply = importSession.capture(() => currentVersion.current === original && isImportCurrent())
+    const canApply = importSession.capture(() => currentVersion.current === original && isImportCurrent('laborEdit'))
     try {
       const workbook = XLSX.read(await file.arrayBuffer())
       if (!workbook.SheetNames[0]) throw new Error('文件中没有工作表')
@@ -98,7 +98,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
   }
   const machineProject = 'brand' in project ? project : null
   const registryProject = getHrRegistryProject(project)
-  const metadataReadOnly = readOnly || isHrFormalRecord(project) || !!registryProject?.boundFormalProjectId
+  const metadataReadOnly = setupReadOnly || isHrFormalRecord(project) || !!registryProject?.boundFormalProjectId
   const isBudgetProject = !!registryProject && getProjectAttribute(registryProject) === 'budget'
   const metadataFields = machineProject ? [{ key: 'brand' as const, label: '品牌' }, { key: 'productLine' as const, label: '产品线' }, { key: 'marketName' as const, label: '市场名' }].map(field => ({ key: field.key, label: field.label,
     children: <ResourceInlineField label={field.label} value={machineProject[field.key]} readOnly={metadataReadOnly} onSave={value => persist({ type: 'metadata', key: field.key, value: String(value ?? '') })}
@@ -106,7 +106,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
         : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ width: '100%' }} onChange={change}
           options={[...new Set([...(field.key === 'brand' ? Object.keys(PRODUCT_LINES_BY_BRAND) : PRODUCT_LINES_BY_BRAND[machineProject.brand as keyof typeof PRODUCT_LINES_BY_BRAND] ?? []), ...(value ? [String(value)] : [])])].map(label => ({ label, value: label }))} />} /> })) : []
   const modelFields = machine ? [{ key: 'projectLevel' as const, label: '项目等级' }, { key: 'levelCoefficient' as const, label: '等级系数' }, { key: 'hrModelVersion' as const, label: '人力模型版本号' }].map(field => ({ key: field.key, label: field.label,
-    children: <ResourceInlineField label={field.label} value={machine[field.key]} readOnly={readOnly || field.key === 'projectLevel' && isHrFormalRecord(project)} onSave={value => persist({ type: 'model', key: field.key, value: field.key === 'levelCoefficient' ? Number(value) : String(value ?? '') })}
+    children: <ResourceInlineField label={field.label} value={machine[field.key]} readOnly={setupReadOnly || field.key === 'projectLevel' && isHrFormalRecord(project)} onSave={value => persist({ type: 'model', key: field.key, value: field.key === 'levelCoefficient' ? Number(value) : String(value ?? '') })}
       renderEditor={(value, change, popup) => field.key === 'levelCoefficient' ? <InputNumber controls={false} aria-label={field.label} value={value as number} style={{ width: '100%' }} step={0.1} onChange={change} />
         : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ width: '100%' }} onChange={change} notFoundContent="当前项目等级暂无可用人力模型" options={(field.key === 'projectLevel' ? getConfigProjectLevels(records) : getConfigModelVersions(records, machine.projectLevel)).map(label => ({ label, value: label }))} />} /> })) : []
   const machineRows = machine ? resolveMachineDepartmentInvestments(machine) : []
@@ -125,7 +125,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
       dates={dates}
       fields={resourceMilestoneFields[category]}
       modelSnapshot={'scheduleModelSnapshot' in version ? version.scheduleModelSnapshot : undefined}
-      readOnly={readOnly}
+      readOnly={setupReadOnly}
       allowSchedule={isBudgetProject}
       headerContent={machine && <dl className="pms-resource-metadata">{[...metadataFields, ...modelFields].map(field => <div key={field.key}><dt>{field.label}</dt><dd>{field.children}</dd></div>)}</dl>}
       canEdit={key => canEditResourceMilestone(category, project, key)}
@@ -133,7 +133,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
       onSchedule={(scheduledDates, modelSnapshot) => persist({ type: 'milestoneSchedule', dates: scheduledDates, modelSnapshot })}
     /> : <section className="pms-hr-milestone-details" aria-label="里程碑信息"><h3 className="pms-hr-investment-section-title">里程碑信息</h3>
       <div className="pms-hr-milestone-details-scroll"><dl style={{ gridTemplateColumns: `repeat(${resourceMilestoneFields[category].length}, minmax(130px, 1fr))` }}>
-        {resourceMilestoneFields[category].map(field => <div key={field.key}><dt>{field.label}</dt><dd><ResourceInlineField label={field.label} value={dates[field.key]} readOnly={readOnly || !canEditResourceMilestone(category, project, field.key)}
+        {resourceMilestoneFields[category].map(field => <div key={field.key}><dt>{field.label}</dt><dd><ResourceInlineField label={field.label} value={dates[field.key]} readOnly={setupReadOnly || !canEditResourceMilestone(category, project, field.key)}
           onSave={value => persist({ type: 'milestone', key: field.key, value: value ? String(value) : null })}
           renderEditor={(value, change, popup) => <div {...inlineDateInputHandlers(change)}><DatePicker aria-label={field.label} defaultValue={value ? dayjs(String(value)) : null} preserveInvalidOnBlur getPopupContainer={popup} style={{ width: '100%' }} onChange={date => change(date?.format('YYYY-MM-DD') ?? null)} /></div>} /></dd></div>)}
       </dl></div></section>}
@@ -141,7 +141,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
     <section className="pms-resource-panel" aria-label="预估投入">
     <Tabs className="pms-resource-investment-tabs" tabBarExtraContent={{ right: <NonLaborInvestmentRange value={cloneNonLaborInvestment(version.nonLaborInvestment)} /> }} items={[{ key: 'labor', label: '各部门人力（人月）投入', children: <>
 
-    {!machine && !readOnly && <Space size="small" className="pms-resource-department-actions">
+    {!machine && !laborReadOnly && <Space size="small" className="pms-resource-department-actions">
       <Button size="small" type="dashed" icon={<PlusOutlined />} onClick={() => action(() => saveDepartments([...rows, { id: `department-${crypto.randomUUID()}`, primaryDepartment: '', secondaryDepartment: '', estimatedInvestment: 0 }]))}>添加部门</Button>
       <Button size="small" type="dashed" icon={<DownloadOutlined />} onClick={() => exportSheet([Object.fromEntries(templateColumns.map(column => [column.key, column.key.includes('Department') ? '' : 0]))], templateColumns, '部门预估投入模板.xlsx', '部门预估投入')}>下载模板</Button>
       <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={importDepartments}><Button size="small" type="dashed" icon={<UploadOutlined />}>导入</Button></Upload>
@@ -157,9 +157,9 @@ export default function ResourceInlineDetail({ category, project, version, scope
           <Table.Summary.Cell index={2} align="center">{formatPersonMonth(version.estimatedInvestment)}</Table.Summary.Cell>
           {phases.map((field, index) => <Table.Summary.Cell key={field.key} index={index + 3} align="center">{formatPersonMonth(Math.round(rows.reduce((sum, row) => sum + Number(category === 'capability' ? row.estimatedInvestment * (getResourcePhaseRatios(category, version, row).projectPeriod ?? 0) / 100 : row[field.key] ?? 0), 0) * 10) / 10)}</Table.Summary.Cell>)}
           <Table.Summary.Cell index={phases.length + 3} />
-          {!readOnly && <Table.Summary.Cell index={phases.length + 4} />}
+          {!laborReadOnly && <Table.Summary.Cell index={phases.length + 4} />}
         </Table.Summary.Row>} />}
-    </> }, { key: 'nonLabor', label: '非人力投入（元）', children: <NonLaborInvestmentSection inline unit="元" showSummary={false} canImport={isImportCurrent} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={readOnly}
+    </> }, { key: 'nonLabor', label: '非人力投入（元）', children: <NonLaborInvestmentSection inline unit="元" showSummary={false} canImport={() => isImportCurrent('nonLaborEdit')} value={cloneNonLaborInvestment(version.nonLaborInvestment)} readOnly={nonLaborReadOnly}
       onChange={value => persist({ type: 'nonLabor', value })} onItemTotalChange={(itemId, value) => persist({ type: 'nonLaborItemTotal', itemId, value })} /> }]} />
     </section>
   </div>

@@ -8,6 +8,23 @@ export interface ProjectPermissionItem {
   aliases?: string[]
 }
 
+export const RESOURCE_PERMISSION_ITEMS = [
+  { key: 'resource:view', name: '查看' },
+  { key: 'resource:createVersion', name: '新建版本' },
+  { key: 'resource:lockVersion', name: '锁定/不锁定' },
+  { key: 'resource:setOfficialVersion', name: '设置为正式版本' },
+  { key: 'resource:deleteVersion', name: '删除' },
+  { key: 'resource:export', name: '导出' },
+  { key: 'resource:laborEdit', name: '各部门人力投入' },
+  { key: 'resource:nonLaborEdit', name: '非人力投入' },
+] as const
+
+export type ResourcePermissionKey = typeof RESOURCE_PERMISSION_ITEMS[number]['key']
+export const RESOURCE_PERMISSION_KEYS = RESOURCE_PERMISSION_ITEMS.map(item => item.key)
+export const RESOURCE_BASIC_PERMISSION_KEYS: readonly ResourcePermissionKey[] = [
+  'resource:view', 'resource:laborEdit', 'resource:nonLaborEdit',
+]
+
 export const PROJECT_PERMISSION_GROUPS: { module: string; permissions: ProjectPermissionItem[] }[] = [
   {
     module: '基础信息',
@@ -28,6 +45,10 @@ export const PROJECT_PERMISSION_GROUPS: { module: string; permissions: ProjectPe
       { key: 'plan:导入', name: '导入' },
       { key: 'plan:导出', name: '导出' },
     ],
+  },
+  {
+    module: '资源',
+    permissions: [...RESOURCE_PERMISSION_ITEMS],
   },
   {
     module: '权限中心',

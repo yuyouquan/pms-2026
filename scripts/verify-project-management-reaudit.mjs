@@ -128,7 +128,8 @@ await check('new HR versions and edit/copy logs record the acting user without r
       updateDepartments(record.id,copy.id,structuredClone(copy.departmentInvestments))
       assert.equal(versions()[1].operationLogs.at(-1).operator,owners[0])
     }
-    const before=structuredClone(versions())
+    // Persistence uses JSON; undefined optional fields are intentionally omitted.
+    const before=JSON.parse(JSON.stringify(versions()))
     await store.persist.rehydrate()
     assert.deepEqual(versions(),before)
   }
