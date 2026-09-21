@@ -9,7 +9,7 @@ import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 import { MILESTONE_FIELDS } from '@/constants/hrMachine'
 import { TECH_MILESTONE_FIELDS, TECH_PHASE_INVESTMENT_FIELDS } from '@/constants/hrTechnical'
 import { TOS_MILESTONE_FIELDS, TOS_PHASE_INVESTMENT_FIELDS } from '@/constants/hrTos'
-import { calcEstimatedInvestment, getAvailableHrModelSelection, isHrModelAvailable } from '@/constants/hrConfig'
+import { calcEstimatedInvestment, getAvailableHrModelSelection, getConfigModelVersions, isHrModelAvailable } from '@/constants/hrConfig'
 import { canEditHrInScope, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
 import { canCreateHrVersion, getHrVersionSeed, isHrBatch, isHrVersionEditable, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { HR_MANUAL_MILESTONE_KEYS, mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
@@ -170,6 +170,11 @@ export function updateInlineResourceVersion(category: HrProjectCategory, project
     if (!('hrModelVersion' in next) || patch.key === 'projectLevel' && isHrFormalRecord(project)) throw new Error('项目等级由来源项目维护')
     if (next[patch.key] === patch.value) return version
     Object.assign(next, { [patch.key]: patch.value })
+    if (patch.key === 'projectLevel' && !isHrModelAvailable(config.hrModel ?? [], next.projectLevel, next.hrModelVersion)) {
+      const available = getConfigModelVersions(config.hrModel ?? [], next.projectLevel)
+      if (!available.length) throw new Error('当前项目等级暂无可用人力模型，请先在配置中心配置')
+      next.hrModelVersion = available[0]
+    }
     if (!Number.isFinite(next.levelCoefficient) || next.levelCoefficient < 0 || Math.abs(next.levelCoefficient * 100 - Math.round(next.levelCoefficient * 100)) > 0.000001 || !isHrModelAvailable(config.hrModel ?? [], next.projectLevel, next.hrModelVersion)) throw new Error('请选择有效的项目等级、人力模型版本号和等级系数')
     next.modelSnapshot = (config.hrModel ?? []).filter(row => row.enabled !== false && String(row.projectLevel) === next.projectLevel && String(row.modelVersion) === next.hrModelVersion).map(row => ({ ...row }))
     delete next.machineDepartmentInvestments
