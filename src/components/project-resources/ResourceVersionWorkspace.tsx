@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Alert, App, Button, Empty, Popconfirm, Space, Tabs, Tooltip } from 'antd'
-import { FlagFilled, FlagOutlined, HistoryOutlined, CopyOutlined, DeleteOutlined, DownloadOutlined, LockOutlined, PlusOutlined, UnlockOutlined } from '@ant-design/icons'
+import { FlagFilled, FlagOutlined, HistoryOutlined, DeleteOutlined, DownloadOutlined, LockOutlined, PlusOutlined, UnlockOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { ProjectItem } from '@/types/app'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
@@ -45,7 +45,6 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
   const allowed = getHrAllowedBudgetTypes(own).includes(budgetType)
   const guard = (action: () => void) => useUiStore.getState().navigateWithEditGuard(action, false)
   const create = () => guard(() => setCreateSource(''))
-  const copy = () => guard(() => setCreateSource(version?.id ?? ''))
   const act = (callback: () => void) => guard(() => {
     try { callback() } catch (error) { message.warning(error instanceof Error ? error.message : '操作失败') }
   })
@@ -70,7 +69,6 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
           {boundFormalProject && <div className="pms-resource-bound-project"><span>绑定正式项目</span><HrSourceLink project={{ pmsProjectId: boundFormalProject.id }} name={boundFormalProject.name} /></div>}
           {version.copiedFromVersionNumber && <span>复制自 {version.copiedFromVersionNumber}</span>}
         </div><Space key={`${version.id}-${version.lockState}-${version.isActive}`} size={4} wrap>
-          {canManage && canCreate && <Tooltip title="复制为新版本"><Button type="text" aria-label="复制为新版本" icon={<CopyOutlined />} onClick={copy} /></Tooltip>}
           {canManage && <Tooltip title={version.lockState === 'locked' ? '解锁' : '锁定'}><Button type="text" aria-label={version.lockState === 'locked' ? '解锁' : '锁定'} icon={version.lockState === 'locked' ? <UnlockOutlined /> : <LockOutlined />} onClick={() => act(() => store.setVersionLocked(owner.id, version.id, version.lockState !== 'locked'))} /></Tooltip>}
           {canManage && <Tooltip title={version.isActive ? '取消设置为正式版本' : '设置为正式版本'}><Button type="text" aria-label={version.isActive ? '取消设置为正式版本' : '设置为正式版本'} icon={version.isActive ? <FlagFilled /> : <FlagOutlined />} onClick={() => act(() => store.setVersionActive(owner.id, version.id, !version.isActive))} /></Tooltip>}
           <Tooltip title="版本操作日志"><Button type="text" aria-label="版本操作日志" icon={<HistoryOutlined />} onClick={() => guard(() => setLogFilter(version.id))} /></Tooltip>
@@ -88,6 +86,6 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
       const id = resourceStore(category).getState().createResourceVersion(own.id, budgetType, project.id, { ...options, sourceVersionId: options.sourceVersionId || undefined })
       setSelectedId(id); setCreateSource(null); message.success('版本已创建，可直接填写')
     }} />}
-    {logFilter !== null && <ResourceOperationLogDialog logs={logs} versionId={logFilter === 'all' ? undefined : logFilter} onCancel={() => setLogFilter(null)} />}
+    {logFilter !== null && <ResourceOperationLogDialog logs={logs} budgetLabel={label} versionId={logFilter === 'all' ? undefined : logFilter} onCancel={() => setLogFilter(null)} />}
   </div>
 }
