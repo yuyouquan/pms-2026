@@ -56,7 +56,7 @@ export default function NewVersionModal({ open, projectId, versionId, embedded =
     const sourceLevel = editingVersion ? editingVersion.projectLevel : isHrFormalRecord(project) ? resolveHrFormalSource('machine', project?.ipmProjectCode ?? null, project?.pmsProjectId).projectLevel : seed?.projectLevel ?? ''
     const selection = getAvailableHrModelSelection(records, { projectLevel: sourceLevel, hrModelVersion: seed?.hrModelVersion ?? '' })
     setProjectLevel(editing ? seed?.projectLevel ?? '' : selection.projectLevel)
-    setHrModelVersion(editing ? seed?.hrModelVersion ?? '' : selection.hrModelVersion)
+    setHrModelVersion(editing ? seed?.hrModelVersion ?? '' : formal && sourceLevel && selection.projectLevel !== sourceLevel ? '' : selection.hrModelVersion)
     setLevelCoefficient(seed?.levelCoefficient ?? 1)
     setMetadata({ brand: project?.brand ?? '', productLine: project?.productLine ?? '', marketName: project?.marketName ?? '' })
   }, [open, localProjectId, budgetType, versionId])
@@ -95,9 +95,12 @@ export default function NewVersionModal({ open, projectId, versionId, embedded =
       <Form.Item label="品牌" required={!formal && !bound}>{metadataReadOnly ? <HrReadonlyField label="品牌" value={effectiveMetadata.brand} reason="来源于正式项目基础信息" /> : <Select aria-label="品牌" value={metadata.brand || undefined} options={[...new Set([...Object.keys(PRODUCT_LINES_BY_BRAND), ...(metadata.brand ? [metadata.brand] : [])])].map(value => ({ value, label: value }))} onChange={brand => setMetadata(previous => ({ ...previous, brand, productLine: '' }))} />}</Form.Item>
       <Form.Item label="产品线" required={!formal && !bound}>{metadataReadOnly ? <HrReadonlyField label="产品线" value={effectiveMetadata.productLine} reason="来源于正式项目基础信息" /> : <Select aria-label="产品线" value={metadata.productLine || undefined} options={[...new Set([...productLines, ...(metadata.productLine ? [metadata.productLine] : [])])].map(value => ({ value, label: value }))} onChange={productLine => setMetadata(previous => ({ ...previous, productLine }))} />}</Form.Item>
       <Form.Item label="市场名" required={!formal && !bound}>{metadataReadOnly ? <HrReadonlyField label="市场名" value={effectiveMetadata.marketName} reason="来源于正式项目基础信息" /> : <Input aria-label="市场名" value={effectiveMetadata.marketName} placeholder="请输入市场名" onChange={event => setMetadata(previous => ({ ...previous, marketName: event.target.value }))} />}</Form.Item>
-      <Form.Item label="项目等级" required tooltip={formal ? '来源于本项目基础信息' : '来源于启用的整机人力模型'}>{formal ? <HrReadonlyField label="项目等级" value={effectiveProjectLevel} reason="来源于本项目基础信息" /> : <Select value={effectiveProjectLevel || undefined} options={getConfigProjectLevels(records).map(value => ({ value, label: value }))} onChange={setProjectLevel} />}</Form.Item>
+      <Form.Item label="项目等级" required tooltip={formal ? '来源于本项目基础信息' : '来源于启用的整机人力模型'}>{formal ? <HrReadonlyField label="项目等级" value={effectiveProjectLevel} reason="来源于本项目基础信息" /> : <Select value={effectiveProjectLevel || undefined} options={getConfigProjectLevels(records).map(value => ({ value, label: value }))} onChange={level => {
+        setProjectLevel(level)
+        setHrModelVersion(current => isHrModelAvailable(records, level, current) ? current : getConfigModelVersions(records, level)[0] ?? '')
+      }} />}</Form.Item>
       <Form.Item label="等级系数" required><InputNumber style={{ width: '100%' }} min={0} precision={2} step={0.1} value={levelCoefficient} onChange={value => setLevelCoefficient(value ?? 1)} /></Form.Item>
-      <Form.Item label="人力模型版本号" required><Select value={hrModelVersion || undefined} options={getConfigModelVersions(records).map(value => ({ value, label: value }))} onChange={setHrModelVersion} /></Form.Item>
+      <Form.Item label="人力模型版本号" required><Select aria-label="人力模型版本号" value={hrModelVersion || undefined} notFoundContent="当前项目等级暂无可用人力模型" options={getConfigModelVersions(records, effectiveProjectLevel).map(value => ({ value, label: value }))} onChange={setHrModelVersion} /></Form.Item>
       </div>
       {!embedded && !scopeId && !editing && <div className="pms-hr-version-form"><Form.Item label="项目" required><Select showSearch aria-label="选择项目" value={localProjectId || undefined} optionFilterProp="label" options={projects.filter(item => canAccessHrProject(item, true) && getHrAllowedBudgetTypes(item).length > 0).map(item => ({ value: item.id, label: item.name, disabled: item.status !== 'active' }))} onChange={id => { setLocalProjectId(id); setBudgetType(fixedBudgetType ?? getHrAllowedBudgetTypes(projects.find(item => item.id === id))[0] ?? 'annual') }} /></Form.Item></div>}
       <HrVersionMilestoneRow category="machine" {...milestoneForm} />

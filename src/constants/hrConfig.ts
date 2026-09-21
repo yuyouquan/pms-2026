@@ -160,7 +160,7 @@ export function getConfigProjectLevels(records: ConfigRecord[]): string[] {
   records.forEach(r => {
     if (r.enabled === false || !isCurrentMachineModel(r)) return
     const level = r.projectLevel
-    if (level !== null && level !== undefined && level !== '') {
+    if (level !== null && level !== undefined && level !== '' && getConfigModelVersions(records, String(level)).length) {
       levels.add(String(level))
     }
   })
@@ -170,10 +170,11 @@ export function getConfigProjectLevels(records: ConfigRecord[]): string[] {
 /**
  * 从配置中心 hrModel 数据中提取去重的模型版本号列表（仅启用记录）
  */
-export function getConfigModelVersions(records: ConfigRecord[]): string[] {
+export function getConfigModelVersions(records: ConfigRecord[], projectLevel?: string): string[] {
   const versions = new Set<string>()
   records.forEach(r => {
     if (r.enabled === false || !isCurrentMachineModel(r)) return
+    if (projectLevel !== undefined && (String(r.projectLevel) !== projectLevel || !isHrModelAvailable(records, projectLevel, String(r.modelVersion ?? '')))) return
     const ver = r.modelVersion
     if (ver !== null && ver !== undefined && ver !== '') {
       versions.add(String(ver))
@@ -441,6 +442,29 @@ export const LEGACY_MOCK_HR_MODELS: ConfigRecord[] = [
     { id: makeId('hrModel', 8), enabled: true, projectLevel: 'D', modelVersion: 'V2025.4', primaryDepartment: '研发中心', secondaryDepartment: '产品部', conceptPhase: 10, planningPhase: 13, developmentPhase: 10, validationPhase: 10, launchPhase: 5, lifecycle: 3 },
   ]
 
+/** Additional demo versions cover every level with three departments, without changing historical models. */
+export const ADDITIONAL_MOCK_HR_MODELS: ConfigRecord[] = ['V2026.2', 'V2026.3'].flatMap((modelVersion, revision) =>
+  ['S', 'A', 'B', 'C', 'D'].flatMap((projectLevel, levelIndex) => {
+    const scale = [1.2, 1, 0.8, 0.6, 0.4][levelIndex] * (revision ? 1.1 : 1)
+    return [
+      { primaryDepartment: '研发中心', secondaryDepartment: '产品部', periods: [6, 5, 5, 16, 6, 5, 9] },
+      { primaryDepartment: '研发中心', secondaryDepartment: '软件部', periods: [4, 3, 3, 12, 5, 4, 7] },
+      { primaryDepartment: '硬件部', secondaryDepartment: '结构部', periods: [2, 1, 1, 4, 2, 1, 3] },
+    ].map(({ periods, ...department }, index) => ({
+      id: `cfg-hrModel-${modelVersion}-${projectLevel}-${index + 1}`, enabled: true,
+      projectLevel, modelVersion, ...department,
+      ...Object.fromEntries(MACHINE_INVESTMENT_PERIODS.map((field, period) => [field.key, Math.round(periods[period] * scale * 100) / 100])),
+    }))
+  }),
+)
+
+/** Applied once during configuration migration; custom-only datasets and existing version groups are retained. */
+export function supplementMachineModelFixtures(records: ConfigRecord[]): ConfigRecord[] {
+  if (!records.some(row => LEGACY_MOCK_HR_MODELS.some(seed => seed.id === row.id))) return records
+  const existingVersions = new Set(records.map(row => String(row.modelVersion ?? '')))
+  return [...records, ...ADDITIONAL_MOCK_HR_MODELS.filter(row => !existingVersions.has(String(row.modelVersion))).map(row => ({ ...row }))]
+}
+
 export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
   feeRate: [{ id: 'resource-fee-rate', value: 5, enabled: true }],
   nonLaborSubject: [
@@ -451,14 +475,14 @@ export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
     { id: 'non-labor-travel-meals', secondarySubject: '差旅费', tertiarySubject: '出差补贴', enabled: true },
     { id: 'non-labor-office-supplies', secondarySubject: '办公费', tertiarySubject: '办公耗材', enabled: true },
   ],
-  hrModel: LEGACY_MOCK_HR_MODELS.map(row => ({
+  hrModel: [...LEGACY_MOCK_HR_MODELS.map(row => ({
     id: row.id, enabled: row.enabled, projectLevel: row.projectLevel, modelVersion: row.modelVersion,
     primaryDepartment: row.primaryDepartment, secondaryDepartment: row.secondaryDepartment,
     conceptToStr1: Number(row.conceptPhase), str1ToStr2: Number(row.planningPhase) / 2,
     str2ToStr3: Number(row.planningPhase) / 2, str3ToStr4: Number(row.developmentPhase),
     str4ToStr4a: Number(row.validationPhase) / 2, str4aToStr5: Number(row.validationPhase) / 2,
     str5ToSixMonths: Number(row.launchPhase) + Number(row.lifecycle),
-  })),
+  })), ...ADDITIONAL_MOCK_HR_MODELS],
   tosPhaseRatio: [
     { id: makeId('tosPhaseRatio', 1), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: 'tOS开发', planningPhase: 8, conceptPhase: 10, planningPhase2: 15, developmentValidationPhase: 50, marketIterationPhase: 10, maintenancePhase: 7 },
     { id: makeId('tosPhaseRatio', 2), enabled: true, modelVersion: 'V2026.1', primaryDepartment: '软件部', secondaryDepartment: '框架组', planningPhase: 5, conceptPhase: 6, planningPhase2: 10, developmentValidationPhase: 35, marketIterationPhase: 7, maintenancePhase: 5 },
