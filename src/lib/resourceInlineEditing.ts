@@ -1,3 +1,4 @@
+import { resourceInlinePermission } from '@/lib/resourceActionPermissions'
 import { allocateResourceRatios, getResourcePhaseRatios, getResourceRatioFields, validateResourceRatio } from '@/lib/resourceRatios'
 import type { ResourceVersionOptions } from '@/types/resourceOperations'
 import dayjs from 'dayjs'
@@ -10,7 +11,7 @@ import { MILESTONE_FIELDS } from '@/constants/hrMachine'
 import { TECH_MILESTONE_FIELDS, TECH_PHASE_INVESTMENT_FIELDS } from '@/constants/hrTechnical'
 import { TOS_MILESTONE_FIELDS, TOS_PHASE_INVESTMENT_FIELDS } from '@/constants/hrTos'
 import { calcEstimatedInvestment, getAvailableHrModelSelection, getConfigModelVersions, isHrModelAvailable } from '@/constants/hrConfig'
-import { canEditHrInScope, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
+import { canResourceAction, getHrRegistryProject, isHrFormalRecord } from '@/lib/hrProjectRegistry'
 import { canCreateHrVersion, getHrVersionSeed, isHrBatch, isHrVersionEditable, nextHrMinorVersion } from '@/lib/hrVersionRules'
 import { HR_MANUAL_MILESTONE_KEYS, mergeHrFormalMilestones } from '@/lib/hrMilestoneOwnership'
 import { cloneNonLaborInvestment, nonLaborDepartmentPairs, nonLaborItemKey, validateNonLaborInvestment } from '@/lib/nonLaborInvestment'
@@ -109,7 +110,7 @@ function departmentTotal(rows: readonly InlineDepartment[]) {
   return Math.round(rows.reduce((sum, row) => sum + row.estimatedInvestment, 0) * 10) / 10
 }
 export function createInlineResourceVersion(category: HrProjectCategory, project: ResourceProject | undefined, budgetType: 'annual' | 'projectEstimate' | 'projectBudget', scopeId: string, config: Config, blank = false): ResourceVersion {
-  if (!project || !scopeId || !canEditHrInScope(project, scopeId) || !canCreateHrVersion(project, budgetType)) throw new Error('当前项目不可创建版本')
+  if (!project || !scopeId || !canResourceAction(project, 'createVersion', scopeId) || !canCreateHrVersion(project, budgetType)) throw new Error('当前项目不可创建版本')
   const seed = blank ? undefined : getHrVersionSeed<ResourceVersion>(project.versions, budgetType)
   const source = resolveHrFormalSource(category, project.ipmProjectCode, project.pmsProjectId)
   const minorVersion = nextHrMinorVersion(project.versions, budgetType)
@@ -137,7 +138,7 @@ export function createInlineResourceVersion(category: HrProjectCategory, project
   return normalizeHrEditedVersion(version, category)
 }
 export function updateInlineResourceVersion(category: HrProjectCategory, project: ResourceProject | undefined, version: ResourceVersion | undefined, patch: ResourceInlinePatch, scopeId: string, config: Config): ResourceVersion {
-  if (!project || !version || !scopeId || !canEditHrInScope(project, scopeId) || !isHrVersionEditable(project, version)) throw new Error('当前版本不可编辑')
+  if (!project || !version || !scopeId || !canResourceAction(project, resourceInlinePermission(patch), scopeId) || !isHrVersionEditable(project, version, resourceInlinePermission(patch))) throw new Error('当前版本不可编辑')
   let next = { ...version }
   if (patch.type === 'batch') {
     if (patch.value !== null && !isHrBatch(patch.value)) throw new Error('请选择有效批次')
@@ -167,6 +168,8 @@ export function updateInlineResourceVersion(category: HrProjectCategory, project
       if (date) previous = date
     }
   } else if (patch.type === 'model') {
+    if (!['projectLevel', 'hrModelVersion', 'levelCoefficient'].includes(patch.key)
+      || (patch.key === 'levelCoefficient' ? typeof patch.value !== 'number' : typeof patch.value !== 'string')) throw new Error('不可编辑非模型字段')
     if (!('hrModelVersion' in next) || patch.key === 'projectLevel' && isHrFormalRecord(project)) throw new Error('项目等级由来源项目维护')
     if (next[patch.key] === patch.value) return version
     Object.assign(next, { [patch.key]: patch.value })
@@ -228,7 +231,7 @@ export function updateInlineResourceVersion(category: HrProjectCategory, project
     if (patch.key === 'brand' && metadata.brand !== canonical.brand) metadata.productLine = ''
     const lines = PRODUCT_LINES_BY_BRAND[metadata.brand as keyof typeof PRODUCT_LINES_BY_BRAND]
     if (metadata.brand && !lines && metadata.brand !== canonical.brand || metadata.productLine && !(lines as readonly string[] | undefined)?.includes(metadata.productLine) && !(metadata.brand === canonical.brand && metadata.productLine === canonical.productLine)) throw new Error('请选择有效的品牌和对应产品线')
-    if (!useProjectStore.getState().updateProject(canonical.id, previous => ({ ...previous, ...metadata, fieldValues: { ...previous.fieldValues, ...metadata } }))) throw new Error('项目信息保存失败，请检查字段或编辑权限')
+    if (!useProjectStore.getState().updateProject(canonical.id, previous => ({ ...previous, ...metadata, fieldValues: { ...previous.fieldValues, ...metadata } }), undefined, { resourceMetadata: { kind: 'edit', versionId: version.id } })) throw new Error('项目信息保存失败，请检查字段或编辑权限')
   }
   if (JSON.stringify(next) === JSON.stringify(version)) return version
   if ('operationLogs' in next) next.operationLogs = [...next.operationLogs, { id: uid(), operation: 'edited', operator: useProjectStore.getState().currentLoginUser, timestamp: new Date().toISOString(), description: '行内更新版本信息' }]

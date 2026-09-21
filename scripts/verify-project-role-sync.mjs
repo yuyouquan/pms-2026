@@ -188,7 +188,7 @@ const permission = readSource(root, 'src/components/permission/PermissionModule.
 assert.equal(hasCallExpression(modal, 'syncTechnicalTeamPermissionMembers'), true, 'team save calls technical one-way synchronization')
 assert.equal(hasCallExpression(modal, 'syncTosTeamPermissionMembers'), true, 'team save calls shared tOS synchronization')
 assert.equal(hasCallExpression(permission, 'syncTosTeamPermissionMembers'), true, 'permission save calls shared tOS synchronization')
-assert.match(permission, /disabled=\{isTechnicalFixedRole \|\| !canManageRoles\}/, 'technical fixed-role member control is read-only')
+assert.match(permission, /disabled=\{isTechnicalFixedRole \|\| isMachineSpm \|\| !canManageRoles\}/, 'technical fixed-role member control is read-only')
 assert.match(permission, /请在项目团队信息中维护/, 'read-only technical roles explain where to edit members')
 assert.match(permission, /handleAddRole/, 'custom role creation remains available')
 assert.match(permission, /handlePermToggle/, 'fixed-role permissions remain editable')

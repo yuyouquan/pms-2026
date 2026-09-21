@@ -1,3 +1,4 @@
+import { canEditHrInScope, canResourceAction } from '@/lib/hrProjectRegistry'
 import { getResourcePhaseRatios, getResourceRatioFields, resourceRatiosAfterDepartmentWrite } from '@/lib/resourceRatios'
 import { createResourceStoreState } from '@/lib/resourceStoreActions'
 import { createInlineResourceVersion, updateInlineResourceVersion, type ResourceInlineActions } from '@/lib/resourceInlineEditing'
@@ -322,7 +323,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
       copyVersion: (projectId, versionId) => set(s => copyHrVersionSnapshot(s.projects, s.monthlyInvestments, projectId, versionId, useProjectStore.getState().currentLoginUser)),
 
       addVersion: (projectId, form) => set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        if (!canEditHrInScope(s.projects.find(p => p.id === projectId))) return s
         const project = s.projects.find(p => p.id === projectId)
         if (!project || !canCreateHrVersion(project, form.budgetType)) return s
 
@@ -366,9 +367,9 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
       }),
 
       deleteVersion: (projectId, versionId) => set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        if (!canResourceAction(s.projects.find(p => p.id === projectId), 'deleteVersion')) return s
         const targetProject = s.projects.find(p => p.id === projectId)
-        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId))) return s
+        if (!isHrVersionEditable(targetProject, targetProject?.versions.find(v => v.id === versionId), 'deleteVersion')) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.filter(v => v.id !== versionId)
@@ -383,7 +384,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
 
 
       updateVersion: (projectId, versionId, updates) => set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        if (!canEditHrInScope(s.projects.find(p => p.id === projectId))) return s
         const newProjects = s.projects.map(p => {
           if (p.id !== projectId) return p
           const newVersions = p.versions.map(v => {
@@ -421,7 +422,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
       }),
 
       updateVersionDepartmentInvestments: (projectId, versionId, departmentInvestments, nonLaborInvestment, milestones) => set((s) => {
-        if (!canAccessHrProject(s.projects.find(p => p.id === projectId), true)) return s
+        if (!canEditHrInScope(s.projects.find(p => p.id === projectId))) return s
         const newEstimatedTotal = departmentInvestments.reduce(
           (sum, d) => sum + (Number(d.estimatedInvestment) || 0), 0,
         )
@@ -466,7 +467,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
 
       updateMonthlyInvestment: (monthlyId, monthlyData) => set((s) => ({
         monthlyInvestments: s.monthlyInvestments.map(mi =>
-          mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(s.projects.find(p => p.id === mi.projectId), s.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId))
+          mi.id === monthlyId && !mi.isArchived && isHrVersionEditable(s.projects.find(p => p.id === mi.projectId), s.projects.find(p => p.id === mi.projectId)?.versions.find(v => v.id === mi.versionId), 'laborEdit')
             ? { ...mi, monthlyData, isEdited: true }
             : mi,
         ),

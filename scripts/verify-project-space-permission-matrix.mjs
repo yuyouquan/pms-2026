@@ -120,7 +120,7 @@ for (const text of [
   'activeKey={selectedPermissionRole}',
   'items={roles.map(role => ({ key: role.name, label: role.name }))}',
   'PROJECT_PERMISSION_GROUPS.map(group => (',
-  'colSpan={maxProjectPermissionColumns - group.permissions.length + 1}',
+  'colSpan={maxProjectPermissionColumns - group.permissions.length}',
 ]) {
   assertIncludes(moduleSource, text, 'project permission role-tab layout')
 }

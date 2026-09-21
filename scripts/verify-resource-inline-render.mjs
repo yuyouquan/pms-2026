@@ -15,7 +15,7 @@ const modules = {
   '@ant-design/icons': new Proxy({}, { get: (_, key) => String(key) }),
   '@/stores/project': { useProjectStore: noop }, '@/stores/permission': { usePermissionStore: noop }, '@/stores/ui': { useUiStore: { getState: () => ui } },
   '@/lib/hrVersionRules': { canCreateHrVersion: () => true, getActiveHrVersion: () => undefined, HR_BATCH_OPTIONS: [], isHrVersionEditable: () => true, formatHrBatch: String },
-  '@/lib/hrProjectRegistry': { canEditHrInScope: () => true, getHrAllowedBudgetTypes: () => ['projectEstimate'], isHrVersionVisible: () => true },
+  '@/lib/hrProjectRegistry': { canResourceAction: () => true, getHrAllowedBudgetTypes: () => ['projectEstimate'], isHrVersionVisible: () => true },
   '@/types/projectRegistry': { getProjectAttribute: () => 'formal' },
   '@/constants/hrMachine': { BUDGET_TYPE_LABELS: { projectEstimate: '项目概算' }, formatPersonMonth: String },
   '@/components/project-resources/resourceVersionViewData': { chooseResourceVersion: (versions, id) => versions.find(v => v.id === id) ?? versions[0] },
