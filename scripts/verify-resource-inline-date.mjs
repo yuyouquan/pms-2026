@@ -46,7 +46,7 @@ const modules = {
   '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'Expenses', NonLaborInvestmentRange: 'Range' },
   '@/components/project-resources/BudgetMilestoneSchedule': { __esModule: true, default: 'BudgetMilestones' },
   '@/lib/hrVersionRules': { isHrVersionEditable: () => true },
-  '@/lib/hrProjectRegistry': { isHrFormalRecord: () => false, getHrRegistryProject: () => ({}), canEditHrInScope: () => true },
+  '@/lib/hrProjectRegistry': { isHrFormalRecord: () => false, getHrRegistryProject: () => ({}), canResourceAction: () => true },
   '@/lib/resourceRatios': { getResourceRatioFields: () => [], getResourcePhaseRatios: () => ({}) },
   '@/lib/resourceInlineEditing': { canEditResourceMilestone: () => true, resourceMilestoneFields: { capability: [{ key: 'projectStartTime', label: '项目开始时间' }] }, resourcePhaseFields: { capability: [] } },
   '@/lib/nonLaborInvestment': { cloneNonLaborInvestment: value => value },
@@ -60,7 +60,7 @@ const modules = {
 const compiled = { exports: {} }
 const source = ts.transpileModule(fs.readFileSync('src/components/project-resources/ResourceInlineDetail.tsx', 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText
 new Function('require', 'module', 'exports', source)(id => modules[id] ?? require(id), compiled, compiled.exports)
-const tree = compiled.exports.default({ category: 'capability', project: { id: 'p' }, version: { id: 'v', projectStartTime: '2026-12-31', projectEndTime: '2027-12-31', departmentInvestments: [] }, scopeId: 'p', readOnly: false })
+const tree = compiled.exports.default({ category: 'capability', project: { id: 'p' }, version: { id: 'v', projectStartTime: '2026-12-31', projectEndTime: '2027-12-31', departmentInvestments: [] }, scopeId: 'p', laborReadOnly: false, nonLaborReadOnly: false, setupReadOnly: false })
 function elements(node) { return [node, ...[node?.props?.children].flat(Infinity).filter(item => item && typeof item === 'object').flatMap(elements)] }
 const field = elements(tree).find(node => node.type === 'InlineField' && node.props.label === '项目开始时间')
 assert.ok(field)
@@ -82,7 +82,7 @@ console.log('PASS production date editor native wrapper captures valid/invalid i
 // Formal projects share stage presentation without gaining budget-only scheduling controls.
 modules['@/lib/resourceInlineEditing'].resourceMilestoneFields.technical=[{key:'planningStart',label:'规划启动'},{key:'edcp',label:'EDCP'}]
 const formalVersion={id:'formal-v',milestones:{planningStart:'2026-01-01',edcp:'2026-12-31'},departmentInvestments:[]}
-const renderTechnical=()=>compiled.exports.default({category:'technical',project:{id:'formal-p'},version:formalVersion,scopeId:'formal-p',readOnly:false})
+const renderTechnical=()=>compiled.exports.default({category:'technical',project:{id:'formal-p'},version:formalVersion,scopeId:'formal-p',laborReadOnly:false,nonLaborReadOnly:false,setupReadOnly:false})
 const formalSchedule=elements(renderTechnical()).find(node=>node.type==='BudgetMilestones')
 assert.ok(formalSchedule,'formal project milestones also use stage presentation')
 assert.equal(formalSchedule.props.allowSchedule,false,'formal project does not gain model scheduling permission')

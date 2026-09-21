@@ -23,7 +23,7 @@ function ResourceNavigation({ project }: { project: ProjectItem }) {
   const [detailVersionId, setDetailVersionId] = useState<string>()
   const category = matchesHrCategory(project, 'machine') ? 'machine' : matchesHrCategory(project, 'tos') ? 'tos'
     : matchesHrCategory(project, 'technical') ? 'technical' : 'capability'
-  if (!can('basicInfo:查看')) return <Empty description="无项目资源查看权限" />
+  if (!can('resource:view')) return <Empty description="无项目资源查看权限" />
   return <HrResourceScope projectId={project.id}>
     <ProjectSpaceTabs className="pms-project-resource-tabs" navigationOnly activeKey={tab}
       onChange={key => useUiStore.getState().navigateWithEditGuard(() => { setTab(key as ResourceTab); setDetailVersionId(undefined) }, false)}

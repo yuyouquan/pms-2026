@@ -4,6 +4,7 @@ import React from 'react'
 import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
 import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Empty, Tooltip, message } from 'antd'
 import { TeamOutlined, SafetyCertificateOutlined, PlusOutlined, CheckSquareFilled, CloseOutlined } from '@ant-design/icons'
+import { resourcePermissionDefaults } from '@/stores/permission'
 import {
   ALL_USERS,
   FIXED_ROLES,
@@ -99,7 +100,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
     if (!name) { message.warning('请输入角色名称'); return }
     if (roles.some(r => r.name === name)) { message.warning('角色名称已存在'); return }
     setRoles([...roles, { name, members: [], isFixed: false }])
-    setRolePermissions(prev => ({ ...prev, [name]: {} }))
+    setRolePermissions(prev => ({ ...prev, [name]: resourcePermissionDefaults({ name, isFixed: false }, projectType) }))
     setNewRoleName('')
     setShowAddRoleModal(false)
     message.success('角色添加成功')
@@ -194,11 +195,12 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                 title: '人员配置', dataIndex: 'members',
                 render: (_: any, record: any) => {
                   const isTechnicalFixedRole = projectType === '技术项目' && record.isFixed
+                  const isMachineSpm = projectType === '整机产品项目' && record.isFixed && record.name === 'SPM'
                   const memberSelect = (
                     <Select
                       mode="multiple"
                       value={record.members}
-                      disabled={isTechnicalFixedRole || !canManageRoles}
+                      disabled={isTechnicalFixedRole || isMachineSpm || !canManageRoles}
                       onChange={(val: string[]) => handleMembersChange(record.name, val)}
                       style={{ width: '100%', minWidth: 300 }}
                       placeholder="请选择人员"
@@ -206,8 +208,8 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                       options={ALL_USERS.map(u => ({ label: u, value: u }))}
                     />
                   )
-                  return isTechnicalFixedRole
-                    ? <Tooltip title="请在项目团队信息中维护"><span>{memberSelect}</span></Tooltip>
+                  return isTechnicalFixedRole || isMachineSpm
+                    ? <Tooltip title={isMachineSpm ? "请在项目基础信息中维护 SPM（自主创建项目随项目负责人同步）" : "请在项目团队信息中维护"}><span>{memberSelect}</span></Tooltip>
                     : memberSelect
                 }
               },
@@ -231,6 +233,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
               <Form.Item label="角色名称" required>
                 <Input placeholder="请输入角色名称" disabled={!canManageRoles} value={newRoleName} onChange={e => setNewRoleName(e.target.value)} onPressEnter={handleAddRole} />
               </Form.Item>
+              <div style={{ color: '#64748b', fontSize: 13 }}>新角色默认拥有资源的查看、各部门人力投入和非人力投入权限，可在权限配置中调整。</div>
             </Form>
           </Modal>
         </div>
@@ -250,11 +253,15 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                 style={{ marginBottom: 8 }}
                 items={roles.map(role => ({ key: role.name, label: role.name }))}
               />
+              <div style={{ color: '#64748b', fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>
+                资源默认权限：所有空间角色可查看、维护各部门人力投入和非人力投入；版本管理与导出默认授权给系统管理员，以及整机项目的 SPM、tOS 版本项目的版本项目经理、技术项目的技术项目负责人。能力建设项目默认由系统管理员管理版本。
+                基础信息、里程碑和模型维护使用“新建版本”权限。以下勾选即时保存，可按角色独立调整；全局管理组保留管理员权限。
+              </div>
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'auto' }}>
                 <div style={{ fontWeight: 600, fontSize: 14, padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
                   角色权限配置 — {selectedPermissionRole}
                 </div>
-                <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <table style={{ width: '100%', minWidth: 1150, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                   <tbody>
                     {PROJECT_PERMISSION_GROUPS.map(group => (
                       <tr key={group.module}>
@@ -301,7 +308,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                         })}
                         {group.permissions.length < maxProjectPermissionColumns && (
                           <td
-                            colSpan={maxProjectPermissionColumns - group.permissions.length + 1}
+                            colSpan={maxProjectPermissionColumns - group.permissions.length}
                             style={{
                               borderRight: '1px solid #edf0f5',
                               borderBottom: '1px solid #edf0f5',

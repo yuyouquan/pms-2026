@@ -25,7 +25,7 @@ export function canAccessHrProject(record?: Pick<HrRegistryRecord, 'pmsProjectId
   const project = getHrRegistryProject(record)
   if (!project && !edit && record && !record.pmsProjectId) return isGlobalAdmin(actor)
   if (edit && project && getProjectAttribute(project) === 'budget' && project.boundFormalProjectId) return false
-  return !!project && hasPermission(actor, project.id, edit ? 'basicInfo:编辑' : 'basicInfo:查看')
+  return !!project && hasPermission(actor, project.id, edit ? 'basicInfo:编辑' : 'resource:view')
 }
 export function getHrAllowedBudgetTypes(record?: Pick<HrRegistryRecord, 'pmsProjectId'> | null): Array<'annual' | 'projectEstimate' | 'projectBudget'> {
   const project = getHrRegistryProject(record)
@@ -37,15 +37,23 @@ export function isHrFormalRecord(record?: Pick<HrRegistryRecord, 'pmsProjectId'>
   const project = getHrRegistryProject(record)
   return !!project && isFormalProject(project)
 }
-export function isHrVersionVisible(record: HrRegistryRecord, budgetType: string, scopeId?: string) {
-  if (!canAccessHrProject(record)) return false
-  if (!scopeId) return true
-  if (record.pmsProjectId === scopeId) return true
-  const source = getHrRegistryProject(record)
-  return budgetType === 'annual' && source?.projectAttribute === 'budget' && source.boundFormalProjectId === scopeId
+export type ResourcePermissionAction = 'view' | 'createVersion' | 'lockVersion' | 'setOfficialVersion' | 'deleteVersion' | 'export' | 'laborEdit' | 'nonLaborEdit'
+/** Resolve authority in the displayed space. Linked budgets may only be read/exported there. */
+export function canResourceAction(record: { pmsProjectId?: string } | null | undefined, action: ResourcePermissionAction, scopeId?: string, actor = useProjectStore.getState().currentLoginUser): boolean {
+  const project = getHrRegistryProject(record)
+  if (!project) return false
+  const scope = scopeId || project.id
+  const read = action === 'view' || action === 'export'
+  if (scope !== project.id && (!read || getProjectAttribute(project) !== 'budget' || project.boundFormalProjectId !== scope)) return false
+  if (!read && getProjectAttribute(project) === 'budget' && project.boundFormalProjectId) return false
+  return hasPermission(actor, scope, 'resource:view') && hasPermission(actor, scope, `resource:${action}`)
 }
-export const canEditHrInScope = (record?: HrRegistryRecord | null, scopeId?: string) => !!record
-  && (!scopeId || record.pmsProjectId === scopeId) && canAccessHrProject(record, true)
+export function isHrVersionVisible(record: HrRegistryRecord, budgetType: string, scopeId?: string) {
+  if (!canResourceAction(record, 'view', scopeId)) return false
+  return !scopeId || record.pmsProjectId === scopeId || budgetType === 'annual'
+}
+export const canEditHrInScope = (record?: { pmsProjectId?: string } | null, scopeId?: string) =>
+  (['createVersion', 'laborEdit', 'nonLaborEdit'] as const).some(action => canResourceAction(record, action, scopeId))
 
 interface RegistryVersion { id: string; projectId: string; budgetType: string }
 interface Migratable extends HrRegistryRecord { versions: RegistryVersion[]; createdAt: string; [key: string]: unknown }

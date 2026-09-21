@@ -53,7 +53,7 @@ const modules = {
   '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'Expenses', NonLaborInvestmentRange: 'Range' },
   '@/components/project-resources/BudgetMilestoneSchedule': { __esModule: true, default: 'BudgetMilestones' },
   '@/lib/hrVersionRules': { isHrVersionEditable: (_project, version) => version?.lockState !== 'locked' },
-  '@/lib/hrProjectRegistry': { isHrFormalRecord: () => false, getHrRegistryProject: () => ({}), canEditHrInScope: (_project, id) => id === scope },
+  '@/lib/hrProjectRegistry': { isHrFormalRecord: () => false, getHrRegistryProject: () => ({}), canResourceAction: (_project, _action, id) => id === scope },
   '@/lib/resourceInlineEditing': { canEditResourceMilestone: () => true, resourceMilestoneFields: { capability: [] }, resourcePhaseFields: { capability: columns } },
   '@/lib/nonLaborInvestment': get(path.resolve('src/lib/nonLaborInvestment.ts')),
   '@/lib/nonLaborSpreadsheet': { nonLaborSpreadsheetColumns: () => [], parseNonLaborInvestmentRows: () => ({ ...emptyExpenses, items: [] }) },
@@ -84,7 +84,7 @@ function mount(Component, props) {
   return { element, unmount: () => owned.forEach(cleanup => cleanup()) }
 }
 const makeSaved = () => ({ id: 'v1', lockState: 'unlocked', projectStartTime: '2026-01-01', projectEndTime: '2026-02-01', departmentInvestments: [], nonLaborInvestment: emptyExpenses })
-const props = () => ({ category: 'capability', project: { id: 'p' }, version: saved, scopeId: 'p', readOnly: false })
+const props = () => ({ category: 'capability', project: { id: 'p' }, version: saved, scopeId: 'p', laborReadOnly: false, nonLaborReadOnly: false, setupReadOnly: false })
 for (const event of ['leave-return-edit', 'lock']) {
   saved = makeSaved(); state.projects = [{ id: 'p', versions: [saved] }]
   const old = mount(Detail, props()), file = deferredFile()

@@ -67,6 +67,7 @@
     "verify:resource-monthly-reallocation": "node scripts/verify-resource-monthly-reallocation.mjs",
     "verify:resource-dashboard": "node scripts/verify-resource-dashboard.mjs",
     "verify:resource-model-selection": "node scripts/verify-resource-model-selection.mjs",
+    "verify:resource-permissions": "node scripts/verify-resource-permission-defaults.mjs && node scripts/verify-resource-permissions.mjs && node scripts/verify-resource-permission-ui.mjs",
     "verify:resource-logs": "node scripts/verify-resource-log-dialog.mjs",
     "verify:resource-cross-tab": "node scripts/verify-resource-cross-tab-storage.mjs",
     "verify:resource-mixed-version": "node scripts/verify-resource-mixed-version-storage.mjs",

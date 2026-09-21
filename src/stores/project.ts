@@ -1,3 +1,4 @@
+import { getResourceMutationContext } from '@/lib/resourceMutationContext'
 import { validateFanTrial } from '@/lib/fanTrial'
 import { MACHINE_BUDGET_METADATA_KEYS, hasBoundMachineBudgetMetadataOverride, isBoundMachineBudget, retainBoundMachineBudgetMetadata, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
 import { validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
@@ -153,6 +154,8 @@ function applyTosRoleMembersToProject(project: Project, role: string, members: s
 export interface ProjectMutationOptions {
   /** Narrow configuration path: actor and allowed changed fields are checked in the store. */
   registryOperation?: 'create' | 'update'
+  /** Resource managers may update only unbound machine budget metadata. */
+  resourceMetadata?: { kind: 'edit'; versionId: string } | { kind: 'create'; budgetType: 'annual' }
   allowedFirstSaleTosValues?: readonly string[]
 }
 
@@ -690,11 +693,24 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       if (!existing) return null
       const actingUser = actor?.trim() || get().currentLoginUser.trim()
       const registryUpdate = options?.registryOperation === 'update'
-      if (registryUpdate ? !isGlobalAdmin(actingUser) : !hasPermission(actingUser, projectId, 'basicInfo:编辑')) return null
+      const resourceMetadata = options?.resourceMetadata
+      if (resourceMetadata) {
+        const context = getResourceMutationContext()
+        if (!context || context.category !== 'machine' || context.projectId !== projectId) return null
+        if (resourceMetadata.kind === 'edit') {
+          if (!['updateVersion', 'updateVersionInline'].includes(context.action) || !resourceMetadata.versionId || context.versionId !== resourceMetadata.versionId) return null
+        } else if (resourceMetadata.kind !== 'create' || resourceMetadata.budgetType !== 'annual' || context.action !== 'addVersion') return null
+        if (registryUpdate || getProjectAttribute(existing) !== 'budget' || !isMachineProjectType(existing.type) || existing.boundFormalProjectId
+          || !hasPermission(actingUser, projectId, 'resource:view') || !hasPermission(actingUser, projectId, 'resource:createVersion')) return null
+      } else if (registryUpdate ? !isGlobalAdmin(actingUser) : !hasPermission(actingUser, projectId, 'basicInfo:编辑')) return null
       const previousProjects = get().projects
       const updated = typeof update === 'function'
         ? update(cloneProjectSeed(existing))
         : { ...existing, ...update } as Project
+      if (resourceMetadata && (
+        Object.keys({ ...existing, ...updated }).some(key => !['brand', 'productLine', 'marketName', 'fieldValues'].includes(key) && JSON.stringify(existing[key]) !== JSON.stringify(updated[key]))
+        || Object.keys({ ...existing.fieldValues, ...updated.fieldValues }).some(key => !['brand', 'productLine', 'marketName'].includes(key) && JSON.stringify(existing.fieldValues?.[key]) !== JSON.stringify(updated.fieldValues?.[key]))
+      )) return null
       if (!isFormalProject(existing)) {
         updated.name = updated.name.trim()
         if (updated.projectCode !== undefined) updated.projectCode = updated.projectCode.trim()
@@ -751,6 +767,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         }
       })
       if (projectToSave.type === '技术项目' || projectToSave.type === PROJECT_TYPE_TOS_VERSION
+        || (isMachineProjectType(projectToSave.type) && JSON.stringify(existing.spm) !== JSON.stringify(projectToSave.spm))
         || (hasDerivedMachineResponsibilityRoles(projectToSave) && JSON.stringify(existing.responsiblePersons || []) !== JSON.stringify(projectToSave.responsiblePersons || []))) {
         const savedProject = get().projects.find(project => project.id === projectId)
         if (savedProject) usePermissionStore.getState().syncProjectTeamPermissionMembers(savedProject)

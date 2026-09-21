@@ -1,10 +1,10 @@
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
-import { GLOBAL_PERM_OPTIONS, PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys } from '@/constants/permissions'
+import { GLOBAL_PERM_OPTIONS, PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys, RESOURCE_PERMISSION_KEYS, RESOURCE_BASIC_PERMISSION_KEYS, type ResourcePermissionKey } from '@/constants/permissions'
 import { ESTABLISHED_FORMAL_PROJECT_IDS, initialProjects } from '@/data/projects'
 import { getProjectResponsiblePersons } from '@/lib/projectResponsibility'
-import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION, resolveProjectClassification } from '@/constants/projectTypes'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
 
 export const TECHNICAL_TEAM_PERMISSION_MAPPING = {
@@ -51,7 +51,7 @@ type RoleProject = {
 
 const normalizeRoleMembers = (value: unknown): string[] => {
   const values = Array.isArray(value) ? value : typeof value === 'string' ? [value] : []
-  return Array.from(new Set(values.map(item => String(item).trim()).filter(Boolean)))
+  return Array.from(new Set(values.flatMap(item => String(item).split(/[,，、]/)).map(item => item.trim()).filter(Boolean)))
 }
 
 const getProjectTeamMembers = (project: RoleProject, field: string): string[] => {
@@ -77,7 +77,9 @@ export const getFixedProjectRoles = (project: RoleProject): Role[] => {
     if (project.type === PROJECT_CATEGORY_MACHINE) team.push({ name: 'SPM', members: responsible, isFixed: true })
     return [...team, { name: '系统管理员', members: responsible, isFixed: true }]
   }
-  if (!mapping) return buildDefaultRoles()
+  if (!mapping) return project.type === PROJECT_CATEGORY_MACHINE
+    ? [...buildDefaultRoles(), { name: 'SPM', members: normalizeRoleMembers(project.spm), isFixed: true }]
+    : buildDefaultRoles()
   return Object.entries(mapping).map(([name, field]) => ({
     name,
     members: getProjectTeamMembers(project, field),
@@ -206,6 +208,36 @@ function buildDefaultRoles(): Role[] {
   return FIXED_ROLES.map(name => ({ name, members: [...(DEFAULT_ROLE_MEMBERS[name] || [])], isFixed: true }))
 }
 
+/** Only fixed roles inherit owner defaults; a custom role name is never authority. */
+export function resourcePermissionDefaults(role: Pick<Role, 'name' | 'isFixed'>, projectType?: string): Record<ResourcePermissionKey, boolean> {
+  const category = resolveProjectClassification(projectType).projectCategory
+  const ownerRole = category === PROJECT_CATEGORY_MACHINE ? 'SPM'
+    : category === PROJECT_TYPE_TOS_VERSION ? '版本项目经理'
+      : category === PROJECT_CATEGORY_TECH ? '技术项目负责人' : '系统管理员'
+  const canManage = role.isFixed && (role.name === '系统管理员' || role.name === ownerRole)
+  return Object.fromEntries(RESOURCE_PERMISSION_KEYS.map(key => [
+    key, RESOURCE_BASIC_PERMISSION_KEYS.includes(key) || canManage,
+  ])) as Record<ResourcePermissionKey, boolean>
+}
+
+function initializeResourcePermissions(
+  roles: readonly Role[],
+  existing: Record<string, Record<string, boolean>>,
+  projectType?: string,
+): Record<string, Record<string, boolean>> {
+  const next = { ...existing }
+  roles.forEach(role => {
+    const defaults: Record<string, boolean> = resourcePermissionDefaults(role, projectType)
+    // Older custom projects have no type metadata until project hydration calls ensure.
+    // Defer owner defaults so a temporary unknown type cannot persist a false denial.
+    if (!projectType && role.isFixed && ['SPM', '版本项目经理', '技术项目负责人'].includes(role.name)) {
+      RESOURCE_PERMISSION_KEYS.filter(key => !RESOURCE_BASIC_PERMISSION_KEYS.includes(key)).forEach(key => { delete defaults[key] })
+    }
+    next[role.name] = { ...defaults, ...existing[role.name] }
+  })
+  return next
+}
+
 const withProjectSpecificMockMembers = (projectId: string, roles: Role[]): Role[] => {
   if (projectId !== '1') return roles
   let foundProjectManager = false
@@ -219,23 +251,24 @@ const withProjectSpecificMockMembers = (projectId: string, roles: Role[]): Role[
     : [...next, { name: '项目经理', members: ['演示用户09'], isFixed: true }]
 }
 
-function buildDefaultRolePermissions(): Record<string, Record<string, boolean>> {
+function buildDefaultRolePermissions(projectType?: string): Record<string, Record<string, boolean>> {
   const init: Record<string, Record<string, boolean>> = {}
   FIXED_ROLES.forEach(r => {
     init[r] = {}
     ;(defaultPermsByRole[r] || []).forEach(p => { init[r][p] = true })
   })
-  return init
+  return initializeResourcePermissions(buildDefaultRoles(), init, projectType)
 }
 
-function buildPermissionsForRoles(roles: readonly Role[]): Record<string, Record<string, boolean>> {
-  return Object.fromEntries(roles.map(role => {
+function buildPermissionsForRoles(roles: readonly Role[], projectType?: string): Record<string, Record<string, boolean>> {
+  const permissions = Object.fromEntries(roles.map(role => {
     const managerRole = role.name === '技术项目负责人' || role.name === '版本项目经理' || role.name === 'SPM'
-    const source = managerRole
+    const source = !role.isFixed ? [] : managerRole
       ? PROJECT_PERMISSION_PRESETS['项目经理']
       : PROJECT_PERMISSION_PRESETS[role.name] || ['basicInfo:查看']
     return [role.name, Object.fromEntries(expandProjectPermissionKeys(source).map(key => [key, true]))]
   }))
+  return initializeResourcePermissions(roles, permissions, projectType)
 }
 
 function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = []): Role[] {
@@ -244,15 +277,22 @@ function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = [])
     const derived = new Set(['SPM', '系统管理员'])
     const expectedNames = new Set(fixed.map(role => role.name))
     return [
-      ...fixed.map(role => derived.has(role.name) ? role : existing.find(item => item.name === role.name) || role),
+      ...fixed.map(role => derived.has(role.name) ? role : existing.find(item => item.name === role.name && item.isFixed) || role),
       ...existing.filter(role => !expectedNames.has(role.name)),
     ]
   }
-  if ((!project.createdBy || ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)) && project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) return fixed
-  return [...fixed, ...existing.filter(role => !role.isFixed)]
+  const expectedNames = new Set(fixed.map(role => role.name))
+  if ((!project.createdBy || ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id)) && project.type !== PROJECT_CATEGORY_TECH && project.type !== PROJECT_TYPE_TOS_VERSION) {
+    return [
+      ...fixed.map(role => project.type === PROJECT_CATEGORY_MACHINE && role.name === 'SPM'
+        ? role : existing.find(item => item.name === role.name && item.isFixed) || role),
+      ...existing.filter(role => !expectedNames.has(role.name)),
+    ]
+  }
+  return [...fixed, ...existing.filter(role => !role.isFixed && !expectedNames.has(role.name))]
 }
 
-type PersistedPermissionState = Pick<PermissionState, 'rolesByProject' | 'rolePermissionsByProject'> & Partial<Pick<PermissionState, 'globalRoles' | 'globalRolePerms'>>
+type PersistedPermissionState = Pick<PermissionState, 'rolesByProject' | 'rolePermissionsByProject'> & Partial<Pick<PermissionState, 'globalRoles' | 'globalRolePerms' | 'projectTypesByProject'>>
 
 const isRecord = (value: unknown): value is Record<string, unknown> => (
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -320,6 +360,7 @@ export function migratePermissionState(persistedState: unknown, version: number)
     rolesByProject['1'] = withProjectSpecificMockMembers('1', rolesByProject['1'])
   }
   return {
+    ...(isRecord(persistedState.projectTypesByProject) ? { projectTypesByProject: Object.fromEntries(Object.entries(persistedState.projectTypesByProject).filter(([id, type]) => id.trim() && typeof type === 'string' && type.trim())) as Record<string, string> } : {}),
     ...(Array.isArray(persistedState.globalRoles) ? { globalRoles: sanitizeRolesByProject({ global: persistedState.globalRoles }).global ?? [] } : {}),
     ...(isRecord(persistedState.globalRolePerms) ? { globalRolePerms: sanitizeGlobalPermissions(persistedState.globalRolePerms) } : {}),
     rolesByProject,
@@ -329,6 +370,7 @@ export function migratePermissionState(persistedState: unknown, version: number)
 
 export function partializePermissionState(state: PermissionState & PermissionActions): PersistedPermissionState {
   return {
+    projectTypesByProject: state.projectTypesByProject,
     globalRoles: state.globalRoles,
     globalRolePerms: state.globalRolePerms,
     rolesByProject: state.rolesByProject,
@@ -367,6 +409,7 @@ const safePermissionStorage: StateStorage = {
 }
 
 function buildInitialPerProject(): {
+  projectTypesByProject: Record<string, string>,
   rolesByProject: Record<string, Role[]>,
   rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>>,
 } {
@@ -377,17 +420,15 @@ function buildInitialPerProject(): {
     const specialRoles = !ESTABLISHED_FORMAL_PROJECT_IDS.has(p.id) || p.type === PROJECT_CATEGORY_TECH || p.type === PROJECT_TYPE_TOS_VERSION
     const baseRoles = specialRoles
       ? mergeProjectRoles(p as unknown as RoleProject)
-      : buildDefaultRoles().map(role => (
+      : getFixedProjectRoles(p as unknown as RoleProject).map(role => (
           role.name === '系统管理员'
             ? { ...role, members: responsiblePersons }
             : role
         ))
     rolesByProject[p.id] = withProjectSpecificMockMembers(p.id, baseRoles)
-    rolePermissionsByProject[p.id] = specialRoles
-      ? buildPermissionsForRoles(rolesByProject[p.id])
-      : buildDefaultRolePermissions()
+    rolePermissionsByProject[p.id] = buildPermissionsForRoles(rolesByProject[p.id], p.type)
   })
-  return { rolesByProject, rolePermissionsByProject }
+  return { rolesByProject, rolePermissionsByProject, projectTypesByProject: Object.fromEntries(initialProjects.map(project => [project.id, project.type])) }
 }
 
 const __INITIAL = buildInitialPerProject()
@@ -410,6 +451,7 @@ function hasProjectRoleManagementAccess(
 
 export interface PermissionState {
   // Per-project roles & permissions
+  projectTypesByProject: Record<string, string>
   rolesByProject: Record<string, Role[]>
   rolePermissionsByProject: Record<string, Record<string, Record<string, boolean>>>
 
@@ -462,6 +504,7 @@ export interface PermissionActions {
 }
 
 export const usePermissionStore = create<PermissionState & PermissionActions>()(persist((set, get) => ({
+  projectTypesByProject: __INITIAL.projectTypesByProject,
   rolesByProject: __INITIAL.rolesByProject,
   rolePermissionsByProject: __INITIAL.rolePermissionsByProject,
 
@@ -494,12 +537,15 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   setRolesForProject: (projectId, v) => set((s) => {
     const prev = s.rolesByProject[projectId] ?? buildDefaultRoles()
     const next = typeof v === 'function' ? v(prev) : v
-    return { rolesByProject: { ...s.rolesByProject, [projectId]: next } }
+    return {
+      rolesByProject: { ...s.rolesByProject, [projectId]: next },
+      rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: initializeResourcePermissions(next, s.rolePermissionsByProject[projectId] || {}, s.projectTypesByProject[projectId]) },
+    }
   }),
   setRolePermissionsForProject: (projectId, v) => set((s) => {
     const prev = s.rolePermissionsByProject[projectId] ?? buildDefaultRolePermissions()
     const next = typeof v === 'function' ? v(prev) : v
-    return { rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: next } }
+    return { rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: initializeResourcePermissions(s.rolesByProject[projectId] || [], next, s.projectTypesByProject[projectId]) } }
   }),
   setRolesForProjectGuarded: (projectId, actor, v) => {
     if (!hasProjectRoleManagementAccess(get(), actor, projectId)) return false
@@ -512,8 +558,11 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     return true
   },
   initProjectPermissions: (projectId, overrides) => set((s) => {
-    const roles = buildDefaultRoles().map(r => overrides && overrides[r.name] ? { ...r, members: [...overrides[r.name]!] } : r)
-    const perms = buildDefaultRolePermissions()
+    const roles = (s.rolesByProject[projectId] ?? buildDefaultRoles()).map(r => overrides && overrides[r.name] ? { ...r, members: [...overrides[r.name]!] } : r)
+    const perms = initializeResourcePermissions(roles, {
+      ...buildPermissionsForRoles(roles, s.projectTypesByProject[projectId]),
+      ...s.rolePermissionsByProject[projectId],
+    }, s.projectTypesByProject[projectId])
     return {
       rolesByProject: { ...s.rolesByProject, [projectId]: roles },
       rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: perms },
@@ -523,11 +572,12 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     const previousRoles = s.rolesByProject[project.id] ?? []
     const roles = mergeProjectRoles(project, previousRoles)
     const previousPermissions = s.rolePermissionsByProject[project.id] ?? {}
-    const rolePermissions = {
-      ...buildPermissionsForRoles(roles),
+    const rolePermissions = initializeResourcePermissions(roles, {
+      ...buildPermissionsForRoles(roles, project.type),
       ...previousPermissions,
-    }
+    }, project.type)
     return {
+      projectTypesByProject: { ...s.projectTypesByProject, [project.id]: project.type },
       rolesByProject: { ...s.rolesByProject, [project.id]: roles },
       rolePermissionsByProject: { ...s.rolePermissionsByProject, [project.id]: rolePermissions },
     }
@@ -535,24 +585,27 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   ensureProjectPermissions: (projects) => set((s) => {
     const rolesByProject = { ...s.rolesByProject }
     const rolePermissionsByProject = { ...s.rolePermissionsByProject }
+    const projectTypesByProject = { ...s.projectTypesByProject }
     projects.forEach(project => {
+      projectTypesByProject[project.id] = project.type
       const expectedFixed = getFixedProjectRoles(project)
       const expectedNames = new Set(expectedFixed.map(role => role.name))
       const existing = rolesByProject[project.id] || []
       const existingByName = new Map(existing.map(role => [role.name, role]))
       const fixed = expectedFixed.map(role => {
         const configured = existingByName.get(role.name)
-        return configured ? { ...configured, isFixed: true } : role
+        if (project.type === PROJECT_CATEGORY_MACHINE && role.name === 'SPM') return role
+        return configured?.isFixed ? configured : role
       })
       const custom = existing.filter(role => !expectedNames.has(role.name) && !role.isFixed)
       const roles = [...fixed, ...custom]
       rolesByProject[project.id] = roles
-      rolePermissionsByProject[project.id] = {
-        ...buildPermissionsForRoles(roles),
+      rolePermissionsByProject[project.id] = initializeResourcePermissions(roles, {
+        ...buildPermissionsForRoles(roles, project.type),
         ...(rolePermissionsByProject[project.id] || {}),
-      }
+      }, project.type)
     })
-    return { rolesByProject, rolePermissionsByProject }
+    return { rolesByProject, rolePermissionsByProject, projectTypesByProject }
   }),
 
   // UI state setters
@@ -580,15 +633,25 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   partialize: partializePermissionState,
   merge: (persistedState, currentState) => {
     const migrated = migratePermissionState(persistedState, PERMISSION_STORAGE_VERSION)
+    const projectTypesByProject = { ...currentState.projectTypesByProject, ...migrated.projectTypesByProject }
+    const rolesByProject = { ...currentState.rolesByProject, ...migrated.rolesByProject }
+    // SPM is sourced from the established project's real field, including old caches.
+    initialProjects.filter(project => project.type === PROJECT_CATEGORY_MACHINE).forEach(project => {
+      if (rolesByProject[project.id]?.some(role => role.name === 'SPM' && role.isFixed)) return
+      const spm = getFixedProjectRoles(project as unknown as RoleProject).find(role => role.name === 'SPM')!
+      rolesByProject[project.id] = [...(rolesByProject[project.id] || []).filter(role => role.name !== 'SPM'), spm]
+    })
+    const rolePermissionsByProject = { ...currentState.rolePermissionsByProject, ...migrated.rolePermissionsByProject }
+    Object.entries(rolesByProject).forEach(([projectId, roles]) => {
+      rolePermissionsByProject[projectId] = initializeResourcePermissions(roles, rolePermissionsByProject[projectId] || {}, projectTypesByProject[projectId])
+    })
     return {
       ...currentState,
       globalRoles: migrated.globalRoles ?? currentState.globalRoles,
       globalRolePerms: initializeHrModelPermissions(migrated.globalRolePerms ?? currentState.globalRolePerms),
-      rolesByProject: { ...currentState.rolesByProject, ...migrated.rolesByProject },
-      rolePermissionsByProject: {
-        ...currentState.rolePermissionsByProject,
-        ...migrated.rolePermissionsByProject,
-      },
+      projectTypesByProject,
+      rolesByProject,
+      rolePermissionsByProject,
     }
   },
 }))
