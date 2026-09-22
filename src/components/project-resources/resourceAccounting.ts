@@ -4,7 +4,7 @@ export const UNASSIGNED_PRIMARY = '未归属一级部门'
 export interface DashboardFilter extends DashboardDateFilter { primary?: string; department?: string; departmentParents?: Record<string, string> }
 export function matchesDashboardDepartment(primary: string, secondary: string, filter: DashboardFilter) {
   return (!filter.primary || filter.primary === 'all' || (primary || UNASSIGNED_PRIMARY) === filter.primary)
-    && (!filter.department || filter.department === 'all' || secondary === filter.department)
+    && (filter.department === undefined || filter.department === 'all' || secondary === filter.department)
 }
 /** Ambiguous secondary names stay unassigned; never allocate the same expense into two parent departments. */
 export function dashboardDepartmentParents(pairs: readonly { primaryDepartment: string; secondaryDepartment: string }[]) {

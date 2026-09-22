@@ -19,8 +19,7 @@ import { exportResourceBusinessDashboard } from '@/components/project-resources/
 import ResourceDashboardMetrics from '@/components/project-resources/ResourceDashboardMetrics'
 import ResourceBusinessTrend from '@/components/project-resources/ResourceBusinessTrend'
 import ResourceAccountingDetails from '@/components/project-resources/ResourceAccountingDetails'
-import ResourceCumulativeLabor from '@/components/project-resources/ResourceCumulativeLabor'
-import { buildCumulativeLabor } from '@/components/project-resources/cumulativeLaborData'
+import { buildResourceDepartmentDetails } from '@/components/project-resources/cumulativeEstimateData'
 import { dashboardStageDefinition } from '@/components/project-resources/resourceDashboardStages'
 import { resolveBudgetScheduleDisplay } from '@/lib/budgetMilestoneScheduling'
 import { usePlanStore } from '@/stores/plan'
@@ -74,7 +73,7 @@ export default function ProjectResourceDashboard({ project, category }: {
   }), dashboardStageDefinition(category, formalDates, display)]
   const stages = stagesFor(sources)
   const trend = dashboardBusinessTrend(analyses, accounting, mode, grain, stages)
-  const cumulative = buildCumulativeLabor(dataset, filter, today, projectStart)
+  const details = buildResourceDepartmentDetails(category, sources, store.monthlyInvestments, rate, dataset, filter, today, projectStart)
   const period = dates ? `${dates[0]}～${dates[1]}` : '全周期'
   const canExport = canResourceAction({ pmsProjectId: project.id }, 'export', project.id)
   const exportAnalysis = () => {
@@ -86,7 +85,7 @@ export default function ProjectResourceDashboard({ project, category }: {
     }
     const currentRate = Number(useHrConfigStore.getState().data.feeRate?.[0]?.value ?? 5)
     const currentAnalyses = currentSources.map(source => source && buildDashboardAnalysis(category, source, current.monthlyInvestments, currentRate, filter))
-    exportResourceBusinessDashboard(project.name, currentAnalyses, buildAccountingAnalysis(dataset, currentRate, filter), filter, mode, grain, stagesFor(currentSources), buildCumulativeLabor(dataset, filter, dayjs().format('YYYY-MM-DD'), projectStart))
+    exportResourceBusinessDashboard(project.name, currentAnalyses, buildAccountingAnalysis(dataset, currentRate, filter), filter, mode, grain, stagesFor(currentSources), buildResourceDepartmentDetails(category, currentSources, current.monthlyInvestments, currentRate, dataset, filter, dayjs().format('YYYY-MM-DD'), projectStart))
   }
   return <section className="pms-resource-dashboard" aria-label="项目资源看板">
     <div className="pms-dashboard-toolbar">
@@ -99,13 +98,12 @@ export default function ProjectResourceDashboard({ project, category }: {
       <label><span>日期</span><DatePicker.RangePicker aria-label="看板日期范围" value={dates ? [dayjs(dates[0]), dayjs(dates[1])] : null} onChange={value => setDates(value?.[0] && value[1] ? [value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')] : undefined)} /></label>
       <span className="pms-dashboard-filter-note">{period} · 正式版本</span>
     </div>
-    <ResourceDashboardMetrics sources={sources} analyses={analyses} accounting={accounting} />
+    <ResourceDashboardMetrics sources={sources} analyses={analyses} accounting={accounting} details={details} />
     <section className="pms-resource-panel pms-dashboard-trend-panel">
       <div className="pms-dashboard-panel-head"><h3>四类投入趋势</h3><div><Segmented aria-label="趋势指标" value={mode} options={[{ value: 'labor', label: '投入人月' }, { value: 'cost', label: '费用（万元）' }]} onChange={value => setMode(value as 'labor' | 'cost')} /><Segmented aria-label="趋势周期" value={grain} options={[{ value: 'month', label: '月度' }, { value: 'week', label: '周度' }, { value: 'stage', label: '阶段' }]} onChange={value => setGrain(value as DashboardTrendGrain)} /></div></div>
       <ResourceBusinessTrend trend={trend} />
       <p className="pms-dashboard-note">预算按月度计划展示；周度、阶段及部分月份按当月周一至周五均摊折算，非实际发生时间。阶段按各来源里程碑归类，缺失区间列为未归属阶段。核算按正式项目里程碑及记录日期汇总，{accounting ? `模拟明细覆盖 ${accounting.dataset.startDate}～${accounting.dataset.endDate}` : '暂无核算来源'}；超出来源期间显示空缺。</p>
     </section>
-    <ResourceAccountingDetails analysis={accounting} />
-    <ResourceCumulativeLabor analysis={cumulative} today={today} />
+    <ResourceAccountingDetails analysis={accounting} details={details} />
   </section>
 }

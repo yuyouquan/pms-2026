@@ -29,7 +29,7 @@ const imports = {
   '@/stores/technicalPlan': { useTechnicalPlanStore: () => ({}) },
   '@/lib/budgetMilestoneScheduling': { resolveBudgetScheduleDisplay: () => ({}) },
   '@/components/project-resources/resourceDashboardStages': { dashboardStageDefinition: () => ({ labels: [], periods: [] }) },
-  '@/components/project-resources/cumulativeLaborData': { buildCumulativeLabor: () => undefined },
+  '@/components/project-resources/cumulativeEstimateData': { buildResourceDepartmentDetails: () => ({ rows: [], total: {} }) },
   '@/stores/hrConfig': { useHrConfigStore: config },
   '@/lib/hrProjectRegistry': { canResourceAction, getHrAllowedBudgetTypes: () => ['annual', 'projectEstimate', 'projectBudget'], isHrVersionVisible: (record, type, scope) => canResourceAction(record, 'view', scope) && (record.pmsProjectId === scope || type === 'annual'), isHrFormalRecord: () => false, getHrRegistryProject: () => project },
   '@/lib/hrVersionRules': { isHrVersionEditable, canCreateHrVersion: record => canResourceAction(record, 'createVersion') },
@@ -68,7 +68,7 @@ const imports = {
     selectDashboardSource: sources => { const official = sources.filter(source => source.version.isActive); return official.length === 1 ? official[0] : undefined },
     buildDashboardAnalysis: (_category, source, rows, rate) => ({ source, rows, rate, years: [], months: [], allMonths: [], issues: [], departments: [], subjects: [], deficit: 0, excess: 0, target: 0 }),
   },
-  ...Object.fromEntries(['ResourceCumulativeLabor', 'ResourceDashboardMetrics', 'ResourceBusinessTrend', 'ResourceAccountingDetails', 'ResourceDashboardDetails', 'HrSourceLink', 'ResourceVersionViews', 'ResourceInlineDetail', 'ResourceVersionWorkspace', 'ProjectResourceDashboard'].map(name => [`@/components/project-resources/${name}`, { __esModule: true, default: name }])),
+  ...Object.fromEntries(['ResourceDashboardMetrics', 'ResourceBusinessTrend', 'ResourceAccountingDetails', 'ResourceDashboardDetails', 'HrSourceLink', 'ResourceVersionViews', 'ResourceInlineDetail', 'ResourceVersionWorkspace', 'ProjectResourceDashboard'].map(name => [`@/components/project-resources/${name}`, { __esModule: true, default: name }])),
 }
 function compile(name) {
   const module = { exports: {} }
