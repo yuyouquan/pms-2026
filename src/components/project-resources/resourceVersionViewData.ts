@@ -28,9 +28,9 @@ const rounded = (amount: number) => Math.round(amount * 1000) / 1000
 const validMonth = (value: string) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value)
 
 /** A selected-version projection; activation belongs to aggregate consumers, never this view. */
-export function buildResourceMonthlyView(allRows: readonly ResourceMonthlyRow[], versionId: string, startMonth?: string, endMonth?: string, year = 'all') {
+export function buildResourceMonthlyView(allRows: readonly ResourceMonthlyRow[], versionId: string, startMonth?: string, endMonth?: string, year = 'all', additionalMonths: readonly string[] = []) {
   const rows = allRows.filter(row => row.versionId === versionId && !row.isArchived)
-  const monthSet = new Set(rows.flatMap(row => Object.keys(row.monthlyData).filter(validMonth)))
+  const monthSet = new Set([...rows.flatMap(row => Object.keys(row.monthlyData)), ...additionalMonths].filter(validMonth))
   if (startMonth && endMonth && validMonth(startMonth) && validMonth(endMonth) && startMonth <= endMonth) {
     const [startYear, start] = startMonth.split('-').map(Number)
     const [endYear, end] = endMonth.split('-').map(Number)
