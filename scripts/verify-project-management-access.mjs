@@ -5,6 +5,8 @@ import { createRequire } from 'node:module'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import ts from 'typescript'
+import path from 'node:path'
+import { createTypeScriptModuleLoader } from './lib/typescript-module-loader.mjs'
 
 // Exercise the real container with isolated stores and lightweight child surfaces.
 // Browser checks cover subscriptions, mounted tab cleanup, and effect-driven resets.
@@ -21,6 +23,7 @@ const state = {
 const store = selector => selector({ ...state, setProjectManagementTab: value => { state.projectManagementTab = value } })
 let offeredTabs = []
 const mocks = {
+  '@/lib/projectRegistryPermissions': createTypeScriptModuleLoader()(path.resolve('src/lib/projectRegistryPermissions.ts')),
   antd: {
     Card: ({ children }) => React.createElement('div', null, children),
     Segmented: ({ options }) => React.createElement('div', { role: 'radiogroup' }, options.map(option => React.createElement(React.Fragment, { key: option.value }, option.label))),
@@ -64,4 +67,8 @@ state.projectManagementTab = 'configuration'
 assert.match(render(), /配置内容/, 'access follows group membership, not a hardcoded login')
 state.globalRoles = state.globalRoles.map(role => role.name === '管理组' ? { ...role, members: [] } : role)
 assert.doesNotMatch(render(), /radiogroup|配置内容/, 'revoking management membership removes access')
-console.log('project management access: admin, non-admin, stale tab, alternate admin, and revoked membership passed')
+for (const name of ['乔永峰','徐如秀（大圆）','孙仁海','游进','邓伟俊','陈佩玲','王健（Jim）']) {
+  state.currentLoginUser = name
+  assert.match(render(), /配置内容/, `${name} can enter configuration without gaining global administration`)
+}
+console.log('project management access: admin, non-admin, stale tab, alternate admin, revoked membership, and scoped managers passed')
