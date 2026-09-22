@@ -9470,6 +9470,35 @@ input.ant-input,
 .pms-resource-panel .pms-non-labor-section > h3 { display: none; }
 .pms-resource-workspace .ant-input-number-input,
 .pms-resource-fee-config .ant-input-number-input { border: 0 !important; box-shadow: none !important; outline: 0 !important; background: transparent !important; border-radius: 0 !important; }
+.pms-resource-fee-config { width: 100%; max-width: 960px; padding: 24px; border: 1px solid var(--pms-border); border-radius: var(--pms-radius-surface); background: var(--pms-surface-solid); box-shadow: var(--pms-shadow-sm); }
+.pms-fee-config-header { display: flex; align-items: center; gap: 12px; padding-bottom: 20px; border-bottom: 1px solid var(--pms-brand-border); }
+.pms-fee-config-icon { display: flex; align-items: center; justify-content: center; flex: 0 0 40px; height: 40px; border-radius: 10px; color: var(--pms-brand); background: var(--pms-brand-surface); font-size: 20px; }
+.pms-fee-config-header h2 { margin: 0; color: var(--pms-text-primary); font-size: 16px; font-weight: 700; line-height: 24px; }
+.pms-fee-config-header p { margin: 4px 0 0; color: var(--pms-text-secondary); font-size: 13px; line-height: 20px; }
+.pms-fee-config-body { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 1.5fr); align-items: center; gap: 32px; padding-top: 24px; }
+.pms-fee-config-field { min-width: 0; }
+.pms-fee-config-field label { display: block; margin-bottom: 8px; color: var(--pms-text-primary); font-size: 13px; font-weight: 600; }
+.pms-fee-config-field .ant-input-number { display: flex; align-items: center; width: 100%; min-height: 44px; }
+.pms-fee-config-field .ant-input-number-input { height: 40px !important; line-height: 40px !important; font-size: 20px !important; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pms-fee-config-field .ant-input-number-suffix { padding-inline: 8px; color: var(--pms-text-secondary); font-size: 13px; }
+.pms-fee-config-hint { margin: 8px 0 0; color: var(--pms-text-secondary); font-size: 12px; line-height: 20px; }
+.pms-fee-config-readonly { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; width: 100%; padding: 0 12px; border: 1px solid var(--pms-border); border-radius: var(--pms-radius-control); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pms-fee-config-readonly > span { color: var(--pms-text-secondary); font-size: 13px; font-weight: 400; }
+.pms-fee-config-field .pms-resource-inline-value { width: 100%; }
+.pms-fee-config-example { min-width: 0; padding: 16px 20px; border-radius: 10px; background: var(--pms-brand-surface); }
+.pms-fee-config-example h3 { margin: 0 0 6px; color: var(--pms-text-primary); font-size: 13px; font-weight: 600; }
+.pms-fee-config-example p { margin: 0; color: var(--pms-text-secondary); font-size: 12px; line-height: 20px; }
+.pms-fee-config-equation { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 12px 0 8px; color: var(--pms-text-primary); font-size: 13px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pms-fee-config-equation strong { color: var(--pms-brand); font-size: 24px; line-height: 32px; font-weight: 700; }
+.pms-fee-config-equation small { margin-left: 4px; font-size: 12px; font-weight: 400; }
+@media (max-width: 1100px) {
+  .pms-fee-config-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .pms-fee-config-field { max-width: 360px; }
+}
+@media (max-width: 600px) {
+  .pms-resource-fee-config { padding: 16px; }
+  .pms-fee-config-example { padding: 14px; }
+}
 .pms-resource-workspace .ant-input-number-handler-wrap { display: none; }
 .pms-resource-workspace .ant-input-number { display: inline-flex; align-items: center; }
 .pms-resource-workspace .ant-input-number-input { min-width: 0; }
