@@ -5648,7 +5648,7 @@ export default function ProjectSpaceContainer() {
       {/* Header */}
       <ProjectSpaceHeader navigateWithEditGuard={navigateWithEditGuard} />
 
-      <div className="pms-project-space__body" style={{ display: 'flex', height: 'calc(100dvh - var(--pms-header-height))' }}>
+      <div className={`pms-project-space__body${isTransferPage ? ' pms-project-space__body--transfer' : ''}`} style={{ display: 'flex', height: 'calc(100dvh - var(--pms-header-height))' }}>
         {/* Sidebar */}
         {!isTransferPage && <CollapsibleSidebarShell
           className="pms-sidebar pms-project-space-sidebar pms-glass-surface"
@@ -5681,7 +5681,7 @@ export default function ProjectSpaceContainer() {
         </CollapsibleSidebarShell>}
 
         {/* Content area */}
-        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${isTransferPage ? ' pms-project-section--transfer pms-transfer-surface' : ''}${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 'var(--pms-content-padding)', overflow: 'auto' }}>
+        <div id="basic-info-scroll-container" className={`pms-project-section${isTransferPage ? '' : ' pms-solid-surface'}${isTransferPage ? ' pms-project-section--transfer pms-transfer-surface' : ''}${!isTransferPage && ['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: isTransferPage ? 0 : 'var(--pms-content-padding)', overflow: 'auto' }}>
           {transfer.transferView === 'apply' && <TransferApply {...transferProps} />}
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}

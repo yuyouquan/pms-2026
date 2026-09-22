@@ -91,7 +91,10 @@ export function syncTransferPipeline(app: TransferApplication, checklist: CheckL
   if (app.status !== 'in_progress' || app.pipeline.maintenanceSpmReview === 'success') return app
   const items = [...checklist, ...(app.projectType === 'tOS版本项目' ? [] : reviewElements)].filter(item => item.applicationId === app.id)
   if (!items.length) return app
-  const roles = [...new Set([...(app.teamConfig?.map(role => role.roleName) ?? []), ...items.map(item => item.responsibleRole)])]
+  // Older applications have no configuration snapshot. Keep all of their team roles visible,
+  // including roles with no material rows, when delegation or entry refreshes the pipeline.
+  const legacyRoles = [...app.pipeline.roleProgress.map(role => role.role), ...app.team.research.map(member => member.role === 'TPM' ? '测试' : member.role)]
+  const roles = [...new Set([...(app.teamConfig?.map(role => role.roleName) ?? legacyRoles), ...items.map(item => item.responsibleRole)])]
   const roleProgress = roles.map(role => {
     const rows = items.filter(item => item.responsibleRole === role)
     // Configured roles without template rows have no material work and do not block the flow.
