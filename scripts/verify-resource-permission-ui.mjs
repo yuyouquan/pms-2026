@@ -18,22 +18,32 @@ const stateStore = { getState: () => current }
 const registry = Object.assign(selector => selector?.({ currentLoginUser: actor, projects: [project] }), { getState: () => ({ currentLoginUser: actor, projects: [project] }) })
 const config = Object.assign(selector => selector({ data: { hrModel: [], feeRate: [{ value: 5 }] } }), { getState: () => ({ data: { feeRate: [{ value: 5 }] } }) })
 const imports = {
-  react: { useEffect: noop, useRef: value => ({ current: value }), useState: initial => { const index = hookCursor++; return [index in hooks ? hooks[index] : initial, value => { hooks[index] = value }] } },
-  antd: new Proxy({ App: { useApp: () => ({ message: { success: noop, warning: value => warnings.push(value) } }) }, Table: table }, { get: (target, key) => target[key] ?? String(key) }),
+  react: { useEffect: noop, useRef: value => ({ current: value }), useState: initial => { const index = hookCursor++; return [index in hooks ? hooks[index] : typeof initial === 'function' ? initial() : initial, value => { hooks[index] = value }] } },
+  antd: new Proxy({ App: { useApp: () => ({ message: { success: noop, warning: value => warnings.push(value) } }) }, Table: table, DatePicker: { RangePicker: 'RangePicker' } }, { get: (target, key) => target[key] ?? String(key) }),
   '@ant-design/icons': new Proxy({}, { get: (_, key) => String(key) }),
   xlsx: { read: () => ({ SheetNames: ['sheet'], Sheets: { sheet: {} } }), utils: { sheet_to_json: () => [['一级部门', '二级部门', '预估投入'], ['A', 'B', 15]] } },
   '@/stores/project': { useProjectStore: registry },
   '@/stores/permission': { usePermissionStore: noop, useHasPermission: () => key => actor === 'owner' && granted.has(key.replace('resource:', '')) },
   '@/stores/ui': { useUiStore: { getState: () => ({ navigateWithEditGuard: callback => { if (defer) pending = callback; else callback() } }) } },
+  '@/stores/plan': { usePlanStore: () => ({}) },
+  '@/stores/technicalPlan': { useTechnicalPlanStore: () => ({}) },
+  '@/lib/budgetMilestoneScheduling': { resolveBudgetScheduleDisplay: () => ({}) },
+  '@/components/project-resources/resourceDashboardStages': { dashboardStageDefinition: () => ({ labels: [], periods: [] }) },
+  '@/components/project-resources/cumulativeEstimateData': { buildResourceDepartmentDetails: () => ({ rows: [], total: {} }) },
   '@/stores/hrConfig': { useHrConfigStore: config },
   '@/lib/hrProjectRegistry': { canResourceAction, getHrAllowedBudgetTypes: () => ['annual', 'projectEstimate', 'projectBudget'], isHrVersionVisible: (record, type, scope) => canResourceAction(record, 'view', scope) && (record.pmsProjectId === scope || type === 'annual'), isHrFormalRecord: () => false, getHrRegistryProject: () => project },
   '@/lib/hrVersionRules': { isHrVersionEditable, canCreateHrVersion: record => canResourceAction(record, 'createVersion') },
   '@/types/projectRegistry': { getProjectAttribute: value => value.projectAttribute },
-  '@/lib/hrFormalProjectSource': { matchesHrCategory: () => false },
+  '@/lib/hrFormalProjectSource': { matchesHrCategory: () => false, resolveHrFormalSource: () => ({ milestones: {} }) },
   '@/components/project-resources/resourceVersionAdapter': { resourceStore: () => stateStore, useResourceStore: () => current, resourceProjectName: value => value.name },
   '@/components/project-resources/resourceVersionViewData': { chooseResourceVersion: versions => versions[0], RESOURCE_TABS: [{ key: 'dashboard', label: '资源概览' }] },
   '@/components/project-resources/ResourceVersionDialogs': { ResourceVersionCreateDialog: 'CreateDialog', ResourceOperationLogDialog: 'LogDialog' },
   '@/components/project-resources/exportResourceVersion': { exportResourceVersion: (...args) => exports.push(args) },
+  '@/lib/resourceAllocation': { resolveMachineDepartmentInvestments: version => version.modelSnapshot?.departmentInvestments ?? [] },
+  '@/mock/resourceAccounting': { resourceAccountingDataset: () => undefined },
+  '@/components/project-resources/resourceAccounting': { buildAccountingAnalysis: () => undefined, dashboardDepartmentParents: () => ({}), UNASSIGNED_PRIMARY: '未归属一级部门' },
+  '@/components/project-resources/resourceDashboardBusiness': { dashboardBusinessTrend: () => ({ periods: [], series: [] }) },
+  '@/components/project-resources/exportResourceBusinessDashboard': { exportResourceBusinessDashboard: (...args) => exports.push(args) },
   '@/components/project-resources/exportResourceDashboard': { exportResourceDashboard: (...args) => exports.push(args) },
   '@/components/project-resources/ResourceInlineField': { __esModule: true, default: 'InlineField' },
   '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'NonLabor', NonLaborInvestmentRange: 'Range' },
@@ -55,10 +65,10 @@ const imports = {
   '@/components/project-resources/resourceDashboardData': {
     DASHBOARD_BUDGETS: [{ key: 'projectBudget', label: '项目预算' }], dashboardDelta: () => undefined,
     dashboardSources: (records, scope, type) => records.filter(record => canResourceAction(record, 'view', scope)).flatMap(owner => owner.versions.filter(version => version.budgetType === type).map(version => ({ owner, version }))),
-    selectDashboardSource: sources => sources[0],
+    selectDashboardSource: sources => { const official = sources.filter(source => source.version.isActive); return official.length === 1 ? official[0] : undefined },
     buildDashboardAnalysis: (_category, source, rows, rate) => ({ source, rows, rate, years: [], months: [], allMonths: [], issues: [], departments: [], subjects: [], deficit: 0, excess: 0, target: 0 }),
   },
-  ...Object.fromEntries(['HrSourceLink', 'ResourceVersionViews', 'ResourceInlineDetail', 'ResourceVersionWorkspace', 'ProjectResourceDashboard'].map(name => [`@/components/project-resources/${name}`, { __esModule: true, default: name }])),
+  ...Object.fromEntries(['ResourceDashboardMetrics', 'ResourceBusinessTrend', 'ResourceAccountingDetails', 'ResourceDashboardDetails', 'HrSourceLink', 'ResourceVersionViews', 'ResourceInlineDetail', 'ResourceVersionWorkspace', 'ProjectResourceDashboard'].map(name => [`@/components/project-resources/${name}`, { __esModule: true, default: name }])),
 }
 function compile(name) {
   const module = { exports: {} }
@@ -177,11 +187,12 @@ imports['@/lib/hrProjectRegistry'].isHrFormalRecord = () => false
 console.log('PASS detail labor/nonlabor/setup field separation and independent async import revalidation')
 
 const renderDashboard = () => { hookCursor = 0; hooks = []; return elements(Dashboard({ project, category: 'capability', onOpenVersion: noop })) }
-for (const change of ['revoke', 'switch', 'unlink']) {
+for (const change of ['revoke', 'switch', 'unlink', 'official']) {
   reset()
   const callback = button(renderDashboard(), '导出分析').props.onClick
   if (change === 'revoke') granted.delete('export')
   else if (change === 'switch') actor = 'other'
+  else if (change === 'official') current.projects[0].versions = [{ ...current.projects[0].versions[0], isActive: false }]
   else current.projects[0].pmsProjectId = 'other'
   callback()
   assert.equal(exports.length, 0, `${change}: stale dashboard export denied`)
@@ -198,4 +209,15 @@ let navigation = Root({ project }); hookCursor = 0; hooks = []
 assert.equal(navigation.type(navigation.props).type, 'Scope', 'resource:view alone grants root resource view')
 granted.clear(); hookCursor = 0; hooks = []
 assert.equal(navigation.type(navigation.props).type, 'Empty')
+reset()
+current.projects = []
+imports['@/mock/resourceAccounting'].resourceAccountingDataset = () => ({ projectId: project.id, worklogs: [], expenses: [] })
+imports['@/components/project-resources/resourceAccounting'].buildAccountingAnalysis = () => ({ months: ['2026-01'], worklogs: [], expenses: [], dataset: { startDate: '2026-01-01', endDate: '2026-01-31' } })
+let actualOnlyButton = button(renderDashboard(), '导出分析')
+assert.equal(actualOnlyButton.props.disabled, false, 'independent accounting can export when no budget source exists')
+actualOnlyButton.props.onClick()
+assert.equal(exports.length, 1)
+granted.delete('export')
+actualOnlyButton.props.onClick()
+assert.equal(exports.length, 1, 'actual-only export still rechecks permission at execution')
 console.log('PASS dashboard export execution authorization, source availability, fresh data and resource:view root gate')
