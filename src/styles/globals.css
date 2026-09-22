@@ -295,6 +295,86 @@
   border-radius: var(--pms-radius-surface);
 }
 
+.pms-transfer-page-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  gap: 20px;
+  max-width: 1660px;
+  margin: 0 auto;
+}
+
+.pms-transfer-page-content {
+  min-width: 0;
+}
+
+.pms-transfer-anchor {
+  position: sticky;
+  top: 16px;
+  align-self: start;
+  padding: 12px 0;
+  border: 1px solid var(--pms-border);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 8%);
+  max-height: calc(100dvh - var(--pms-header-height) - 48px);
+  overflow-y: auto;
+}
+
+.pms-transfer-anchor__title {
+  margin-bottom: 4px;
+  padding: 0 16px 8px;
+  border-bottom: 1px solid var(--pms-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pms-text-tertiary);
+  letter-spacing: 1px;
+}
+
+.pms-transfer-anchor .ant-anchor::before,
+.pms-transfer-anchor .ant-anchor-ink {
+  display: none;
+}
+
+.pms-transfer-anchor .ant-anchor-link {
+  padding: 7px 12px;
+  border-left: 3px solid transparent;
+}
+
+.pms-transfer-anchor .ant-anchor-link-active {
+  border-left-color: var(--pms-brand);
+  background: var(--pms-brand-surface);
+  font-weight: 600;
+}
+
+.pms-transfer-anchor .ant-anchor-link-title {
+  font-size: 13px;
+}
+
+.pms-transfer-anchor__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Fixed operations must cover the scrolling cells in every row state.
+   The shared translucent hover/selection backgrounds otherwise expose tags underneath. */
+.pms-project-section--transfer .pms-table .ant-table-tbody > tr > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
+  background: var(--pms-surface-solid) !important;
+}
+
+.pms-project-section--transfer .pms-table .ant-table-tbody > tr:hover > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right),
+.pms-project-section--transfer .pms-table .ant-table-tbody > tr > td.ant-table-cell-row-hover:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
+  background: color-mix(in srgb, rgb(99 102 241) 6%, var(--pms-surface-solid)) !important;
+}
+
+.pms-project-section--transfer .pms-table .ant-table-tbody > tr.ant-table-row-selected > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
+  background: color-mix(in srgb, rgb(99 102 241) 8%, var(--pms-surface-solid)) !important;
+}
+
+.pms-project-section--transfer .pms-table .ant-table-tbody > tr.ant-table-row-selected:hover > td:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right),
+.pms-project-section--transfer .pms-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-row-hover:is(.ant-table-cell-fix-start, .ant-table-cell-fix-end, .ant-table-cell-fix-left, .ant-table-cell-fix-right) {
+  background: color-mix(in srgb, rgb(99 102 241) 12%, var(--pms-surface-solid)) !important;
+}
+
 .pms-project-information-slot {
   margin-bottom: 16px;
   overflow: hidden;

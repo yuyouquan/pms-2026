@@ -3,7 +3,7 @@ import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
 // Real stores and business helpers; browser interactions are verified separately.
 const root = process.cwd()
-const { useTransferStore, resumeTransferAiChecks } = loadTypeScriptModule(root, 'src/stores/transfer.ts')
+const { useTransferStore, resumeTransferAiChecks, upgradeTransferMockDefaults } = loadTypeScriptModule(root, 'src/stores/transfer.ts')
 const { usePermissionStore, hasGlobalPermission } = loadTypeScriptModule(root, 'src/stores/permission.ts')
 const config = loadTypeScriptModule(root, 'src/lib/transferConfig.ts')
 const flow = loadTypeScriptModule(root, 'src/lib/transferWorkflow.ts')
@@ -41,6 +41,31 @@ function templateRows(kind, projectType = whole) {
       : ['B.01', '回归评审要素', '交付件', '说明', '备注', 'SPM', '在研SPM', '维护SPM', '核对内容'],
   ], kind, state().tmTeamConfigs[projectType])
 }
+check('tOS mock defaults contain only SPM and TPM with matching material responsibilities', () => {
+  assert.deepEqual(state().tmTeamConfigs[tos].map(role => [role.roleName, role.ipmRoleCode]), [['SPM', 'SPM'], ['TPM', 'TPM']])
+  const templates = config.getCurrentTransferTemplates(tos, state().tmTemplateVersions)
+  assert.deepEqual([...new Set(templates.checklist.map(row => row.responsibleRole))].sort(), ['SPM', 'TPM'])
+  assert.ok(templates.checklist.every(row => row.entryRole === `在研${row.responsibleRole}` && row.reviewRole === `维护${row.responsibleRole}`))
+  assert.equal(templates.reviewElements.length, 0)
+  assert.equal(state().tmTeamConfigs[whole].length, 5)
+})
+check('legacy default refresh preserves whole-product data, existing applications and customized configuration', () => {
+  const original = cloneState(state())
+  useTransferStore.setState({ tmTeamConfigs: { ...state().tmTeamConfigs, [tos]: config.getTransferRoleConfig(whole) }, tmTemplateVersions: { ...state().tmTemplateVersions, [tos]: { checklist: [{ ...state().tmTemplateVersions[tos].checklist[0], rows: structuredClone(state().tmTemplateVersions[whole].checklist[0].rows) }], review: [] } } })
+  upgradeTransferMockDefaults()
+  assert.deepEqual(state().tmTeamConfigs[tos], original.tmTeamConfigs[tos])
+  assert.deepEqual(state().tmTemplateVersions[tos], original.tmTemplateVersions[tos])
+  assert.deepEqual(state().tmTemplateVersions[whole], original.tmTemplateVersions[whole])
+  assert.deepEqual(state().transferApplications, original.transferApplications)
+  const custom = [{ id: 'spm', roleName: '版本负责人', ipmRoleCode: 'VERSION_PM' }]
+  useTransferStore.setState({ tmTeamConfigs: { ...state().tmTeamConfigs, [tos]: custom } })
+  upgradeTransferMockDefaults()
+  assert.deepEqual(state().tmTeamConfigs[tos], custom)
+  useTransferStore.setState({ tmTeamConfigs: { ...state().tmTeamConfigs, [tos]: config.getTransferRoleConfig(whole) }, tmTemplateVersions: { ...state().tmTemplateVersions, [tos]: { ...state().tmTemplateVersions[tos], checklist: [{ ...state().tmTemplateVersions[tos].checklist[0], createdBy: editor }] } } })
+  const imported = snapshot()
+  upgradeTransferMockDefaults()
+  assert.deepEqual(snapshot(), imported)
+})
 function application(projectType = whole) {
   return {
     ...structuredClone(MOCK_TRANSFER_APPLICATIONS[0]), id: 'regression-application', projectId: project.id, projectName: project.name,

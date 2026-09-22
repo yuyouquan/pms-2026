@@ -5642,6 +5642,7 @@ export default function ProjectSpaceContainer() {
   // For brevity we render a placeholder that maintains the same layout structure.
   // The actual body rendering for each module (basic, plan, etc.) is delegated to sub-functions that were defined above.
 
+  const isTransferPage = transfer.transferView !== null && transfer.transferView !== 'apply'
   return (
     <div className="pms-project-space pms-page-shell">
       {/* Header */}
@@ -5649,7 +5650,7 @@ export default function ProjectSpaceContainer() {
 
       <div className="pms-project-space__body" style={{ display: 'flex', height: 'calc(100dvh - var(--pms-header-height))' }}>
         {/* Sidebar */}
-        <CollapsibleSidebarShell
+        {!isTransferPage && <CollapsibleSidebarShell
           className="pms-sidebar pms-project-space-sidebar pms-glass-surface"
           collapsed={projectSpaceSidebarCollapsed}
           onCollapsedChange={setProjectSpaceSidebarCollapsed}
@@ -5677,10 +5678,10 @@ export default function ProjectSpaceContainer() {
               transfer.setTransferView(null)
             })}
           />
-        </CollapsibleSidebarShell>
+        </CollapsibleSidebarShell>}
 
         {/* Content area */}
-        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 'var(--pms-content-padding)', overflow: 'auto' }}>
+        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${isTransferPage ? ' pms-project-section--transfer' : ''}${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 'var(--pms-content-padding)', overflow: 'auto' }}>
           {transfer.transferView === 'apply' && <TransferApply {...transferProps} />}
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}

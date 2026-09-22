@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Empty, Input, Modal, Select, Space, Table, Tag, Upload, message } from 'antd'
+import { Button, Card, Empty, Input, Modal, Select, Space, Table, Upload, message } from 'antd'
 import { DeleteOutlined, DiffOutlined, DownloadOutlined, EditOutlined, PlusOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons'
 import * as XLSX from 'xlsx'
 import { useTransferStore } from '@/stores/transfer'
@@ -69,7 +69,7 @@ export function TransferConfig(_props: unknown) {
   }, [from, to, versions, kind])
   if (view === 'team') return <>
     <Card className="pms-config-workspace-card pms-solid-surface" title={`${projectType} · 转维团队配置`} extra={canEdit && <Button icon={<EditOutlined />} onClick={() => { setRoles(structuredClone(state.tmTeamConfigs[projectType])); setEditing(true) }}>编辑</Button>}>
-      <Table className="pms-table" size="small" rowKey="id" pagination={false} dataSource={state.tmTeamConfigs[projectType]} columns={[{ title: '角色名', dataIndex: 'roleName', render: (value: string, role: TransferTeamRole) => <Space>{value}{role.id === 'spm' && <Tag>维护SPM终审</Tag>}</Space> }, { title: 'IPM角色Code', dataIndex: 'ipmRoleCode' }]} />
+      <Table className="pms-table" size="small" rowKey="id" pagination={false} dataSource={state.tmTeamConfigs[projectType]} columns={[{ title: '角色名', dataIndex: 'roleName' }, { title: 'IPM角色Code', dataIndex: 'ipmRoleCode' }]} />
     </Card>
     <Modal className="pms-modal" title={`${projectType} · 转维团队配置`} open={editing} width={700} onCancel={() => setEditing(false)} okText="保存" onOk={() => {
       if (useProjectStore.getState().currentLoginUser !== actor) return

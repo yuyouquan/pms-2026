@@ -17,7 +17,8 @@ export function getTransferProjectType(project: string | { id?: string; type?: s
   const raw = typeof project === 'string' ? project : project?.type ?? project?.projectType
   return resolveProjectClassification(raw).projectCategory === 'tOS版本项目' ? 'tOS版本项目' : '整机产品项目'
 }
-export function getTransferRoleConfig(_kind: TransferProjectType): TransferTeamRole[] {
+export function getTransferRoleConfig(kind: TransferProjectType): TransferTeamRole[] {
+  if (kind === 'tOS版本项目') return [{ id: 'spm', roleName: 'SPM', ipmRoleCode: 'SPM' }, { id: 'test', roleName: 'TPM', ipmRoleCode: 'TPM' }]
   return [{ id: 'spm', roleName: 'SPM', ipmRoleCode: 'SPM' }, { id: 'test', roleName: '测试', ipmRoleCode: 'TPM' }, { id: 'base', roleName: '底软', ipmRoleCode: '底软' }, { id: 'system', roleName: '系统', ipmRoleCode: '系统' }, { id: 'camera', roleName: '影像', ipmRoleCode: '影像' }]
 }
 export function getTransferMember(team: readonly TMTeamMember[], role: string, config: readonly TransferTeamRole[] = []): TMTeamMember | undefined {
@@ -38,10 +39,13 @@ export function createTransferTemplateVersions(): TransferTemplateVersions {
   const create = (project: TransferProjectType, kind: TransferTemplateKind): TransferTemplateSnapshot[] => {
     if (project === 'tOS版本项目' && kind === 'review') return []
     let sequence = 0, last = ''
-    const rows: TransferTemplateRow[] = (kind === 'checklist' ? MOCK_CHECKLIST_TEMPLATES : MOCK_REVIEW_ELEMENT_TEMPLATES).map(row => {
+    const roles = getTransferRoleConfig(project)
+    const resolveRole = (role: string) => roles.find(candidate => candidate.roleName === role || candidate.ipmRoleCode === (role === '测试' ? 'TPM' : role))
+    const rows: TransferTemplateRow[] = (kind === 'checklist' ? MOCK_CHECKLIST_TEMPLATES : MOCK_REVIEW_ELEMENT_TEMPLATES).filter(row => resolveRole(row.responsibleRole)).map(row => {
       const text = 'checkItem' in row ? row.checkItem : row.standard
       if (text !== last) { sequence++; last = text }
-      return { ...row, entryRole: `在研${row.responsibleRole}`, reviewRole: `维护${row.responsibleRole}`, seq: row.seq ?? sequence, ...(!('checkItem' in row) ? { type: row.type ?? '检查项' } : {}) }
+      const role = resolveRole(row.responsibleRole)!.roleName
+      return { ...row, responsibleRole: role, entryRole: `在研${role}`, reviewRole: `维护${role}`, seq: row.seq ?? sequence, ...(!('checkItem' in row) ? { type: row.type ?? '检查项' } : {}) }
     })
     return [{ id: `${project}-${kind}-1`, version: 'v1.0', date: '2026-09-22', createdBy: '系统', kind, rows }]
   }

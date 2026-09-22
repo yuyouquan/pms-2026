@@ -3,7 +3,7 @@
 import { useEffect, useState, type Key, type ReactNode } from 'react'
 import dayjs from 'dayjs'
 import { Alert, Anchor, Avatar, Badge, Button, Card, Col, Collapse, DatePicker, Descriptions, Empty, Form, Image, Input, Modal, Popconfirm, Popover, Progress, Row, Segmented, Select, Space, Table, Tabs, Tag, Timeline, Tooltip, message } from 'antd'
-import { ArrowLeftOutlined, AuditOutlined, CheckCircleOutlined, CloseCircleOutlined, CopyOutlined, EditOutlined, FileTextOutlined, PlusOutlined, SafetyOutlined, StopOutlined, SwapOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, AuditOutlined, CheckCircleOutlined, CloseCircleOutlined, CopyOutlined, EditOutlined, FileTextOutlined, HistoryOutlined, PlusOutlined, PushpinOutlined, SafetyOutlined, StopOutlined, SwapOutlined, SyncOutlined, TeamOutlined } from '@ant-design/icons'
 import { ALL_USERS } from '@/constants/permissions'
 import { MOCK_TM_USERS, ROLE_COLORS, getCurrentNodeLabel, getCurrentNodeStatus, getPipelinePercent, buildCloseReviewRows, type TransferApplication, type CheckListItem, type ReviewElement, type BlockTask, type LegacyTask, type TMTeamMember, type HistoryRecord } from '@/mock/transfer-maintenance'
 import { matchesTransferProject, matchesTransferActor, canEnterTransferItem, canReviewTransferItem, canManageTransfer, canCloseTransfer, canEditTransferLegacy, canResolveTransferLegacy, canDelegateTransferItem, getMaintenanceSpmReviewAccess, createTransferMaterials, getMissingTransferTeamRoles, syncTransferPipeline, type TransferItem } from '@/lib/transferWorkflow'
@@ -371,7 +371,14 @@ function TransferProjectPanels({ props, app }: { props: TransferModuleProps; app
 }
 function TransferSectionNavigation({ isTos, final = false }: { isTos: boolean; final?: boolean }) {
   const sections = [['pipeline', '流水线'], ['info', '项目信息'], ['team', '团队信息'], ...(final ? [['summary', '评审汇总']] : []), ['checklist', 'CheckList'], ...(!isTos ? [['review', '评审要素']] : []), ['block', 'Block任务'], ['legacy', '遗留任务'], final ? ['decision', '维护SPM评审'] : ['history', '历史记录']]
-  return <nav aria-label="转维页面导航" className="pms-solid-surface" style={{ position: 'sticky', top: 0, zIndex: 20, marginBottom: 16, padding: '8px 12px', overflowX: 'auto', borderRadius: 8 }}><Anchor direction="horizontal" affix={false} offsetTop={56} targetOffset={56} getContainer={() => document.getElementById('basic-info-scroll-container') || window} onClick={event => event.preventDefault()} items={sections.map(([id, label]) => ({ key: id, href: `#transfer-${id}`, title: label }))} /></nav>
+  const icons: Record<string, ReactNode> = { pipeline: <SyncOutlined />, info: <FileTextOutlined />, team: <TeamOutlined />, summary: <AuditOutlined />, checklist: <CheckCircleOutlined />, review: <AuditOutlined />, block: <StopOutlined />, legacy: <PushpinOutlined />, decision: <SafetyOutlined />, history: <HistoryOutlined /> }
+  return <nav aria-label="转维页面导航" className="pms-transfer-anchor pms-solid-surface">
+    <div className="pms-transfer-anchor__title">页面导航</div>
+    <Anchor direction="vertical" affix={false} targetOffset={16} getContainer={() => document.getElementById('basic-info-scroll-container') || window} onClick={event => event.preventDefault()} items={sections.map(([id, label]) => ({ key: id, href: `#transfer-${id}`, title: <span className="pms-transfer-anchor__label">{icons[id]}<span>{label}</span></span> }))} />
+  </nav>
+}
+function TransferPageLayout({ children, isTos, final = false }: { children: ReactNode; isTos: boolean; final?: boolean }) {
+  return <div className="pms-transfer-page-layout"><div className="pms-transfer-page-content">{children}</div><TransferSectionNavigation isTos={isTos} final={final} /></div>
 }
 function TransferGuides({ isTos }: { isTos: boolean }) {
   const guides = [{ title: '转维流程概览', description: '了解转维流程的整体步骤和关键节点', image: '转维流程概览图' }, { title: '转维CheckList', description: '查看转维所需的检查项和交付物清单', image: '转维CheckList图' }, ...(!isTos ? [{ title: '转维评审要素', description: '了解转维评审的关键评审标准和要素', image: '转维评审要素图' }] : [])]
@@ -384,7 +391,7 @@ export function TransferDetail(props: TransferModuleProps) {
   const items = [...props.tmChecklistItems, ...props.tmReviewElements].filter(item => item.applicationId === app.id)
   const final = getMaintenanceSpmReviewAccess(app, props.currentUser, props.selectedProject)
   const related = props.transferApplications.find(row => row.id === (app.reopenedAsId || app.predecessorId))
-  return <div style={{ maxWidth: 1500, margin: '0 auto' }}><TransferSectionNavigation isTos={getTransferProjectType(app.projectType || props.selectedProject) === 'tOS版本项目'} /><PageHeading props={props} app={app} title="项目转维进展详情页"><Space>
+  return <TransferPageLayout isTos={getTransferProjectType(app.projectType || props.selectedProject) === 'tOS版本项目'}><PageHeading props={props} app={app} title="项目转维进展详情页"><Space>
     {canOpenItems(props, app, 'entry') && <Button icon={<EditOutlined />} onClick={() => props.setTransferView('entry')}>资料录入</Button>}
     {canOpenItems(props, app, 'review') && <Button icon={<AuditOutlined />} onClick={() => props.setTransferView('review')}>维护审核</Button>}
     {(final.canApprove || final.canReject) && <Button icon={<SafetyOutlined />} onClick={() => props.setTransferView('maintenance-spm-review')}>维护SPM审核</Button>}
@@ -394,7 +401,7 @@ export function TransferDetail(props: TransferModuleProps) {
     <TransferProjectPanels props={props} app={app} />
     <MaterialPanels props={props} app={app} /><TaskPanels props={props} app={app} resolveLegacy />
     <Card id="transfer-history" title="历史记录"><Timeline items={records.filter(record => record.applicationId === app.id).slice().sort((left, right) => new Date(left.timestamp).getTime() - new Date(right.timestamp).getTime()).map(record => ({ content: <><Space><strong>{record.action}</strong><span>{record.operator}</span><span style={{ color: '#9ca3af' }}>{when(record.timestamp)}</span></Space><div style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{record.detail}</div></> }))} /></Card>
-  </div>
+  </TransferPageLayout>
 }
 
 type PendingItemAction = { scope: string; appId: string; ids: string[]; mode: 'entry' | 'pass' | 'reject' | 'delegate' | 'submit' | 'role-pass' | 'role-reject' | 'role-legacy'; role?: string }
@@ -591,7 +598,7 @@ export function TransferMaintenanceSpmReview(props: TransferModuleProps) {
     useTransferStore.setState(state => ({ transferApplications: state.transferApplications.map(row => row.id === target.id ? { ...row, ...(action === 'reject' ? { status: 'failed' as const, failureReason: comment.trim() } : {}), pipeline: { ...row.pipeline, maintenanceSpmReview: action === 'approve' ? 'success' : 'failed', infoChange: action === 'approve' ? 'in_progress' : row.pipeline.infoChange }, updatedAt: stamp() } : row), tmHistory: [...state.tmHistory, history(target.id, props.currentUser, action === 'approve' ? '维护SPM审核通过' : '维护SPM审核不通过', action === 'approve' ? `进入信息变更阶段${comment.trim() ? `；评审建议：${comment.trim()}` : ''}` : `转维流程终止；驳回原因：${comment.trim()}`)] }))
     setAction(null); props.setTransferView('detail'); message.success(action === 'approve' ? '维护SPM审核通过，进入信息变更阶段' : '转维流程已终止，资料和历史记录已保留')
   }
-  return <div style={{ maxWidth: 1500, margin: '0 auto' }}><TransferSectionNavigation isTos={getTransferProjectType(app.projectType || props.selectedProject) === 'tOS版本项目'} final /><PageHeading props={props} app={app} title="维护SPM审核" /><TransferProjectPanels props={props} app={app} />
+  return <TransferPageLayout isTos={getTransferProjectType(app.projectType || props.selectedProject) === 'tOS版本项目'} final><PageHeading props={props} app={app} title="维护SPM审核" /><TransferProjectPanels props={props} app={app} />
     <Card id="transfer-summary" title="评审状态汇总" style={{ marginBottom: 16 }}><Table rowKey="role" size="small" pagination={false} dataSource={closeRows} columns={[{ title: '角色', dataIndex: 'role', width: 140 }, { title: '责任人', dataIndex: 'responsiblePerson', width: 140 }, { title: '审核结论', dataIndex: 'conclusion', width: 140, render: (value: string) => <Tag color={value === 'PASS' ? 'success' : value === 'Fail' ? 'error' : 'default'}>{value}</Tag> }, { title: '评审意见', dataIndex: 'comment', render: (value: string) => <LongText value={value} /> }]} /></Card>
     <MaterialPanels props={props} app={app} /><TaskPanels props={props} app={app} editLegacy />
     <Card id="transfer-decision" title="维护SPM审核决定"><Descriptions size="small"><Descriptions.Item label="当前维护SPM">{access.reviewer?.name || '-'}</Descriptions.Item></Descriptions>
@@ -599,7 +606,7 @@ export function TransferMaintenanceSpmReview(props: TransferModuleProps) {
       <TextArea maxLength={500} showCount rows={4} aria-label="维护SPM评审建议" value={comment} disabled={!access.canApprove && !access.canReject} onChange={event => setComment(event.target.value)} placeholder="请输入维护SPM评审建议（不通过时必填）" style={{ marginBottom: 16 }} />
       <Space>{access.canApprove && <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => { setOpenedScope(key); setAction('approve') }}>审核通过</Button>}{access.canReject && <Button danger icon={<CloseCircleOutlined />} onClick={() => { setOpenedScope(key); setAction('reject') }}>审核不通过</Button>}{!access.canApprove && !access.canReject && <Alert type="info" showIcon message="当前用户无终审权限或流程尚未进入可终审阶段。" />}</Space>
     </Card><Modal className="pms-modal" title={action === 'approve' ? '维护SPM审核通过确认' : '维护SPM审核不通过确认'} open={Boolean(action)} onCancel={() => setAction(null)} onOk={confirm} okText="确认" okButtonProps={{ danger: action === 'reject' }}><p>{action === 'approve' ? '确认通过维护SPM审核？流水线将进入信息变更阶段。' : '确认不通过？本次转维流程将终止，保留所有录入内容，可由有权限的人员重新发起。'}</p><LongText value={comment} /></Modal>
-  </div>
+  </TransferPageLayout>
 }
 /** Existing consumers may still import the previous symbol while navigating to the new final-review view. */
 export const TransferSqaReview = TransferMaintenanceSpmReview

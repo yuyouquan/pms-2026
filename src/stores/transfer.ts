@@ -342,6 +342,17 @@ export const useTransferStore = create<TransferState & TransferActions>()(persis
   partialize: state => ({ tmTeamConfigs: state.tmTeamConfigs, tmTemplateVersions: state.tmTemplateVersions, transferApplications: state.transferApplications, tmChecklistItems: state.tmChecklistItems, tmReviewElements: state.tmReviewElements, tmBlockTasks: state.tmBlockTasks, tmLegacyTasks: state.tmLegacyTasks, tmHistory: state.tmHistory }),
 }))
 let hydration: Promise<void> | undefined
+/** Refresh only the untouched legacy mock configuration; preserve imports and application snapshots. */
+export function upgradeTransferMockDefaults(): void {
+  useTransferStore.setState(state => {
+    const kind = 'tOS版本项目'
+    const versions = state.tmTemplateVersions[kind]
+    const untouchedTeam = JSON.stringify(state.tmTeamConfigs[kind]) === JSON.stringify(getTransferRoleConfig('整机产品项目'))
+    const untouchedTemplates = versions.checklist.length === 1 && versions.checklist[0].id === `${kind}-checklist-1` && versions.checklist[0].createdBy === '系统' && !versions.review.length
+    if (!untouchedTeam || !untouchedTemplates) return state
+    return { tmTeamConfigs: { ...state.tmTeamConfigs, [kind]: getTransferRoleConfig(kind) }, tmTemplateVersions: { ...state.tmTemplateVersions, [kind]: createTransferTemplateVersions()[kind] } }
+  })
+}
 /** A reload drops browser timers; finish saved mock checks instead of leaving them stuck forever. */
 export function resumeTransferAiChecks(): void {
   useTransferStore.setState(state => {
@@ -357,6 +368,6 @@ export function resumeTransferAiChecks(): void {
   })
 }
 export function rehydrateTransferStore(): Promise<void> {
-  if (!hydration) hydration = Promise.resolve(useTransferStore.persist.rehydrate()).then(resumeTransferAiChecks)
+  if (!hydration) hydration = Promise.resolve(useTransferStore.persist.rehydrate()).then(() => { upgradeTransferMockDefaults(); resumeTransferAiChecks() })
   return hydration
 }
