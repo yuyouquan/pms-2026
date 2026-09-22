@@ -19,7 +19,7 @@ const registry = Object.assign(selector => selector?.({ currentLoginUser: actor,
 const config = Object.assign(selector => selector({ data: { hrModel: [], feeRate: [{ value: 5 }] } }), { getState: () => ({ data: { feeRate: [{ value: 5 }] } }) })
 const imports = {
   react: { useEffect: noop, useRef: value => ({ current: value }), useState: initial => { const index = hookCursor++; return [index in hooks ? hooks[index] : initial, value => { hooks[index] = value }] } },
-  antd: new Proxy({ App: { useApp: () => ({ message: { success: noop, warning: value => warnings.push(value) } }) }, Table: table }, { get: (target, key) => target[key] ?? String(key) }),
+  antd: new Proxy({ App: { useApp: () => ({ message: { success: noop, warning: value => warnings.push(value) } }) }, Table: table, DatePicker: { RangePicker: 'RangePicker' } }, { get: (target, key) => target[key] ?? String(key) }),
   '@ant-design/icons': new Proxy({}, { get: (_, key) => String(key) }),
   xlsx: { read: () => ({ SheetNames: ['sheet'], Sheets: { sheet: {} } }), utils: { sheet_to_json: () => [['一级部门', '二级部门', '预估投入'], ['A', 'B', 15]] } },
   '@/stores/project': { useProjectStore: registry },
@@ -34,6 +34,11 @@ const imports = {
   '@/components/project-resources/resourceVersionViewData': { chooseResourceVersion: versions => versions[0], RESOURCE_TABS: [{ key: 'dashboard', label: '资源概览' }] },
   '@/components/project-resources/ResourceVersionDialogs': { ResourceVersionCreateDialog: 'CreateDialog', ResourceOperationLogDialog: 'LogDialog' },
   '@/components/project-resources/exportResourceVersion': { exportResourceVersion: (...args) => exports.push(args) },
+  '@/lib/resourceAllocation': { resolveMachineDepartmentInvestments: version => version.modelSnapshot?.departmentInvestments ?? [] },
+  '@/mock/resourceAccounting': { resourceAccountingDataset: () => undefined },
+  '@/components/project-resources/resourceAccounting': { buildAccountingAnalysis: () => undefined, dashboardDepartmentParents: () => ({}), UNASSIGNED_PRIMARY: '未归属一级部门' },
+  '@/components/project-resources/resourceDashboardBusiness': { dashboardBusinessTrend: () => ({ periods: [], series: [] }) },
+  '@/components/project-resources/exportResourceBusinessDashboard': { exportResourceBusinessDashboard: (...args) => exports.push(args) },
   '@/components/project-resources/exportResourceDashboard': { exportResourceDashboard: (...args) => exports.push(args) },
   '@/components/project-resources/ResourceInlineField': { __esModule: true, default: 'InlineField' },
   '@/components/project-resources/NonLaborInvestmentSection': { __esModule: true, default: 'NonLabor', NonLaborInvestmentRange: 'Range' },
@@ -58,7 +63,7 @@ const imports = {
     selectDashboardSource: sources => sources[0],
     buildDashboardAnalysis: (_category, source, rows, rate) => ({ source, rows, rate, years: [], months: [], allMonths: [], issues: [], departments: [], subjects: [], deficit: 0, excess: 0, target: 0 }),
   },
-  ...Object.fromEntries(['HrSourceLink', 'ResourceVersionViews', 'ResourceInlineDetail', 'ResourceVersionWorkspace', 'ProjectResourceDashboard'].map(name => [`@/components/project-resources/${name}`, { __esModule: true, default: name }])),
+  ...Object.fromEntries(['ResourceDashboardMetrics', 'ResourceBusinessTrend', 'ResourceAccountingDetails', 'ResourceDashboardDetails', 'HrSourceLink', 'ResourceVersionViews', 'ResourceInlineDetail', 'ResourceVersionWorkspace', 'ProjectResourceDashboard'].map(name => [`@/components/project-resources/${name}`, { __esModule: true, default: name }])),
 }
 function compile(name) {
   const module = { exports: {} }
@@ -198,4 +203,15 @@ let navigation = Root({ project }); hookCursor = 0; hooks = []
 assert.equal(navigation.type(navigation.props).type, 'Scope', 'resource:view alone grants root resource view')
 granted.clear(); hookCursor = 0; hooks = []
 assert.equal(navigation.type(navigation.props).type, 'Empty')
+reset()
+current.projects = []
+imports['@/mock/resourceAccounting'].resourceAccountingDataset = () => ({ projectId: project.id, worklogs: [], expenses: [] })
+imports['@/components/project-resources/resourceAccounting'].buildAccountingAnalysis = () => ({ months: ['2026-01'], worklogs: [], expenses: [], dataset: { startDate: '2026-01-01', endDate: '2026-01-31' } })
+let actualOnlyButton = button(renderDashboard(), '导出分析')
+assert.equal(actualOnlyButton.props.disabled, false, 'independent accounting can export when no budget source exists')
+actualOnlyButton.props.onClick()
+assert.equal(exports.length, 1)
+granted.delete('export')
+actualOnlyButton.props.onClick()
+assert.equal(exports.length, 1, 'actual-only export still rechecks permission at execution')
 console.log('PASS dashboard export execution authorization, source availability, fresh data and resource:view root gate')

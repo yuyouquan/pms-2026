@@ -60,6 +60,7 @@ const scripts = [
   "verify-resource-cell-editing.mjs",
   "verify-resource-cross-tab-storage.mjs",
   "verify-resource-dashboard.mjs",
+  "verify-resource-dashboard-business.mjs",
   "verify-resource-dataset-refresh.mjs",
   "verify-resource-empty-project-persistence.mjs",
   "verify-resource-expense-followup.mjs",
