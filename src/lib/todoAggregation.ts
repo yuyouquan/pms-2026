@@ -27,7 +27,7 @@ export type WorkbenchTodoRoute =
   | {
     kind: 'transfer'
     applicationId: string
-    view: 'entry' | 'review' | 'sqa-review' | 'detail'
+    view: 'entry' | 'review' | 'maintenance-spm-review' | 'detail'
   }
 
 export interface WorkbenchTodo {
@@ -86,7 +86,7 @@ export interface TransferTodoCandidate {
   completed: boolean
   completedAt?: string
   title: string
-  view: 'entry' | 'review' | 'sqa-review' | 'detail'
+  view: 'entry' | 'review' | 'maintenance-spm-review' | 'detail'
   sourceLabel?: string
   context?: string
 }
@@ -238,69 +238,79 @@ interface TransferApplicationLike {
   createdAt?: string
   updatedAt?: string
   remark?: string
-  pipeline: { dataEntry: string; maintenanceReview: string; sqaReview: string }
+  finalReviewRole?: string
+  pipeline: { dataEntry: string; maintenanceReview: string; maintenanceSpmReview: string; roleProgress?: Array<{role:string;entryStatus:string;reviewStatus:string}> }
   team: {
     maintenance: Array<{ id: string; name: string; role: string }>
     research: Array<{ id: string; name: string; role: string }>
   }
 }
 
-export function buildTransferTodoCandidates({
-  applications,
-  projects,
-}: {
+interface TransferTodoItem {
+  applicationId: string
+  responsibleRole: string
+  entryPersonId: string
+  entryPerson: string
+  reviewPersonId: string
+  reviewPerson: string
+  entryStatus: string
+  reviewStatus: string
+  delegatedTo?: string[]
+  reviewDelegatedTo?: string[]
+}
+export function buildTransferTodoCandidates({ applications, projects, items }: {
   applications: readonly TransferApplicationLike[]
   projects: readonly { id: string; name: string }[]
+  items?: readonly TransferTodoItem[]
 }): TransferTodoCandidate[] {
   return applications.flatMap(application => {
-    if (application.status === 'cancelled') return []
+    if (application.status === 'cancelled' || application.status === 'failed') return []
     const project = projects.find(candidate => candidate.id === application.projectId)
-      ?? (/^proj_\d+$/.test(application.projectId)
-        ? projects.find(candidate => candidate.name === application.projectName)
-        : undefined)
+      ?? (/^proj_\d+$/.test(application.projectId) ? projects.find(candidate => candidate.name === application.projectName) : undefined)
     if (!project) return []
-    const nodes = [
-      {
-        key: 'entry',
-        state: application.pipeline.dataEntry,
-        label: '转维资料录入',
-        owner: application.team.research.find(member => member.role === 'SPM')
-          ?? { id: application.applicantId, name: application.applicant },
-      },
-      {
-        key: 'review',
-        state: application.pipeline.maintenanceReview,
-        label: '转维维护审核',
-        owner: application.team.maintenance.find(member => member.role === 'SPM'),
-      },
-      {
-        key: 'sqa-review',
-        state: application.pipeline.sqaReview,
-        label: '转维 SQA 审核',
-        owner: application.team.research.find(member => member.role === 'SQA'),
-      },
-    ] as const
-
+    type Node = { key: 'entry' | 'review' | 'maintenance-spm-review'; state: string; label: string; owner?: {id:string;name:string} }
+    let nodes: Node[] = []
+    const appItems = items?.filter(item => item.applicationId === application.id)
+    if (appItems?.length) {
+      const grouped = new Map<string, Node>()
+      for (const side of ['entry', 'review'] as const) for (const row of appItems) {
+        if (side === 'review' && row.reviewStatus === 'not_reviewed') continue
+        const completed = side === 'entry' ? ['reviewing', 'passed'].includes(row.reviewStatus) : row.reviewStatus === 'passed'
+        const owner = side === 'entry' ? { id: row.entryPersonId, name: row.entryPerson } : { id: row.reviewPersonId, name: row.reviewPerson }
+        const delegates = (side === 'entry' ? row.delegatedTo : row.reviewDelegatedTo) ?? []
+        for (const person of [owner, ...delegates.map(id => ({ id, name: id.startsWith('login-') ? id.slice(6) : TRANSFER_TO_PMS_USER_MAP[id]?.transferUserName ?? '' }))]) {
+          const id = `${side}:${person.id}`
+          const prior = grouped.get(id)
+          grouped.set(id, { key: side, owner: person, label: side === 'entry' ? '转维资料录入' : '转维维护审核', state: completed && (!prior || prior.state === 'success') ? 'success' : 'in_progress' })
+        }
+      }
+      // Coordinators submit a role even when its materials are assigned to another role.
+      for (const progress of application.pipeline.roleProgress ?? []) {
+        if (!appItems.some(row => row.responsibleRole === progress.role)) continue
+        for (const side of ['entry', 'review'] as const) {
+          const state = side === 'entry' ? progress.entryStatus : progress.reviewStatus
+          if (side === 'review' && state === 'not_started') continue
+          const team = side === 'entry' ? application.team.research : application.team.maintenance
+          const owner = team.find(member => member.role === progress.role || (progress.role === '测试' && member.role === 'TPM'))
+          if (!owner) continue
+          const id = `${side}:${owner.id}`, prior = grouped.get(id)
+          grouped.set(id, { key: side, owner, label: side === 'entry' ? '转维资料录入' : '转维维护审核', state: state === 'completed' && (!prior || prior.state === 'success') ? 'success' : 'in_progress' })
+        }
+      }
+      nodes = [...grouped.values()]
+    } else {
+      nodes = [
+        { key: 'entry', state: application.pipeline.dataEntry, label: '转维资料录入', owner: application.team.research.find(member => member.role === (application.finalReviewRole ?? 'SPM')) ?? { id: application.applicantId, name: application.applicant } },
+        { key: 'review', state: application.pipeline.maintenanceReview, label: '转维维护审核', owner: application.team.maintenance.find(member => member.role === (application.finalReviewRole ?? 'SPM')) },
+      ]
+    }
+    nodes.push({ key: 'maintenance-spm-review', state: application.pipeline.maintenanceSpmReview === 'not_started' && application.pipeline.roleProgress?.some(role => role.reviewStatus === 'rejected') ? 'in_progress' : application.pipeline.maintenanceSpmReview, label: '转维维护SPM审核', owner: application.team.maintenance.find(member => member.role === (application.finalReviewRole ?? 'SPM')) })
     return nodes.flatMap(node => {
-      if (node.state === 'not_started') return []
+      if (!node.state || node.state === 'not_started') return []
       const activeOwner = mapTransferOwnerToPmsUser(node.owner?.id, node.owner?.name)
       if (!activeOwner) return []
       const completed = node.state === 'success'
-      return [{
-        applicationId: application.id,
-        id: `${application.id}:${node.key}`,
-        projectId: project.id,
-        projectName: project.name,
-        activeOwner,
-        dueDate: application.plannedReviewDate || '',
-        generatedAt: application.createdAt,
-        completed,
-        completedAt: completed ? application.updatedAt : undefined,
-        title: node.label,
-        sourceLabel: node.label,
-        context: application.remark || '',
-        view: completed ? 'detail' as const : node.key,
-      }]
+      return [{ applicationId: application.id, id: `${application.id}:${node.key}:${activeOwner}`, projectId: project.id, projectName: project.name, activeOwner, dueDate: application.plannedReviewDate || '', generatedAt: application.createdAt, completed, completedAt: completed ? application.updatedAt : undefined, title: node.label, view: completed ? 'detail' as const : node.key, sourceLabel: node.label, context: application.remark || '' }]
     })
   })
 }

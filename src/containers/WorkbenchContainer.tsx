@@ -199,7 +199,7 @@ export default function WorkbenchContainer() {
     tosTypeCurrentVersionByKey,
   } = usePlanStore()
   const {
-    transferApplications,
+    transferApplications, tmChecklistItems, tmReviewElements,
     setSelectedTransferAppId,
     setTransferView,
   } = useTransferStore()
@@ -246,8 +246,8 @@ export default function WorkbenchContainer() {
     ],
   )
   const transferTodoCandidates = useMemo(
-    () => buildTransferTodoCandidates({ applications: transferApplications, projects }),
-    [projects, transferApplications],
+    () => buildTransferTodoCandidates({ applications: transferApplications, projects, items: [...tmChecklistItems, ...tmReviewElements] }),
+    [projects, transferApplications, tmChecklistItems, tmReviewElements],
   )
   const accessibleCandidates = useMemo(() => filterTodoCandidatesByAccess({
     currentUser: currentLoginUser,

@@ -75,6 +75,7 @@
     "verify:resource-activation": "node scripts/verify-resource-activation-interactions.mjs && node scripts/verify-resource-cross-tab-storage.mjs",
     "verify:resource-formal": "node scripts/verify-resource-formal-domain.mjs && node scripts/verify-resource-formal-status.mjs && node scripts/verify-resource-monthly-presentation.mjs",
     "verify:project-resource-regression": "node scripts/verify-project-resource-regression.mjs",
+    "verify:transfer": "node scripts/verify-transfer-integration.mjs && node scripts/verify-transfer-ui-guards.mjs && node scripts/verify-transfer-workflow.mjs && node scripts/verify-transfer-entry-exchange.mjs",
     "verify:resource-dashboard-business": "node scripts/verify-resource-dashboard-business.mjs && node scripts/verify-resource-cumulative-estimate.mjs"
   },
   "dependencies": {

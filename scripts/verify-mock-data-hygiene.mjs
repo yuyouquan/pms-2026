@@ -279,6 +279,12 @@ function sourceFiles(directoryPath) {
     return entry.isDirectory() ? sourceFiles(file) : entry.isFile() && textExtensions.has(path.extname(file)) ? [file] : []
   })
 }
+function runtimeUrls(text) {
+  // SVG XML namespaces are metadata, including SVG embedded in a data URI.
+  // Remove only the namespace attribute, so real links to the same host still fail.
+  const destinations = text.replace(/\bxmlns\s*=\s*(["'])http:\/\/www\.w3\.org\/2000\/svg\1/g, '')
+  return [...destinations.matchAll(/https?:\/\/[a-z0-9][a-z0-9.-]*(?::\d+)?/gi)].map(match => match[0])
+}
 check('source and public text contain no private network endpoints or non-example sample URLs', () => {
   const invalid = []
   const files = [...sourceFiles(path.join(root, 'src')), ...sourceFiles(path.join(root, 'public'))]
@@ -304,10 +310,8 @@ check('source and public text contain no private network endpoints or non-exampl
     } else urlTexts.push(source)
     // Documentation comments are scanned for private endpoints above, while only
     // runtime string literals are required to use the reserved sample domains.
-    for (const match of urlTexts.join('\n').matchAll(/https?:\/\/[a-z0-9][a-z0-9.-]*(?::\d+)?/gi)) {
-      // The XML namespace is metadata required by SVG, not a sample destination.
-      if (match[0] === 'http://www.w3.org' && /\.svg$/.test(file)) continue
-      if (!safeSampleUrl(match[0])) invalid.push(`${relative} non-example runtime URL`)
+    for (const url of runtimeUrls(urlTexts.join('\n'))) {
+      if (!safeSampleUrl(url)) invalid.push(`${relative} non-example runtime URL`)
     }
   }
   assert.deepEqual(invalid, [], 'source/public text network scan')
@@ -338,6 +342,9 @@ check('inline sample person fields remain fictional in component-local data', ()
 })
 
 check('hygiene guards reject plausible accidental real-data substitutions', () => {
+  assert.deepEqual(runtimeUrls('<svg xmlns="http://www.w3.org/2000/svg"><a href="http://www.w3.org/real-link"/></svg>'), ['http://www.w3.org'])
+  assert.deepEqual(runtimeUrls("<svg xmlns='http://www.w3.org/2000/svg'></svg>"), [])
+  assert.deepEqual(runtimeUrls('<svg xmlns="https://unexpected.invalid/namespace"/>'), ['https://unexpected.invalid'])
   assert.equal(validPersonField('createdBy', '当前用户'), true)
   assert.equal(validPersonField('createdBy', '当前用户,普通姓名'), false)
   assert.equal(validPersonField('updatedBy', '普通姓名'), false)
