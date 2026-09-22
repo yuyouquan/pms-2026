@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import { App, Form, Input, Modal, Select } from 'antd'
-import { ALL_USERS } from '@/components/permission/PermissionModule'
+import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
 import { PROJECT_CATEGORY_MACHINE } from '@/constants/projectTypes'
 import { EXTERNAL_PROJECT_POOL } from '@/data/externalProjectPool'
 import { findProjectCategoryMapping } from '@/lib/enumConsumers'
@@ -10,7 +10,7 @@ import { createConfiguredProject } from '@/lib/projectRegistry'
 import { ensureEnumHydrated, useEnumStore } from '@/stores/enums'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
-import { canConfigureProjectScope, getCreatableProjectAttributes, getCreatableProjectTypes, PROJECT_REGISTRY_MANAGERS } from '@/lib/projectRegistryPermissions'
+import { canConfigureProjectScope, getCreatableProjectAttributes, getCreatableProjectTypes } from '@/lib/projectRegistryPermissions'
 import {
   getRegistryProjectTypes,
   PROJECT_ATTRIBUTE_LABELS,
@@ -180,7 +180,7 @@ export default function NewProjectModal({ open, onCancel, onCreated }: NewProjec
             showSearch
             optionFilterProp="label"
             placeholder="请选择责任人"
-            options={[...ALL_USERS, ...PROJECT_REGISTRY_MANAGERS].map(value => ({ value, label: value }))}
+            options={PROJECT_USER_CHOICES.map(value => ({ value, label: value }))}
           />
         </Form.Item>
       </Form>

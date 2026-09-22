@@ -167,7 +167,7 @@ import { matchesTransferProject } from '@/lib/transferWorkflow'
 import { selectTechnicalProjectStage, useTechnicalPlanStore } from '@/stores/technicalPlan'
 import { resolvePermissionProjectId, usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
-import { ALL_USERS } from '@/components/permission/PermissionModule'
+import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
 import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview, TransferWorkbench } from '@/components/transfer/TransferModule'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans/VersionTrainPlan'
@@ -4624,7 +4624,7 @@ export default function ProjectSpaceContainer() {
     const projectLevelChoices = machineProjectSpaceOptions.softwareProjectLevel
     const systemTypeChoices = machineProjectSpaceOptions.systemType
     const yesNoChoices = [{ label: '是', value: '是' }, { label: '否', value: '否' }]
-    const userChoices = ALL_USERS.map(u => ({ label: u, value: u }))
+    const userChoices = PROJECT_USER_CHOICES.map(u => ({ label: u, value: u }))
     const renderMultiTags = (value: any, color = 'blue') => {
       const values = Array.isArray(value) ? value : String(value || '').split(',')
       const cleaned = values.map(v => String(v).trim()).filter(Boolean)

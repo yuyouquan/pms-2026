@@ -32,6 +32,13 @@ check('minimal formal registration supports all mapped categories and source-own
   assert.equal(project(tos).projectCode, ''); assert.equal(project(machine).createdBy, admin)
   assert.ok(project(machine).createdAt); assert.equal(project(machine).firstSaleTosVersion, undefined)
 })
+check('new formal statuses remain stable through persistence and rehydration', () => {
+  const snapshot = partializeProjectState(store.getState())
+  const restored = migrateProjectState(JSON.parse(JSON.stringify(snapshot)), PROJECT_STORE_VERSION)
+  for (const id of [machine, tos, tech, capability]) {
+    assert.equal(project(id).status, restored.projects.find(item => item.id === id).status, `${project(id).type}: visible status must not change on reload`)
+  }
+})
 check('all manual categories and roadmap machine register without invented dates', () => {
   budget = manual(); roadmap = manual('整机产品项目', 'roadmap')
   for (const type of ['tOS版本项目','技术项目','能力建设项目']) manual(type)

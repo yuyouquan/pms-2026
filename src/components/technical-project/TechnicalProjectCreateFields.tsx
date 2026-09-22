@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { FileOutlined, LinkOutlined, UploadOutlined } from '@ant-design/icons'
 import { Button, Collapse, DatePicker, Form, Input, Radio, Select, Space, Tag, Upload, type FormInstance } from 'antd'
 import dayjs from 'dayjs'
-import { ALL_USERS } from '@/components/permission/PermissionModule'
+import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
 import {
   TECHNICAL_DELIVERABLE_FIELDS,
   TECHNICAL_TEAM_FIELDS,
@@ -17,7 +17,7 @@ import type { ProjectInfoProject } from '@/lib/projectInfoValues'
 import type { DeliverableValue } from '@/types/technicalProject'
 import type { ProjectInfoFieldDefinition, ProjectInfoGroupDefinition, ProjectInfoGroupKey } from '@/constants/projectInfoSchema'
 
-const personOptions = ALL_USERS.map(user => ({ label: user, value: user }))
+const personOptions = PROJECT_USER_CHOICES.map(user => ({ label: user, value: user }))
 const TECHNICAL_SOURCE_SNAPSHOT_KEYS = new Set(['secondaryCategory', 'technicalTrack', 'projectName'])
 const technicalTeamFieldsByKey = new Map(TECHNICAL_TEAM_FIELDS.map(field => [field.key, field]))
 const technicalDeliverableFieldsByKey = new Map(TECHNICAL_DELIVERABLE_FIELDS.map(field => [field.key, field]))

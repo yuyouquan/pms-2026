@@ -374,7 +374,8 @@ export default function PlannedProjectModal({
         className="pms-roadmap-overlay-body pms-solid-surface"
         form={form}
         layout="vertical"
-        preserve={false}
+        // resetFields remounts controls; preserve values set during the same initialization.
+        preserve
         disabled={!canEdit || !enumReady}
         requiredMark
         onValuesChange={() => {

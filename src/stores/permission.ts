@@ -1,4 +1,4 @@
-import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
+import { getPmsLocalStorage, isPmsHydrationWriteSuppressed } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { GLOBAL_PERM_OPTIONS, PROJECT_PERMISSION_ITEMS, FIXED_ROLES, getProjectPermissionKeys, RESOURCE_PERMISSION_KEYS, RESOURCE_BASIC_PERMISSION_KEYS, type ResourcePermissionKey } from '@/constants/permissions'
@@ -391,7 +391,7 @@ const safePermissionStorage: StateStorage = {
     }
   },
   setItem(name, value) {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || isPmsHydrationWriteSuppressed()) return
     try {
       getPmsLocalStorage().setItem(name, value)
     } catch (error) {

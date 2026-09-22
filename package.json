@@ -72,7 +72,8 @@
     "verify:resource-cross-tab": "node scripts/verify-resource-cross-tab-storage.mjs",
     "verify:resource-mixed-version": "node scripts/verify-resource-mixed-version-storage.mjs",
     "verify:resource-activation": "node scripts/verify-resource-activation-interactions.mjs && node scripts/verify-resource-cross-tab-storage.mjs",
-    "verify:resource-formal": "node scripts/verify-resource-formal-domain.mjs && node scripts/verify-resource-formal-status.mjs && node scripts/verify-resource-monthly-presentation.mjs"
+    "verify:resource-formal": "node scripts/verify-resource-formal-domain.mjs && node scripts/verify-resource-formal-status.mjs && node scripts/verify-resource-monthly-presentation.mjs",
+    "verify:project-resource-regression": "node scripts/verify-project-resource-regression.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

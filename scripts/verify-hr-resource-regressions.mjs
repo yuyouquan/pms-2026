@@ -12,6 +12,7 @@ const active=rows=>monthlyHelpers.selectActiveHrMonthlyRows ? monthlyHelpers.sel
 const base=registry.getState().projects[0]
 const types={Capability:'能力建设项目',Tos:'tOS版本项目',Technical:'技术项目',Machine:'整机产品项目'}
 registry.setState({projects:Object.entries(types).map(([name,type])=>({...base,id:`review-${name}`,type,projectAttribute:'budget',createdBy:'演示用户01',responsiblePersons:['演示用户01']})),registryHistory:[],currentLoginUser:'演示用户01'})
+const milestoneDates={conceptStart:'2028-01-01',str1:'2028-03-01',str5:'2028-12-01',planningKO:'2028-01-01',planningStart:'2028-01-01',charterDCP:'2028-03-01',edcp:'2028-12-01'}
 const department=id=>({id,primaryDepartment:'研发中心',secondaryDepartment:id==='d1'?'部门一':'部门二',estimatedInvestment:12,planningPhase:12,conceptPhase:0,planningPhase2:0,developmentValidationPhase:0,marketIterationPhase:0,maintenancePhase:0,planPhase:0,developmentPhase:0,migrationPhase:0})
 let checks=0
 for(const name of ['Capability','Tos','Technical','Machine']){
@@ -25,12 +26,18 @@ for(const name of ['Capability','Tos','Technical','Machine']){
   const row=modelData.hrModel[0]
   modelRows=[d1,d2].map(d=>({...row,id:d.id,primaryDepartment:d.primaryDepartment,secondaryDepartment:d.secondaryDepartment,projectLevel:'S',modelVersion:'REVIEW',enabled:true,conceptToStr1:12,str1ToStr2:0,str2ToStr3:0,str3ToStr4:0,str4ToStr4a:0,str4aToStr5:0,str5ToSixMonths:0}))
   model.setState({data:{...modelData,hrModel:modelRows}})
-  store.getState().addVersion(project.id,'annual',{projectLevel:'S',levelCoefficient:1,hrModelVersion:'REVIEW'})
- }else store.getState().addVersion(project.id,{budgetType:'annual',departmentInvestments:[d1,d2],projectStartTime:'2028-01-01',projectEndTime:'2028-12-01'})
+  store.getState().addVersion(project.id,'annual',{projectLevel:'S',levelCoefficient:1,hrModelVersion:'REVIEW',milestones:milestoneDates})
+ }else store.getState().addVersion(project.id,{budgetType:'annual',milestones:milestoneDates,departmentInvestments:[d1,d2],projectStartTime:'2028-01-01',projectEndTime:'2028-12-01'})
  const version=()=>store.getState().projects.find(p=>p.id===project.id).versions[0]
  const rows=()=>store.getState().monthlyInvestments.filter(r=>r.versionId===version().id)
+ let modelRevision=0
  const change=departments=>{
-  if(name==='Machine')model.setState({data:{...modelData,hrModel:departments.map(d=>({...modelRows.find(r=>r.id===d.id)??modelRows[1],id:d.id}))}})
+  if(name==='Machine'){
+   const modelVersion=`REVIEW-${++modelRevision}`
+   model.setState({data:{...modelData,hrModel:departments.map(d=>({...modelRows.find(r=>r.id===d.id)??modelRows[1],id:d.id,modelVersion}))}})
+   // Saved versions retain their model; explicitly selecting it applies configuration changes.
+   store.getState().updateVersionInline(project.id,version().id,{type:'model',key:'hrModelVersion',value:modelVersion},project.pmsProjectId)
+  }
   else store.getState().updateVersionDepartmentInvestments(project.id,version().id,departments)
   store.getState().refreshFormalProjects()
  }
