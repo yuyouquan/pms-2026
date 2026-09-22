@@ -15,6 +15,7 @@ import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import { getProjectAttribute, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import { useTransferStore } from '@/stores/transfer'
 import { ALL_USERS } from '@/components/permission/PermissionModule'
+import { PROJECT_REGISTRY_MANAGERS } from '@/lib/projectRegistryPermissions'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useRef, useEffect, useMemo } from 'react'
 
@@ -79,7 +80,7 @@ function UserSwitcher() {
           </div>, disabled: true },
           { type: 'divider' as const },
           { key: 'switch-label', label: <span style={{ color: '#999', fontSize: 11 }}><SwapOutlined style={{ marginRight: 4 }} />切换用户（测试权限）</span>, disabled: true },
-          ...ALL_USERS.map(u => {
+          ...[...ALL_USERS, ...PROJECT_REGISTRY_MANAGERS].map(u => {
             const isActive = currentLoginUser === u
             const adminGroup = globalRoles.find(r => r.name === '管理组')
             const isAdmin = adminGroup?.members.includes(u)
@@ -87,7 +88,7 @@ function UserSwitcher() {
             return {
               key: u,
               label: <div className="pms-user-menu__row" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: isActive ? 600 : 400 }}>
-                <Avatar size="small" style={{ background: isActive ? 'var(--pms-brand-strong)' : '#e0e0e0', fontSize: 12 }}>{u.slice(-1)}</Avatar>
+                <Avatar size="small" style={{ background: isActive ? 'var(--pms-brand-strong)' : '#e0e0e0', fontSize: 12 }}>{u.replace(/[（(].*$/, '').slice(-1)}</Avatar>
                 <span className="pms-user-menu__name">{u}</span>
                 {isAdmin && <Tag color="red" style={{ fontSize: 10, padding: '0 4px', lineHeight: '16px' }}>管理组</Tag>}
                 <span className="pms-user-menu__count" style={{ color: '#9ca3af', fontSize: 11, marginLeft: 'auto' }}>{projectCount}个项目</span>
@@ -117,7 +118,7 @@ function UserSwitcher() {
         data-current-user={currentLoginUser}
         style={{ display: 'flex', alignItems: 'center', gap: 8, height: 'auto', cursor: 'pointer', padding: '5px 14px', borderRadius: 24 }}
       >
-        <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentLoginUser.slice(-1)}</Avatar>
+        <Avatar size={28} style={{ background: 'rgba(255,255,255,0.25)', fontSize: 13, fontWeight: 600 }}>{currentLoginUser.replace(/[（(].*$/, '').slice(-1)}</Avatar>
         <span style={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>{currentLoginUser}</span>
         {isAdminUser && <Tag color="rgba(255,100,100,0.35)" style={{ color: '#fff', border: '1px solid rgba(255,255,255,0.25)', fontSize: 10, margin: 0 }}>管理组</Tag>}
       </Button>

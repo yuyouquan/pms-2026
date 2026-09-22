@@ -5,6 +5,8 @@ import { validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
 import { getProjectAttribute, isFormalProject, type ProjectRegistryHistoryEntry } from '@/types/projectRegistry'
 import { createRegistryHistoryEntry, validateRegistryCreation, validateRegistryProject } from '@/lib/projectRegistryRules'
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
+import { canEditProjectRegistry } from '@/lib/projectRegistryPermissions'
+import { buildProjectCreationNotification } from '@/lib/projectCreationNotification'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import { RESOURCE_REGISTRY_PROJECTS } from '@/mock/projectRegistry'
@@ -579,6 +581,10 @@ function appendRegistryAudits(history: ProjectRegistryHistoryEntry[], before: re
   const nextById = new Map(after.map(project => [project.id, project]))
   const entries = [...new Set([...previousById.keys(), ...nextById.keys()])].flatMap(id => {
     const entry = createRegistryHistoryEntry(previousById.get(id) || null, nextById.get(id) || null, actor)
+    if (entry?.action === 'create' && entry.after) {
+      const notification = buildProjectCreationNotification(entry.after)
+      if (notification) entry.notification = notification
+    }
     return entry ? [entry] : []
   })
   return entries.length ? [...entries, ...history] : history
@@ -637,7 +643,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     })),
     addProject: (newProject, actor, options) => {
       const actingUser = actor?.trim() || get().currentLoginUser.trim()
-      if (!isGlobalAdmin(actingUser)) return false
+      if (!canEditProjectRegistry(actingUser, newProject, isGlobalAdmin(actingUser))) return false
       if (get().projects.some(project => project.id === newProject.id)) return false
       const previousProjects = get().projects
       if (validateRegistryProject(previousProjects, newProject)) return false
@@ -702,7 +708,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         } else if (resourceMetadata.kind !== 'create' || resourceMetadata.budgetType !== 'annual' || context.action !== 'addVersion') return null
         if (registryUpdate || getProjectAttribute(existing) !== 'budget' || !isMachineProjectType(existing.type) || existing.boundFormalProjectId
           || !hasPermission(actingUser, projectId, 'resource:view') || !hasPermission(actingUser, projectId, 'resource:createVersion')) return null
-      } else if (registryUpdate ? !isGlobalAdmin(actingUser) : !hasPermission(actingUser, projectId, 'basicInfo:编辑')) return null
+      } else if (registryUpdate ? !canEditProjectRegistry(actingUser, existing, isGlobalAdmin(actingUser)) : !hasPermission(actingUser, projectId, 'basicInfo:编辑')) return null
       const previousProjects = get().projects
       const updated = typeof update === 'function'
         ? update(cloneProjectSeed(existing))

@@ -9675,3 +9675,22 @@ input.ant-input,
   .pms-dashboard-filter-note { margin-left: 0; width: 100%; }
   .pms-dashboard-toolbar > div { gap: 6px; }
 }
+
+.pms-project-creation-notice {
+  padding: 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--pms-border-color, #e6e2ff);
+  border-radius: 12px;
+  background: var(--pms-bg-subtle, #faf9ff);
+}
+.pms-project-creation-notice__heading { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.pms-project-creation-notice__meta { display: flex; gap: 12px; margin-top: 6px; font-size: 13px; overflow-wrap: anywhere; }
+.pms-project-creation-notice__meta > :first-child { flex: 0 0 56px; color: #77728b; }
+.pms-project-creation-notice__message { margin-top: 14px; padding: 12px; border-radius: 8px; background: #fff; overflow-wrap: anywhere; }
+.pms-project-creation-notice__message p { margin: 8px 0 0; white-space: pre-wrap; line-height: 1.7; }
+.pms-project-creation-notice__hint { margin-top: 10px; color: #77728b; font-size: 12px; }
+
+.pms-user-dropdown .ant-dropdown-menu {
+  max-height: min(680px, calc(100dvh - 80px));
+  overflow-y: auto;
+}

@@ -3,6 +3,7 @@ import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSI
 import { findProjectCategoryMapping } from '@/lib/enumConsumers'
 import { mapIpmProjectStatus, normalizeLegacyProjectStatus } from '@/lib/projectStatus'
 import { validateRegistryProject } from '@/lib/projectRegistryRules'
+import { canConfigureProjectScope, canEditProjectRegistry } from '@/lib/projectRegistryPermissions'
 import { useEnumStore } from '@/stores/enums'
 import { isGlobalAdmin } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
@@ -15,7 +16,6 @@ const fail = (message: string): RegistryMutationResult => ({ ok: false, message 
 
 export function createConfiguredProject(input: ConfiguredProjectInput, actor: string): RegistryMutationResult {
   actor = actor.trim()
-  if (!canManageProjectRegistry(actor)) return fail('仅管理组可创建和管理项目配置')
   if (!Object.hasOwn(PROJECT_ATTRIBUTE_LABELS, input.projectAttribute)) return fail('请选择有效的项目属性')
   const responsiblePersons = [...new Set(input.responsiblePersons.map(person => person.trim()).filter(Boolean))]
   if (!responsiblePersons.length) return fail('请至少选择一位责任人')
@@ -27,6 +27,7 @@ export function createConfiguredProject(input: ConfiguredProjectInput, actor: st
   if (source && (!mapping || !getRegistryProjectTypes('formal').includes(mapping.pmsProjectCategory))) return fail('该 IPM 项目分类尚未配置有效映射，请联系管理员维护')
   const type = mapping?.pmsProjectCategory || input.type || ''
   if (!getRegistryProjectTypes(input.projectAttribute).includes(type)) return fail('请选择有效的项目类型，路标项目仅支持整机产品项目')
+  if (!canConfigureProjectScope(actor, input.projectAttribute, type, isGlobalAdmin(actor))) return fail('当前用户没有该项目属性和类型的创建权限')
   const name = (source?.name || input.name || '').trim()
   if (!name) return fail('项目名称不能为空')
   const fields = source ? fetchByBid(source.bid) : {}
@@ -53,9 +54,10 @@ export function createConfiguredProject(input: ConfiguredProjectInput, actor: st
 }
 
 export function updateConfiguredProject(id: string, updates: ConfiguredProjectUpdates, actor: string): RegistryMutationResult {
-  if (!canManageProjectRegistry(actor)) return fail('仅管理组可创建和管理项目配置')
+  actor = actor.trim()
   const state = useProjectStore.getState(), previous = state.projects.find(p => p.id === id)
   if (!previous) return fail('项目不存在或已删除')
+  if (!canEditProjectRegistry(actor, previous, isGlobalAdmin(actor))) return fail('当前用户没有该项目属性和类型的编辑权限')
   if (Object.keys(updates).some(key => !['name','projectCode','boundFormalProjectId'].includes(key))) return fail('项目配置仅支持修改名称、编码和绑定')
   const candidate = { ...previous, ...updates }
   if (updates.name !== undefined) candidate.name = updates.name.trim()

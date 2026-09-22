@@ -45,6 +45,13 @@ export const getRegistryProjectTypes = (attribute: ProjectAttribute): readonly s
 export const getRegistryProjectCategory = (project: Pick<ProjectItem, 'type'>): string => resolveProjectClassification(project.type).projectCategory
 export type ProjectRegistryAction = 'create' | 'update' | 'bind' | 'rebind' | 'unbind' | 'delete'
 export interface ProjectRegistryChange { field: string; before: unknown; after: unknown }
+export interface ProjectCreationNotification {
+  status: 'simulated'
+  recipients: string[]
+  subject: string
+  body: string
+  timestamp: string
+}
 export interface ProjectRegistryHistoryEntry {
   id: string
   projectId: string
@@ -54,4 +61,5 @@ export interface ProjectRegistryHistoryEntry {
   changes: ProjectRegistryChange[]
   before: ProjectItem | null
   after: ProjectItem | null
+  notification?: ProjectCreationNotification
 }
