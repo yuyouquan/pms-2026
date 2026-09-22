@@ -7,6 +7,7 @@ import ProjectListContainer from '@/containers/ProjectListContainer'
 import { usePermissionStore } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useUiStore, type ProjectManagementTab } from '@/stores/ui'
+import { canAccessProjectRegistry } from '@/lib/projectRegistryPermissions'
 
 export default function ProjectManagementContainer() {
   const projectManagementTab = useUiStore(state => state.projectManagementTab)
@@ -16,11 +17,12 @@ export default function ProjectManagementContainer() {
   const isAdmin = usePermissionStore(state => state.globalRoles.some(
     role => role.name === '管理组' && role.members.includes(currentLoginUser),
   ))
-  const activeTab = isAdmin ? projectManagementTab : 'view'
+  const canConfigure = canAccessProjectRegistry(currentLoginUser, isAdmin)
+  const activeTab = canConfigure ? projectManagementTab : 'view'
 
   useEffect(() => {
-    if (!isAdmin && projectManagementTab !== 'view') setProjectManagementTab('view')
-  }, [isAdmin, projectManagementTab, setProjectManagementTab])
+    if (!canConfigure && projectManagementTab !== 'view') setProjectManagementTab('view')
+  }, [canConfigure, projectManagementTab, setProjectManagementTab])
 
   return (
     <section className={`pms-project-management${activeTab === 'view' && projectListView === 'card' ? ' pms-project-management--cards' : ''}`} aria-label="项目管理">
@@ -29,7 +31,7 @@ export default function ProjectManagementContainer() {
           id="project-management-views"
           activeKey={activeTab}
           onChange={key => setProjectManagementTab(key as ProjectManagementTab)}
-          renderTabBar={() => isAdmin ? (
+          renderTabBar={() => canConfigure ? (
             <div className="pms-project-management__view-mode">
               <Segmented<ProjectManagementTab>
                 aria-label="项目管理视图"
@@ -44,7 +46,7 @@ export default function ProjectManagementContainer() {
           ) : <></>}
           items={[
             { key: 'view', label: '项目视图', children: <ProjectListContainer /> },
-            ...(isAdmin ? [{ key: 'configuration', label: '项目配置', children: <ProjectConfiguration /> }] : []),
+            ...(canConfigure ? [{ key: 'configuration', label: '项目配置', children: <ProjectConfiguration /> }] : []),
           ]}
         />
       </Card>

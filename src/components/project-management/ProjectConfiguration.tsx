@@ -28,6 +28,9 @@ import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import { getProjectAttribute, isFormalProject, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import type { ProjectItem } from '@/types/app'
 import NewProjectModal from '@/components/project-management/NewProjectModal'
+import ProjectCreationNotice from '@/components/project-management/ProjectCreationNotice'
+import { canAccessProjectRegistry, canEditProjectRegistry } from '@/lib/projectRegistryPermissions'
+import type { ProjectCreationNotification } from '@/types/projectRegistry'
 
 type EditableField = 'name' | 'projectCode' | 'boundFormalProjectId'
 interface EditingCell {
@@ -56,12 +59,15 @@ export default function ProjectConfiguration() {
   } = useUiStore()
   const activateProject = useActivateProject()
   const [newProjectOpen, setNewProjectOpen] = useState(false)
+  const [creationNotice, setCreationNotice] = useState<ProjectCreationNotification | null>(null)
   const [historyProjectId, setHistoryProjectId] = useState<string | null>(null)
   const [editing, setEditing] = useState<EditingCell | null>(null)
   const editingRef = useRef<EditingCell | null>(null)
   const confirmingRef = useRef(false)
   const canManage = canManageProjectRegistry(currentLoginUser)
   const isAdmin = globalRoles.some(role => role.name === '管理组' && role.members.includes(currentLoginUser))
+  const canCreate = canAccessProjectRegistry(currentLoginUser, isAdmin)
+  const canEdit = (project: ProjectItem) => canEditProjectRegistry(currentLoginUser, project, isAdmin)
   const filteredProjects = useMemo(() => filterConfigurationProjects(projects, filters), [projects, filters])
   const hasFilters = Boolean(filters.name || filters.projectCode || filters.boundFormalProjectName || filters.projectTypes.length || filters.projectAttributes.length)
   const currentPage = Math.min(Math.max(1, projectConfigurationPage), Math.max(1, Math.ceil(filteredProjects.length / 15)))
@@ -87,7 +93,7 @@ export default function ProjectConfiguration() {
   }
 
   const beginEdit = (project: ProjectItem, field: EditableField) => {
-    if (!canManage || isFormalProject(project) || confirmingRef.current) return
+    if (!canEdit(project) || isFormalProject(project) || confirmingRef.current) return
     const rawValue = project[field]
     setCurrentEditing({
       projectId: project.id,
@@ -147,7 +153,7 @@ export default function ProjectConfiguration() {
         const normalized = normalizeConfigurationCellValue(pending.value)
         const result = updateConfiguredProject(pending.projectId, {
           [pending.field]: pending.field === 'boundFormalProjectId' ? (normalized || null) : normalized,
-        }, currentLoginUser)
+        }, useProjectStore.getState().currentLoginUser)
         confirmingRef.current = false
         if (!result.ok) {
           message.error(result.message)
@@ -204,7 +210,7 @@ export default function ProjectConfiguration() {
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: () => {
-        const result = deleteConfiguredProject(project.id, currentLoginUser)
+        const result = deleteConfiguredProject(project.id, useProjectStore.getState().currentLoginUser)
         if (!result.ok) {
           message.error(result.message)
           return
@@ -234,7 +240,7 @@ export default function ProjectConfiguration() {
       return (
         <div className="pms-project-config__cell-value">
           <Tooltip title={project.name}><Button type="link" className="pms-project-config__name" onClick={() => openProject(project)}>{project.name}</Button></Tooltip>
-          {!isFormalProject(project) && canManage ? (
+          {!isFormalProject(project) && canEdit(project) ? (
             <Tooltip title="编辑项目名称"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的项目名称`} icon={<EditOutlined />} onClick={() => beginEdit(project, field)} /></Tooltip>
           ) : null}
         </div>
@@ -242,7 +248,7 @@ export default function ProjectConfiguration() {
     }
     return (
       <div className="pms-project-config__cell-value">
-        <Tooltip title={value || '—'}>{!isFormalProject(project) && canManage ? (
+        <Tooltip title={value || '—'}>{!isFormalProject(project) && canEdit(project) ? (
           <Button
             type="text"
             size="small"
@@ -253,7 +259,7 @@ export default function ProjectConfiguration() {
             {value || '—'}
           </Button>
         ) : <span>{value || '—'}</span>}</Tooltip>
-        {!isFormalProject(project) && canManage ? (
+        {!isFormalProject(project) && canEdit(project) ? (
           <Tooltip title="编辑项目编码"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的项目编码`} icon={<EditOutlined />} onClick={() => beginEdit(project, field)} /></Tooltip>
         ) : null}
       </div>
@@ -291,7 +297,7 @@ export default function ProjectConfiguration() {
         }
         return (
           <div className="pms-project-config__cell-value">
-            <Tooltip title={boundName || '—'}>{canManage ? (
+            <Tooltip title={boundName || '—'}>{canEdit(project) ? (
               <Button
                 type="text"
                 size="small"
@@ -302,7 +308,7 @@ export default function ProjectConfiguration() {
                 {boundName || '—'}
               </Button>
             ) : <span>{boundName || '—'}</span>}</Tooltip>
-            {canManage ? (
+            {canEdit(project) ? (
               <Tooltip title="编辑绑定正式项目"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的绑定正式项目`} icon={<EditOutlined />} onClick={() => beginEdit(project, 'boundFormalProjectId')} /></Tooltip>
             ) : null}
           </div>
@@ -367,7 +373,7 @@ export default function ProjectConfiguration() {
           ], onClick: ({ key }) => exportProjects(key as 'all' | 'current') }}>
             <Button icon={<ExportOutlined />}>导出</Button>
           </Dropdown>}
-          {canManage ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewProjectOpen(true)}>新项目</Button> : null}
+          {canCreate ? <Button type="primary" icon={<PlusOutlined />} onClick={() => setNewProjectOpen(true)}>新项目</Button> : null}
         </div>
       </div>
       <Table<ProjectItem>
@@ -391,11 +397,16 @@ export default function ProjectConfiguration() {
         onCancel={() => setNewProjectOpen(false)}
         onCreated={projectId => {
           setNewProjectOpen(false)
+          setCreationNotice(useProjectStore.getState().registryHistory.find(entry => entry.projectId === projectId && entry.action === 'create')?.notification ?? null)
           resetFilters()
           const index = useProjectStore.getState().projects.findIndex(project => project.id === projectId)
           setProjectConfigurationPage(Math.floor(Math.max(0, index) / 15) + 1)
         }}
       />
+      <Modal className="pms-modal" title="项目创建成功" open={Boolean(creationNotice)} width={620}
+        onCancel={() => setCreationNotice(null)} footer={<Button type="primary" onClick={() => setCreationNotice(null)}>知道了</Button>}>
+        {creationNotice && <ProjectCreationNotice notice={creationNotice} />}
+      </Modal>
       <Modal
         className="pms-modal"
         title={`${historyProject?.name ?? '项目'} · 历史`}
@@ -404,6 +415,7 @@ export default function ProjectConfiguration() {
         width={860}
         onCancel={() => setHistoryProjectId(null)}
       >
+        {history.filter(entry => entry.notification).map(entry => <ProjectCreationNotice key={entry.id} notice={entry.notification!} />)}
         <Table
           rowKey="key"
           size="small"
