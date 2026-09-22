@@ -9697,7 +9697,9 @@ input.ant-input,
 
 /* Business resource dashboard: one comparable six-metric row, then trend and ledger. */
 .pms-dashboard-metrics-scroll { overflow-x: auto; padding-bottom: 2px; }
-.pms-dashboard-six-metrics { display: grid; grid-template-columns: repeat(6, minmax(146px, 1fr)); gap: 8px; }
+.pms-dashboard-eight-metrics { display: grid; grid-template-columns: repeat(8, minmax(180px, 1fr)); gap: 8px; }
+.pms-dashboard-department-value { display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
+.pms-dashboard-department-value small { font-size: 11px; color: var(--pms-text-secondary); }
 .pms-dashboard-metric { display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 12px 10px 9px; background: var(--pms-bg-elevated, #fff); border: 1px solid var(--pms-border); border-top: 3px solid var(--budget-color, #b7b2c9); border-radius: 12px; }
 .pms-dashboard-metric-heading { display: flex; align-items: center; justify-content: space-between; gap: 5px; min-height: 21px; }
 .pms-dashboard-metric-heading h3 { font-size: 12px; white-space: nowrap; }
