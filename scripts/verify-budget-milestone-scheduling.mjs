@@ -242,7 +242,7 @@ assert.throws(() => unauthorizedScheduleCase.store.getState().updateVersionInlin
   unauthorizedScheduleCase.versionId,
   unauthorizedScheduleCase.patch,
   unauthorizedScheduleCase.scopeId,
-), /当前版本不可编辑/, 'milestoneSchedule enforces actor edit permission')
+), /无当前资源操作权限|当前版本不可编辑/, 'milestoneSchedule enforces actor edit permission')
 assert.deepEqual(
   unauthorizedScheduleCase.store.getState().projects.find(item => item.id === unauthorizedScheduleCase.projectId),
   unauthorizedProjectBefore,

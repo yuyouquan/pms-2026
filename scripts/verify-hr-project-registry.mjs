@@ -21,7 +21,7 @@ const stores = names.map(name => get(`src/stores/hr${name}.ts`)[`useHr${name}Sto
 const types = ['整机产品项目','tOS版本项目','技术项目','能力建设项目']
 const base = registry.getState().projects[0]
 const formal = categories.map((category,i)=>({...base,id:`formal-${category}`,name:`正式${category}`,type:types[i],sourceBid:`source-${category}`,projectCode:'DUPLICATE-CODE',projectAttribute:'formal',fieldValues:{softwareProjectLevel:'S'},markets:['OP'],versionTypes:['Full']}))
-const budget = formal.map(project=>({...project,id:`budget-${project.id}`,sourceBid:undefined,projectCode:'',projectAttribute:'budget',name:`预算${project.name}`,boundFormalProjectId:project.id,brand:'旧品牌',productLine:'旧产品线',marketName:'旧市场'}))
+const budget = formal.map(project=>({...project,id:`budget-${project.id}`,sourceBid:undefined,projectCode:'',projectAttribute:'budget',name:`预算${project.name}`,boundFormalProjectId:null,brand:'旧品牌',productLine:'旧产品线',marketName:'旧市场'}))
 registry.setState({projects:[...formal,...budget],registryHistory:[],currentLoginUser:'演示用户01',marketConfigsByProjectId:{'formal-machine':[{market:'OP',isMain:true}]},tosTypeConfigsByProjectId:{'formal-tos':[{type:'Full',isMain:true}]}})
 let checks=0
 const check=(name,fn)=>{fn();checks++;console.log('PASS '+name)}
@@ -34,7 +34,7 @@ plan.setState({versions,marketVersionsByKey:{[getMarketPlanVersionKey('formal-ma
 technicalPlan.setState({plansByKey:{'formal-technical:tdt':{planKey:'formal-technical:tdt',templateKind:'tdt',versions:[{...versions[0],templateType:'tdt',tasks}]}}})
 const dept={id:'d1',primaryDepartment:'研发中心',secondaryDepartment:'软件部',estimatedInvestment:12,planningPhase:2,conceptPhase:2,planningPhase2:2,developmentValidationPhase:2,marketIterationPhase:2,maintenancePhase:2,planPhase:2,developmentPhase:3,migrationPhase:3}
 const getRecord=(store,id)=>store.getState().projects.find(row=>row.pmsProjectId===id)
-const createVersion=(i,id,type)=>i===0?stores[i].getState().addVersion(id,type,{projectLevel:'S',levelCoefficient:1,hrModelVersion:'V2026.1'}):stores[i].getState().addVersion(id,{budgetType:type,departmentInvestments:[dept],projectStartTime:'2028-01-01',projectEndTime:'2028-12-01'})
+const createVersion=(i,id,type)=>i===0?stores[i].getState().addVersion(id,type,{projectLevel:'S',levelCoefficient:1,hrModelVersion:'V2026.1',milestones:{conceptStart:'2028-01-01',str1:'2028-02-01',str5:'2028-12-01'}}):stores[i].getState().addVersion(id,{budgetType:type,milestones:{planningKO:'2028-01-01',conceptStart:'2028-02-01',str5:'2028-12-01',planningStart:'2028-01-01',charterDCP:'2028-02-01',edcp:'2028-12-01'},departmentInvestments:[dept],projectStartTime:'2028-01-01',projectEndTime:'2028-12-01'})
 for(let i=0;i<4;i++){
  const store=stores[i],category=categories[i]
  check(`${category}: configured records, attribute budget restrictions, source date ownership, readonly histories and last deletion`,()=>{
@@ -51,9 +51,11 @@ for(let i=0;i<4;i++){
   store.getState().updateVersion(b.id,b.versions[0].id,patch);store.getState().updateVersion(f.id,f.versions[0].id,patch)
   assert.equal(dateOf(getRecord(store,f.pmsProjectId).versions[0]),i===3?'2028-01-01':'2030-02-01')
   assert.equal(dateOf(getRecord(store,b.pmsProjectId).versions[0]),'2028-01-01')
+  store.getState().setVersionLocked(b.id,b.versions[0].id,true)
   const originalAnnual=structuredClone(getRecord(store,b.pmsProjectId).versions[0])
   createVersion(i,b.id,'annual');store.getState().updateVersion(b.id,originalAnnual.id,patch)
   assert.deepEqual(getRecord(store,b.pmsProjectId).versions[0],originalAnnual)
+  registry.setState({projects:registry.getState().projects.map(p=>p.id===b.pmsProjectId?{...p,boundFormalProjectId:f.pmsProjectId}:p)})
   assert.equal(helpers.isHrVersionVisible(b,'annual',f.pmsProjectId),true);assert.equal(helpers.canEditHrInScope(b,f.pmsProjectId),false)
   registry.setState({projects:registry.getState().projects.map(p=>p.id===b.pmsProjectId?{...p,boundFormalProjectId:null}:p)})
   store.getState().refreshFormalProjects();assert.equal(helpers.isHrVersionVisible(getRecord(store,b.pmsProjectId),'annual',f.pmsProjectId),false)
@@ -65,7 +67,7 @@ for(let i=0;i<4;i++){
   store.getState().deleteVersion(f.id,f.versions[0].id);createVersion(i,b.id,'annual');store.getState().updateMonthlyInvestment(monthly.id,{'2028-01':99})
   assert.equal(JSON.stringify(store.getState().projects),before);assert.equal(store.getState().monthlyInvestments.find(row=>row.id===monthly.id).monthlyData['2028-01'],7.3)
   assert.equal(helpers.canAccessHrProject(b),false);registry.setState({currentLoginUser:'演示用户01'})
-  for(const version of getRecord(store,b.pmsProjectId).versions)store.getState().deleteVersion(b.id,version.id)
+  for(const version of getRecord(store,b.pmsProjectId).versions){store.getState().setVersionLocked(b.id,version.id,false);store.getState().deleteVersion(b.id,version.id)}
   assert.equal(getRecord(store,b.pmsProjectId).versions.length,0);assert.ok(registry.getState().projects.some(p=>p.id===b.pmsProjectId))
   assert.throws(()=>store.getState().bindIpmProject(b.id,'fake'),/项目配置/);assert.throws(()=>store.getState().deleteProject(b.id),/项目配置/)
  })
@@ -115,14 +117,14 @@ check('explicit duplicate legacy ownership claims retain both originals without 
  assert.deepEqual(migrated.monthlyInvestments.map(row=>row.monthlyData),monthly.map(row=>row.monthlyData))
  assert.deepEqual(helpers.reconcileHrRegistry(migrated.projects,migrated.monthlyInvestments,'capability',true),migrated)
 })
-check('formal-only access never grants source visibility; roadmap rejects all budget types',()=>{
+check('formal-only resource access permits linked annual reading; roadmap rejects all budget types',()=>{
  const owner='正式项目专属成员'
  permission.getState().ensureProjectPermissions([{...formal[0],createdBy:'演示用户01',responsiblePersons:[owner]}])
  registry.setState({projects:registry.getState().projects.map(p=>p.id===budget[0].id?{...p,boundFormalProjectId:formal[0].id}:p)})
  const b=getRecord(stores[0],budget[0].id)
  assert.equal(helpers.canAccessHrProject({pmsProjectId:formal[0].id},false,owner),true)
  assert.equal(helpers.canAccessHrProject(b,false,owner),false)
- registry.setState({currentLoginUser:owner});assert.equal(helpers.isHrVersionVisible(b,'annual',formal[0].id),false)
+ registry.setState({currentLoginUser:owner});assert.equal(helpers.isHrVersionVisible(b,'annual',formal[0].id),true);assert.equal(helpers.canResourceAction(b,'laborEdit',formal[0].id),false)
  registry.setState({currentLoginUser:'演示用户01',projects:[...registry.getState().projects,{...formal[0],id:'roadmap-reject',projectAttribute:'roadmap'}]})
  for(const type of rules.HR_BUDGET_TYPES)assert.equal(rules.canCreateHrVersion({status:'active',pmsProjectId:'roadmap-reject',ipmProjectCode:'anything'},type),false)
 })

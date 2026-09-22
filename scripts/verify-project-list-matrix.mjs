@@ -73,7 +73,7 @@ const migratedProjects = projectStore.migrateProjectState({ projects: legacyProj
 for (const project of migratedProjects.filter(project => legacyProjectStatuses.some(legacy => legacy.id === project.id))) {
   assert.ok(projectStatus.getActiveProjectStatuses(project.type).includes(project.status), `${project.id} must migrate into its active catalog`)
 }
-assert.match(projectListContainerSource, /useSingleEnumOptions\(\s*statusEnumType,\s*\[\]/)
+assert.match(projectListContainerSource, /useSingleEnumOptions\(\s*statusEnumType,\s*undefined,\s*projectTypeFilter !== 'all',\s*'filter'/)
 for (const retiredStatus of ["status: '规划中'", "status: '筹备中'", "status: '已迁移'"]) {
   assert.doesNotMatch(projectSeedSource, new RegExp(retiredStatus), `project mocks must not keep retired status ${retiredStatus}`)
 }

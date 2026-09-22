@@ -9,7 +9,7 @@ import { getMissingProjectInfoFields } from '@/lib/projectInfoCompletion'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReloadOutlined } from '@ant-design/icons'
 import { Alert, App, Button, Collapse, Form, Input, Modal, Select, Skeleton, Space, Spin, Tag } from 'antd'
-import { ALL_USERS } from '@/components/permission/PermissionModule'
+import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
 import ProjectInfoFieldInput from '@/components/project-info/ProjectInfoFieldInput'
 import { FanTrialCountryEditor } from '@/components/project-info/FanTrialCountries'
 import { readFanTrialRows, validateFanTrial } from '@/lib/fanTrial'
@@ -1324,7 +1324,7 @@ export default function ProjectInfoModal({
               )}
               {projectType !== PROJECT_TYPE_TOS_VERSION && !isMachineProjectType(projectType) && !isTechnicalProject && (
                 <Form.Item label="项目责任人" name="responsiblePersons" extra="负责项目可见范围，并作为权限中心的系统管理员" rules={[{ required: true, type: 'array', min: 1, message: '请选择项目责任人' }]}>
-                  <Select mode="multiple" showSearch optionFilterProp="label" options={ALL_USERS.map(user => ({ label: user, value: user }))} />
+                  <Select mode="multiple" showSearch optionFilterProp="label" options={PROJECT_USER_CHOICES.map(user => ({ label: user, value: user }))} />
                 </Form.Item>
               )}
               {isTargetProjectInfoType(projectType) && (mode === 'edit' || !isMachineProjectType(projectType)) && (

@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
 import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
 import { Card, Tabs, Table, Button, Space, Input, Select, Tag, Modal, Form, Popconfirm, Empty, Tooltip, message } from 'antd'
 import { TeamOutlined, SafetyCertificateOutlined, PlusOutlined, CheckSquareFilled, CloseOutlined } from '@ant-design/icons'
@@ -205,7 +206,7 @@ export const PermissionConfig: React.FC<PermissionConfigProps> = ({
                       style={{ width: '100%', minWidth: 300 }}
                       placeholder="请选择人员"
                       maxTagCount={5}
-                      options={ALL_USERS.map(u => ({ label: u, value: u }))}
+                      options={PROJECT_USER_CHOICES.map(u => ({ label: u, value: u }))}
                     />
                   )
                   return isTechnicalFixedRole || isMachineSpm
@@ -433,7 +434,7 @@ export const GlobalPermissionConfig: React.FC<GlobalPermissionConfigProps> = ({
                     style={{ width: '100%', minWidth: 300 }}
                     placeholder="请选择人员"
                     maxTagCount={5}
-                    options={ALL_USERS.map(u => ({ label: u, value: u }))}
+                    options={PROJECT_USER_CHOICES.map(u => ({ label: u, value: u }))}
                   />
                 )
               },

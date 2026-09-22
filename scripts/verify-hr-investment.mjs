@@ -59,13 +59,17 @@ for(let index=0;index<stores.length;index++) {
  let current=store.getState().projects[0]
  eq(current.versions.map(v=>v.versionNumber),['V0.1','V0.2'],category+' sequential version')
  assert.notEqual(current.versions[0].id,current.versions[1].id,category+' IDs unique');assertions++
+ store.getState().setVersionLocked(project.id, first.id, true)
  const historical=JSON.stringify(current.versions[0].milestones ?? [current.versions[0].projectStartTime,current.versions[0].projectEndTime])
  store.getState().updateVersion(project.id,first.id,index===3?{projectStartTime:'2044-01-01',batch:20}:{milestones:index===2?{planningStart:'2044-01-01'}:{conceptStart:'2044-01-01'},batch:20})
  current=store.getState().projects[0]
  eq(JSON.stringify(current.versions[0].milestones ?? [current.versions[0].projectStartTime,current.versions[0].projectEndTime]),historical,category+' history dates guarded')
- eq(current.versions[0].batch,20,category+' historical batch editable')
+ eq(current.versions[0].batch,null,category+' locked legacy batch is immutable')
+ store.getState().setVersionLocked(project.id, first.id, false)
+ store.getState().updateVersion(project.id,first.id,{batch:20})
  store.getState().updateVersion(project.id,first.id,{batch:21})
  eq(store.getState().projects[0].versions[0].batch,20,category+' invalid batch rejected')
+ store.getState().setVersionLocked(project.id, first.id, true)
  // Prior mixed ownership is split before nonannual creation.
  const annualSource={...store.getState().projects[0],id:`annual-${category}`}
  annualSource.versions=annualSource.versions.map(v=>({...v,projectId:annualSource.id}))
@@ -142,8 +146,8 @@ modelStore.setState({data:{...modelBefore,hrModel:modelBefore.hrModel.map(record
 stores[0].getState().refreshFormalProjects()
 const unboundAfter=stores[0].getState().projects[0]
 const unboundLatest=unboundAfter.versions.find(v=>v.id===unboundVersionBefore.id)
-eq(unboundLatest.estimatedInvestment,unboundVersionBefore.estimatedInvestment+10,'unbound latest version follows model edit')
-eq(unboundAfter.annualBudget,unboundLatest.estimatedInvestment,'unbound project total follows model edit')
+eq(unboundLatest.estimatedInvestment,unboundVersionBefore.estimatedInvestment,'saved model snapshot remains stable until explicit model selection')
+eq(unboundAfter.annualBudget,0,'summary excludes versions without an official selection')
 eq(stores[0].getState().monthlyInvestments.filter(r=>r.versionId===unboundLatest.id).reduce((sum,r)=>sum+r.estimatedTotal,0),unboundLatest.estimatedInvestment,'unbound monthly total follows model edit')
 eq(JSON.stringify(unboundAfter.versions[0]),historicalBeforeModel,'model edit retains historical version snapshot')
 modelStore.setState({data:modelBefore})

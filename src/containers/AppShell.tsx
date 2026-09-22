@@ -14,8 +14,7 @@ import { usePermissionStore, resolvePermissionProjectId } from '@/stores/permiss
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import { getProjectAttribute, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import { useTransferStore } from '@/stores/transfer'
-import { ALL_USERS } from '@/components/permission/PermissionModule'
-import { PROJECT_REGISTRY_MANAGERS } from '@/lib/projectRegistryPermissions'
+import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useRef, useEffect, useMemo } from 'react'
 
@@ -80,7 +79,7 @@ function UserSwitcher() {
           </div>, disabled: true },
           { type: 'divider' as const },
           { key: 'switch-label', label: <span style={{ color: '#999', fontSize: 11 }}><SwapOutlined style={{ marginRight: 4 }} />切换用户（测试权限）</span>, disabled: true },
-          ...[...ALL_USERS, ...PROJECT_REGISTRY_MANAGERS].map(u => {
+          ...PROJECT_USER_CHOICES.map(u => {
             const isActive = currentLoginUser === u
             const adminGroup = globalRoles.find(r => r.name === '管理组')
             const isAdmin = adminGroup?.members.includes(u)
