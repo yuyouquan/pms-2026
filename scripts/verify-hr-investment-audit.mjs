@@ -53,7 +53,7 @@ for(let i=0;i<4;i++) {
  const options=store.persist.getOptions(), prior=structuredClone(original.projects[0]);prior.projectAccounting=123.4
  const custom={...structuredClone(prior),id:'user-created-'+category}
  const saved={...original,projects:[prior,custom],filters:store.getState().filters}
- const migrated=options.migrate(saved,options.version-1)
+ const migrated=options.migrate(saved,i===0?11:options.version-1)
  eq(migrated.projects.find(p=>p.id===prior.id),prior,category+' migration preserves edits')
  eq(migrated.projects.find(p=>p.id===custom.id),custom,category+' migration preserves user additions')
  eq(migrated.projects.length,8,category+' migration appends only new seeds')
@@ -75,9 +75,11 @@ for(let i=0;i<4;i++) {
  eq(latest.versionNumber,'V0.3',category+' creates sequential V0.3')
  eq(latest.createdBy,'演示用户01',category+' new or copied version records actual creator')
  eq(store.getState().monthlyInvestments.filter(m=>m.versionId===latest.id).length>0,true,category+' latest monthly available; historical rows retained for compatibility')
- const history=JSON.stringify(current.versions.find(v=>v.id===old.id))
+ store.getState().setVersionLocked(p.id,old.id,true)
+ const history=JSON.stringify(store.getState().projects[0].versions.find(v=>v.id===old.id))
  store.getState().updateVersion(p.id,old.id,i===3?{projectStartTime:'2040-01-01'}:{milestones:{...(old.milestones??{}),[i===2?'planningStart':'conceptStart']:'2040-01-01'}})
- eq(JSON.stringify(store.getState().projects[0].versions.find(v=>v.id===old.id)),history,category+' historical edit blocked')
+ eq(JSON.stringify(store.getState().projects[0].versions.find(v=>v.id===old.id)),history,category+' locked history edit blocked')
+ store.getState().setVersionLocked(p.id,old.id,false)
  store.getState().deleteVersion(p.id,latest.id)
  eq(rules.getLatestHrVersion(store.getState().projects[0].versions,'annual').id,old.id,category+' deleting latest restores previous version')
  eq(store.getState().monthlyInvestments.some(m=>m.versionId===latest.id),false,category+' deleted version monthly removed')

@@ -92,7 +92,7 @@ await check('Bound machine budgets reject creation with partial or empty formal 
     assert.deepEqual({ brand: record().brand, productLine: record().productLine, marketName: record().marketName }, sourceMetadata)
     const canonicalBefore = structuredClone(registry.getState().projects)
     const milestones = { conceptStart: '2032-02-01', str5: '2032-11-01' }
-    assert.throws(() => store.getState().addVersion(record().id, 'annual', { ...meta, metadata: sourceMetadata, milestones }), /权限/)
+    store.getState().addVersion(record().id, 'annual', { ...meta, metadata: sourceMetadata, milestones }) // Legacy forbidden writes are no-ops.
     assert.equal(record().versions.length, 0)
     assert.deepEqual(registry.getState().projects, canonicalBefore)
   }
@@ -146,7 +146,7 @@ await check('Forms and navigation wire shared milestones, category layouts, perm
     assert.match(source(`src/components/hr-${category}/${category === 'machine' ? 'MachineVersionDetailModal' : 'VersionDetailModal'}.tsx`), /HrVersionMilestoneDetails/)
   }
   assert.doesNotMatch(source('src/constants/hrPipeline.ts'), /key: 'config\/hr-model'/)
-  assert.match(source('src/containers/ConfigContainer.tsx'), /HR_CONFIG_CENTER_MODULES: ConfigModuleKey\[\] = \['hrModel', 'nonLaborSubject'\]/)
+  assert.match(source('src/containers/ConfigContainer.tsx'), /HR_CONFIG_CENTER_MODULES: ConfigModuleKey\[\] = \['hrModel', 'nonLaborSubject', 'feeRate'\]/)
   assert.match(source('src/containers/ConfigContainer.tsx'), /ariaLabel="配置分类"/)
   assert.match(source('src/containers/ConfigContainer.tsx'), /HrConfigContent key=\{selectedHrConfigModule\} moduleKey=\{selectedHrConfigModule\}/)
   assert.match(source('src/components/hr-config/ConfigTablePanel.tsx'), /canEdit \? actionColumn : \[\]/)

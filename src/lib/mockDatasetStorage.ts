@@ -33,6 +33,8 @@ type StorageArea = 'localStorage' | 'sessionStorage'
 
 let hydrationWriteDepth = 0
 
+export const isPmsHydrationWriteSuppressed = () => hydrationWriteDepth > 0
+
 /** Cross-tab hydration reads a snapshot; schema migration must not echo it back. */
 export function withoutPmsHydrationWrites<T>(hydrate: () => T): T {
   hydrationWriteDepth += 1

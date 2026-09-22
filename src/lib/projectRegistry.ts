@@ -35,7 +35,7 @@ export function createConfiguredProject(input: ConfiguredProjectInput, actor: st
     id: `registry-${globalThis.crypto.randomUUID()}`, name, type: type as ProjectItem['type'],
     projectAttribute: input.projectAttribute, sourceBid: source?.bid,
     boundFormalProjectId: null, createdBy: actor, createdAt: new Date().toISOString(),
-    status: source ? mapIpmProjectStatus(source.ipmStatus || '筹备中', type) : normalizeLegacyProjectStatus(type, '筹备中'), progress: 0,
+    status: normalizeLegacyProjectStatus(type, source ? mapIpmProjectStatus(source.ipmStatus || '筹备中', type) : '筹备中'), progress: 0,
     leader: responsiblePersons[0], responsiblePersons, markets: [], androidVersion: '', chipPlatform: '',
     spm: type === PROJECT_CATEGORY_MACHINE ? responsiblePersons.join('、') : '',
     updatedAt: new Date().toISOString(), productLine: '', tosVersion: '', planStartDate: '', planEndDate: '',

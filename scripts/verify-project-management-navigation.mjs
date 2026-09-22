@@ -97,7 +97,7 @@ for (const label of ['项目属性', '项目名称', '项目类型', '责任人'
 assert.match(creation, /title=['"]新增项目['"]/)
 assert.match(creation, /createConfiguredProject/)
 assert.match(creation, /EXTERNAL_PROJECT_POOL/)
-assert.match(creation, /ALL_USERS/)
+assert.match(creation, /PROJECT_USER_CHOICES/)
 assert.doesNotMatch(creation, /项目编码|安卓版本|里程碑|产品线|品牌/, 'minimal creation stays limited to four fields')
 
 assert.match(projectList, /filterFormalRegistryProjects\(projects\)/, 'all project-list modes share a formal-only base')

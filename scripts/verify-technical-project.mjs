@@ -462,7 +462,7 @@ assert.doesNotMatch(technicalPlanSummary, /计划摘要/, 'technical plan header
 assert.match(technicalPlanSummary, /暂无计划版本/, 'technical plan summary uses one empty state when no published version exists')
 assert.match(technicalPlanSummary, /暂无计划数据/, 'technical plan summary does not render an empty milestone table')
 assert.match(technicalPlanSummary, /currentProjection\.rows[\s\S]*actualEndDate|actualEndDate[\s\S]*currentProjection\.rows/, 'technical plan summary renders the current actual completion row')
-assert.match(technicalPlanSummary, /TECHNICAL_STAGE_COLORS[\s\S]*borderBottom:[\s\S]*stageColor/, 'technical plan summary reuses the whole-machine colored stage header treatment')
+assert.match(technicalPlanSummary, /technical-plan-summary-stage pms-phase-header-stage/, 'technical plan summary reuses the shared stage header theme')
 assert.match(technicalPlanSummary, /stage\.estimatedDays == null \? '-' : `\$\{group\.stage\.estimatedDays\}天`/, 'technical plan summary shows stage estimated duration')
 assert.doesNotMatch(technicalPlanSummary, /stage\.planStartDate[\s\S]{0,180}stage\.planEndDate[\s\S]{0,180}~/, 'technical plan summary omits stage date ranges')
 assert.doesNotMatch(technicalPlanSummary, /stage\.manpowerPercent[\s\S]{0,180}%/, 'technical plan summary omits stage manpower percentages')

@@ -1,7 +1,7 @@
 'use client'
 
 import { Input, Select } from 'antd'
-import { ALL_USERS } from '@/components/permission/PermissionModule'
+import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
 import { JiraProjectEditor } from '@/components/project-info/JiraProjectEditor'
 import type { ProjectInfoFieldDefinition } from '@/constants/projectInfoSchema'
 import type { JiraProjectConfig } from '@/lib/jiraProject'
@@ -48,7 +48,7 @@ export default function ProjectInfoFieldInput({
         showSearch
         value={toText(value) || undefined}
         placeholder="请选择人员"
-        options={ALL_USERS.map(user => ({ label: user, value: user }))}
+        options={PROJECT_USER_CHOICES.map(user => ({ label: user, value: user }))}
         onChange={next => onChange?.(next || '')}
       />
     )
@@ -60,7 +60,7 @@ export default function ProjectInfoFieldInput({
         mode="multiple"
         value={Array.isArray(value) ? value as string[] : []}
         placeholder="请选择人员"
-        options={ALL_USERS.map(user => ({ label: user, value: user }))}
+        options={PROJECT_USER_CHOICES.map(user => ({ label: user, value: user }))}
         onChange={next => onChange?.(next)}
       />
     )
