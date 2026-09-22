@@ -78,6 +78,7 @@ const scripts = [
   "verify-resource-milestone-ownership.mjs",
   "verify-resource-mixed-version-storage.mjs",
   "verify-resource-model-selection.mjs",
+  "verify-resource-monthly-cost.mjs",
   "verify-resource-monthly-presentation.mjs",
   "verify-resource-monthly-reallocation.mjs",
   "verify-resource-permission-defaults.mjs",
