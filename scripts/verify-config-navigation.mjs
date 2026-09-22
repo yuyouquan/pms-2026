@@ -7,10 +7,10 @@ const enums = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 const { migrateEnumState, ENUM_STORE_VERSION } = loadTypeScriptModule(root, 'src/stores/enums.ts')
 
 assert.deepEqual(CONFIG_MENU_GROUPS.map(group => [group.key, group.children.length]), [
-  ['plan', 4], ['transfer', 2], ['enum', 25], ['hrPipeline', 3],
+  ['plan', 4], ['transfer', 5], ['enum', 25], ['hrPipeline', 3],
 ])
 const leaves = CONFIG_MENU_GROUPS.flatMap(group => group.children)
-assert.equal(new Set(leaves.map(leaf => leaf.key)).size, 34)
+assert.equal(new Set(leaves.map(leaf => leaf.key)).size, 37)
 assert.ok(leaves.every(leaf => !leaf.children && leaf.target))
 assert.deepEqual(filterConfigMenu('  '), CONFIG_MENU_GROUPS)
 assert.deepEqual(filterConfigMenu('粉丝').map(group => [group.label, group.children.map(leaf => leaf.label)]), [
@@ -23,6 +23,9 @@ assert.deepEqual(filterConfigMenu('非人力 科目')[0].children.map(leaf => le
 assert.deepEqual(filterConfigMenu('费率')[0].children.map(leaf => leaf.key), ['hrPipeline:feeRate'])
 assert.deepEqual(filterConfigMenu('不存在的菜单'), [])
 assert.equal(CONFIG_MENU_GROUPS[2].children.length, 25, 'search must not mutate the complete menu')
+
+assert.deepEqual(filterConfigMenu('转维 tOS')[0].children.map(leaf => leaf.label), ['CheckList', '转维团队配置'])
+assert.deepEqual(filterConfigMenu('转维 整机')[0].children.map(leaf => leaf.label), ['CheckList', '评审要素', '转维团队配置'])
 
 const seeds = enums.createInitialEnumRows()
 for (const type of enums.ENUM_TYPE_KEYS) {
@@ -58,4 +61,4 @@ assert.match(container, /handleConfigMenuSelect[\s\S]*navigateWithEditGuard/)
 for (const file of ['src/components/config/EnumConfig.tsx', 'src/components/transfer/TransferModule.tsx']) {
   assert.doesNotMatch(readSource(root, file), /<ConfigWorkspaceShell\b/, 'embedded modules do not add duplicate sidebars')
 }
-console.log('PASS: 34 menu destinations, fuzzy search, 25 mock categories, safe one-time migration')
+console.log('PASS: 37 menu destinations, fuzzy search, 25 mock categories, safe one-time migration')

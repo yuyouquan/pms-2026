@@ -23,7 +23,7 @@ import { usePlanStore, LEVEL2_PLAN_TYPES, VERSION_DATA, getConfigColumnsForView,
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
 import { useHasGlobalPermission } from '@/stores/permission'
-import { TransferConfig } from '@/components/transfer/TransferModule'
+import { TransferConfig } from '@/components/transfer/TransferConfig'
 import MrTemplateTable from '@/components/plans/MrTemplateTable'
 import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION, getProjectTypeFamilyKey } from '@/constants/projectTypes'
 import { nextPlanTaskId, planTaskDisplayNumbers } from '@/lib/planTaskDisplayNumbers'
@@ -719,7 +719,7 @@ export default function ConfigContainer() {
   }
 
   const selectedConfigMenuKey = configTab === 'enum' ? `enum:${selectedEnumType}`
-    : configTab === 'transfer' ? `transfer:${transferConfigView === 'review' ? 'review' : 'checklist'}`
+    : configTab === 'transfer' ? `transfer:${transferStore.transferProjectType}:${transferConfigView === 'home' ? 'checklist' : transferConfigView}`
       : configTab === 'hrPipeline' ? `hrPipeline:${selectedHrConfigModule}`
         : `plan:${selectedTemplateType}`
 
@@ -732,6 +732,7 @@ export default function ConfigContainer() {
       } else if (target.module === 'enum') {
         setSelectedEnumType(target.enumType)
       } else if (target.module === 'transfer') {
+        transferStore.setTransferProjectType(target.projectType)
         setTransferConfigView(target.view)
       } else {
         setHrConfigModule(target.moduleKey)
@@ -741,47 +742,6 @@ export default function ConfigContainer() {
     })
   }
 
-  // Build transferProps for TransferConfig
-  const transferProps = {
-    selectedProject, currentUser: transferCurrentUser,
-    transferView: transferStore.transferView, setTransferView: transferStore.setTransferView,
-    transferConfigView, setTransferConfigView,
-    configSidebarCollapsed, setConfigSidebarCollapsed,
-    tmConfigSearchText: transferStore.tmConfigSearchText, setTmConfigSearchText: transferStore.setTmConfigSearchText,
-    tmConfigSelectedVersion: transferStore.tmConfigSelectedVersion, setTmConfigSelectedVersion: transferStore.setTmConfigSelectedVersion,
-    tmConfigDiffOpen: transferStore.tmConfigDiffOpen, setTmConfigDiffOpen: transferStore.setTmConfigDiffOpen,
-    tmConfigDiffFrom: transferStore.tmConfigDiffFrom, setTmConfigDiffFrom: transferStore.setTmConfigDiffFrom,
-    tmConfigDiffTo: transferStore.tmConfigDiffTo, setTmConfigDiffTo: transferStore.setTmConfigDiffTo,
-    selectedTransferAppId: transferStore.selectedTransferAppId, setSelectedTransferAppId: transferStore.setSelectedTransferAppId,
-    transferApplications: transferStore.transferApplications, setTransferApplications: transferStore.setTransferApplications,
-    tmChecklistItems: transferStore.tmChecklistItems, setTmChecklistItems: transferStore.setTmChecklistItems,
-    tmReviewElements: transferStore.tmReviewElements, setTmReviewElements: transferStore.setTmReviewElements,
-    tmBlockTasks: transferStore.tmBlockTasks, tmLegacyTasks: transferStore.tmLegacyTasks,
-    tmApplyDate: transferStore.tmApplyDate, setTmApplyDate: transferStore.setTmApplyDate,
-    tmApplyRemark: transferStore.tmApplyRemark, setTmApplyRemark: transferStore.setTmApplyRemark,
-    tmApplyTeam: transferStore.tmApplyTeam, setTmApplyTeam: transferStore.setTmApplyTeam,
-    tmDetailModalVisible: transferStore.tmDetailModalVisible, setTmDetailModalVisible: transferStore.setTmDetailModalVisible,
-    tmDetailModalTitle: transferStore.tmDetailModalTitle, setTmDetailModalTitle: transferStore.setTmDetailModalTitle,
-    tmDetailModalContent: transferStore.tmDetailModalContent, setTmDetailModalContent: transferStore.setTmDetailModalContent,
-    tmCloseModalVisible: transferStore.tmCloseModalVisible, setTmCloseModalVisible: transferStore.setTmCloseModalVisible,
-    tmCloseAppId: transferStore.tmCloseAppId, setTmCloseAppId: transferStore.setTmCloseAppId,
-    tmCloseReason: transferStore.tmCloseReason, setTmCloseReason: transferStore.setTmCloseReason,
-    tmEntryTab: transferStore.tmEntryTab, setTmEntryTab: transferStore.setTmEntryTab,
-    tmEntryModalOpen: transferStore.tmEntryModalOpen, setTmEntryModalOpen: transferStore.setTmEntryModalOpen,
-    tmEntryModalRecord: transferStore.tmEntryModalRecord, setTmEntryModalRecord: transferStore.setTmEntryModalRecord,
-    tmEntryContent: transferStore.tmEntryContent, setTmEntryContent: transferStore.setTmEntryContent,
-    tmEntryActiveRole: transferStore.tmEntryActiveRole, setTmEntryActiveRole: transferStore.setTmEntryActiveRole,
-    tmReviewTab: transferStore.tmReviewTab, setTmReviewTab: transferStore.setTmReviewTab,
-    tmReviewModalOpen: transferStore.tmReviewModalOpen, setTmReviewModalOpen: transferStore.setTmReviewModalOpen,
-    tmReviewAction: transferStore.tmReviewAction, setTmReviewAction: transferStore.setTmReviewAction,
-    tmReviewRecord: transferStore.tmReviewRecord, setTmReviewRecord: transferStore.setTmReviewRecord,
-    tmReviewComment: transferStore.tmReviewComment, setTmReviewComment: transferStore.setTmReviewComment,
-    tmReviewActiveRole: transferStore.tmReviewActiveRole, setTmReviewActiveRole: transferStore.setTmReviewActiveRole,
-    tmSqaComment: transferStore.tmSqaComment, setTmSqaComment: transferStore.setTmSqaComment,
-    tmSqaModalOpen: transferStore.tmSqaModalOpen, setTmSqaModalOpen: transferStore.setTmSqaModalOpen,
-    tmSqaAction: transferStore.tmSqaAction, setTmSqaAction: transferStore.setTmSqaAction,
-    setProjectSpaceModule: useUiStore.getState().setProjectSpaceModule,
-  }
 
   const renderGanttChart = () => {
     const ganttTasks = filteredTasks
@@ -875,7 +835,7 @@ export default function ConfigContainer() {
         content={(
           <>
             {configTab === 'hrPipeline' && <HrConfigContent key={selectedHrConfigModule} moduleKey={selectedHrConfigModule} />}
-            {configTab === 'transfer' && <TransferConfig {...transferProps} />}
+            {configTab === 'transfer' && <TransferConfig />}
             {configTab === 'enum' && <EnumConfig currentLoginUser={currentLoginUser} />}
             {configTab === 'plan' && (
             <div className="pms-config-workspace-card">

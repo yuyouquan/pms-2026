@@ -166,19 +166,20 @@ assert.equal(todos.resolveVisiblePlanVersion(versions, undefined, true), 'v4', '
 const transferFixtures = todos.buildTransferTodoCandidates({
   projects: [{ id: 'p1', name: '项目 A' }],
   applications: [
-    { id: 'review', projectId: 'p1', projectName: '项目 A', status: 'in_progress', createdAt: '2026-07-28 10:00:00', applicantId: 'u001', applicant: '演示用户01', plannedReviewDate: '2026-08-01', pipeline: { dataEntry: 'success', maintenanceReview: 'in_progress', sqaReview: 'not_started' }, team: { maintenance: [{ id: 'u003', name: '演示用户03', role: 'SPM' }], research: [] } },
-    { id: 'sqa', projectId: 'p1', projectName: '项目 A', status: 'in_progress', applicantId: 'u001', applicant: '演示用户01', plannedReviewDate: '2026-08-02', pipeline: { dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' }, team: { maintenance: [], research: [{ id: 'u007', name: '演示用户07', role: 'SQA' }] } },
+    { id: 'review', projectId: 'p1', projectName: '项目 A', status: 'in_progress', createdAt: '2026-07-28 10:00:00', applicantId: 'u001', applicant: '演示用户01', plannedReviewDate: '2026-08-01', pipeline: { dataEntry: 'success', maintenanceReview: 'in_progress', maintenanceSpmReview: 'not_started' }, team: { maintenance: [{ id: 'u003', name: '演示用户03', role: 'SPM' }], research: [] } },
+    { id: 'sqa', projectId: 'p1', projectName: '项目 A', status: 'in_progress', applicantId: 'u001', applicant: '演示用户01', plannedReviewDate: '2026-08-02', pipeline: { dataEntry: 'success', maintenanceReview: 'success', maintenanceSpmReview: 'in_progress' }, team: { maintenance: [{ id: 'u007', name: '演示用户07', role: 'SPM' }], research: [] } },
   ],
 })
 assert.deepEqual(transferFixtures.map(item => [item.view, item.activeOwner, item.sourceLabel]), [
   ['detail', '演示用户01', '转维资料录入'],
   ['review', '演示用户03', '转维维护审核'],
   ['detail', '演示用户01', '转维资料录入'],
-  ['sqa-review', '演示用户07', '转维 SQA 审核'],
+  ['detail', '演示用户07', '转维维护审核'],
+  ['maintenance-spm-review', '演示用户07', '转维维护SPM审核'],
 ], 'completed history and active nodes use their authoritative owner identities')
 assert.equal(transferFixtures[0].generatedAt, '2026-07-28 10:00:00', 'transfer candidates preserve the application creation timestamp')
 assert.equal(transferFixtures[1].applicationId, 'review', 'transfer routes preserve the real application id rather than the row id')
-assert.equal(transferFixtures[1].id, 'review:review', 'each transfer node keeps a unique workbench row id')
+assert.equal(transferFixtures[1].id, 'review:review:演示用户03', 'each transfer node keeps a unique workbench row id')
 
 const sameNameProjects = [
   { id: 'new-project', name: 'DEMO017(16)' },
@@ -187,7 +188,7 @@ const sameNameProjects = [
 const projectRoutingApplication = {
   id: 'project-routing', projectId: 'old-project', projectName: 'DEMO017(16)',
   status: 'in_progress', applicantId: 'u001', applicant: '演示用户01',
-  pipeline: { dataEntry: 'in_progress', maintenanceReview: 'not_started', sqaReview: 'not_started' },
+  pipeline: { dataEntry: 'in_progress', maintenanceReview: 'not_started', maintenanceSpmReview: 'not_started' },
   team: { maintenance: [], research: [] },
 }
 const buildProjectRoutingTodos = (application, projects = sameNameProjects) => todos.buildTransferTodoCandidates({

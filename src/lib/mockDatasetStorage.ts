@@ -5,6 +5,7 @@ export const MOCK_DATASET_VERSION_STORAGE_KEY = 'pms:mock-dataset-version'
 // Explicit ownership prevents this refresh from deleting other apps on the same origin.
 const LOCAL_STORAGE_KEYS = new Set([
   'pms-projects',
+  'pms-transfer-store',
   'pms-hr-config',
   'pms-hr-machine',
   'pms-hr-tos',

@@ -165,10 +165,10 @@ import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '
 import { useTransferStore } from '@/stores/transfer'
 import { matchesTransferProject } from '@/lib/transferWorkflow'
 import { selectTechnicalProjectStage, useTechnicalPlanStore } from '@/stores/technicalPlan'
-import { resolvePermissionProjectId, usePermissionStore, useHasPermission } from '@/stores/permission'
+import { isGlobalAdmin, resolvePermissionProjectId, usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
-import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferSqaReview, TransferWorkbench } from '@/components/transfer/TransferModule'
+import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferMaintenanceSpmReview, TransferWorkbench } from '@/components/transfer/TransferModule'
 import RequirementDevPlan from '@/components/plans/RequirementDevPlan'
 import VersionTrainPlan, { INITIAL_VERSION_TRAIN_DATA } from '@/components/plans/VersionTrainPlan'
 import ProjectInfoModal, { type ProjectInfoSubmitPayload } from '@/components/project-info/ProjectInfoModal'
@@ -3270,6 +3270,7 @@ export default function ProjectSpaceContainer() {
     id: `login-${currentLoginUser}`,
     name: currentLoginUser,
     role: 'SPM' as const,
+    isAdmin: isGlobalAdmin(currentLoginUser),
     department: '-',
   }), [currentLoginUser])
   const transferProps = {
@@ -4795,7 +4796,7 @@ export default function ProjectSpaceContainer() {
             canEdit={canEditBasicInfo}
             canConfigure={canViewBasicInfo}
             onEdit={() => setShowProjectInfoEditor(true)}
-            onApplyTransfer={isWholeMachine ? () => transfer.setTransferView('apply') : undefined}
+            onApplyTransfer={() => navigateWithEditGuard(() => { transfer.setTmReopenAppId(null); transfer.setTransferView('apply') })}
             canApplyTransfer={canDo('basicInfo:applyTransfer')}
             afterCore={canDo('basicInfo:planConfigView') ? (isWholeMachine ? renderWholeMachinePlanInfo() : renderProjectPlanInfo()) : undefined}
             visibleGroupKeys={isTosVersionProject ? ['team'] : undefined}
@@ -4947,7 +4948,7 @@ export default function ProjectSpaceContainer() {
           </>
         )}
         {/* Transfer info */}
-        {isWholeMachine && canDo('basicInfo:transferView') && currentProjectTransferApps.length > 0 && (
+        {isTargetProject && canDo('basicInfo:transferView') && currentProjectTransferApps.length > 0 && (
           <Card
             id="section-transfer"
             style={{ marginBottom: 20, borderRadius: 8 }}
@@ -5684,9 +5685,9 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}
           {transfer.transferView === 'review' && <TransferReview {...transferProps} />}
-          {transfer.transferView === 'sqa-review' && <TransferSqaReview {...transferProps} />}
+          {transfer.transferView === 'maintenance-spm-review' && <TransferMaintenanceSpmReview {...transferProps} />}
           {transfer.transferView === null && projectSpaceModule === 'resources' && selectedProject && <ProjectResources project={selectedProject} />}
-          {transfer.transferView === null && projectSpaceModule === 'basic' && (
+          {(transfer.transferView === null || transfer.transferView === 'apply') && projectSpaceModule === 'basic' && (
             !canViewBasicInfo ? <Empty description="无基础信息查看权限" /> : isTechnicalProject && selectedProject
               ? <TechnicalProjectInformationView
                   project={selectedProject}

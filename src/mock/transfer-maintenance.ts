@@ -7,9 +7,9 @@ export type RoleNodeStatus = 'not_started' | 'in_progress' | 'completed' | 'reje
 export type EntryStatus = 'not_entered' | 'draft' | 'entered'
 export type AICheckStatus = 'not_started' | 'in_progress' | 'passed' | 'failed'
 export type ReviewStatus = 'not_reviewed' | 'reviewing' | 'passed' | 'rejected'
-export type PipelineStatus = 'in_progress' | 'completed' | 'cancelled'
-export type RoleType = 'SPM' | 'TPM' | 'SQA' | '底软' | '系统' | '影像'
-export type PipelineRole = 'SPM' | '测试' | '底软' | '系统' | '影像'
+export type PipelineStatus = 'in_progress' | 'completed' | 'cancelled' | 'failed'
+export type RoleType = string
+export type PipelineRole = string
 
 // ========== 核心接口 ==========
 
@@ -18,6 +18,7 @@ export interface TMTeamMember {
   name: string
   role: RoleType
   department: string
+  ipmRoleCode?: string
   avatar?: string
 }
 
@@ -36,7 +37,7 @@ export interface PipelineState {
   projectInit: PipelineNodeStatus
   dataEntry: PipelineNodeStatus
   maintenanceReview: PipelineNodeStatus
-  sqaReview: PipelineNodeStatus
+  maintenanceSpmReview: PipelineNodeStatus
   infoChange: PipelineNodeStatus
   roleProgress: RoleProgress[]
 }
@@ -51,6 +52,13 @@ export interface TransferApplication {
   plannedReviewDate: string
   remark: string
   status: PipelineStatus
+  projectType?: '整机产品项目' | 'tOS版本项目'
+  teamConfig?: { id: string; roleName: string; ipmRoleCode: string }[]
+  finalReviewRole?: string
+  templateVersionIds?: { checklist: string; review?: string }
+  predecessorId?: string
+  reopenedAsId?: string
+  failureReason?: string
   cancelReason?: string
   pipeline: PipelineState
   createdAt: string
@@ -67,7 +75,7 @@ export interface Deliverable {
 export interface CheckListItem {
   id: string
   applicationId: string
-  seq: number
+  seq: string | number
   type: string
   checkItem: string
   responsibleRole: PipelineRole
@@ -83,13 +91,16 @@ export interface CheckListItem {
   aiCheckResult?: string
   reviewStatus: ReviewStatus
   reviewComment?: string
-  delegatedTo?: string
+  reviewRemark?: string
+  delegatedTo?: string[]
+  reviewDelegatedTo?: string[]
 }
 
 export interface ReviewElement {
+  type?: string
   id: string
   applicationId: string
-  seq: number
+  seq: string | number
   standard: string
   description: string
   remark: string
@@ -106,10 +117,13 @@ export interface ReviewElement {
   aiCheckResult?: string
   reviewStatus: ReviewStatus
   reviewComment?: string
-  delegatedTo?: string
+  reviewRemark?: string
+  delegatedTo?: string[]
+  reviewDelegatedTo?: string[]
 }
 
 export interface BlockTask {
+  responsibleRole?: string
   id: string
   applicationId: string
   description: string
@@ -151,6 +165,7 @@ export interface CloseReviewRow {
 // ========== 配置中心模板接口（保留） ==========
 
 export interface CheckListTemplate {
+  seq?: string | number
   id: number
   type: string
   checkItem: string
@@ -161,6 +176,8 @@ export interface CheckListTemplate {
 }
 
 export interface ReviewElementTemplate {
+  seq?: string | number
+  type?: string
   id: number
   standard: string
   description: string
@@ -188,7 +205,7 @@ export interface VersionDiffItem {
 // 兼容旧代码 — TeamMember alias
 export type TeamMember = TMTeamMember
 
-// ========== 用户列表（15人） ==========
+// ========== 用户列表（9个唯一可登录身份） ==========
 
 export const MOCK_TM_USERS: TMTeamMember[] = [
   { id: 'u001', name: '演示用户01', role: 'SPM', department: '示例项目组' },
@@ -199,50 +216,43 @@ export const MOCK_TM_USERS: TMTeamMember[] = [
   { id: 'u006', name: '演示用户06', role: 'TPM', department: '示例测试组' },
   { id: 'u007', name: '演示用户07', role: 'SQA', department: '示例质量组' },
   { id: 'u008', name: '演示用户08', role: '底软', department: '示例底软组' },
-  { id: 'u009', name: '演示外协01', role: '底软', department: '示例底软组' },
-  { id: 'u010', name: '演示外协02', role: '底软', department: '示例底软组' },
-  { id: 'u011', name: '演示外协03', role: '系统', department: '示例系统组' },
-  { id: 'u012', name: '演示外协04', role: '系统', department: '示例系统组' },
-  { id: 'u013', name: '演示外协05', role: '系统', department: '示例系统组' },
-  { id: 'u014', name: '演示外协06', role: '影像', department: '示例影像组' },
-  { id: 'u015', name: '演示外协07', role: '影像', department: '示例影像组' },
+  { id: 'login-演示用户09', name: '演示用户09', role: '底软', department: '示例底软组' },
 ]
 
 // ========== 项目团队 ==========
+// Role belongs to the project-team assignment; identity always comes from the unique directory.
 
 const TEAM_1: ProjectTeam = {
   research: [
-    MOCK_TM_USERS[0],  // 演示用户01 SPM
-    MOCK_TM_USERS[3],  // 演示用户04 TPM
-    MOCK_TM_USERS[7],  // 演示用户08 底软
-    MOCK_TM_USERS[10], // 演示外协03 系统
-    MOCK_TM_USERS[13], // 演示外协06 影像
-    MOCK_TM_USERS[6],  // 演示用户07 SQA
+    { ...MOCK_TM_USERS[0], role: 'SPM' },
+    { ...MOCK_TM_USERS[3], role: 'TPM' },
+    { ...MOCK_TM_USERS[7], role: '底软' },
+    { ...MOCK_TM_USERS[4], role: '系统' },
+    { ...MOCK_TM_USERS[2], role: '影像' },
   ],
   maintenance: [
-    MOCK_TM_USERS[1],  // 演示用户02 SPM
-    MOCK_TM_USERS[4],  // 演示用户05 TPM
-    MOCK_TM_USERS[8],  // 演示外协01 底软
-    MOCK_TM_USERS[11], // 演示外协04 系统
-    MOCK_TM_USERS[14], // 演示外协07 影像
+    { ...MOCK_TM_USERS[1], role: 'SPM' },
+    { ...MOCK_TM_USERS[4], role: 'TPM' },
+    { ...MOCK_TM_USERS[8], role: '底软' },
+    { ...MOCK_TM_USERS[5], role: '系统' },
+    { ...MOCK_TM_USERS[3], role: '影像' },
   ],
 }
 
 const TEAM_2: ProjectTeam = {
   research: [
-    MOCK_TM_USERS[2],  // 演示用户03 SPM
-    MOCK_TM_USERS[5],  // 演示用户06 TPM
-    MOCK_TM_USERS[9],  // 演示外协02 底软
-    MOCK_TM_USERS[12], // 演示外协05 系统
-    MOCK_TM_USERS[14], // 演示外协07 影像
-    MOCK_TM_USERS[6],  // 演示用户07 SQA
+    { ...MOCK_TM_USERS[2], role: 'SPM' },
+    { ...MOCK_TM_USERS[5], role: 'TPM' },
+    { ...MOCK_TM_USERS[7], role: '底软' },
+    { ...MOCK_TM_USERS[6], role: '系统' },
+    { ...MOCK_TM_USERS[3], role: '影像' },
   ],
   maintenance: [
-    MOCK_TM_USERS[0],  // 演示用户01 SPM
-    MOCK_TM_USERS[3],  // 演示用户04 TPM
-    MOCK_TM_USERS[7],  // 演示用户08 底软
-    MOCK_TM_USERS[10], // 演示外协03 系统
-    MOCK_TM_USERS[13], // 演示外协06 影像
+    { ...MOCK_TM_USERS[0], role: 'SPM' },
+    { ...MOCK_TM_USERS[3], role: 'TPM' },
+    { ...MOCK_TM_USERS[7], role: '底软' },
+    { ...MOCK_TM_USERS[4], role: '系统' },
+    { ...MOCK_TM_USERS[2], role: '影像' },
   ],
 }
 
@@ -277,7 +287,7 @@ export const MOCK_TRANSFER_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'in_progress',
       maintenanceReview: 'not_started',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'not_started' },
@@ -304,7 +314,7 @@ export const MOCK_TRANSFER_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'success',
       maintenanceReview: 'in_progress',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'in_progress' },
@@ -331,7 +341,7 @@ export const MOCK_TRANSFER_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'success',
       maintenanceReview: 'success',
-      sqaReview: 'success',
+      maintenanceSpmReview: 'success',
       infoChange: 'success',
       roleProgress: [
         { role: 'SPM', entryStatus: 'completed', reviewStatus: 'completed' },
@@ -359,7 +369,7 @@ export const MOCK_TRANSFER_APPLICATIONS: TransferApplication[] = [
       projectInit: 'success',
       dataEntry: 'failed',
       maintenanceReview: 'not_started',
-      sqaReview: 'not_started',
+      maintenanceSpmReview: 'not_started',
       infoChange: 'not_started',
       roleProgress: [
         { role: 'SPM', entryStatus: 'in_progress', reviewStatus: 'not_started' },
@@ -375,8 +385,8 @@ export const MOCK_TRANSFER_APPLICATIONS: TransferApplication[] = [
 ]
 
 // ========== Pipeline 节点名 ==========
-const PIPELINE_NODES = ['项目发起', '资料录入', '维护审核', 'SQA审核', '信息变更']
-const PIPELINE_KEYS: (keyof Omit<PipelineState, 'roleProgress'>)[] = ['projectInit', 'dataEntry', 'maintenanceReview', 'sqaReview', 'infoChange']
+const PIPELINE_NODES = ['项目发起', '资料录入', '维护审核', '维护SPM审核', '信息变更']
+const PIPELINE_KEYS: (keyof Omit<PipelineState, 'roleProgress'>)[] = ['projectInit', 'dataEntry', 'maintenanceReview', 'maintenanceSpmReview', 'infoChange']
 
 // ========== CheckList 条目（基于 ta001） ==========
 
@@ -607,16 +617,16 @@ export const MOCK_REVIEW_ELEMENTS: ReviewElement[] = generateReviewElements('ta0
 export const MOCK_BLOCK_TASKS: BlockTask[] = [
   {
     id: 'bt001', applicationId: 'ta002', description: '系统模块接口文档版本不一致，Swagger文档未同步更新',
-    resolution: '需系统组更新Swagger文档并重新生成接口说明', responsiblePerson: '演示外协05', department: '示例系统组',
+    resolution: '需系统组更新Swagger文档并重新生成接口说明', responsiblePerson: '演示用户07', department: '示例系统组',
     deadline: '2026-03-28', status: 'open', createdAt: '2026-03-20 10:30:00',
   },
   {
     id: 'bt002', applicationId: 'ta002', description: '底软驱动兼容性测试在特定机型上失败',
-    resolution: '底软组排查驱动兼容问题，已定位到LCD驱动初始化时序', responsiblePerson: '演示外协02', department: '示例底软组',
+    resolution: '底软组排查驱动兼容问题，已定位到LCD驱动初始化时序', responsiblePerson: '演示用户08', department: '示例底软组',
     deadline: '2026-03-25', status: 'resolved', createdAt: '2026-03-18 14:00:00',
   },
   {
-    id: 'bt003', applicationId: 'ta002', description: 'SQA审核发现性能测试报告缺少压力测试场景',
+    id: 'bt003', applicationId: 'ta002', description: '维护SPM审核发现性能测试报告缺少压力测试场景',
     resolution: '测试组补充压力测试场景并重新出具报告', responsiblePerson: '演示用户06', department: '示例测试组',
     deadline: '2026-03-30', status: 'open', createdAt: '2026-03-22 09:15:00',
   },
@@ -627,7 +637,7 @@ export const MOCK_BLOCK_TASKS: BlockTask[] = [
 export const MOCK_LEGACY_TASKS: LegacyTask[] = [
   {
     id: 'lt001', applicationId: 'ta002', description: '旧版Camera HAL层接口需在MR1版本中迁移至新框架',
-    responsiblePerson: '演示外协06', department: '示例影像组', deadline: '2026-06-30', status: 'open', createdAt: '2026-03-20 11:00:00',
+    responsiblePerson: '演示用户03', department: '示例影像组', deadline: '2026-06-30', status: 'open', createdAt: '2026-03-20 11:00:00',
   },
   {
     id: 'lt002', applicationId: 'ta002', description: '底软电源管理模块历史遗留的唤醒延迟问题需后续优化',
@@ -642,15 +652,15 @@ export const MOCK_HISTORY: HistoryRecord[] = [
   { id: 'h002', applicationId: 'ta001', action: '录入', operator: '演示用户01', detail: 'SPM角色完成全部12项CheckList录入', timestamp: '2026-03-16 14:20:00' },
   { id: 'h003', applicationId: 'ta001', action: '录入', operator: '演示用户08', detail: '底软角色完成全部12项CheckList录入', timestamp: '2026-03-18 17:00:00' },
   { id: 'h004', applicationId: 'ta001', action: '录入', operator: '演示用户04', detail: '测试角色开始录入CheckList', timestamp: '2026-03-19 09:00:00' },
-  { id: 'h005', applicationId: 'ta001', action: '录入', operator: '演示外协03', detail: '系统角色开始录入CheckList，已完成4项', timestamp: '2026-03-20 10:30:00' },
+  { id: 'h005', applicationId: 'ta001', action: '录入', operator: '演示用户05', detail: '系统角色开始录入CheckList，已完成4项', timestamp: '2026-03-20 10:30:00' },
   { id: 'h006', applicationId: 'ta001', action: 'AI检查', operator: '系统', detail: 'AI智能检查发现2项不通过: 监控平台CPU指标、内存使用率偏高', timestamp: '2026-03-20 10:35:00' },
   { id: 'h007', applicationId: 'ta002', action: '创建', operator: '演示用户03', detail: '创建转维申请，计划评审日期: 2026-05-01', timestamp: '2026-02-20 10:00:00' },
   { id: 'h008', applicationId: 'ta002', action: '录入完成', operator: '系统', detail: '全部角色完成资料录入，流水线进入维护审核阶段', timestamp: '2026-03-10 16:00:00' },
   { id: 'h009', applicationId: 'ta002', action: '通过', operator: '演示用户05', detail: '测试角色维护审核通过', timestamp: '2026-03-15 11:00:00' },
-  { id: 'h010', applicationId: 'ta002', action: '通过', operator: '演示外协07', detail: '影像角色维护审核通过', timestamp: '2026-03-16 14:30:00' },
-  { id: 'h011', applicationId: 'ta002', action: '不通过', operator: '演示外协03', detail: '系统角色维护审核不通过: 接口文档版本不一致', timestamp: '2026-03-18 09:20:00' },
+  { id: 'h010', applicationId: 'ta002', action: '通过', operator: '演示用户04', detail: '影像角色维护审核通过', timestamp: '2026-03-16 14:30:00' },
+  { id: 'h011', applicationId: 'ta002', action: '不通过', operator: '演示用户05', detail: '系统角色维护审核不通过: 接口文档版本不一致', timestamp: '2026-03-18 09:20:00' },
   { id: 'h012', applicationId: 'ta003', action: '创建', operator: '演示用户01', detail: '创建转维申请', timestamp: '2026-01-10 08:00:00' },
-  { id: 'h013', applicationId: 'ta003', action: '通过', operator: '演示用户07', detail: 'SQA审核通过，转维流程完成', timestamp: '2026-03-01 17:30:00' },
+  { id: 'h013', applicationId: 'ta003', action: '通过', operator: '演示用户07', detail: '维护SPM审核通过，转维流程完成', timestamp: '2026-03-01 17:30:00' },
   { id: 'h014', applicationId: 'ta004', action: '创建', operator: '演示用户02', detail: '创建转维申请', timestamp: '2026-03-05 11:00:00' },
   { id: 'h015', applicationId: 'ta004', action: '关闭', operator: '演示用户02', detail: '项目延期，取消转维计划', timestamp: '2026-03-18 09:15:00' },
 ]
@@ -769,26 +779,30 @@ export function buildCloseReviewRows(
   checklistItems: CheckListItem[],
   reviewElements: ReviewElement[],
 ): CloseReviewRow[] {
-  const appCl = checklistItems.filter(c => c.applicationId === app.id)
-  const appRe = reviewElements.filter(r => r.applicationId === app.id)
+  const config = app.teamConfig ?? []
+  const roleConfig = (role: string) => config.find(row => row.roleName === role || row.ipmRoleCode === role)
+    ?? (role === '测试' || role === 'TPM' ? config.find(row => row.id === 'test' || row.roleName === '测试' || row.ipmRoleCode === 'TPM') : undefined)
+  // Resolve against this application's snapshot; later configuration changes must not alter its history.
+  const roleKey = (role: string) => roleConfig(role)?.id ?? (role === 'TPM' ? '测试' : role)
+  const appItems = [...checklistItems, ...(app.projectType === 'tOS版本项目' ? [] : reviewElements)]
+    .filter(item => item.applicationId === app.id)
 
   return app.pipeline.roleProgress.map(rp => {
-    const roleCl = appCl.filter(c => c.responsibleRole === rp.role)
-    const roleRe = appRe.filter(r => r.responsibleRole === rp.role)
-    const allItems = [...roleCl, ...roleRe]
-    const allPassed = allItems.every(item => item.reviewStatus === 'passed')
-    const anyFailed = allItems.some(item => item.reviewStatus === 'rejected')
-    const team = app.team.maintenance
-    const person = team.find(m => {
-      if (rp.role === 'SPM') return m.role === 'SPM'
-      if (rp.role === '测试') return m.role === 'TPM'
-      return m.role === rp.role
-    })
+    const key = roleKey(rp.role)
+    const allItems = appItems.filter(item => roleKey(item.responsibleRole) === key)
+    const allPassed = allItems.length > 0 && allItems.every(item => item.reviewStatus === 'passed')
+    const rejectedItems = allItems.filter(item => item.reviewStatus === 'rejected')
+    const person = app.team.maintenance.find(member => roleKey(member.role) === key)
+      ?? app.team.maintenance.find(member => member.ipmRoleCode && roleKey(member.ipmRoleCode) === key)
+    // Item review remarks take priority over the shared role opinion, as on the source final-review page.
+    const notes = [...new Set((rejectedItems.length > 0 ? rejectedItems : allItems)
+      .map(item => item.reviewRemark?.trim() || item.reviewComment?.trim())
+      .filter((comment): comment is string => Boolean(comment)))]
     return {
-      role: rp.role,
+      role: roleConfig(rp.role)?.roleName ?? rp.role,
       responsiblePerson: person?.name || '-',
-      conclusion: allItems.length === 0 ? 'N/A' : allPassed ? 'PASS' : anyFailed ? 'Fail' : 'N/A',
-      comment: '',
+      conclusion: allPassed ? 'PASS' : rejectedItems.length > 0 ? 'Fail' : 'N/A',
+      comment: notes.join('\n') || (rejectedItems.length > 0 ? '审核不通过' : allPassed ? '审核通过，资料完整' : 'N/A'),
     }
   })
 }

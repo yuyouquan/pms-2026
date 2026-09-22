@@ -5,7 +5,7 @@ import type { EnumTypeKey } from '@/types/enums'
 
 export type ConfigMenuTarget =
   | { module: 'plan'; projectType: (typeof PROJECT_TEMPLATE_TYPES)[number] }
-  | { module: 'transfer'; view: 'checklist' | 'review' }
+  | { module: 'transfer'; projectType: '整机产品项目' | 'tOS版本项目'; view: 'checklist' | 'review' | 'team' }
   | { module: 'enum'; enumType: EnumTypeKey }
   | { module: 'hrPipeline'; moduleKey: 'hrModel' | 'nonLaborSubject' | 'feeRate' }
 
@@ -31,8 +31,11 @@ export const CONFIG_MENU_GROUPS: ConfigMenuGroup[] = [
   {
     key: 'transfer', label: '转维材料模板配置',
     children: [
-      { key: 'transfer:checklist', label: '转维材料', target: { module: 'transfer', view: 'checklist' } },
-      { key: 'transfer:review', label: '评审要素', target: { module: 'transfer', view: 'review' } },
+      { key: 'transfer:整机产品项目:checklist', label: 'CheckList', target: { module: 'transfer', projectType: '整机产品项目', view: 'checklist' } },
+      { key: 'transfer:整机产品项目:review', label: '评审要素', target: { module: 'transfer', projectType: '整机产品项目', view: 'review' } },
+      { key: 'transfer:整机产品项目:team', label: '转维团队配置', target: { module: 'transfer', projectType: '整机产品项目', view: 'team' } },
+      { key: 'transfer:tOS版本项目:checklist', label: 'CheckList', target: { module: 'transfer', projectType: 'tOS版本项目', view: 'checklist' } },
+      { key: 'transfer:tOS版本项目:team', label: '转维团队配置', target: { module: 'transfer', projectType: 'tOS版本项目', view: 'team' } },
     ],
   },
   {
@@ -53,7 +56,7 @@ export function filterConfigMenu(query: string): ConfigMenuGroup[] {
   if (terms.length === 0) return CONFIG_MENU_GROUPS
   return CONFIG_MENU_GROUPS.flatMap(group => {
     const children = group.children.filter(child => {
-      const path = `${group.label} ${child.label}`.toLocaleLowerCase()
+      const path = `${group.label} ${child.target.module === 'transfer' ? child.target.projectType : ''} ${child.label}`.toLocaleLowerCase()
       return terms.every(term => path.includes(term))
     })
     return children.length ? [{ ...group, children }] : []

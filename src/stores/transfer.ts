@@ -1,7 +1,14 @@
 import { create } from 'zustand'
-import { seedTransferMaterials } from '@/lib/transferWorkflow'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
+import { hasGlobalPermission } from '@/stores/permission'
+import { createTransferTemplateVersions, getTransferRoleConfig, validateTransferTeamConfig, type TransferProjectType, type TransferTeamRole, type TransferTemplateVersions, type TransferTemplateKind, type TransferTemplateRow } from '@/lib/transferConfig'
+import { seedTransferMaterials, syncTransferPipeline } from '@/lib/transferWorkflow'
+import { getTransferAiCheckResult } from '@/lib/transferAiCheck'
 import {
   MOCK_TM_USERS,
+  MOCK_HISTORY,
+  type HistoryRecord,
   MOCK_TRANSFER_APPLICATIONS,
   MOCK_CHECKLIST_ITEMS,
   MOCK_REVIEW_ELEMENTS,
@@ -20,17 +27,22 @@ export interface TransferState {
   currentUser: typeof MOCK_TM_USERS[0]
 
   // View navigation
-  transferView: null | 'apply' | 'detail' | 'entry' | 'review' | 'sqa-review'
+  transferView: null | 'apply' | 'detail' | 'entry' | 'review' | 'maintenance-spm-review'
   selectedTransferAppId: string | null
 
   // Config center
-  transferConfigView: 'home' | 'checklist' | 'review'
+  transferConfigView: 'home' | 'checklist' | 'review' | 'team'
   tmConfigSearchText: string
   tmConfigSelectedVersion: string
   tmConfigDiffOpen: boolean
   tmConfigDiffFrom: string
   tmConfigDiffTo: string
 
+  transferProjectType: TransferProjectType
+  tmTeamConfigs: Record<TransferProjectType, TransferTeamRole[]>
+  tmTemplateVersions: TransferTemplateVersions
+  tmHistory: HistoryRecord[]
+  tmReopenAppId: string | null
   // Data
   transferApplications: TransferApplication[]
   tmChecklistItems: CheckListItem[]
@@ -81,12 +93,18 @@ export interface TransferState {
 }
 
 export interface TransferActions {
+  setTransferProjectType: (kind: TransferProjectType) => void
+  setTmHistory: (v: HistoryRecord[] | ((previous: HistoryRecord[]) => HistoryRecord[])) => void
+  setTmReopenAppId: (id: string | null) => void
+  saveTransferTeamConfig: (kind: TransferProjectType, roles: TransferTeamRole[], actor: string) => string[]
+  importTransferTemplate: (kind: TransferProjectType, templateKind: TransferTemplateKind, rows: TransferTemplateRow[], actor: string) => boolean
+
   setCurrentUser: (v: typeof MOCK_TM_USERS[0]) => void
 
-  setTransferView: (v: null | 'apply' | 'detail' | 'entry' | 'review' | 'sqa-review') => void
+  setTransferView: (v: null | 'apply' | 'detail' | 'entry' | 'review' | 'maintenance-spm-review') => void
   setSelectedTransferAppId: (v: string | null) => void
 
-  setTransferConfigView: (v: 'home' | 'checklist' | 'review') => void
+  setTransferConfigView: (v: 'home' | 'checklist' | 'review' | 'team') => void
   setTmConfigSearchText: (v: string) => void
   setTmConfigSelectedVersion: (v: string) => void
   setTmConfigDiffOpen: (v: boolean) => void
@@ -167,7 +185,12 @@ const VIEW_TRANSIENT_DEFAULTS = {
 
 const additionalMaterials = MOCK_TRANSFER_APPLICATIONS.filter(app => !MOCK_CHECKLIST_ITEMS.some(item => item.applicationId === app.id)).map(seedTransferMaterials)
 
-export const useTransferStore = create<TransferState & TransferActions>()((set) => ({
+export const useTransferStore = create<TransferState & TransferActions>()(persist((set, get) => ({
+  transferProjectType: '整机产品项目',
+  tmTeamConfigs: { '整机产品项目': getTransferRoleConfig('整机产品项目'), 'tOS版本项目': getTransferRoleConfig('tOS版本项目') },
+  tmTemplateVersions: createTransferTemplateVersions(),
+  tmHistory: MOCK_HISTORY,
+  tmReopenAppId: null,
   // Current user
   currentUser: MOCK_TM_USERS[0],
 
@@ -231,6 +254,37 @@ export const useTransferStore = create<TransferState & TransferActions>()((set) 
   tmSqaModalOpen: false,
   tmSqaAction: 'approve',
 
+  setTransferProjectType: kind => set({ transferProjectType: kind, transferConfigView: 'checklist', tmConfigSearchText: '', tmConfigSelectedVersion: '', tmConfigDiffOpen: false }),
+  setTmHistory: value => set(state => ({ tmHistory: typeof value === 'function' ? value(state.tmHistory) : value })),
+  setTmReopenAppId: id => set({ tmReopenAppId: id }),
+  saveTransferTeamConfig: (kind, roles, actor) => {
+    if (!hasGlobalPermission(actor, 'configCenter:transferEdit')) return ['暂无转维配置编辑权限']
+    const errors = validateTransferTeamConfig(roles)
+    const current = get(), previous = current.tmTeamConfigs[kind]
+    const removed = previous.filter(role => !roles.some(next => next.id === role.id))
+    const used = [...(current.tmTemplateVersions[kind].checklist.at(-1)?.rows ?? []), ...(current.tmTemplateVersions[kind].review.at(-1)?.rows ?? [])]
+    removed.forEach(role => { if (used.some(row => [row.responsibleRole, row.entryRole.replace(/^在研/, ''), row.reviewRole.replace(/^维护/, '')].includes(role.roleName))) errors.push(`角色“${role.roleName}”仍被当前模板使用，请先调整模板`) })
+    if (errors.length) return errors
+    const normalized = roles.map(role => ({ ...role, roleName: role.roleName.trim(), ipmRoleCode: role.ipmRoleCode.trim() }))
+    const rename = (name: string) => { const old = previous.find(role => role.roleName === name); return normalized.find(role => role.id === old?.id)?.roleName ?? name }
+    const versions = { ...current.tmTemplateVersions[kind] }
+    for (const templateKind of ['checklist', 'review'] as const) {
+      const latest = versions[templateKind].at(-1)
+      if (!latest) continue
+      const rows = latest.rows.map(row => ({ ...row, responsibleRole: rename(row.responsibleRole), entryRole: `在研${rename(row.entryRole.replace(/^在研/, ''))}`, reviewRole: `维护${rename(row.reviewRole.replace(/^维护/, ''))}` }))
+      if (JSON.stringify(rows) !== JSON.stringify(latest.rows)) versions[templateKind] = [...versions[templateKind], { ...latest, id: `${kind}-${templateKind}-${Date.now()}`, version: `v${versions[templateKind].length + 1}.0`, date: new Date().toISOString(), createdBy: actor, rows }]
+    }
+    set({ tmTeamConfigs: { ...current.tmTeamConfigs, [kind]: normalized }, tmTemplateVersions: { ...current.tmTemplateVersions, [kind]: versions } })
+    return []
+  },
+  importTransferTemplate: (kind, templateKind, rows, actor) => {
+    if (!hasGlobalPermission(actor, 'configCenter:transferEdit') || (kind === 'tOS版本项目' && templateKind === 'review') || !rows.length) return false
+    const versions = get().tmTemplateVersions, previous = versions[kind][templateKind]
+    const snapshot = { id: `${kind}-${templateKind}-${Date.now()}`, version: `v${previous.length + 1}.0`, kind: templateKind, date: new Date().toISOString(), createdBy: actor, rows: structuredClone(rows) }
+    set({ tmTemplateVersions: { ...versions, [kind]: { ...versions[kind], [templateKind]: [...previous, snapshot] } }, tmConfigSelectedVersion: snapshot.id })
+    return true
+  },
+
   // ─── Setters ─────────────────────────────────────────────────────
   setCurrentUser: (v) => set({ currentUser: v }),
 
@@ -283,4 +337,26 @@ export const useTransferStore = create<TransferState & TransferActions>()((set) 
   setTmSqaComment: (v) => set({ tmSqaComment: v }),
   setTmSqaModalOpen: (v) => set({ tmSqaModalOpen: v }),
   setTmSqaAction: (v) => set({ tmSqaAction: v }),
+}), {
+  name: 'pms-transfer-store', storage: createJSONStorage(() => pmsLocalStorage), skipHydration: true,
+  partialize: state => ({ tmTeamConfigs: state.tmTeamConfigs, tmTemplateVersions: state.tmTemplateVersions, transferApplications: state.transferApplications, tmChecklistItems: state.tmChecklistItems, tmReviewElements: state.tmReviewElements, tmBlockTasks: state.tmBlockTasks, tmLegacyTasks: state.tmLegacyTasks, tmHistory: state.tmHistory }),
 }))
+let hydration: Promise<void> | undefined
+/** A reload drops browser timers; finish saved mock checks instead of leaving them stuck forever. */
+export function resumeTransferAiChecks(): void {
+  useTransferStore.setState(state => {
+    const activeIds = new Set(state.transferApplications.filter(app => app.status === 'in_progress' && app.pipeline.maintenanceSpmReview !== 'success').map(app => app.id))
+    let changed = false
+    const finish = <T extends CheckListItem | ReviewElement>(item: T): T => {
+      if (!activeIds.has(item.applicationId) || item.entryStatus !== 'entered' || item.aiCheckStatus !== 'in_progress') return item
+      changed = true
+      return { ...item, ...getTransferAiCheckResult() }
+    }
+    const checklist = state.tmChecklistItems.map(finish), review = state.tmReviewElements.map(finish)
+    return changed ? { tmChecklistItems: checklist, tmReviewElements: review, transferApplications: state.transferApplications.map(app => syncTransferPipeline(app, checklist, review)) } : state
+  })
+}
+export function rehydrateTransferStore(): Promise<void> {
+  if (!hydration) hydration = Promise.resolve(useTransferStore.persist.rehydrate()).then(resumeTransferAiChecks)
+  return hydration
+}
