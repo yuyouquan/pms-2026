@@ -9721,3 +9721,6 @@ input.ant-input,
 .pms-dashboard-filters .ant-picker-range { width: 258px; }
 .pms-dashboard-lock-state { border-radius: 5px; padding: 2px 5px; font-size: 10px; white-space: nowrap; color: var(--pms-text-secondary); background: #f1f0f5; }
 .pms-dashboard-lock-state.is-locked { color: var(--pms-brand-strong); background: #eee8ff; }
+
+.pms-dashboard-official-version { font-size: 11px; color: var(--pms-brand-strong); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pms-dashboard-metric-heading h3 { flex-shrink: 0; }
