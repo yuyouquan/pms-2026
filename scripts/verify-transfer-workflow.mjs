@@ -1,168 +1,285 @@
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import path from 'node:path'
-import vm from 'node:vm'
-import ts from 'typescript'
 import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
+// Real stores and business helpers; browser interactions are verified separately.
 const root = process.cwd()
-const { useTransferStore } = loadTypeScriptModule(root, 'src/stores/transfer.ts')
-const mock = loadTypeScriptModule(root, 'src/mock/transfer-maintenance.ts')
-const jsx = (type, props) => ({ type, props: props || {} })
-const source = fs.readFileSync(path.join(root, 'src/components/transfer/TransferModule.tsx'), 'utf8')
-const output = ts.transpileModule(source, { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText
-const module = { exports: {} }
-const requireModule = name => {
-  if (name === 'react') return { Fragment: 'Fragment', useEffect: () => {} }
-  if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx, Fragment: 'Fragment' }
-  if (name === 'antd') return new Proxy({ message: { warning() {}, success() {}, error() {} } }, { get: (target, key) => target[key] || key })
-  if (name === '@ant-design/icons') return new Proxy({}, { get: (_, key) => key })
-  if (name.includes('CollapsibleWorkspace')) return { ConfigWorkspaceShell: 'ConfigWorkspaceShell' }
-  if (name.startsWith('@/')) return loadTypeScriptModule(root, `src/${name.slice(2)}.ts`)
-  throw new Error(name)
-}
-vm.runInThisContext(`(function(require,module,exports){${output}\n})`)(requireModule, module, module.exports)
-const components = module.exports
-const allNodes = element => !element || typeof element !== 'object' ? [] : [element, ...[element.props?.children, element.props?.footer].flat(Infinity).flatMap(allNodes)]
-const button = (tree, label) => allNodes(tree).find(node => node.type === 'Button' && node.props.children === label)
-const propsFor = (app, user = '演示用户01') => {
-  const props = { ...useTransferStore.getState(), selectedProject: { id: app.projectId, name: app.projectName }, currentUser: { id: `login-${user}`, name: user }, canApplyTransfer: true, canViewTransfer: true, setProjectSpaceModule() {} }
-  for (const key of Object.keys(useTransferStore.getState()).filter(key => key !== 'currentUser')) Object.defineProperty(props, key, { get: () => useTransferStore.getState()[key], configurable: true })
-  useTransferStore.getState().setSelectedTransferAppId(app.id)
-  return props
-}
-const initial = useTransferStore.getState()
+const { useTransferStore, resumeTransferAiChecks, upgradeTransferMockDefaults } = loadTypeScriptModule(root, 'src/stores/transfer.ts')
+const { usePermissionStore, hasGlobalPermission } = loadTypeScriptModule(root, 'src/stores/permission.ts')
+const config = loadTypeScriptModule(root, 'src/lib/transferConfig.ts')
+const flow = loadTypeScriptModule(root, 'src/lib/transferWorkflow.ts')
+const { getTransferRoleSubmission } = loadTypeScriptModule(root, 'src/components/transfer/transferInteraction.ts')
+const { MOCK_TRANSFER_APPLICATIONS } = loadTypeScriptModule(root, 'src/mock/transfer-maintenance.ts')
+const { mapTransferOwnerToPmsUser } = loadTypeScriptModule(root, 'src/lib/todoAggregation.ts')
+const whole = '整机产品项目', tos = 'tOS版本项目', editor = '演示用户01', viewer = '演示用户05'
+const person = name => ({ id: `login-${name}`, name })
+const actor = person(editor), reviewer = person('演示用户02'), outsider = person(viewer)
+const project = { id: 'regression-project', name: '转维业务回归项目' }
+const foreignProject = { id: 'another-project', name: project.name }
+const cloneState = state => Object.fromEntries(Object.entries(state).map(([key, value]) => [key, typeof value === 'function' ? value : structuredClone(value)]))
+const initialTransfer = cloneState(useTransferStore.getState()), initialPermission = cloneState(usePermissionStore.getState())
+const state = () => useTransferStore.getState()
+const snapshot = () => structuredClone({ teams: state().tmTeamConfigs, versions: state().tmTemplateVersions })
 const failures = []
-function check(name, fn) { try { useTransferStore.setState(initial, true); fn(); console.log(`PASS ${name}`) } catch (error) { failures.push(name); console.error(`FAIL ${name}: ${error.message}`) } }
+let checks = 0
+function check(name, fn) {
+  checks++
+  try {
+    useTransferStore.setState(cloneState(initialTransfer), true)
+    usePermissionStore.setState(cloneState(initialPermission), true)
+    usePermissionStore.setState({
+      globalRoles: [{ name: '转维回归编辑组', members: [editor], isFixed: false }, { name: '转维回归查看组', members: [viewer], isFixed: false }],
+      globalRolePerms: { '转维回归编辑组': { 'configCenter:transferEdit': true }, '转维回归查看组': { 'configCenter:transferEdit': false } },
+    })
+    fn(); console.log(`PASS ${name}`)
+  } catch (error) { failures.push(name); console.error(`FAIL ${name}: ${error.stack || error.message}`) }
+}
+function templateRows(kind, projectType = whole) {
+  return config.parseTransferTemplateRows([
+    config.TRANSFER_TEMPLATE_HEADERS[kind],
+    kind === 'checklist'
+      ? ['A.01', '回归检查标准', '检查项', 'SPM', '在研SPM', '维护SPM', '资料完整']
+      : ['B.01', '回归评审要素', '交付件', '说明', '备注', 'SPM', '在研SPM', '维护SPM', '核对内容'],
+  ], kind, state().tmTeamConfigs[projectType])
+}
+check('tOS mock defaults contain only SPM and TPM with matching material responsibilities', () => {
+  assert.deepEqual(state().tmTeamConfigs[tos].map(role => [role.roleName, role.ipmRoleCode]), [['SPM', 'SPM'], ['TPM', 'TPM']])
+  const templates = config.getCurrentTransferTemplates(tos, state().tmTemplateVersions)
+  assert.deepEqual([...new Set(templates.checklist.map(row => row.responsibleRole))].sort(), ['SPM', 'TPM'])
+  assert.ok(templates.checklist.every(row => row.entryRole === `在研${row.responsibleRole}` && row.reviewRole === `维护${row.responsibleRole}`))
+  assert.equal(templates.reviewElements.length, 0)
+  assert.equal(state().tmTeamConfigs[whole].length, 5)
+})
+check('legacy default refresh preserves whole-product data, existing applications and customized configuration', () => {
+  const original = cloneState(state())
+  useTransferStore.setState({ tmTeamConfigs: { ...state().tmTeamConfigs, [tos]: config.getTransferRoleConfig(whole) }, tmTemplateVersions: { ...state().tmTemplateVersions, [tos]: { checklist: [{ ...state().tmTemplateVersions[tos].checklist[0], rows: structuredClone(state().tmTemplateVersions[whole].checklist[0].rows) }], review: [] } } })
+  upgradeTransferMockDefaults()
+  assert.deepEqual(state().tmTeamConfigs[tos], original.tmTeamConfigs[tos])
+  assert.deepEqual(state().tmTemplateVersions[tos], original.tmTemplateVersions[tos])
+  assert.deepEqual(state().tmTemplateVersions[whole], original.tmTemplateVersions[whole])
+  assert.deepEqual(state().transferApplications, original.transferApplications)
+  const custom = [{ id: 'spm', roleName: '版本负责人', ipmRoleCode: 'VERSION_PM' }]
+  useTransferStore.setState({ tmTeamConfigs: { ...state().tmTeamConfigs, [tos]: custom } })
+  upgradeTransferMockDefaults()
+  assert.deepEqual(state().tmTeamConfigs[tos], custom)
+  useTransferStore.setState({ tmTeamConfigs: { ...state().tmTeamConfigs, [tos]: config.getTransferRoleConfig(whole) }, tmTemplateVersions: { ...state().tmTemplateVersions, [tos]: { ...state().tmTemplateVersions[tos], checklist: [{ ...state().tmTemplateVersions[tos].checklist[0], createdBy: editor }] } } })
+  const imported = snapshot()
+  upgradeTransferMockDefaults()
+  assert.deepEqual(snapshot(), imported)
+})
+function application(projectType = whole) {
+  return {
+    ...structuredClone(MOCK_TRANSFER_APPLICATIONS[0]), id: 'regression-application', projectId: project.id, projectName: project.name,
+    projectType, applicantId: actor.id, applicant: actor.name, status: 'in_progress', finalReviewRole: 'SPM',
+    teamConfig: [{ id: 'spm', roleName: 'SPM', ipmRoleCode: 'SPM' }],
+    team: { research: [{ ...actor, role: 'SPM', ipmRoleCode: 'SPM' }], maintenance: [{ ...reviewer, role: 'SPM', ipmRoleCode: 'SPM' }] },
+    pipeline: { projectInit: 'success', dataEntry: 'in_progress', maintenanceReview: 'not_started', maintenanceSpmReview: 'not_started', infoChange: 'not_started', roleProgress: [{ role: 'SPM', entryStatus: 'not_started', reviewStatus: 'not_started' }] },
+  }
+}
+const material = app => flow.createTransferMaterials(app, { checklist: templateRows('checklist'), reviewElements: templateRows('review') })
 
-check('unauthorized actor cannot save a stale entry dialog', () => {
-  const app = mock.MOCK_TRANSFER_APPLICATIONS[0]
-  const props = propsFor(app)
-  const item = props.tmChecklistItems.find(item => item.responsibleRole === 'SPM')
-  props.setTmEntryModalRecord({ ...item, _tab: 'checklist', _actorId: 'login-演示用户01' })
-  props.setTmEntryContent('unauthorized overwrite')
-  props.setTmEntryModalOpen(true)
-  props.currentUser = { id: 'login-演示用户03', name: '演示用户03' }
-  button(components.TransferEntry(props), '确认提交')?.props.onClick()
-  assert.notEqual(props.tmChecklistItems.find(row => row.id === item.id).entryContent, 'unauthorized overwrite')
+check('template imports append immutable versions and isolate project types and template kinds', () => {
+  const before = snapshot(), rows = templateRows('checklist')
+  assert.equal(hasGlobalPermission(editor, 'configCenter:transferEdit'), true)
+  assert.equal(state().importTransferTemplate(whole, 'checklist', rows, editor), true)
+  const versions = state().tmTemplateVersions[whole].checklist
+  assert.equal(versions.length, before.versions[whole].checklist.length + 1)
+  assert.deepEqual(versions.slice(0, -1), before.versions[whole].checklist)
+  assert.deepEqual(versions.at(-1).rows, rows)
+  assert.equal(versions.at(-1).createdBy, editor)
+  assert.equal(versions.at(-1).version, `v${versions.length}.0`)
+  assert.equal(state().tmConfigSelectedVersion, versions.at(-1).id)
+  rows[0].checkItem = 'caller mutation must not alter published content'
+  assert.equal(versions.at(-1).rows[0].checkItem, '回归检查标准')
+  assert.deepEqual(state().tmTemplateVersions[tos], before.versions[tos])
+  assert.deepEqual(state().tmTemplateVersions[whole].review, before.versions[whole].review)
+  const wholeAfter = structuredClone(state().tmTemplateVersions[whole])
+  assert.equal(state().importTransferTemplate(tos, 'checklist', templateRows('checklist', tos), editor), true)
+  assert.deepEqual(state().tmTemplateVersions[whole], wholeAfter)
+  assert.equal(config.getCurrentTransferTemplates(tos, state().tmTemplateVersions).reviewElements.length, 0)
 })
-check('application change closes and clears pending record', () => {
-  const store = useTransferStore.getState()
-  store.setSelectedTransferAppId('ta001'); store.setTransferView('entry')
-  store.setTmEntryModalRecord({ id: 'old', applicationId: 'ta001' }); store.setTmEntryModalOpen(true)
-  store.setSelectedTransferAppId('ta002')
-  assert.equal(useTransferStore.getState().tmEntryModalOpen, false)
-  assert.equal(useTransferStore.getState().tmEntryModalRecord, null)
+check('unauthorized, revoked, empty and tOS review imports cannot publish versions', () => {
+  const before = snapshot(), rows = templateRows('checklist')
+  assert.equal(state().importTransferTemplate(whole, 'checklist', rows, viewer), false)
+  assert.equal(state().importTransferTemplate(whole, 'checklist', rows, ''), false)
+  assert.equal(state().importTransferTemplate(tos, 'review', templateRows('review'), editor), false)
+  assert.equal(state().importTransferTemplate(whole, 'checklist', [], editor), false)
+  usePermissionStore.setState({ globalRolePerms: { '转维回归编辑组': { 'configCenter:transferEdit': false } } })
+  assert.equal(state().importTransferTemplate(whole, 'checklist', rows, editor), false)
+  assert.deepEqual(snapshot(), before)
 })
-check('apply permission is checked at submit', () => {
-  const props = propsFor(mock.MOCK_TRANSFER_APPLICATIONS[0]); props.canApplyTransfer = false
-  props.setTmApplyDate('2026-09-09'); const count = props.transferApplications.length
-  button(components.TransferApply(props), '提交申请')?.props.onClick()
-  assert.equal(props.transferApplications.length, count)
+check('team rename updates current templates while preserving history and existing applications', () => {
+  const before = snapshot()
+  const apps = structuredClone(state().transferApplications), checklist = structuredClone(state().tmChecklistItems), reviewElements = structuredClone(state().tmReviewElements)
+  const roles = before.teams[whole].map(role => role.id === 'spm' ? { ...role, roleName: ' 版本负责人 ', ipmRoleCode: ' VERSION_PM ' } : role)
+  assert.deepEqual(state().saveTransferTeamConfig(whole, roles, editor), [])
+  assert.deepEqual(state().tmTeamConfigs[whole].find(role => role.id === 'spm'), { id: 'spm', roleName: '版本负责人', ipmRoleCode: 'VERSION_PM' })
+  for (const kind of ['checklist', 'review']) {
+    const oldVersions = before.versions[whole][kind], newVersions = state().tmTemplateVersions[whole][kind]
+    assert.equal(newVersions.length, oldVersions.length + 1)
+    assert.deepEqual(newVersions.slice(0, -1), oldVersions)
+    assert.deepEqual(newVersions.at(-1).rows, oldVersions.at(-1).rows.map(row => ({
+      ...row, responsibleRole: row.responsibleRole === 'SPM' ? '版本负责人' : row.responsibleRole,
+      entryRole: row.entryRole === '在研SPM' ? '在研版本负责人' : row.entryRole,
+      reviewRole: row.reviewRole === '维护SPM' ? '维护版本负责人' : row.reviewRole,
+    })))
+  }
+  assert.deepEqual(state().tmTeamConfigs[tos], before.teams[tos])
+  assert.deepEqual(state().tmTemplateVersions[tos], before.versions[tos])
+  assert.deepEqual(state().transferApplications, apps)
+  assert.deepEqual(state().tmChecklistItems, checklist)
+  assert.deepEqual(state().tmReviewElements, reviewElements)
 })
-check('new application contains its own template rows with team assignment', () => {
-  const props = propsFor(mock.MOCK_TRANSFER_APPLICATIONS[0])
-  props.setTmApplyDate('2026-09-09'); props.setTmApplyTeam(mock.MOCK_TM_TEAMS.TEAM_2)
-  button(components.TransferApply(props), '提交申请')?.props.onClick()
-  const app = props.transferApplications[0]
-  assert.ok(props.tmChecklistItems.some(row => row.applicationId === app.id))
-  const item = props.tmChecklistItems.find(row => row.applicationId === app.id && row.responsibleRole === 'SPM')
-  assert.equal(item.entryPersonId, mock.MOCK_TM_TEAMS.TEAM_2.research.find(member => member.role === 'SPM').id)
+check('team save rejects unauthorized users, revoked grants and invalid roles without partial changes', () => {
+  const before = snapshot(), roles = structuredClone(before.teams[whole])
+  const renamed = roles.map(role => role.id === 'spm' ? { ...role, roleName: '无权保存的名称' } : role)
+  assert.ok(state().saveTransferTeamConfig(whole, renamed, viewer).length > 0)
+  assert.ok(state().saveTransferTeamConfig(whole, roles.filter(role => role.id !== 'spm'), editor).length > 0)
+  assert.ok(state().saveTransferTeamConfig(whole, roles.map(role => ({ ...role, roleName: '重复角色' })), editor).length > 0)
+  assert.ok(state().saveTransferTeamConfig(whole, roles.filter(role => role.id !== 'test'), editor).length > 0)
+  usePermissionStore.setState({ globalRolePerms: {} })
+  assert.ok(state().saveTransferTeamConfig(whole, renamed, editor).length > 0)
+  assert.deepEqual(snapshot(), before)
 })
-check('SQA confirmation updates the application pipeline', () => {
-  const app = { ...mock.MOCK_TRANSFER_APPLICATIONS[0], pipeline: { ...mock.MOCK_TRANSFER_APPLICATIONS[0].pipeline, dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' } }
-  const props = propsFor(app, '演示用户07'); props.setTransferApplications([app]); props.setTmSqaModalOpen(true)
-  const modal = allNodes(components.TransferSqaReview(props)).find(node => node.type === 'Modal')
-  modal?.props.onOk()
-  assert.equal(props.transferApplications[0].pipeline.sqaReview, 'success')
-  assert.equal(props.transferApplications[0].pipeline.infoChange, 'in_progress')
+check('configuration project switch clears view selections without changing published data', () => {
+  const before = snapshot()
+  state().setTransferConfigView('review'); state().setTmConfigSearchText('旧搜索')
+  state().setTmConfigSelectedVersion('old-version'); state().setTmConfigDiffOpen(true)
+  state().setTransferProjectType(tos)
+  assert.equal(state().transferProjectType, tos)
+  assert.equal(state().transferConfigView, 'checklist')
+  assert.equal(state().tmConfigSearchText, '')
+  assert.equal(state().tmConfigSelectedVersion, '')
+  assert.equal(state().tmConfigDiffOpen, false)
+  assert.deepEqual(snapshot(), before)
 })
-check('another application record and current project mismatch cannot be submitted', () => {
-  const props = propsFor(mock.MOCK_TRANSFER_APPLICATIONS[1])
-  const oldItem = props.tmChecklistItems.find(item => item.applicationId === 'ta001')
-  props.setTmEntryModalRecord({ ...oldItem, _tab: 'checklist', _actorId: props.currentUser.id })
-  props.setTmEntryContent('cross application overwrite')
-  button(components.TransferEntry(props), '确认提交')?.props.onClick()
-  assert.notEqual(props.tmChecklistItems.find(item => item.id === oldItem.id).entryContent, 'cross application overwrite')
-  props.selectedProject = { id: 'different-project', name: 'different-project' }
-  assert.equal(allNodes(components.TransferDetail(props)).some(node => node.type === 'Table'), false)
+check('entry and review require correct owner or delegate, application, project and readiness', () => {
+  const app = application(), item = material(app).checklist[0]
+  assert.equal(flow.canEnterTransferItem(app, item, actor, project), true)
+  assert.equal(flow.canEnterTransferItem(app, item, outsider, project), false)
+  assert.equal(flow.canEnterTransferItem(app, item, actor, foreignProject), false)
+  assert.equal(flow.canEnterTransferItem(app, { ...item, applicationId: 'another-application' }, actor, project), false)
+  assert.equal(flow.canEnterTransferItem(app, { ...item, delegatedTo: [outsider.id] }, outsider, project), true)
+  const reviewing = { ...app, pipeline: { ...app.pipeline, maintenanceReview: 'in_progress' } }
+  const submitted = { ...item, entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'reviewing' }
+  assert.equal(flow.canReviewTransferItem(reviewing, submitted, reviewer, project), true)
+  assert.equal(flow.canReviewTransferItem(reviewing, submitted, actor, project), false)
+  assert.equal(flow.canReviewTransferItem(reviewing, submitted, reviewer, foreignProject), false)
+  assert.equal(flow.canReviewTransferItem(reviewing, { ...submitted, applicationId: 'another-application' }, reviewer, project), false)
+  assert.equal(flow.canReviewTransferItem(reviewing, { ...submitted, aiCheckStatus: 'in_progress' }, reviewer, project), false)
+  assert.equal(flow.canReviewTransferItem(reviewing, { ...submitted, reviewDelegatedTo: [outsider.id] }, outsider, project), true)
+  assert.equal(flow.canReviewTransferItem(app, submitted, reviewer, project), false)
 })
-check('the last entry and review advance only their application and reset old review results', () => {
-  const app = structuredClone(mock.MOCK_TRANSFER_APPLICATIONS[0])
-  const props = propsFor(app)
-  const original = props.tmChecklistItems.find(item => item.applicationId === app.id && item.responsibleRole === 'SPM')
-  const target = { ...original, entryStatus: 'draft', aiCheckStatus: 'not_started', reviewStatus: 'rejected', reviewComment: 'old rejection' }
-  const unrelated = { ...original, id: 'other', applicationId: 'other-app' }
-  props.setTmChecklistItems([target, unrelated]); props.setTmReviewElements([])
-  props.setTmEntryModalRecord({ ...target, _tab: 'checklist', _actorId: props.currentUser.id })
-  props.setTmEntryContent('corrected content')
-  button(components.TransferEntry(props), '确认提交').props.onClick()
-  assert.equal(props.tmChecklistItems[0].reviewStatus, 'not_reviewed')
-  assert.equal(props.tmChecklistItems[0].reviewComment, undefined)
-  assert.equal(props.tmChecklistItems[1], unrelated)
-  assert.equal(props.transferApplications.find(row => row.id === app.id).pipeline.maintenanceReview, 'in_progress')
-  props.currentUser = { id: 'login-演示用户02', name: '演示用户02' }
-  props.setTmReviewRecord({ ...props.tmChecklistItems[0], _tab: 'checklist', _actorId: props.currentUser.id })
-  props.setTmReviewAction('pass')
-  allNodes(components.TransferReview(props)).find(node => node.type === 'Modal').props.onOk()
-  const updated = props.transferApplications.find(row => row.id === app.id)
-  assert.equal(updated.pipeline.maintenanceReview, 'success')
-  assert.equal(updated.pipeline.sqaReview, 'in_progress')
+check('all material approvals start maintenance SPM review and ignore unrelated applications', () => {
+  const app = application(), materials = material(app)
+  const ready = item => ({ ...item, entryStatus: 'entered', aiCheckStatus: 'passed', reviewStatus: 'passed' })
+  const checklist = materials.checklist.map(ready), reviewElements = materials.reviewElements.map(ready)
+  const foreign = { ...checklist[0], id: 'unrelated', applicationId: 'another-application', reviewStatus: 'rejected' }
+  const next = flow.syncTransferPipeline(app, [...checklist, foreign], reviewElements)
+  assert.equal(next.pipeline.dataEntry, 'success')
+  assert.equal(next.pipeline.maintenanceReview, 'success')
+  assert.equal(next.pipeline.maintenanceSpmReview, 'in_progress')
+  assert.equal(next.pipeline.infoChange, 'not_started')
+  assert.equal(app.pipeline.maintenanceSpmReview, 'not_started')
+  const access = flow.getMaintenanceSpmReviewAccess(next, reviewer, project)
+  assert.equal(access.canApprove, true); assert.equal(access.canReject, true)
+  assert.equal(flow.canEditTransferLegacy(next, reviewer, project), true)
+  assert.equal(flow.getMaintenanceSpmReviewAccess(next, actor, project).canApprove, false)
+  assert.equal(flow.getMaintenanceSpmReviewAccess(next, reviewer, foreignProject).canReject, false)
+  assert.equal(flow.canEditTransferLegacy(next, outsider, project), false)
+  const tosApp = application(tos)
+  assert.equal(material(tosApp).reviewElements.length, 0)
+  assert.equal(flow.syncTransferPipeline(tosApp, checklist, [{ ...reviewElements[0], reviewStatus: 'rejected' }]).pipeline.maintenanceSpmReview, 'in_progress')
 })
-check('team assignment and item readiness protect maintenance review', () => {
-  const { canEnterTransferItem, canReviewTransferItem, canSqaReviewTransfer, matchesTransferProject } = loadTypeScriptModule(root, 'src/lib/transferWorkflow.ts')
-  const app = mock.MOCK_TRANSFER_APPLICATIONS[1]
-  const props = propsFor(app)
-  const item = props.tmChecklistItems.find(row => row.applicationId === app.id && row.responsibleRole === 'SPM')
-  assert.equal(canReviewTransferItem(app, item, { id: 'login-演示用户01', name: '演示用户01' }, props.selectedProject), true)
-  assert.equal(canReviewTransferItem(app, item, { id: 'login-演示用户02', name: '演示用户02' }, props.selectedProject), false)
-  assert.equal(canReviewTransferItem(app, { ...item, entryStatus: 'draft' }, { id: 'login-演示用户01', name: '演示用户01' }, props.selectedProject), false)
-  assert.equal(canSqaReviewTransfer(app, { id: 'login-演示用户07', name: '演示用户07' }, props.selectedProject), false)
-  assert.equal(matchesTransferProject({ ...app, projectId: 'real-project-id' }, { id: 'other-id', name: app.projectName }), false)
-  assert.equal(canEnterTransferItem({ ...app, status: 'completed' }, item, { id: 'login-演示用户01', name: '演示用户01' }, props.selectedProject), false)
+check('a rejected role permits maintenance SPM rejection and legacy work but cannot be approved', () => {
+  const app = application(), items = material(app)
+  const rejected = item => ({ ...item, entryStatus: 'entered', aiCheckStatus: 'not_started', reviewStatus: 'rejected' })
+  const next = flow.syncTransferPipeline(app, items.checklist.map(rejected), items.reviewElements.map(rejected))
+  const access = flow.getMaintenanceSpmReviewAccess(next, reviewer, project)
+  assert.equal(access.isRejectionMode, true)
+  assert.equal(access.canApprove, false); assert.equal(access.canReject, true)
+  assert.equal(flow.canEditTransferLegacy(next, reviewer, project), true)
+  assert.equal(flow.getMaintenanceSpmReviewAccess(next, outsider, project).canReject, false)
 })
-check('SQA rejection persists the rollback and allows re-review', () => {
-  const app = { ...mock.MOCK_TRANSFER_APPLICATIONS[0], pipeline: { ...mock.MOCK_TRANSFER_APPLICATIONS[0].pipeline, dataEntry: 'success', maintenanceReview: 'success', sqaReview: 'in_progress' } }
-  const props = propsFor(app, '演示用户07'); props.setTransferApplications([app])
-  props.setTmSqaAction('reject'); props.setTmSqaComment('补充审核')
-  allNodes(components.TransferSqaReview(props)).find(node => node.type === 'Modal').props.onOk()
-  assert.equal(props.transferApplications[0].pipeline.maintenanceReview, 'in_progress')
-  assert.equal(props.transferApplications[0].pipeline.sqaReview, 'not_started')
-  assert.ok(props.tmChecklistItems.filter(item => item.applicationId === app.id).every(item => item.reviewStatus === 'not_reviewed'))
+check('terminal applications are read-only and sync cannot reopen a finished workflow', () => {
+  const app = application(), entry = { ...material(app).checklist[0], entryStatus: 'entered', aiCheckStatus: 'passed' }
+  for (const status of ['cancelled', 'failed', 'completed']) {
+    const terminal = { ...app, status, pipeline: { ...app.pipeline, maintenanceReview: 'in_progress', maintenanceSpmReview: 'in_progress', roleProgress: [{ role: 'SPM', entryStatus: 'completed', reviewStatus: 'completed' }] } }
+    const review = { ...entry, reviewStatus: 'reviewing' }
+    assert.equal(flow.canEnterTransferItem(terminal, entry, actor, project), false, status)
+    assert.equal(flow.canReviewTransferItem(terminal, review, reviewer, project), false, status)
+    assert.equal(flow.canDelegateTransferItem(terminal, entry, actor, project, 'entry'), false, status)
+    assert.equal(flow.canDelegateTransferItem(terminal, review, reviewer, project, 'review'), false, status)
+    assert.equal(flow.getMaintenanceSpmReviewAccess(terminal, reviewer, project).canReject, false, status)
+    assert.equal(flow.canEditTransferLegacy(terminal, reviewer, project), false, status)
+    assert.equal(flow.canCloseTransfer(terminal, actor, project, true), false, status)
+    assert.equal(getTransferRoleSubmission(terminal, 'SPM', [entry], actor, project, true).canSubmit, false, status)
+    assert.equal(flow.syncTransferPipeline(terminal, [review], []), terminal)
+  }
+  const approved = { ...app, pipeline: { ...app.pipeline, maintenanceReview: 'success', maintenanceSpmReview: 'success', infoChange: 'in_progress' } }
+  assert.equal(flow.canEnterTransferItem(approved, entry, actor, project), false)
+  assert.equal(flow.canEditTransferLegacy(approved, reviewer, project), false)
+  assert.equal(flow.canCloseTransfer(approved, actor, project, true), false)
+  assert.equal(flow.syncTransferPipeline(approved, [entry], []), approved)
 })
-check('newly submitted application produces the assigned current user entry todo', () => {
-  const { buildTransferTodoCandidates } = loadTypeScriptModule(root, 'src/lib/todoAggregation.ts')
-  const props = propsFor(mock.MOCK_TRANSFER_APPLICATIONS[0])
-  props.setTmApplyDate('2026-09-09'); props.setTmApplyTeam(mock.MOCK_TM_TEAMS.TEAM_1)
-  button(components.TransferApply(props), '提交申请').props.onClick()
-  const app = props.transferApplications[0]
-  const todos = buildTransferTodoCandidates({ applications: [app], projects: [props.selectedProject] })
-  assert.equal(todos.find(todo => todo.view === 'entry')?.activeOwner, '演示用户01')
-  const assignedElsewhere = { ...app, team: mock.MOCK_TM_TEAMS.TEAM_2 }
-  const otherTodos = buildTransferTodoCandidates({ applications: [assignedElsewhere], projects: [props.selectedProject] })
-  assert.equal(otherTodos.find(todo => todo.view === 'entry')?.activeOwner, '演示用户03')
+check('role submission rejects a different actor, project, hidden view or unfinished AI check', () => {
+  const app = application(), item = { ...material(app).checklist[0], entryStatus: 'entered', aiCheckStatus: 'passed' }
+  assert.equal(getTransferRoleSubmission(app, 'SPM', [item], actor, project, true).canSubmit, true)
+  assert.equal(getTransferRoleSubmission(app, 'SPM', [item], outsider, project, true).canSubmit, false)
+  assert.equal(getTransferRoleSubmission(app, 'SPM', [item], actor, foreignProject, true).canSubmit, false)
+  assert.equal(getTransferRoleSubmission(app, 'SPM', [item], actor, project, false).canSubmit, false)
+  assert.equal(getTransferRoleSubmission(app, 'SPM', [{ ...item, aiCheckStatus: 'in_progress' }], actor, project, true).canSubmit, false)
 })
-check('PMS login identities require a directory user and exact matching ID/name pair', () => {
-  const { mapTransferOwnerToPmsUser } = loadTypeScriptModule(root, 'src/lib/todoAggregation.ts')
-  assert.equal(mapTransferOwnerToPmsUser('login-演示用户01', '演示用户01'), '演示用户01')
-  assert.equal(mapTransferOwnerToPmsUser('login-演示用户09', '演示用户09'), '演示用户09')
-  assert.equal(mapTransferOwnerToPmsUser('login-演示用户01', '演示用户03'), undefined)
+check('application and view switches clear draft dialogs while preserving saved business data', () => {
+  const saved = { apps: structuredClone(state().transferApplications), checklist: structuredClone(state().tmChecklistItems), versions: structuredClone(state().tmTemplateVersions) }
+  const fill = () => {
+    state().setTmApplyDate('2026-10-01'); state().setTmApplyRemark('未提交申请'); state().setTmApplyTeam(application().team)
+    state().setTmEntryModalRecord({ id: 'old-entry', applicationId: 'first' }); state().setTmEntryModalOpen(true); state().setTmEntryContent('未保存录入')
+    state().setTmReviewRecord({ id: 'old-review', applicationId: 'first' }); state().setTmReviewModalOpen(true); state().setTmReviewComment('未保存审核')
+    state().setTmDetailModalVisible(true); state().setTmDetailModalContent('上一个申请详情')
+  }
+  const cleared = () => {
+    assert.equal(state().tmApplyDate, ''); assert.equal(state().tmApplyRemark, '')
+    assert.deepEqual(state().tmApplyTeam, { research: [], maintenance: [] })
+    assert.equal(state().tmEntryModalOpen, false); assert.equal(state().tmEntryModalRecord, null); assert.equal(state().tmEntryContent, '')
+    assert.equal(state().tmReviewModalOpen, false); assert.equal(state().tmReviewRecord, null); assert.equal(state().tmReviewComment, '')
+    assert.equal(state().tmDetailModalVisible, false); assert.equal(state().tmDetailModalContent, '')
+  }
+  state().setSelectedTransferAppId('first'); state().setTransferView('entry'); fill()
+  state().setSelectedTransferAppId('first')
+  assert.equal(state().tmEntryContent, '未保存录入', 'reselecting the same application must retain its draft')
+  state().setSelectedTransferAppId('second'); cleared()
+  assert.equal(state().selectedTransferAppId, 'second')
+  fill(); state().setTransferView('maintenance-spm-review'); cleared()
+  assert.equal(state().transferView, 'maintenance-spm-review')
+  assert.deepEqual(state().transferApplications, saved.apps)
+  assert.deepEqual(state().tmChecklistItems, saved.checklist)
+  assert.deepEqual(state().tmTemplateVersions, saved.versions)
+})
+check('reload resumes pending mock AI checks without altering completed or terminal materials', () => {
+  const app = application(), item = {...material(app).checklist[0],entryStatus:'entered',aiCheckStatus:'in_progress'}
+  const terminal = {...app,id:'finished',status:'failed'}
+  const finishedItem = {...item,id:'frozen-check',applicationId:terminal.id}
+  const passedItem = {...item,id:'passed-check',aiCheckStatus:'passed',aiCheckResult:'保留原结果'}
+  useTransferStore.setState({transferApplications:[app,terminal],tmChecklistItems:[item,finishedItem,passedItem],tmReviewElements:[]})
+  resumeTransferAiChecks()
+  const rows = state().tmChecklistItems
+  assert.ok(['passed','failed'].includes(rows[0].aiCheckStatus))
+  assert.ok(rows[0].aiCheckResult)
+  assert.deepEqual(rows[1],finishedItem)
+  assert.deepEqual(rows[2],passedItem)
+  assert.equal(state().transferApplications[0].pipeline.dataEntry,'in_progress','AI completion does not automatically submit a role')
+  assert.deepEqual(state().transferApplications[1],terminal)
+})
+check('PMS identity bridge requires a known exact external identity or local login pair', () => {
+  assert.equal(mapTransferOwnerToPmsUser(actor.id, actor.name), actor.name)
+  assert.equal(mapTransferOwnerToPmsUser('u001', actor.name), actor.name)
+  assert.equal(mapTransferOwnerToPmsUser(actor.id, outsider.name), undefined)
   assert.equal(mapTransferOwnerToPmsUser('login-不存在', '不存在'), undefined)
-  assert.equal(mapTransferOwnerToPmsUser('arbitrary-id', '演示用户01'), undefined)
-  assert.equal(mapTransferOwnerToPmsUser('u001', '演示用户03'), undefined)
+  assert.equal(mapTransferOwnerToPmsUser('arbitrary-id', actor.name), undefined)
+  assert.equal(mapTransferOwnerToPmsUser('u001', outsider.name), undefined)
 })
-check('embedded project transfer table hosts the close confirmation and rechecks permission', () => {
-  const props = propsFor(mock.MOCK_TRANSFER_APPLICATIONS[0]); props.embedded = true
-  props.setTmCloseAppId('ta001'); props.setTmCloseReason('不再转维'); props.setTmCloseModalVisible(true)
-  const tree = components.TransferWorkbench(props)
-  const table = allNodes(tree).find(node => node.type === 'Table')
-  assert.deepEqual(table.props.columns.map(column => column.title), ['项目名称', '流水线进度', '计划评审日期', '角色进度', '操作'])
-  const modal = allNodes(tree).find(node => node.type === 'Modal')
-  assert.ok(modal)
-  props.canApplyTransfer = false; modal.props.onOk()
-  assert.equal(props.transferApplications.find(app => app.id === 'ta001').status, 'in_progress')
-  props.canApplyTransfer = true; modal.props.onOk()
-  assert.equal(props.transferApplications.find(app => app.id === 'ta001').status, 'cancelled')
-})
-if (failures.length) throw new Error(`${failures.length} transfer regressions: ${failures.join(', ')}`)
-console.log('Transfer workflow verification passed')
+
+useTransferStore.setState(cloneState(initialTransfer), true)
+usePermissionStore.setState(cloneState(initialPermission), true)
+if (failures.length) throw new Error(`${failures.length}/${checks} transfer regressions: ${failures.join(', ')}`)
+console.log(`Transfer workflow verification passed: ${checks} real-module business regressions`)

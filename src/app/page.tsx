@@ -8,6 +8,7 @@ import { Alert, Modal, Button, Space } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
+import { rehydrateTransferStore } from '@/stores/transfer'
 import { usePlanStore } from '@/stores/plan'
 import RoadmapView from '@/components/roadmap/RoadmapView'
 import { parseProjectViewShare } from '@/components/roadmap/utils'
@@ -31,6 +32,7 @@ const globalStyles = `
 
 export default function Home() {
   useHrFormalProjectSync()
+  useEffect(() => { void rehydrateTransferStore() }, [])
   const roadmapMigrationConflicts = useRoadmapRegistryMigration()
   // ═══════ Routing-level store hooks ═══════
   const {

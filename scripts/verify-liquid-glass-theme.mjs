@@ -369,7 +369,10 @@ const PROJECT_SPACE_MATERIAL_EXPECTATIONS = {
   'src/containers/ProjectSpaceContainer.tsx': [
     { label: 'project-space root material', pattern: /className=["']pms-project-space pms-page-shell["']/ },
     { label: 'glass project-space sidebar', pattern: /className=["'][^"']*pms-sidebar[^"']*pms-glass-surface[^"']*["']/ },
-    { label: 'solid project-space content', pattern: /id=["']basic-info-scroll-container["'][^>]*className=(?:["']pms-project-section pms-solid-surface["']|\{`pms-project-section pms-solid-surface(?:\$\{|[ `]))/ },
+    // Transfer pages use their own card layout; ordinary project-space pages
+    // must still retain the solid content surface (including the apply modal).
+    { label: 'solid ordinary project-space content', pattern: /id=["']basic-info-scroll-container["'][^>]*className=(?:["']pms-project-section pms-solid-surface["']|\{`pms-project-section pms-solid-surface(?:\$\{|[ `])|\{`pms-project-section\$\{isTransferPage\s*\?\s*''\s*:\s*' pms-solid-surface'\})/ },
+    { label: 'dedicated transfer-page layout boundary', pattern: /const isTransferPage = transfer\.transferView !== null && transfer\.transferView !== 'apply'/ },
   ],
   'src/components/plans/PlanWorkspaceShell.tsx': [
     { label: 'plan workspace shell', pattern: /className=["']pms-plan-workspace["']/ },
