@@ -16,12 +16,7 @@ export default function ResourceAccountingDetails({ analysis }: { analysis?: Acc
         { title: '人力费用（万元）', dataIndex: 'laborCost', align: 'right', width: 140, render: (value: number) => value.toFixed(2) },
         { title: '工作内容', dataIndex: 'description', width: 210 },
       ]} />
-      <details className="pms-dashboard-trend-detail"><summary>实际非人力费用明细 · {analysis.expenses.length} 条 / {analysis.nonLaborYuan.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} 元</summary>
-        <Table className="pms-table" size="small" rowKey="id" pagination={false} dataSource={analysis.expenses} scroll={{ x: 800 }} locale={{ emptyText: '当前筛选范围暂无实际非人力费用' }} columns={[
-          { title: '日期', dataIndex: 'date', width: 110 }, { title: '一级部门', dataIndex: 'primaryDepartment' }, { title: '二级部门', dataIndex: 'secondaryDepartment' },
-          { title: '费用科目', dataIndex: 'subject' }, { title: '金额（元）', dataIndex: 'amountYuan', align: 'right', render: (value: number) => value.toFixed(2) }, { title: '说明', dataIndex: 'description' },
-        ]} />
-      </details>
+
     </>}
   </section>
 }

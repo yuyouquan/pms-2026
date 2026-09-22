@@ -28,7 +28,7 @@ function ResourceNavigation({ project }: { project: ProjectItem }) {
     <ProjectSpaceTabs className="pms-project-resource-tabs" navigationOnly activeKey={tab}
       onChange={key => useUiStore.getState().navigateWithEditGuard(() => { setTab(key as ResourceTab); setDetailVersionId(undefined) }, false)}
       items={RESOURCE_TABS.filter(item => getProjectAttribute(project) !== 'budget' || item.key === 'annual').map(item => ({ ...item }))} />
-    {tab === 'dashboard' ? <ProjectResourceDashboard project={project} category={category} onOpenVersion={(type, id) => useUiStore.getState().navigateWithEditGuard(() => { setTab(type); setDetailVersionId(id) }, false)} /> : tab === 'accounting'
+    {tab === 'dashboard' ? <ProjectResourceDashboard project={project} category={category} /> : tab === 'accounting'
       ? <div className="pms-resource-placeholder"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="项目核算待建设" /></div>
       : getProjectAttribute(project) === 'roadmap' ? <Empty description="路标项目暂无预算版本" />
         : <ResourceVersionWorkspace key={tab} project={project} category={category} budgetType={tab} initialVersionId={detailVersionId} />}
