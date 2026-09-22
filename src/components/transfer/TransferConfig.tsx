@@ -68,10 +68,10 @@ export function TransferConfig(_props: unknown) {
     return compareTransferTemplates(before, after, kind)
   }, [from, to, versions, kind])
   if (view === 'team') return <>
-    <Card className="pms-config-workspace-card pms-solid-surface" title={`${projectType} · 转维团队配置`} extra={canEdit && <Button icon={<EditOutlined />} onClick={() => { setRoles(structuredClone(state.tmTeamConfigs[projectType])); setEditing(true) }}>编辑</Button>}>
+    <Card className="pms-config-workspace-card pms-solid-surface pms-transfer-surface" title={`${projectType} · 转维团队配置`} extra={canEdit && <Button icon={<EditOutlined />} onClick={() => { setRoles(structuredClone(state.tmTeamConfigs[projectType])); setEditing(true) }}>编辑</Button>}>
       <Table className="pms-table" size="small" rowKey="id" pagination={false} dataSource={state.tmTeamConfigs[projectType]} columns={[{ title: '角色名', dataIndex: 'roleName' }, { title: 'IPM角色Code', dataIndex: 'ipmRoleCode' }]} />
     </Card>
-    <Modal className="pms-modal" title={`${projectType} · 转维团队配置`} open={editing} width={700} onCancel={() => setEditing(false)} okText="保存" onOk={() => {
+    <Modal className="pms-modal pms-transfer-surface" title={`${projectType} · 转维团队配置`} open={editing} width={700} onCancel={() => setEditing(false)} okText="保存" onOk={() => {
       if (useProjectStore.getState().currentLoginUser !== actor) return
       const errors = state.saveTransferTeamConfig(projectType, roles, actor)
       if (errors.length) { message.error(errors.join('；')); return }
@@ -86,7 +86,7 @@ export function TransferConfig(_props: unknown) {
     </Modal>
   </>
   return <>
-    <Card className="pms-config-workspace-card pms-solid-surface" title={`${projectType} · ${kind === 'checklist' ? 'CheckList' : '评审要素'}`} extra={<Space wrap>
+    <Card className="pms-config-workspace-card pms-solid-surface pms-transfer-surface" title={`${projectType} · ${kind === 'checklist' ? 'CheckList' : '评审要素'}`} extra={<Space wrap>
       <Button icon={<DownloadOutlined />} onClick={() => exportRows(true)}>下载导入模板</Button>
       {canEdit && <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={beforeUpload}><Button icon={<UploadOutlined />}>导入</Button></Upload>}
       <Button icon={<DownloadOutlined />} onClick={() => exportRows(false)}>导出</Button>
@@ -96,7 +96,7 @@ export function TransferConfig(_props: unknown) {
       <Input aria-label="搜索转维模板" placeholder="搜索标准、角色或规则" prefix={<SearchOutlined />} value={state.tmConfigSearchText} onChange={event => state.setTmConfigSearchText(event.target.value)} allowClear style={{ width: 320, marginBottom: 16 }} />
       <Table className="pms-table" rowKey="id" size="small" pagination={false} dataSource={rows} columns={columns} scroll={{ x: kind === 'review' ? 1540 : 1150 }} />
     </Card>
-    <Modal className="pms-modal" title="确认导入模板" open={Boolean(pendingRows)} onCancel={() => setPendingRows(null)} okText="确认导入" onOk={() => {
+    <Modal className="pms-modal pms-transfer-surface" title="确认导入模板" open={Boolean(pendingRows)} onCancel={() => setPendingRows(null)} okText="确认导入" onOk={() => {
       if (!pendingRows || useProjectStore.getState().currentLoginUser !== actor) return
       try {
         const validated = parseTransferTemplateRows([TRANSFER_TEMPLATE_HEADERS[kind], ...transferTemplateMatrix(pendingRows, kind)], kind, useTransferStore.getState().tmTeamConfigs[projectType])
@@ -104,7 +104,7 @@ export function TransferConfig(_props: unknown) {
         setPendingRows(null); message.success('导入成功，已创建新版本')
       } catch (error) { message.error((error as Error).message) }
     }}><p>将导入 {pendingRows?.length ?? 0} 条{kind === 'checklist' ? 'CheckList' : '评审要素'}并生成新版本。已发起的申请保留原模板。</p></Modal>
-    <Modal className="pms-modal" title="版本对比" open={state.tmConfigDiffOpen} width={1100} footer={null} onCancel={() => state.setTmConfigDiffOpen(false)}>
+    <Modal className="pms-modal pms-transfer-surface" title="版本对比" open={state.tmConfigDiffOpen} width={1100} footer={null} onCancel={() => state.setTmConfigDiffOpen(false)}>
       <Space style={{ marginBottom: 16 }}><Select aria-label="基准模板版本" value={from} options={versions.map(version => ({ value: version.id, label: version.version }))} onChange={setFrom} /><span>→</span><Select aria-label="对比模板版本" value={to} options={versions.map(version => ({ value: version.id, label: version.version }))} onChange={setTo} /></Space>
       <Table size="small" rowKey="id" dataSource={differences} pagination={false} locale={{ emptyText: <Empty description="两个版本没有差异" /> }} columns={[{ title: '变更', dataIndex: 'change', width: 80 }, { title: '修改前', dataIndex: 'before' }, { title: '修改后', dataIndex: 'after' }]} />
     </Modal>

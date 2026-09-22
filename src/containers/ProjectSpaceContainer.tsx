@@ -5681,7 +5681,7 @@ export default function ProjectSpaceContainer() {
         </CollapsibleSidebarShell>}
 
         {/* Content area */}
-        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${isTransferPage ? ' pms-project-section--transfer' : ''}${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 'var(--pms-content-padding)', overflow: 'auto' }}>
+        <div id="basic-info-scroll-container" className={`pms-project-section pms-solid-surface${isTransferPage ? ' pms-project-section--transfer pms-transfer-surface' : ''}${['basic', 'plan', 'resources', 'permission'].includes(projectSpaceModule) ? ' pms-project-section--compact' : ''}`} style={{ flex: 1, minWidth: 0, padding: 'var(--pms-content-padding)', overflow: 'auto' }}>
           {transfer.transferView === 'apply' && <TransferApply {...transferProps} />}
           {transfer.transferView === 'detail' && <TransferDetail {...transferProps} />}
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}

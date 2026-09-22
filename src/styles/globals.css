@@ -307,6 +307,32 @@
   min-width: 0;
 }
 
+/* Preserve button variants within transfer pages and their portalled dialogs.
+   Shared danger/disabled styles must not turn table links or text actions into outlined buttons. */
+.pms-transfer-surface .ant-btn-dangerous.ant-btn:is(.ant-btn-link, .ant-btn-text),
+.pms-transfer-surface .ant-btn:is(.ant-btn-link, .ant-btn-text) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.pms-transfer-surface .ant-btn:is(.ant-btn-link, .ant-btn-text):disabled {
+  background: transparent !important;
+}
+
+.pms-transfer-surface .ant-btn-link {
+  background: transparent !important;
+}
+
+.pms-transfer-surface .ant-btn-dangerous:is(.ant-btn-default, .ant-btn-text):not(:disabled):hover,
+.pms-transfer-surface .ant-btn-dangerous:is(.ant-btn-default, .ant-btn-text):not(:disabled):active {
+  background: color-mix(in srgb, var(--danger) 12%, var(--pms-surface-solid)) !important;
+}
+
+.pms-transfer-surface .ant-btn-default.ant-btn-dangerous:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 8%, var(--pms-surface-solid)) !important;
+  border-color: transparent !important;
+}
+
 .pms-transfer-anchor {
   position: sticky;
   top: 16px;
