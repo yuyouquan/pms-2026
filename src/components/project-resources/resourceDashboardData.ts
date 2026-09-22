@@ -1,3 +1,5 @@
+import { dashboardMonthDates, dashboardMonthFraction, matchesDashboardDate, spreadDashboardPlan } from '@/components/project-resources/resourceDashboardPeriods'
+import { dashboardDepartmentParents, matchesDashboardDepartment, UNASSIGNED_PRIMARY, type DashboardFilter } from '@/components/project-resources/resourceAccounting'
 import { isHrVersionVisible } from '@/lib/hrProjectRegistry'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import { resolveMachineDepartmentInvestments } from '@/lib/resourceAllocation'
@@ -38,29 +40,37 @@ export interface DashboardDepartment {
 export interface DashboardIssue { key: string; title: string; detail: string; severity: 'warning' | 'info' }
 
 export function buildDashboardAnalysis(category: HrProjectCategory, source: DashboardSource, allRows: readonly ResourceMonthlyRow[], rate: number,
-  filter: { year?: string; department?: string } = {}) {
+  filter: DashboardFilter = {}) {
   const version = source.version, year = filter.year ?? 'all', department = filter.department ?? 'all'
-  const matches = (value: string) => department === 'all' || value === department
-  const rows = allRows.filter(row => row.versionId === version.id && !row.isArchived && matches(row.secondaryDepartment))
+  const allUpperRows = 'hrModelVersion' in version ? resolveMachineDepartmentInvestments(version) : version.departmentInvestments
+  const versionRows = allRows.filter(row => row.versionId === version.id && !row.isArchived)
+  const departmentParents = filter.departmentParents ?? dashboardDepartmentParents([...allUpperRows, ...versionRows])
+  const matches = (primary: string, secondary: string) => matchesDashboardDepartment(primary, secondary, filter)
+  const rows = versionRows.filter(row => matches(row.primaryDepartment, row.secondaryDepartment))
   const range = hrNonLaborMonthRange(category, 'milestones' in version ? version.milestones : version, true)
   const complete = buildResourceMonthlyView(rows, version.id, range.startMonth ?? undefined, range.endMonth ?? undefined)
   const expense = cloneNonLaborInvestment(version.nonLaborInvestment)
   const expenseMonths = nonLaborMonths(expense)
-  const expenseItems = expense.items.filter(item => matches(item.secondaryDepartment))
+  const expenseItems = expense.items.filter(item => matches(departmentParents[item.secondaryDepartment] ?? UNASSIGNED_PRIMARY, item.secondaryDepartment))
   const allMonths = [...new Set([...complete.months, ...expenseMonths])].sort()
-  const months = allMonths.filter(month => year === 'all' || month.startsWith(`${year}-`))
+  const months = allMonths.filter(month => dashboardMonthDates(month).some(date => matchesDashboardDate(date, filter)))
   const years = [...new Set(allMonths.map(month => month.slice(0, 4)))]
   const validRate = Number.isFinite(rate) && rate >= 0 ? rate : 0
-  const monthly = months.map(month => {
+  const rawMonthly = allMonths.map(month => {
     const labor = rounded(rows.reduce((sum, row) => sum + number(row.monthlyData[month]), 0))
     const nonLaborYuan = expenseMonths.includes(month) ? rounded(expenseItems.reduce((sum, item) => sum + number(item.monthlyAmounts[month]), 0)) : 0
     return { month, labor, laborCost: rounded(labor * validRate), nonLaborYuan, cost: rounded(labor * validRate + nonLaborYuan / 10000) }
+  })
+  const daily = spreadDashboardPlan(rawMonthly, filter)
+  const monthly = rawMonthly.filter(row => months.includes(row.month)).map(row => {
+    const fraction = dashboardMonthFraction(row.month, filter)
+    return { month: row.month, labor: rounded(row.labor * fraction), laborCost: rounded(row.laborCost * fraction), nonLaborYuan: rounded(row.nonLaborYuan * fraction), cost: rounded(row.cost * fraction) }
   })
   const labor = rounded(monthly.reduce((sum, item) => sum + item.labor, 0))
   const nonLaborYuan = rounded(monthly.reduce((sum, item) => sum + item.nonLaborYuan, 0))
   const laborCost = rounded(labor * validRate), cost = rounded(laborCost + nonLaborYuan / 10000)
   const peak = monthly.reduce<{ month: string; value: number } | undefined>((best, item) => !best || item.labor > best.value ? { month: item.month, value: item.labor } : best, undefined)
-  const upperRows = ('hrModelVersion' in version ? resolveMachineDepartmentInvestments(version) : version.departmentInvestments).filter(row => matches(row.secondaryDepartment))
+  const upperRows = allUpperRows.filter(row => matches(row.primaryDepartment, row.secondaryDepartment))
   const departments = new Map<string, DashboardDepartment>()
   const keyOf = (primary: string, secondary: string) => JSON.stringify([primary, secondary])
   const ensure = (primary: string, secondary: string) => {
@@ -78,7 +88,7 @@ export function buildDashboardAnalysis(category: HrProjectCategory, source: Dash
     if (!upperKeys.has(item.key)) item.target += number(row.estimatedTotal)
     const rowTotal = sumMonthlyRow(row), delta = rounded(rowTotal - number(row.estimatedTotal))
     item.allocated += rowTotal
-    item.selected += sumMonthlyRow(row, months)
+    item.selected += months.reduce((sum, month) => sum + number(row.monthlyData[month]) * dashboardMonthFraction(month, filter), 0)
     // Source rows can share department names. Keep their shortages and excesses before grouping.
     if (Math.abs(delta) >= 0.0005) {
       item.deficit += Math.max(0, -delta)
@@ -100,7 +110,7 @@ export function buildDashboardAnalysis(category: HrProjectCategory, source: Dash
   const departmentRows = [...departments.values()].map(item => ({ ...item, target: rounded(item.target), allocated: rounded(item.allocated), selected: rounded(item.selected),
     cost: rounded(item.selected * validRate), delta: rounded(item.allocated - item.target), share: labor > 0 ? item.selected / labor * 100 : 0 }))
     .sort((a, b) => b.selected - a.selected || a.key.localeCompare(b.key))
-  const target = department === 'all' ? number(version.estimatedInvestment) : rounded(departmentRows.reduce((sum, item) => sum + item.target, 0))
+  const target = department === 'all' && (!filter.primary || filter.primary === 'all') ? number(version.estimatedInvestment) : rounded(departmentRows.reduce((sum, item) => sum + item.target, 0))
   const allocated = rounded(departmentRows.reduce((sum, item) => sum + item.allocated, 0))
   if (department === 'all' && target > 0 && !departmentRows.length) issues.push({ key: 'missing-detail', title: '版本投入明细缺失', detail: `版本保存了 ${target.toFixed(1)} 人月预估，但未保存可还原的部门与月度明细，请前往来源版本核对。`, severity: 'warning' })
   const deficit = rounded(departmentRows.reduce((sum, item) => sum + item.deficit, 0))
@@ -112,7 +122,7 @@ export function buildDashboardAnalysis(category: HrProjectCategory, source: Dash
   expenseItems.forEach(item => {
     const key = JSON.stringify([item.secondarySubject, item.tertiarySubject])
     const subject = subjects.get(key) ?? { key, secondary: item.secondarySubject || '待分类', tertiary: item.tertiarySubject || '待分类', amount: 0, share: 0 }
-    subject.amount += monthly.reduce((sum, row) => sum + (expenseMonths.includes(row.month) ? number(item.monthlyAmounts[row.month]) : 0), 0)
+    subject.amount += monthly.reduce((sum, row) => sum + (expenseMonths.includes(row.month) ? number(item.monthlyAmounts[row.month]) * dashboardMonthFraction(row.month, filter) : 0), 0)
     subjects.set(key, subject)
   })
   const subjectRows = months.length ? [...subjects.values()].map(item => ({ ...item, amount: rounded(item.amount), share: nonLaborYuan > 0 ? item.amount / nonLaborYuan * 100 : 0 })).sort((a, b) => b.amount - a.amount || a.key.localeCompare(b.key)) : []
@@ -128,7 +138,7 @@ export function buildDashboardAnalysis(category: HrProjectCategory, source: Dash
   if (!allMonths.length) issues.push({ key: 'months', title: '尚未形成月度计划', detail: '完善来源版本的里程碑或项目起止日期后，可分析月度投入。', severity: 'info' })
   if (!version.isActive) issues.push({ key: 'draft', title: '正在分析非正式版本', detail: `${version.versionNumber} 为手动选择的分析版本，未改变正式版本。`, severity: 'info' })
   if (!Number.isFinite(rate) || rate < 0) issues.push({ key: 'rate', title: '人力费率无效', detail: '请在配置中心修正费率；当前人力费用按 0 计算。', severity: 'warning' })
-  return { source, year, department, rate: validRate, allMonths, months, years, monthly, labor, laborCost, nonLaborYuan, cost,
+  return { source, year, department, filter, daily, rate: validRate, allMonths, months, years, monthly, labor, laborCost, nonLaborYuan, cost,
     target, allocated, deficit, excess, average: months.length ? labor / months.length : 0, peak, departments: departmentRows, stages, subjects: subjectRows, issues }
 }
 export type DashboardAnalysis = ReturnType<typeof buildDashboardAnalysis>
