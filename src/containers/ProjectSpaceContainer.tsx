@@ -938,7 +938,7 @@ export default function ProjectSpaceContainer() {
   )
   const canDo = useHasPermission(currentLoginUser, _permProjectId)
   const canManageRoles = canDo('projectPermission:manageRoles')
-  const roles = perm.rolesByProject[_permProjectId] ?? []
+  const roles = useMemo(() => perm.rolesByProject[_permProjectId] ?? [], [perm.rolesByProject, _permProjectId])
   const setRoles = (v: Parameters<typeof perm.setRolesForProject>[1]) => {
     if (!_permProjectId) return
     if (!perm.setRolesForProjectGuarded(_permProjectId, currentLoginUser, v)) {
