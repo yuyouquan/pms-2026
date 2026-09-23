@@ -248,7 +248,7 @@ check('transfer applications, teams, materials, and todos resolve consistently',
         assert.equal(item[nameKey], owner?.name || '', `${item.id} uses its own ${side} owner name`)
       }
     }
-    assert.ok(applications.every(app => rows.some(item => item.applicationId === app.id)), 'every application has its own materials')
+    assert.ok(applications.every(app => rows === transferState.tmReviewElements && app.projectType === 'tOS版本项目' ? !rows.some(item => item.applicationId === app.id) : rows.some(item => item.applicationId === app.id)), 'every application has its own project-type materials; tOS has no review elements')
   }
   for (const record of [...transferState.tmBlockTasks, ...transferState.tmLegacyTasks, ...transfer.MOCK_HISTORY]) assert.ok(apps.has(record.applicationId))
   const candidates = todos.buildTransferTodoCandidates({ applications, projects })
