@@ -1,4 +1,5 @@
-import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
+import { reconcileTosMrInstances } from '@/lib/tosMrLevel1Sync'
+import { getPmsLocalStorage, isPmsHydrationWriteSuppressed } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
@@ -34,6 +35,7 @@ import type {
   ReconcileJointResult,
   StoreStopReleaseInput,
   TosMrVersionInstance,
+  TosMrVersionCandidate,
 } from '@/types/mrVersionPlan'
 
 export const MR_VERSION_PLAN_STORAGE_KEY = 'pms-mr-version-plan-store'
@@ -44,11 +46,20 @@ const TEMPLATE_ACTIONS = new Set<MrTemplateChangeLog['action']>([
   'create-revision', 'add', 'rename', 'move', 'delete', 'publish', 'cancel-revision',
 ])
 
+interface TosDownstreamSnapshot {
+  machinePlansByKey: Record<string, JointMachinePlan>
+  marketOverridesByKey: Record<string, MrMarketOverride>
+  machineRowLocks: Record<string, MrMachineRowLock>
+}
+
 export interface MrVersionPlanState {
   templateVersions: MrTemplateVersion[]
   currentTemplateVersionId: string
   templateHistory: MrTemplateChangeLog[]
   tosInstancesByProjectId: Record<string, TosMrVersionInstance[]>
+  tosInstancesByType: Record<string, Record<string, TosMrVersionInstance[]>>
+  activeTosTypeByProjectId: Record<string, string>
+  tosDownstreamByType: Record<string, Record<string, TosDownstreamSnapshot>>
   machinePlansByKey: Record<string, JointMachinePlan>
   marketOverridesByKey: Record<string, MrMarketOverride>
   stopReleaseRecords: MrStopReleaseRecord[]
@@ -61,6 +72,7 @@ export interface MrVersionPlanActions {
   updateTemplateActivities: (versionId: string, updater: MrActivityUpdater, actor: string, permission: MrPermissionResult) => boolean
   publishTemplateRevision: (versionId: string, actor: string, permission: MrPermissionResult) => { ok: boolean; errors: string[] }
   cancelTemplateRevision: (versionId: string, actor: string, permission: MrPermissionResult) => boolean
+  syncTosInstancesFromLevel1: (projectId: string, candidates: readonly TosMrVersionCandidate[], sourceType?: string) => void
   addTosVersionInstance: (input: AddTosInstanceInput, permission: MrPermissionResult) => boolean
   updateTosDate: (projectId: string, tosVersion: string, activityId: string, value: string, actor: string, permission: MrPermissionResult) => boolean
   reconcileMachinePlans: (input: Omit<ReconcileJointInput, 'tosInstances' | 'persistedPlans' | 'stopRecords'>) => ReconcileJointResult
@@ -98,7 +110,7 @@ const memoryStorage: StateStorage = {
 
 const browserStorage: StateStorage = {
   getItem: name => typeof window === 'undefined' ? null : getPmsLocalStorage().getItem(name),
-  setItem: (name, value) => { if (typeof window !== 'undefined') getPmsLocalStorage().setItem(name, value) },
+  setItem: (name, value) => { if (typeof window !== 'undefined' && !isPmsHydrationWriteSuppressed()) getPmsLocalStorage().setItem(name, value) },
   removeItem: name => { if (typeof window !== 'undefined') getPmsLocalStorage().removeItem(name) },
 }
 
@@ -267,7 +279,7 @@ function sanitizeTosInstances(value: unknown): Record<string, TosMrVersionInstan
       if (!tosVersion || versions.has(tosVersion) || !templateVersionId || !createdBy || !createdAt || !updatedBy || !updatedAt || activities.length === 0) return
       versions.add(tosVersion)
       const childIds = new Set(activities.filter(activity => activity.parentId !== null).map(activity => activity.id))
-      instances.push({ projectId, tosVersion, templateVersionId, activities, dates: sanitizeDates(candidate.dates, childIds), createdBy, createdAt, updatedBy, updatedAt })
+      instances.push({ projectId, tosVersion, ...(text(candidate.sourceLevel1TaskId) ? { sourceLevel1TaskId: text(candidate.sourceLevel1TaskId) } : {}), templateVersionId, activities, dates: sanitizeDates(candidate.dates, childIds), createdBy, createdAt, updatedBy, updatedAt })
     })
     if (instances.length) result[projectId] = instances
   })
@@ -393,7 +405,7 @@ function sanitizeMachineRowLocks(
 }
 
 function initialMrVersionPlanState(): MrVersionPlanState {
-  return createInitialMrVersionPlanState()
+  return { ...createInitialMrVersionPlanState(), tosInstancesByType: {}, activeTosTypeByProjectId: {}, tosDownstreamByType: {} }
 }
 
 function mergeTosInstancesByStableKey(
@@ -431,13 +443,36 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
   const tosInstancesByProjectId = shouldMergeStandardSeeds
     ? mergeTosInstancesByStableKey(fallback.tosInstancesByProjectId, sanitizedTosInstances)
     : sanitizedTosInstances
+  const tosInstancesByType = isRecord(persistedState.tosInstancesByType)
+    ? Object.fromEntries(Object.entries(persistedState.tosInstancesByType).map(([type, rows]) => [type, sanitizeTosInstances(rows)])) : {}
   const tosChildIds = buildTosChildIds(tosInstancesByProjectId)
+  const tosDownstreamByType: MrVersionPlanState['tosDownstreamByType'] = {}
+  if (isRecord(persistedState.tosDownstreamByType)) {
+    for (const [type, scopes] of Object.entries(persistedState.tosDownstreamByType)) {
+      if (!isRecord(scopes)) continue
+      tosDownstreamByType[type] = {}
+      for (const [projectId, snapshot] of Object.entries(scopes)) {
+        if (!isRecord(snapshot)) continue
+        const childIds = buildTosChildIds({ [projectId]: tosInstancesByType[type]?.[projectId] || [] })
+        const plans = sanitizeMachinePlans(snapshot.machinePlansByKey, childIds)
+        tosDownstreamByType[type][projectId] = {
+          machinePlansByKey: plans,
+          marketOverridesByKey: sanitizeMarketOverrides(snapshot.marketOverridesByKey, plans, childIds),
+          machineRowLocks: sanitizeMachineRowLocks(snapshot.machineRowLocks, plans),
+        }
+      }
+    }
+  }
   const machinePlansByKey = sanitizeMachinePlans(persistedState.machinePlansByKey, tosChildIds)
   const migrated: MrVersionPlanState = {
     templateVersions: safeTemplateVersions.map(cloneTemplateVersion),
     currentTemplateVersionId,
     templateHistory: sanitizeTemplateHistory(persistedState.templateHistory),
     tosInstancesByProjectId,
+    tosInstancesByType,
+    tosDownstreamByType,
+    activeTosTypeByProjectId: isRecord(persistedState.activeTosTypeByProjectId)
+      ? Object.fromEntries(Object.entries(persistedState.activeTosTypeByProjectId).filter(([, type]) => typeof type === 'string' && type.trim()).map(([id, type]) => [id, text(type)])) : {},
     machinePlansByKey,
     marketOverridesByKey: sanitizeMarketOverrides(persistedState.marketOverridesByKey, machinePlansByKey, tosChildIds),
     stopReleaseRecords: sanitizeStopRecords(persistedState.stopReleaseRecords),
@@ -490,6 +525,9 @@ export function partializeMrVersionPlanState(state: MrVersionPlanStore): MrVersi
     currentTemplateVersionId: state.currentTemplateVersionId,
     templateHistory: state.templateHistory,
     tosInstancesByProjectId: state.tosInstancesByProjectId,
+    tosInstancesByType: state.tosInstancesByType,
+    tosDownstreamByType: state.tosDownstreamByType,
+    activeTosTypeByProjectId: state.activeTosTypeByProjectId,
     machinePlansByKey: state.machinePlansByKey,
     marketOverridesByKey: state.marketOverridesByKey,
     stopReleaseRecords: state.stopReleaseRecords,
@@ -657,6 +695,51 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       } catch {
         return false
       }
+    },
+    syncTosInstancesFromLevel1: (projectIdInput, candidates, sourceType = 'Full') => {
+      const projectId = text(projectIdInput)
+      const type = text(sourceType)
+      if (!projectId || !type) return
+      const state = get()
+      const previousType = state.activeTosTypeByProjectId[projectId]
+      const current = state.tosInstancesByProjectId[projectId] || []
+      const archives = { ...state.tosInstancesByType }
+      const downstream = { ...state.tosDownstreamByType }
+      let machinePlansByKey = state.machinePlansByKey
+      let marketOverridesByKey = state.marketOverridesByKey
+      let machineRowLocks = state.machineRowLocks
+      // A main-type switch changes the projection, not the source nodes. Keep
+      // the departing type's template snapshots and entered dates for return.
+      if (previousType && previousType !== type) {
+        archives[previousType] = { ...archives[previousType], [projectId]: current }
+        const plans = Object.fromEntries(Object.entries(machinePlansByKey).filter(([, plan]) => plan.tosProjectId === projectId))
+        const overrides = Object.fromEntries(Object.entries(marketOverridesByKey).filter(([, row]) => plans[`${row.projectId}::${row.tosVersion}`]))
+        const locks = Object.fromEntries(Object.entries(machineRowLocks).filter(([, row]) => row.tosProjectId === projectId))
+        downstream[previousType] = { ...downstream[previousType], [projectId]: { machinePlansByKey: plans, marketOverridesByKey: overrides, machineRowLocks: locks } }
+        const saved = downstream[type]?.[projectId]
+        const restoredPlans = state.stopReleaseRecords.reduce((plans, record) => applyStopRelease({
+          persistedPlans: plans, tosInstances: archives[type]?.[projectId] || [], stopRecords: state.stopReleaseRecords, record,
+        }).persistedPlans, saved?.machinePlansByKey || {})
+        const restored = saved && {
+          machinePlansByKey: restoredPlans,
+          marketOverridesByKey: Object.fromEntries(Object.entries(saved.marketOverridesByKey).filter(([, row]) => restoredPlans[`${row.projectId}::${row.tosVersion}`])),
+          machineRowLocks: sanitizeMachineRowLocks(saved.machineRowLocks, restoredPlans),
+        }
+        machinePlansByKey = { ...Object.fromEntries(Object.entries(machinePlansByKey).filter(([key]) => !plans[key])), ...restored?.machinePlansByKey }
+        marketOverridesByKey = { ...Object.fromEntries(Object.entries(marketOverridesByKey).filter(([key]) => !overrides[key])), ...restored?.marketOverridesByKey }
+        machineRowLocks = { ...Object.fromEntries(Object.entries(machineRowLocks).filter(([key]) => !locks[key])), ...restored?.machineRowLocks }
+      }
+      const existing = previousType && previousType !== type ? archives[type]?.[projectId] || [] : current
+      const next = reconcileTosMrInstances({ projectId, candidates, existing, template: latestPublishedTemplate(state.templateVersions), now: clock() })
+      archives[type] = { ...archives[type], [projectId]: next }
+      if (previousType === type && sameJson(current, next) && sameJson(state.tosInstancesByType, archives)) return
+      set({
+        tosInstancesByProjectId: { ...state.tosInstancesByProjectId, [projectId]: next },
+        tosInstancesByType: archives,
+        tosDownstreamByType: downstream,
+        machinePlansByKey, marketOverridesByKey, machineRowLocks,
+        activeTosTypeByProjectId: { ...state.activeTosTypeByProjectId, [projectId]: type },
+      })
     },
     addTosVersionInstance: (input, permission) => {
       const projectId = text(input.projectId)

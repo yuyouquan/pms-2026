@@ -2208,6 +2208,7 @@ export default function ProjectSpaceContainer() {
     if (shouldAutoEnablePlanEditMode({
       activeModule,
       projectSpaceModule,
+      projectPlanLevel,
       isCurrentDraft,
       followedReadOnly: followedTosLevel1ReadOnly,
     })) {
@@ -2215,7 +2216,7 @@ export default function ProjectSpaceContainer() {
     } else {
       setIsEditMode(false)
     }
-  }, [activeModule, currentVersion, followedTosLevel1ReadOnly, isCurrentDraft, projectSpaceModule, setIsEditMode])
+  }, [activeModule, currentVersion, followedTosLevel1ReadOnly, isCurrentDraft, projectSpaceModule, projectPlanLevel, setIsEditMode])
 
   useEffect(() => {
     if (!mrPlanNavigationIntent || mrPlanNavigationIntent.source !== 'joint-mr') return
@@ -4006,7 +4007,7 @@ export default function ProjectSpaceContainer() {
       })
       const columns: ColumnsType<any> = [
         {
-          title: '序号', dataIndex: 'id', key: 'id', width: 100, fixed: 'left',
+          title: '序号', dataIndex: 'id', key: 'id', width: 132, fixed: 'left', className: 'pms-level1-sequence-cell',
           render: (value: string, record: any) => <Space size={6}>{canReorderGovernedTask(record) && <span className="pms-level1-structure-actions"><DragHandle /></span>}<span>{record.displaySequence || value}</span></Space>,
         },
         {

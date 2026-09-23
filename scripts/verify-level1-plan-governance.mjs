@@ -53,6 +53,10 @@ assert.equal(projectSpaceRules.shouldAutoEnablePlanEditMode({
   followedReadOnly: true,
 }), false, 'followed tOS plans remain read-only even when the selected version is a revision')
 
+for (const projectPlanLevel of ['mr-version-plan', 'level1']) {
+  assert.equal(projectSpaceRules.shouldAutoEnablePlanEditMode({activeModule:'projectSpace',projectSpaceModule:'plan',projectPlanLevel,isCurrentDraft:true,followedReadOnly:false}), projectPlanLevel === 'level1', 'returning from MR to the draft restores edit mode')
+}
+
 const horizontalVersions = [
   { id: 'v1', versionNo: 'V1', status: '已发布' },
   { id: 'v2', versionNo: 'V2', status: '已发布' },

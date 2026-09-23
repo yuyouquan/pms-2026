@@ -17,11 +17,13 @@ export interface GovernedLevel1ActualTask extends Level1PlanTask {
 export const shouldAutoEnablePlanEditMode = (input: {
   activeModule: string
   projectSpaceModule: string
+  projectPlanLevel?: string
   isCurrentDraft: boolean
   followedReadOnly: boolean
 }): boolean => (
   input.activeModule === 'projectSpace'
   && input.projectSpaceModule === 'plan'
+  && input.projectPlanLevel !== 'mr-version-plan'
   && input.isCurrentDraft
   && !input.followedReadOnly
 )

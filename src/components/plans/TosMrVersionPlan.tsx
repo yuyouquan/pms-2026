@@ -1,28 +1,28 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Empty, Input, Modal, Radio, Select, Space, Spin, Tag, Tooltip, message } from 'antd'
-import { AppstoreOutlined, PlusOutlined, TableOutlined } from '@ant-design/icons'
+import { Card, Empty, Input, Radio, Space, Spin, Tag, message } from 'antd'
+import { AppstoreOutlined, TableOutlined } from '@ant-design/icons'
 import type { ProjectItem } from '@/types/app'
 import type { TosTypeConfigRow, TosTypeVersionsState } from '@/lib/tosTypeRules'
 import type { MrLevel1TaskLike, MrPlanVersionLike, MrPlanViewMode, MrTemplateVersion } from '@/types/mrVersionPlan'
 import {
   getTosManagerUsers,
   selectCanonicalTosMrInstances,
-  selectLatestPublishedTosLevel1,
 } from '@/lib/mrPlanSourceAdapters'
 import {
   compareTosVersionNumbers,
   resolveMrPermissions,
   resolveTosMrInstanceDateAccess,
-  selectTosMrVersionCandidates,
+  selectTosMrVersionCandidatesFromTasks,
   validateTosMrInstanceDates,
 } from '@/lib/mrVersionPlanRules'
 import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
+import { usePlanStore } from '@/stores/plan'
+import { selectActiveTosMrTasks } from '@/lib/tosMrLevel1Sync'
 import MrPlanGrid, { getMrPlanCellKey, type MrPlanGridRow } from '@/components/plans/MrPlanGrid'
 
 const NO_TEMPLATE_MESSAGE = '请先在配置中心发布三级计划-MR版本计划模板'
-const INCOMPLETE_LEVEL1_MESSAGE = '请先完善一级计划中的计划开始时间和计划完成时间'
 
 let projectMrHydrationPromise: Promise<void> | null = null
 let projectMrHydrated = false
@@ -67,15 +67,14 @@ export default function TosMrVersionPlan({
 }: TosMrVersionPlanProps) {
   const [messageApi, messageContextHolder] = message.useMessage()
   const [hydrated, setHydrated] = useState(false)
-  const [addOpen, setAddOpen] = useState(false)
-  const [selectedVersion, setSelectedVersion] = useState<string>()
   const [versionQuery, setVersionQuery] = useState('')
   const templateVersions = useMrVersionPlanStore(state => state.templateVersions)
   const instances = useMrVersionPlanStore(state => (
     selectCanonicalTosMrInstances(state.tosInstancesByProjectId, project.id)
   ))
   const viewModeByScope = useMrVersionPlanStore(state => state.viewModeByScope)
-  const addTosVersionInstance = useMrVersionPlanStore(state => state.addTosVersionInstance)
+  const sharedBusinessTasks = usePlanStore(state => state.level1BusinessTasksByScope)
+  const tosTypePlanData = usePlanStore(state => state.tosTypePlanDataByProjectId)
   const updateTosDate = useMrVersionPlanStore(state => state.updateTosDate)
   const setViewMode = useMrVersionPlanStore(state => state.setViewMode)
 
@@ -87,13 +86,15 @@ export default function TosMrVersionPlan({
     return () => { active = false }
   }, [])
 
-  const source = useMemo(() => selectLatestPublishedTosLevel1({
+  const source = useMemo(() => selectActiveTosMrTasks({
     project,
     tosTypeRows,
     tosTypeVersionsByKey,
     publishedSnapshots,
     fallbackVersions,
-  }), [fallbackVersions, project, publishedSnapshots, tosTypeRows, tosTypeVersionsByKey])
+    sharedBusinessTasks,
+    tosTypePlanData,
+  }), [fallbackVersions, project, publishedSnapshots, tosTypeRows, tosTypeVersionsByKey, sharedBusinessTasks, tosTypePlanData])
   const sortedInstances = useMemo(
     () => [...instances].sort((left, right) => compareTosVersionNumbers(left.tosVersion, right.tosVersion)),
     [instances],
@@ -104,11 +105,7 @@ export default function TosMrVersionPlan({
       ? sortedInstances.filter(instance => instance.tosVersion.toLocaleLowerCase().includes(query))
       : sortedInstances
   }, [sortedInstances, versionQuery])
-  const candidates = useMemo(() => source ? selectTosMrVersionCandidates({
-    versions: source.versions,
-    getSnapshot: source.getSnapshot,
-    usedVersions: sortedInstances.map(instance => instance.tosVersion),
-  }) : [], [sortedInstances, source])
+  const candidates = useMemo(() => source ? selectTosMrVersionCandidatesFromTasks(source) : [], [source])
   const latestTemplate = useMemo(() => selectLatestPublishedTemplate(templateVersions), [templateVersions])
   const permission = useMemo(() => resolveMrPermissions({
     context: 'tos',
@@ -133,7 +130,7 @@ export default function TosMrVersionPlan({
           .filter(activity => activity.parentId !== null)
           .forEach(activity => {
             result[getMrPlanCellKey(`${instance.projectId}::${instance.tosVersion}`, activity.id)] = [
-              access?.reason ?? '当前tOS版本在最新发布的一级计划中不存在，无法修改日期',
+              access?.reason ?? '当前tOS版本在一级计划中不存在，无法修改日期',
             ]
           })
         return
@@ -152,27 +149,10 @@ export default function TosMrVersionPlan({
     dates: instance.dates,
   }))
 
-  const handleAdd = () => {
-    if (!selectedVersion || !latestTemplate) return
-    const added = addTosVersionInstance({
-      projectId: project.id,
-      tosVersion: selectedVersion,
-      actor: currentUser,
-      now: new Date().toISOString(),
-    }, permission)
-    if (!added) {
-      void messageApi.error('tOS版本号添加失败，请检查权限或版本是否已存在')
-      return
-    }
-    setAddOpen(false)
-    setSelectedVersion(undefined)
-    void messageApi.success('tOS版本号添加成功')
-  }
-
   const handleDateChange = (row: MrPlanGridRow, activityId: string, value: string) => {
     const access = instanceAccessByVersion.get(row.version)
     if (!access?.canEdit) {
-      void messageApi.error(access?.reason ?? '当前tOS版本在最新发布的一级计划中不存在，无法修改日期')
+      void messageApi.error(access?.reason ?? '当前tOS版本在一级计划中不存在，无法修改日期')
       return
     }
     const updated = updateTosDate(project.id, row.version, activityId, value, currentUser, permission)
@@ -205,21 +185,6 @@ export default function TosMrVersionPlan({
             onChange={event => setVersionQuery(event.target.value)}
             style={{ width: 240 }}
           />
-          {permission.canEditTos && (
-            <Tooltip title={noTemplate ? NO_TEMPLATE_MESSAGE : undefined}>
-              <span>
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  disabled={noTemplate}
-                  onClick={() => setAddOpen(true)}
-                  aria-label="新增tOS版本号"
-                >
-                  新增tOS版本号
-                </Button>
-              </span>
-            </Tooltip>
-          )}
           {!permission.canEditTos && <Tag>只读</Tag>}
         </Space>
         <Radio.Group
@@ -247,40 +212,11 @@ export default function TosMrVersionPlan({
       ) : (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={versionQuery.trim() ? '未找到匹配的tOS版本号' : '暂无MR版本计划'}
+          description={versionQuery.trim() ? '未找到匹配的tOS版本号' : noTemplate ? NO_TEMPLATE_MESSAGE : '请在一级计划的上市迭代阶段或维护阶段添加tOS版本节点'}
         />
       )}
 
-      <Modal
-        title="新增tOS版本号"
-        open={addOpen}
-        okText="确认新增"
-        cancelText="取消"
-        okButtonProps={{ disabled: !selectedVersion }}
-        onOk={handleAdd}
-        onCancel={() => { setAddOpen(false); setSelectedVersion(undefined) }}
-        destroyOnHidden
-      >
-        <Select
-          aria-label="选择tOS版本号"
-          placeholder="请选择一级计划中的tOS版本号"
-          value={selectedVersion}
-          onChange={setSelectedVersion}
-          style={{ width: '100%' }}
-          options={candidates.map(candidate => ({
-            value: candidate.value,
-            disabled: candidate.disabled,
-            title: candidate.reason,
-            label: (
-              <Space size={8}>
-                <span>{candidate.label}</span>
-                {candidate.reason && <span className="pms-mr-candidate-reason">{candidate.reason}</span>}
-              </Space>
-            ),
-          }))}
-          notFoundContent={source ? '暂无可选tOS版本号' : INCOMPLETE_LEVEL1_MESSAGE}
-        />
-      </Modal>
+
     </Card>
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { useTosMrLevel1Sync } from '@/hooks/useTosMrLevel1Sync'
 import { useHrFormalProjectSync } from '@/hooks/useHrFormalProjectSync'
 import { useEffect } from 'react'
 import { useRoadmapRegistryMigration } from '@/hooks/useRoadmapRegistryMigration'
@@ -32,6 +33,7 @@ const globalStyles = `
 
 export default function Home() {
   useHrFormalProjectSync()
+  useTosMrLevel1Sync()
   useEffect(() => { void rehydrateTransferStore() }, [])
   const roadmapMigrationConflicts = useRoadmapRegistryMigration()
   // ═══════ Routing-level store hooks ═══════
