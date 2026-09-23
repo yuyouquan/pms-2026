@@ -1,13 +1,10 @@
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import { cloneNonLaborInvestment, nonLaborMonths } from '@/lib/nonLaborInvestment'
 import { resolveMachineDepartmentInvestments } from '@/lib/resourceAllocation'
-import { getResourcePhaseRatios } from '@/lib/resourceRatios'
-import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import type { ResourceAccountingDataset } from '@/types/resourceAccounting'
 import { buildAccountingAnalysis, dashboardDepartmentParents, matchesDashboardDepartment, UNASSIGNED_PRIMARY, type AccountingAnalysis, type DashboardFilter } from '@/components/project-resources/resourceAccounting'
 import { buildDashboardAnalysis, type DashboardAnalysis, type DashboardSource } from '@/components/project-resources/resourceDashboardData'
-import { resourceInvestmentStages } from '@/components/project-resources/resourceMonthlyPresentation'
-import { dashboardMonthFraction, validDashboardDate } from '@/components/project-resources/resourceDashboardPeriods'
+import { dashboardMonthDates, validDashboardDate } from '@/components/project-resources/resourceDashboardPeriods'
 import type { ResourceMonthlyRow } from '@/components/project-resources/resourceVersionViewData'
 
 export interface DashboardInvestment { labor?: number; cost?: number }
@@ -16,68 +13,73 @@ export const executionPercent = (actual: number | undefined, planned: number | u
 
 /** Choose once for the project. Missing department rows or dates never trigger a different source. */
 export function selectCumulativeEstimateSource(sources: readonly (DashboardSource | undefined)[]) {
-  for (const type of ['projectBudget', 'annual', 'projectEstimate']) {
+  for (const type of ['projectBudget', 'projectEstimate', 'annual']) {
     const official = sources.filter((source): source is DashboardSource => !!source?.version.isActive && source.version.budgetType === type)
     if (official.length === 1) return official[0]
   }
 }
 
-/** Milestone intervals use elapsed calendar days [start, end), matching resource allocation. */
-export function milestoneProgress(start: string | null | undefined, end: string | null | undefined, today: string) {
-  if (!start || !end || !validDashboardDate(start) || !validDashboardDate(end) || !validDashboardDate(today) || end < start) return undefined
-  if (today < start) return 0
-  if (today >= end) return 1
-  return (Date.parse(today) - Date.parse(start)) / (Date.parse(end) - Date.parse(start))
-}
-
-export function buildCumulativeEstimate(category: HrProjectCategory, sources: readonly (DashboardSource | undefined)[], rate: number, filter: DashboardFilter, today: string) {
+/** Monthly plans are spread over every calendar day, including initiation day and today. */
+export function buildCumulativeEstimate(_category: HrProjectCategory, sources: readonly (DashboardSource | undefined)[], rate: number, filter: DashboardFilter,
+  today: string, monthly: readonly ResourceMonthlyRow[], projectStart?: string) {
   const source = selectCumulativeEstimateSource(sources)
   if (!source) return undefined
   const version = source.version
   const upper = 'hrModelVersion' in version ? resolveMachineDepartmentInvestments(version) : version.departmentInvestments
-  const rawDates = 'milestones' in version ? version.milestones : version
-  const dates = (category === 'machine' ? withMachineDerivedMilestones(rawDates) : rawDates) as unknown as Record<string, string | null>
-  const stages = resourceInvestmentStages(category, version)
+  const sourceRows = monthly.filter(row => row.versionId === version.id && !row.isArchived)
+  const globalIssues: string[] = []
+  if (!projectStart || !validDashboardDate(projectStart)) globalIssues.push('请补全有效的项目开始日期，作为立项起算日')
+  if (!validDashboardDate(today)) globalIssues.push('累计截止日期无效')
+  if (!sourceRows.length && version.estimatedInvestment > 0) globalIssues.push('来源正式版本缺少月度预估投入')
+  const fraction = (month: string) => {
+    const days = dashboardMonthDates(month)
+    return days.length && projectStart ? days.filter(date => date >= projectStart && date <= today).length / days.length : 0
+  }
   const groups = new Map<string, { key: string; primary: string; secondary: string; labor: number; nonLaborYuan: number; issues: string[] }>()
-  for (const row of upper.filter(row => matchesDashboardDepartment(row.primaryDepartment, row.secondaryDepartment, filter))) {
-    const primary = row.primaryDepartment || UNASSIGNED_PRIMARY, secondary = row.secondaryDepartment, key = keyOf(primary, secondary)
+  const getGroup = (primary: string, secondary: string) => {
+    primary ||= UNASSIGNED_PRIMARY
+    const key = keyOf(primary, secondary)
     const group = groups.get(key) ?? { key, primary, secondary, labor: 0, nonLaborYuan: 0, issues: [] }
-    const ratios = category === 'machine' ? undefined : getResourcePhaseRatios(category, version, row)
-    const amounts = stages.map(stage => category === 'machine' ? Number((row as unknown as Record<string, unknown>)[stage.key] ?? 0) : row.estimatedInvestment * (ratios?.[stage.key] ?? 0) / 100)
-    if (!Number.isFinite(row.estimatedInvestment) || row.estimatedInvestment < 0 || amounts.some(value => !Number.isFinite(value) || value < 0)
-      || Math.abs(amounts.reduce((sum, value) => sum + value, 0) - row.estimatedInvestment) > .00001) {
-      group.issues.push(`${primary} / ${secondary}：阶段投入与部门预估不平衡`)
-    }
-    stages.forEach((stage, index) => {
-      const amount = amounts[index]
-      if (!amount) return
-      const progress = milestoneProgress(dates[stage.startField], dates[stage.endField], today)
-      if (progress === undefined) group.issues.push(`${primary} / ${secondary}：${stage.label}里程碑缺失或顺序无效`)
-      else group.labor += amount * progress
-    })
     groups.set(key, group)
+    return group
+  }
+  for (const row of sourceRows.filter(row => matchesDashboardDepartment(row.primaryDepartment, row.secondaryDepartment, filter))) {
+    const group = getGroup(row.primaryDepartment, row.secondaryDepartment)
+    if (!Object.keys(row.monthlyData).length && row.estimatedTotal > 0) group.issues.push(`${group.primary} / ${group.secondary}：缺少月度预估投入`)
+    for (const [month, amount] of Object.entries(row.monthlyData)) {
+      if (!dashboardMonthDates(month).length || !Number.isFinite(amount) || amount < 0) group.issues.push(`${group.primary} / ${group.secondary}：月度预估投入无效`)
+      else group.labor += amount * fraction(month)
+    }
+  }
+  // Locked legacy snapshots can have only part of the department monthly rows.
+  // Preserve manual monthly amounts, but never interpret a missing positive department as zero.
+  for (const row of upper.filter(row => row.estimatedInvestment > 0 && matchesDashboardDepartment(row.primaryDepartment, row.secondaryDepartment, filter))) {
+    if (!sourceRows.some(month => keyOf(month.primaryDepartment, month.secondaryDepartment) === keyOf(row.primaryDepartment, row.secondaryDepartment))) {
+      const group = getGroup(row.primaryDepartment, row.secondaryDepartment)
+      group.issues.push(`${group.primary} / ${group.secondary}：缺少月度预估投入`)
+    }
   }
   const expenses = cloneNonLaborInvestment(version.nonLaborInvestment)
   const months = nonLaborMonths(expenses)
-  const parents = filter.departmentParents ?? dashboardDepartmentParents(upper)
+  const parents = filter.departmentParents ?? dashboardDepartmentParents([...upper, ...sourceRows])
   for (const item of expenses.items) {
     const primary = parents[item.secondaryDepartment] ?? UNASSIGNED_PRIMARY
     if (!matchesDashboardDepartment(primary, item.secondaryDepartment, filter)) continue
-    const key = keyOf(primary, item.secondaryDepartment)
-    const group = groups.get(key) ?? { key, primary, secondary: item.secondaryDepartment, labor: 0, nonLaborYuan: 0, issues: [] }
+    const group = getGroup(primary, item.secondaryDepartment)
     for (const month of months) {
       const amount = Number(item.monthlyAmounts[month] ?? 0)
       if (!Number.isFinite(amount) || amount < 0) group.issues.push(`${primary} / ${item.secondaryDepartment}：非人力费用无效`)
-      else group.nonLaborYuan += amount * dashboardMonthFraction(month, { endDate: today })
+      else group.nonLaborYuan += amount * fraction(month)
     }
-    groups.set(key, group)
   }
   const validRate = Number.isFinite(rate) && rate >= 0
-  const rows = [...groups.values()].map(row => ({ ...row, labor: row.issues.length ? undefined : row.labor, cost: row.issues.length || !validRate ? undefined : row.labor * rate + row.nonLaborYuan / 10000 }))
-  const issues = [...new Set(rows.flatMap(row => row.issues))]
-  if (!upper.length && version.estimatedInvestment > 0) issues.push('来源版本缺少部门投入明细')
+  const rows = [...groups.values()].map(row => ({ ...row,
+    labor: globalIssues.length || row.issues.length ? undefined : row.labor,
+    cost: globalIssues.length || row.issues.length || !validRate ? undefined : row.labor * rate + row.nonLaborYuan / 10000,
+  }))
+  const issues = [...new Set([...globalIssues, ...rows.flatMap(row => row.issues)])]
   const labor = issues.length ? undefined : rows.reduce((sum, row) => sum + (row.labor ?? 0), 0)
-  return { source, today, rows, issues, labor, cost: labor === undefined || !validRate ? undefined : rows.reduce((sum, row) => sum + (row.cost ?? 0), 0) }
+  return { source, today, projectStart, rows, issues, labor, cost: labor === undefined || !validRate ? undefined : rows.reduce((sum, row) => sum + (row.cost ?? 0), 0) }
 }
 export type CumulativeEstimate = ReturnType<typeof buildCumulativeEstimate>
 
@@ -90,13 +92,13 @@ export interface ResourceDepartmentDetail {
 const visible = (analysis: DashboardAnalysis | AccountingAnalysis | undefined): DashboardInvestment | undefined => analysis?.months.length ? { labor: analysis.labor, cost: analysis.cost } : undefined
 
 export function buildResourceDepartmentDetails(category: HrProjectCategory, sources: readonly (DashboardSource | undefined)[], monthly: readonly ResourceMonthlyRow[],
-  rate: number, dataset: ResourceAccountingDataset | undefined, filter: DashboardFilter, today: string) {
+  rate: number, dataset: ResourceAccountingDataset | undefined, filter: DashboardFilter, today: string, projectStart?: string) {
   filter = { ...filter, departmentParents: filter.departmentParents ?? dashboardDepartmentParents([
     ...sources.flatMap(source => source ? 'hrModelVersion' in source.version ? resolveMachineDepartmentInvestments(source.version) : source.version.departmentInvestments : []),
     ...monthly.filter(row => sources.some(source => source?.version.id === row.versionId) && !row.isArchived),
     ...(dataset?.worklogs ?? []), ...(dataset?.expenses ?? []),
   ]) }
-  const cumulative = buildCumulativeEstimate(category, sources, rate, filter, today)
+  const cumulative = buildCumulativeEstimate(category, sources, rate, filter, today, monthly, projectStart)
   const analyses = sources.map(source => source && buildDashboardAnalysis(category, source, monthly, rate, filter))
   const actual = buildAccountingAnalysis(dataset, rate, filter)
   const departments = new Map<string, { primary: string; secondary: string }>()
@@ -113,7 +115,7 @@ export function buildResourceDepartmentDetails(category: HrProjectCategory, sour
     const scoped = { ...filter, primary, department: secondary }
     const planned = sources.map(source => source && visible(buildDashboardAnalysis(category, source, monthly, rate, scoped)))
     const currentActual = visible(buildAccountingAnalysis(dataset, rate, scoped))
-    const estimate = cumulative?.rows.find(row => row.key === key) ?? (cumulative ? cumulative.issues.length && !cumulative.rows.length ? {} : { labor: 0, cost: 0 } : undefined)
+    const estimate = cumulative?.rows.find(row => row.key === key) ?? (cumulative ? cumulative.issues.length ? {} : { labor: 0, cost: 0 } : undefined)
     return { key, primary, secondary, annual: planned[0], estimate: planned[1], budget: planned[2], cumulative: estimate, actual: currentActual,
       toDateExecution: executionPercent(currentActual?.labor, estimate?.labor), toDateCostExecution: executionPercent(currentActual?.cost, estimate?.cost),
       lifecycleExecution: executionPercent(currentActual?.labor, planned[2]?.labor), lifecycleCostExecution: executionPercent(currentActual?.cost, planned[2]?.cost) }

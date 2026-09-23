@@ -73,6 +73,7 @@ try {
   }
   let A=renderField('A'), B=renderField('B')
   A.props.onFocusCapture(); A=renderField('A')
+  assert.equal(isEditMode,false,'focusing unchanged resource input does not create an unsaved draft')
   elements(A).find(n=>n.type==='Editor').props.change('invalid'); A=renderField('A')
   A.props.onBlur({relatedTarget:{},currentTarget:{contains:()=>false}}); A=renderField('A')
   B.props.onFocusCapture(); B=renderField('B')
@@ -86,5 +87,10 @@ try {
   assert.equal(isEditMode,true,'saving B also preserves the guard for invalid A')
   A.props.onKeyDown({key:'Escape',preventDefault(){},stopPropagation(){}}); renderField('A')
   assert.equal(isEditMode,false,'finishing the last field releases the guard')
+  A=renderField('A'); A.props.onFocusCapture(); A=renderField('A')
+  elements(A).find(n=>n.type==='Editor').props.change('valid')
+  assert.equal(isEditMode,true,'changed field is guarded immediately')
+  A.props.onBlur({relatedTarget:{},currentTarget:{contains:()=>false}})
+  assert.equal(isEditMode,false,'successful autosave clears guard synchronously before navigation or rerender')
 } finally { globalThis.document=previousDocument }
 console.log('PASS multiple field sessions preserve unsaved guards until the final draft is finished')

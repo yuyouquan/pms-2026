@@ -1,14 +1,15 @@
 /** Actual field event handlers, kept independent of React for executable lifecycle tests. */
-export function createInlineFieldSession(notify: () => void) {
-  const state = { editing: false, value: undefined as unknown, error: '', revision: 0 }
-  const cancel = () => { state.editing = false; state.error = ''; state.revision++; notify() }
+export function createInlineFieldSession(notify: (state: { editing: boolean; dirty: boolean }) => void) {
+  let initialValue: unknown
+  const state = { editing: false, dirty: false, value: undefined as unknown, error: '', revision: 0 }
+  const cancel = () => { state.editing = false; state.dirty = false; state.error = ''; state.revision++; notify(state) }
   const save = (persist: (value: unknown) => void): boolean => {
     if (!state.editing) return true
     try { persist(state.value); cancel(); return true }
-    catch (error) { state.error = error instanceof Error ? error.message : '保存失败，请检查输入'; notify(); return false }
+    catch (error) { state.error = error instanceof Error ? error.message : '保存失败，请检查输入'; notify(state); return false }
   }
-  return { state, begin: (value: unknown) => { state.value = value; state.error = ''; state.editing = true; notify() },
-    change: (value: unknown) => { state.value = value; state.error = ''; notify() }, cancel, save,
+  return { state, begin: (value: unknown) => { initialValue = value; state.value = value; state.dirty = false; state.error = ''; state.editing = true; notify(state) },
+    change: (value: unknown) => { state.dirty = !Object.is(value, initialValue); state.value = value; state.error = ''; notify(state) }, cancel, save,
     leave: (inside: boolean, persist: (value: unknown) => void) => inside || save(persist),
     captureEscape: (event: { key: string; preventDefault: () => void; stopImmediatePropagation: () => void }) => {
       if (!state.editing || event.key !== 'Escape') return false

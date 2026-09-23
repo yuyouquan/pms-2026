@@ -130,17 +130,17 @@ for (const mode of ['labor', 'cost']) {
   assert.ok(trend.series[2].values.every(value => value === undefined), 'absent source stays missing at every stage')
 }
 assert.equal(dashboardBusinessTrend([undefined, undefined, undefined], undefined, 'labor', 'stage', [definition]).periods.length, 0)
-const details = buildResourceDepartmentDetails('capability', [undefined, undefined, source], rows, 5, dataset, filter, '2027-01-04')
+const details = buildResourceDepartmentDetails('capability', [undefined, undefined, source], rows, 5, dataset, filter, '2027-01-04', '2026-12-01')
 assert.equal(selectDashboardSource([source, { ...source, version: { ...source.version, id: 'conflict' } }]), undefined, 'official conflict does not silently choose a version')
 get('exportResourceBusinessDashboard').exportResourceBusinessDashboard('测试', [full, planned, undefined], actual, filter, 'cost', 'stage', [definition, capability, undefined, definition], details)
 assert.equal(sheet('当前趋势').columns.find(column => column.key === 'period').title, '阶段')
 close(sheet('当前趋势').rows.reduce((sum, row) => sum + (row.accounting ?? 0), 0), actual.cost, 'stage export matches card and chart')
-close(sheet('部门投入明细').rows[0].cumulativeLabor, 43 * 34 / 61, 'estimated export uses milestone progress')
+close(sheet('部门投入明细').rows[0].cumulativeLabor, 23 + 20 * 4 / 31, 'estimated export uses milestone progress')
 close(sheet('部门投入明细').rows[0].actualLabor, actual.labor, 'export numerator equals displayed actual')
 close(sheet('部门投入明细').rows.at(-1).toDateCostExecution, details.total.toDateCostExecution, 'export independent cost rate matches total')
 close(sheet('部门投入明细').rows.at(-1).lifecycleExecution, details.total.lifecycleExecution, 'export PM lifecycle rate matches total')
 assert.equal(sheet('部门投入明细').rows[0].today, '2027-01-04')
-close(sheet('偏差及执行率').rows.find(row => row.name === '累至今日执行率').percent, details.total.toDateExecution, 'rate export matches card')
+close(sheet('偏差及执行率').rows.find(row => row.name === '累至今日预算执行率').percent, details.total.toDateExecution, 'rate export matches card')
 
 const require = createRequire(import.meta.url), xlsx = require('xlsx')
 let workbook
