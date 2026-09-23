@@ -1065,6 +1065,13 @@ const denyLevel1StructurePermissions = (): Level1StructurePermissions => ({
   canReorder: false,
 })
 
+/** Business periods are live tOS data, edited only from the latest published plan. */
+export const canMaintainLevel1BusinessTasks = (input: Level1StructurePermissionInput): boolean => (
+  getLevel1ProjectKind(input.projectType) === 'tos'
+  && !input.isDraft && Boolean(input.isLatestPublished)
+  && (input.isSuperAdmin || input.isSpm)
+)
+
 export const getLevel1StructurePermissions = (
   input: Level1StructurePermissionInput,
 ): Level1StructurePermissions => {
@@ -1075,6 +1082,16 @@ export const getLevel1StructurePermissions = (
   const isBusinessActionTask = isCustomBusinessTask
     && businessParent
     && input.task?.parentId === input.parent?.id
+  if (businessParent || isBusinessStage(input.projectType, input.task)) {
+    const canMaintain = canMaintainLevel1BusinessTasks(input)
+    return {
+      canAddStage: false,
+      canAddChild: canMaintain && businessParent,
+      canRename: canMaintain && Boolean(isBusinessActionTask),
+      canDelete: canMaintain && Boolean(isBusinessActionTask),
+      canReorder: canMaintain && Boolean(isBusinessActionTask),
+    }
+  }
   if (!input.isDraft) {
     if (!input.isLatestPublished || (!input.isSuperAdmin && !input.isSpm)) return denyLevel1StructurePermissions()
     return {

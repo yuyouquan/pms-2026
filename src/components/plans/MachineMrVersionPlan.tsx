@@ -209,6 +209,7 @@ export default function MachineMrVersionPlan({
   )), [projection.versions])
   const verticalColumns: ColumnsType<VerticalRow> = [
     { title: 'tOS版本号', key: 'tosVersion', width: 150, fixed: 'left', render: (_, row) => row.version.tosVersion },
+    { title: 'MR号', key: 'mrNumber', width: 90, fixed: 'left', render: (_, row) => `MR${projection.versions.findIndex(version => version.key === row.version.key) + 1}` },
     { title: '活动序号', dataIndex: 'number', key: 'number', width: 110, fixed: 'left' },
     { title: '活动名称', key: 'activityName', width: 240, fixed: 'left', render: (_, row) => row.activity.activityName },
     ...projection.markets.map(market => ({
@@ -252,6 +253,7 @@ export default function MachineMrVersionPlan({
   }
   const horizontalColumns: ColumnsType<HorizontalRow> = [
     { title: 'tOS版本号', key: 'tosVersion', width: 150, fixed: 'left', render: (_, row) => row.version.tosVersion },
+    { title: 'MR号', key: 'mrNumber', width: 90, fixed: 'left', render: (_, row) => `MR${projection.versions.findIndex(version => version.key === row.version.key) + 1}` },
     { title: '市场项目', dataIndex: 'market', key: 'market', width: 120, fixed: 'left' },
     ...horizontalGroups.map(group => ({
       title: group.title,

@@ -23,9 +23,10 @@ export function selectActiveTosMrTasks(input: ActiveTosMrSourceInput): readonly 
     ])
   }
   const versions = getTosTypeVersions(input.tosTypeVersionsByKey, input.project.id, type, 'level1', [...input.fallbackVersions])
-  const live = input.tosTypePlanData[input.project.id]?.[type]?.level1Tasks
-  if (live && versions.some(version => version.status === '修订中')) return live
-  return selectLatestPublishedTosLevel1(input)?.tasks ?? null
+  const published = selectLatestPublishedTosLevel1(input)?.tasks
+  if (published) return published
+  // Legacy data may not have a published snapshot yet; a scoped live seed is safe only before publication.
+  return versions.some(version => version.status === '已发布') ? null : input.tosTypePlanData[input.project.id]?.[type]?.level1Tasks ?? null
 }
 
 export function reconcileTosMrInstances(input: {

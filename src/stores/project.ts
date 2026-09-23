@@ -226,7 +226,7 @@ const initialProjectState = (initialProjects as Project[]).map(migrateProjectHis
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
     acc[project.id] = buildMarketRowsFromMarkets(project.markets).map(row => (
-      project.id === '1' && row.market === 'TR' ? { ...row, isMadaControlled: '是' } : row
+      project.id === '1' && row.market === 'TR' ? { ...row, isMadaControlled: '是', followsMain: true } : row
     ))
   }
   return acc
@@ -235,7 +235,9 @@ const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) =>
 const initialTosTypeConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (project.type === PROJECT_TYPE_TOS_VERSION) {
     const versionTypes = (project as typeof project & { versionTypes?: string[] }).versionTypes || []
-    acc[project.id] = buildTosTypeRows(versionTypes, project.versionType || '')
+    acc[project.id] = buildTosTypeRows(versionTypes, project.versionType || '').map(row => (
+      project.id === '19' && row.type === 'Slim' ? { ...row, followsMain: true } : row
+    ))
   }
   return acc
 }, {} as Record<string, TosTypeConfigRow[]>)

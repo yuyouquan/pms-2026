@@ -1,5 +1,6 @@
 import { getMainMarket, type MarketConfigRow } from '@/lib/marketRules'
 import { compareTosVersionNumbers, normalizeMrBusinessDate } from '@/lib/mrVersionPlanRules'
+import { canonicalizeTosMrVersion } from '@/lib/mrAggregationRules'
 import type {
   JointMachinePlan,
   MrMachineMarketProjection,
@@ -56,7 +57,7 @@ export function projectMachineMarketMrVersions(input: {
     .sort((left, right) => compareTosVersionNumbers(left.tosVersion, right.tosVersion))
     .forEach(plan => {
       const instance = (input.instancesByProjectId[plan.tosProjectId] ?? [])
-        .find(candidate => candidate.tosVersion === plan.tosVersion)
+        .find(candidate => canonicalizeTosMrVersion(candidate.tosVersion) === canonicalizeTosMrVersion(plan.tosVersion))
       if (!instance) {
         missingInstanceVersions.push(plan.tosVersion)
         return

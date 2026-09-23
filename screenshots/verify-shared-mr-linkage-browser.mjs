@@ -7,7 +7,7 @@ import puppeteer from 'puppeteer'
 
 const base = process.env.PMS_BASE_URL || 'http://127.0.0.1:3042'
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'pms-shared-mr-linkage-'))
-const browser = await puppeteer.launch({ headless: true })
+const browser = await puppeteer.launch({ headless: true, protocolTimeout: 20000 })
 const errors = []
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 async function createPage() {
@@ -54,8 +54,8 @@ async function fill(page, name, value, commit = true) {
 async function openTosPlan(page) {
   await clickText(page, '项目管理')
   await clickText(page, '项目配置')
-  await fill(page, '筛选项目名称', 'tOS16.1')
-  await clickText(page, 'tOS16.1')
+  await fill(page, '筛选项目名称', 'tOS16.3')
+  await clickText(page, 'tOS16.3')
   await page.waitForSelector('.pms-project-space')
   await clickText(page, '计划')
   await page.waitForSelector('input[aria-label="横版表格"]')
@@ -82,12 +82,12 @@ try {
   assert.equal(await peer.$('button[aria-label="新增tOS版本号"]'), null)
   await clickAria(source, '取消修订')
   await clickText(source, '确认取消')
-  await addNode(source, '16.1.0.145')
-  await peer.waitForSelector('[aria-label^="16.1.0.145 日期不可填写"]')
-  assert.equal(await peer.$('input[aria-label="16.1.0.145-修改点收集开始时间-日期"]'), null)
-  await fill(source, 'planStartDate 16.1.0.145', '2027-03-03')
-  await fill(source, 'planEndDate 16.1.0.145', '2027-03-20')
-  await fill(peer, '16.1.0.145-修改点收集开始时间-日期', '2027-03-05')
+  await addNode(source, '16.3.0.170')
+  await peer.waitForSelector('[aria-label^="16.3.0.170 日期不可填写"]')
+  assert.equal(await peer.$('input[aria-label="16.3.0.170-修改点收集开始时间-日期"]'), null)
+  await fill(source, 'planStartDate 16.3.0.170', '2026-10-16')
+  await fill(source, 'planEndDate 16.3.0.170', '2026-11-01')
+  await fill(peer, '16.3.0.170-修改点收集开始时间-日期', '2026-10-18')
   console.log('PASS latest published addition, automatic MR and cross-tab date gating')
 
   // Isolated browser fixture: a downstream machine has already entered its MR dates.
@@ -95,34 +95,34 @@ try {
   await seeder.evaluate(() => {
     const key = 'pms-mr-version-plan-store'
     const saved = JSON.parse(localStorage.getItem(key))
-    const row = saved.state.tosInstancesByProjectId['2'].find(row => row.tosVersion === '16.1.0.145')
+    const row = saved.state.tosInstancesByProjectId['19'].find(row => row.tosVersion === '16.3.0.170')
     const leaf = row.activities.find(item => item.activityName === '修改点收集开始时间')
-    saved.state.machinePlansByKey['18::16.1.0.145'] = { projectId: '18', tosProjectId: '2', tosVersion: '16.1.0.145', transferType: '3', dates: { [leaf.id]: '2027-03-06' }, updatedBy: 'QA', updatedAt: '2026-09-23' }
-    saved.state.machineRowLocks['18::2::16.1.0.145'] = { key: '18::2::16.1.0.145', projectId: '18', tosProjectId: '2', tosVersion: '16.1.0.145', lockedBy: 'QA', lockedAt: '2026-09-23' }
+    saved.state.machinePlansByKey['1::16.3.0.170'] = { projectId: '1', tosProjectId: '19', tosVersion: '16.3.0.170', transferType: '3', dates: { [leaf.id]: '2026-10-19' }, updatedBy: 'QA', updatedAt: '2026-09-23' }
+    saved.state.machineRowLocks['1::19::16.3.0.170'] = { key: '1::19::16.3.0.170', projectId: '1', tosProjectId: '19', tosVersion: '16.3.0.170', lockedBy: 'QA', lockedAt: '2026-09-23' }
     localStorage.setItem(key, JSON.stringify(saved))
   })
   await seeder.close()
-  await clickAria(source, '修改业务节点 16.1.0.145')
-  await fill(source, '业务节点新名称 16.1.0.145', '16.1.0.155', false)
+  await clickAria(source, '修改业务节点 16.3.0.170')
+  await fill(source, '业务节点新名称 16.3.0.170', '16.3.0.175', false)
   await clickText(source, '确认修改')
-  await peer.waitForSelector('input[aria-label="16.1.0.155-修改点收集开始时间-日期"]')
+  await peer.waitForSelector('input[aria-label="16.3.0.175-修改点收集开始时间-日期"]')
   let state = await readMr(peer)
-  assert.equal(state.tosInstancesByProjectId['2'].find(row => row.tosVersion === '16.1.0.155').dates['mr-node-change-collection'], '2027-03-05')
-  assert.equal(state.machinePlansByKey['18::16.1.0.155'].dates['mr-node-change-collection'], '2027-03-06')
-  assert.equal(state.machinePlansByKey['18::16.1.0.155'].transferType, '3')
-  assert.ok(state.machineRowLocks['18::2::16.1.0.155'])
-  assert.equal(state.machinePlansByKey['18::16.1.0.145'], undefined)
+  assert.equal(state.tosInstancesByProjectId['19'].find(row => row.tosVersion === '16.3.0.175').dates['mr-node-change-collection'], '2026-10-18')
+  assert.equal(state.machinePlansByKey['1::16.3.0.175'].dates['mr-node-change-collection'], '2026-10-19')
+  assert.equal(state.machinePlansByKey['1::16.3.0.175'].transferType, '3')
+  assert.ok(state.machineRowLocks['1::19::16.3.0.175'])
+  assert.equal(state.machinePlansByKey['1::16.3.0.170'], undefined)
   console.log('PASS source rename preserves persisted MR and downstream dates, transfer type and lock')
 
-  await clickAria(source, '删除节点 16.1.0.155')
+  await clickAria(source, '删除节点 16.3.0.175')
   await clickText(source, '确认')
-  await peer.waitForSelector('input[aria-label="16.1.0.155-修改点收集开始时间-日期"]', { hidden: true })
-  await addNode(source, '16.1.0.155')
-  await peer.waitForSelector('[aria-label^="16.1.0.155 日期不可填写"]')
+  await peer.waitForSelector('input[aria-label="16.3.0.175-修改点收集开始时间-日期"]', { hidden: true })
+  await addNode(source, '16.3.0.175')
+  await peer.waitForSelector('[aria-label^="16.3.0.175 日期不可填写"]')
   state = await readMr(peer)
-  assert.deepEqual(state.tosInstancesByProjectId['2'].find(row => row.tosVersion === '16.1.0.155').dates, {})
-  assert.equal(state.machinePlansByKey['18::16.1.0.155'], undefined)
-  assert.equal(state.machineRowLocks['18::2::16.1.0.155'], undefined)
+  assert.deepEqual(state.tosInstancesByProjectId['19'].find(row => row.tosVersion === '16.3.0.175').dates, {})
+  assert.deepEqual(state.machinePlansByKey['1::16.3.0.175']?.dates || {}, {}, 're-created machine projection has no old dates')
+  assert.equal(state.machineRowLocks['1::19::16.3.0.175'], undefined)
   console.log('PASS deleting and recreating the same name does not resurrect downstream data')
 
   await clickAria(source, '创建修订')
@@ -133,8 +133,11 @@ try {
   await wait(1500)
   const afterWrites = await Promise.all([source, peer].map(page => page.evaluate(() => window.__qaPlanWrites)))
   assert.deepEqual(afterWrites, beforeWrites, 'different version selections must settle without cross-tab write echoes')
-  const centerDelta = await source.$eval('button[aria-label="修改业务节点 16.1.0.155"]', button => {
-    const cells = button.closest('tr').querySelectorAll('td')
+  assert.equal(await source.$('button[aria-label="修改业务节点 16.3.0.175"]'), null, 'draft business children are read-only')
+  assert.equal(await source.$('button[aria-label="添加业务节点 维护阶段"]'), null, 'draft cannot add business children')
+  assert.equal(await source.$('input[aria-label="planStartDate 16.3.0.175"]'), null)
+  const centerDelta = await source.$$eval('.pms-level1-tree-table tr', rows => {
+    const cells = rows.find(row => row.textContent.includes('16.3.0.175')).querySelectorAll('td')
     const number = cells[0].querySelector('.ant-space-item:last-child span').getBoundingClientRect()
     const name = cells[1].querySelector('.ant-space-item:first-child span').getBoundingClientRect()
     return Math.abs(number.y + number.height / 2 - name.y - name.height / 2)
@@ -143,19 +146,20 @@ try {
   await clickAria(source, '发布')
   // Publishing a partial business node is allowed; source availability is a warning in MR.
   await source.waitForSelector('button[aria-label="创建修订"]', { visible: true })
-  await peer.waitForSelector('[aria-label^="16.1.0.155 日期不可填写"]')
+  await peer.waitForSelector('[aria-label^="16.3.0.175 日期不可填写"]')
   console.log('PASS draft creation settles across tabs, sequence aligns and publish preserves shared nodes')
   await peer.bringToFront()
-  await peer.screenshot({ path: path.join(output, 'mr-source-warning.png'), fullPage: true })
+  fs.writeFileSync(path.join(output, 'mr-source-warning.txt'), await peer.evaluate(() => document.body.innerText))
   await peer.reload({ waitUntil: 'networkidle2' })
   state = await readMr(peer)
-  assert.ok(state.tosInstancesByProjectId['2'].some(row => row.tosVersion === '16.1.0.155'))
-  assert.equal(state.machinePlansByKey['18::16.1.0.155'], undefined)
+  assert.ok(state.tosInstancesByProjectId['19'].some(row => row.tosVersion === '16.3.0.175'))
+  assert.deepEqual(state.machinePlansByKey['1::16.3.0.175']?.dates || {}, {}, 're-created machine projection has no old dates')
   assert.deepEqual(errors, [], 'no browser runtime errors')
   console.log(`PASS refresh persistence and runtime errors; evidence: ${output}`)
 } catch (error) {
+  console.error(error)
   for (const [index, page] of (await browser.pages()).entries()) {
-    await page.screenshot({ path: path.join(output, `failure-${index}.png`) }).catch(() => {})
+
     fs.writeFileSync(path.join(output, `failure-${index}.txt`), await page.evaluate(() => document.body.innerText).catch(() => 'Page unavailable'))
   }
   console.error(`Failure evidence: ${output}`)
