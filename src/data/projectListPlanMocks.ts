@@ -137,10 +137,8 @@ export function buildProjectListMockPlanTasks<T extends ProjectListMockTemplateT
 ): T[] {
   const dated = buildDatedMilestones(projectId, templateTasks)
   if (context?.projectType === '整机产品项目') {
-    return appendBusinessMockRows(dated, projectId, [
-      { stageName: '上市阶段', taskName: 'MR1', planStartDate: '2026-12-16', planEndDate: '2027-01-15' },
-      { stageName: '生命周期阶段', taskName: 'MR2', planStartDate: '2027-01-16', planEndDate: '2027-03-01' },
-    ])
+    // Machine business periods are generated from the market's MR plan, never seeded independently.
+    return dated
   }
   const prefix = context?.projectType === 'tOS版本项目'
     ? getTosVersionPrefix(context.projectName)

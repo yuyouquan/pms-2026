@@ -16,7 +16,8 @@ assert.equal(projected.find(t => t.taskName === '生命周期阶段').displaySeq
 assert.deepEqual(machine, before, 'display numbering must not change saved IDs or references')
 for (const [type, tasks] of [['整机产品项目', machine], ['tOS版本项目', rules.buildTosLevel1Tasks()]]) {
  for (const stage of tasks.filter(t => rules.isBusinessStage(type,t))) {
-  assert.equal(rules.getLevel1StructurePermissions({projectType:type,isDraft:false,isLatestPublished:true,isSuperAdmin:false,isSpm:true,parent:stage}).canAddChild,true,'latest published business stages allow maintainers to add children')
+  assert.equal(rules.getLevel1StructurePermissions({projectType:type,isDraft:false,isLatestPublished:true,isSuperAdmin:false,isSpm:true,parent:stage}).canAddChild,type === 'tOS版本项目','only tOS latest published business stages allow maintainers to add children')
+  assert.equal(rules.getLevel1StructurePermissions({projectType:type,isDraft:true,isLatestPublished:false,isSuperAdmin:true,isSpm:true,parent:stage}).canAddChild,false,'business nodes cannot be manually added in a draft')
   assert.equal(rules.getLevel1StructurePermissions({projectType:type,isDraft:false,isLatestPublished:false,isSuperAdmin:true,isSpm:false,parent:stage}).canAddChild,false,'historical snapshots stay read only')
   assert.equal(rules.getLevel1StructurePermissions({projectType:type,isDraft:false,isLatestPublished:true,isSuperAdmin:false,isSpm:false,parent:stage}).canAddChild,false,'viewers cannot edit')
  }
@@ -39,7 +40,18 @@ const remapped = shared.applyLevel1BusinessTasks('整机产品项目',changedPar
 assert.equal(remapped.find(t=>t.stableId==='shared-a').parentId,'new-stage-id','template renumbering preserves parent links')
 const seededB = shared.selectLevel1BusinessSeedTasks({projectType:'整机产品项目',hasDraft:true,liveTasks:draft,latestPublishedTasks:published,projectSeedTasks:machine})
 assert.equal(seededB.some(t=>t.stableId==='shared-a'),false,'unscoped legacy machine draft cannot seed another project')
-assert.deepEqual(shared.selectLevel1BusinessSeedTasks({projectType:'tOS版本项目',hasDraft:true,liveTasks:draft,latestPublishedTasks:published,projectSeedTasks:machine}),draft,'already scoped tOS drafts retain their children')
+assert.deepEqual(shared.selectLevel1BusinessSeedTasks({projectType:'tOS版本项目',hasDraft:true,liveTasks:draft,latestPublishedTasks:published,projectSeedTasks:machine}),published,'initial shared tOS business data comes from the latest publication')
+const marketRules = load(path.resolve('src/lib/marketRules.ts'))
+const follower = [...machine, {...child,stableId:'own-tr',id:'tr-own',taskName:'MR9',planStartDate:'2027-02-01'}]
+const followed = marketRules.mergeFollowMarketActualDates(draft, follower)
+assert.equal(followed.some(task => task.stableId === 'shared-a'),false,'following market must not copy main business children')
+assert.equal(followed.find(task => task.stableId === 'own-tr').planStartDate,'2027-02-01','following market retains own MR dates')
+assert.equal(marketRules.mergeFollowMarketActualDates(draft, machine).some(task => task.stableId === 'shared-a'),false,'empty local business collection stays empty on follow')
+for (const type of ['整机产品项目','tOS版本项目']) {
+ for (const isDraft of [false,true]) {
+  assert.equal(rules.canMaintainLevel1BusinessTasks({projectType:type,isDraft,isLatestPublished:!isDraft,isSuperAdmin:true,isSpm:false}),type==='tOS版本项目' && !isDraft)
+ }
+}
 const planModule = load(path.resolve('src/stores/plan.ts'))
 const legacy = {marketPlanData:{OP:{tasks:draft}},publishedSnapshots:{},level1BusinessTasksByScope:{}}
 const migrated = planModule.migratePlanStoreState(legacy,16)

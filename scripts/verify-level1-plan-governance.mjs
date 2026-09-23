@@ -526,18 +526,7 @@ const machineProjectMock = projectMocks.buildProjectListMockPlanTasks('1', machi
   projectName: 'DEMO017-DEMOCHIP001_DEMOBOARD016',
 })
 const machineBusinessMocks = machineProjectMock.filter(task => task.nodeKind === 'business-period')
-assert.deepEqual(machineBusinessMocks.map(task => task.taskName), ['MR1', 'MR2'], 'machine project mocks add one launch and one lifecycle business period')
-assert.equal(machineBusinessMocks.every(task => task.source === 'custom' && task.stableId?.includes('mock-1-business-')), true, 'machine business mocks use stable project-scoped custom identities')
-assert.equal(machineBusinessMocks[0].planEndDate < machineBusinessMocks[1].planStartDate, true, 'machine planned business periods never overlap')
-assert.equal(machineBusinessMocks[0].actualEndDate < machineBusinessMocks[1].actualStartDate, true, 'machine actual business periods never overlap')
-const offsetMachineMock = projectMocks.buildProjectListMockPlanTasks('3', machineUndatedTemplate, {
-  projectType: '整机产品项目',
-  projectName: 'DEMO013_DEMOBOARD010',
-})
-const offsetMachineStr5 = offsetMachineMock.find(task => task.taskName === 'STR5')
-const offsetMachineMr1 = offsetMachineMock.find(task => task.taskName === 'MR1')
-assert.equal(offsetMachineStr5.planEndDate < offsetMachineMr1.planStartDate, true, 'project offsets never make STR5 overlap the first planned machine business period')
-assert.equal(offsetMachineStr5.actualEndDate < offsetMachineMr1.actualStartDate, true, 'project offsets never make STR5 overlap the first actual machine business period')
+assert.deepEqual(machineBusinessMocks, [], 'machine mocks derive business periods exclusively from MR plans')
 
 const tosProjectMock = projectMocks.buildProjectListMockPlanTasks('19', tosUndatedTemplate, {
   projectType: 'tOS版本项目',
@@ -982,7 +971,7 @@ assert.deepEqual(
 )
 
 const denyAllStructure = { canAddStage: false, canAddChild: false, canRename: false, canDelete: false, canReorder: false }
-const adminBusinessStructure = { canAddStage: false, canAddChild: true, canRename: true, canDelete: true, canReorder: true }
+const adminBusinessStructure = denyAllStructure
 const adminNonBusinessStructure = { canAddStage: false, canAddChild: true, canRename: false, canDelete: true, canReorder: false }
 const customAdminStage = {
   ...machineInsert.parent,
@@ -1112,7 +1101,7 @@ assert.deepEqual(
     task: machineInsert.task,
     parent: machineInsert.parent,
   }),
-  { canAddStage: false, canAddChild: true, canRename: true, canDelete: true, canReorder: true },
+  denyAllStructure,
   'SPMs can add, rename, delete, and reorder dynamic nodes only within machine business stages',
 )
 
@@ -1131,7 +1120,7 @@ assert.deepEqual(
     task: fixedBusinessChild,
     parent: machineInsert.parent,
   }),
-  { canAddStage: false, canAddChild: true, canRename: false, canDelete: false, canReorder: false },
+  denyAllStructure,
   'SPMs cannot rename, delete, or reorder a fixed node even when its parent is a business stage',
 )
 const templateBusinessPeriod = {
@@ -1149,7 +1138,7 @@ assert.deepEqual(
     task: templateBusinessPeriod,
     parent: machineInsert.parent,
   }),
-  { canAddStage: false, canAddChild: true, canRename: false, canDelete: false, canReorder: false },
+  denyAllStructure,
   'SPMs cannot rename, delete, or reorder a template business-period under an allowed business stage',
 )
 assert.deepEqual(
@@ -1161,8 +1150,8 @@ assert.deepEqual(
     task: templateBusinessPeriod,
     parent: machineInsert.parent,
   }),
-  adminNonBusinessStructure,
-  'global super administrators retain child/delete but not stage-add or unsupported template business rename/reorder actions',
+  denyAllStructure,
+  'global super administrators cannot manually maintain generated MR periods; previously child/delete but not stage-add or unsupported template business rename/reorder actions',
 )
 assert.equal(typeof rules.deleteLevel1GovernedTask, 'function', 'governed deletion is exposed as an executable permission-checked handler helper')
 const templateBusinessTasks = [...machineInsert.tasks, { ...templateBusinessPeriod, id: '4.2', parentId: machineInsert.parent.id, order: 2 }]
@@ -1187,8 +1176,8 @@ const allowedAdminTemplateBusinessDelete = rules.deleteLevel1GovernedTask(templa
   isSpm: false,
   taskStableId: templateBusinessPeriod.stableId,
 })
-assert.equal(allowedAdminTemplateBusinessDelete.ok, true, 'global super administrators retain template-node deletion')
-assert.equal(allowedAdminTemplateBusinessDelete.tasks.some(task => task.stableId === templateBusinessPeriod.stableId), false, 'an authorized deletion removes the requested stable node')
+assert.equal(allowedAdminTemplateBusinessDelete.ok, false, 'generated MR nodes cannot be deleted manually by administrators')
+assert.deepEqual(templateBusinessTasks, templateBusinessTasksSnapshot, 'denied deletion leaves generated periods unchanged')
 assert.deepEqual(
   rules.getLevel1StructurePermissions({
     projectType: '整机产品项目',
@@ -1209,7 +1198,7 @@ assert.deepEqual(
     task: tosInsert.task,
     parent: tosInsert.parent,
   }),
-  { canAddStage: false, canAddChild: true, canRename: true, canDelete: true, canReorder: true },
+  denyAllStructure,
   'SPMs receive the same governed permissions under a tOS maintenance stage',
 )
 assert.deepEqual(
