@@ -204,6 +204,7 @@ import {
   getNextTosBusinessVersionName,
   getLevel1StructurePermissions,
   canMaintainLevel1BusinessTasks,
+  canEditLevel1BusinessActualDates,
   buildMachineLevel1Tasks,
   buildTosLevel1Tasks,
   insertLevel1BusinessNode,
@@ -2901,7 +2902,7 @@ export default function ProjectSpaceContainer() {
       return
     }
     if (business && selectedProject) {
-      const canEditShared = canMaintainLevel1BusinessTasks({
+      const canEditShared = canEditLevel1BusinessActualDates({
         projectType: selectedProject.type,
         isDraft: useLevel1SurfaceScope ? level1SurfaceIsDraft : isCurrentDraft,
         isLatestPublished: useLevel1SurfaceScope ? level1SurfaceIsLatestPublished : isLatestPublished,
@@ -3499,6 +3500,19 @@ export default function ProjectSpaceContainer() {
       project, tasks: currentTasks, isDraft, isLatestPublished,
       isSuperAdmin: admins.includes(token.currentUser),
       isSpm: getLevel1MaintainerUsers(project.spm, roles).includes(token.currentUser),
+      writeBusinessActualDate: (stableId: string, field: 'actualStartDate' | 'actualEndDate', value: string) => {
+        const task = currentTasks.find(candidate => (candidate.stableId || candidate.id) === stableId)
+        if (!task || task.parentId !== parent?.id || !isBusinessStage(project.type, parent)
+          || !canEditLevel1BusinessActualDates({ projectType: project.type, isDraft, isLatestPublished,
+            isSuperAdmin: admins.includes(token.currentUser), isSpm: getLevel1MaintainerUsers(project.spm, roles).includes(token.currentUser) })) {
+          return { ok: false, message: '只能在最新已发布版本中编辑 MR 实际日期' } as const
+        }
+        const result = applyGovernedLevel1ActualDateTransaction({
+          targets: [{ key: scopeKey, tasks: currentTasks.map(candidate => ({ ...candidate })) }], targetStableId: stableId, field, value,
+        })
+        if (result.ok) latestPlan.setLevel1BusinessTasks(scopeKey, project.type, result.targets[0].tasks, ownSnapshotKey)
+        return result
+      },
       writeTasks: (nextTasks: Level1PlanTask[]) => {
         if (isBusinessStage(project.type, parent)) {
           if (!canMaintainLevel1BusinessTasks({ projectType: project.type, isDraft, isLatestPublished, isSuperAdmin: admins.includes(token.currentUser), isSpm: getLevel1MaintainerUsers(project.spm, roles).includes(token.currentUser) })) return
@@ -3850,19 +3864,22 @@ export default function ProjectSpaceContainer() {
         if (isBusinessStage(selectedProject.type, parent)) {
           const token = createLevel1StructureToken(parent?.stableId || parent?.id || '')
           const latest = token && getLatestLevel1MutationContext(token)
-          if (!latest || !canMaintainLevel1BusinessTasks({ projectType: latest.project.type, ...latest })) return
-          let nextTasks = latest.tasks.map(task => (task.stableId || task.id) === (rawTask.stableId || rawTask.id) ? { ...task, [field]: value } : task)
           if (field === 'actualStartDate' || field === 'actualEndDate') {
-            const result = applyGovernedLevel1ActualDateTransaction({ targets: [{ key: 'shared', tasks: latest.tasks.map(task => ({ ...task })) }], targetStableId: rawTask.stableId || rawTask.id, field, value })
-            if (!result.ok) { void message.error(result.message); return }
-            nextTasks = result.targets[0].tasks
-          } else {
-            const validation = validateLevel1ScheduleDates(nextTasks, { axes: ['plan'] })
-            if (!validation.valid) {
-              setLevel1DateInputReset(value => value + 1)
-              void message.error(validation.violations[0].message)
-              return
+            if (!latest) return
+            const result = latest.writeBusinessActualDate(rawTask.stableId || rawTask.id, field, value)
+            if (!result.ok) {
+              setLevel1DateInputReset(previous => previous + 1)
+              void message.error(result.message)
             }
+            return
+          }
+          if (!latest || !canMaintainLevel1BusinessTasks({ projectType: latest.project.type, ...latest })) return
+          const nextTasks = latest.tasks.map(task => (task.stableId || task.id) === (rawTask.stableId || rawTask.id) ? { ...task, [field]: value } : task)
+          const validation = validateLevel1ScheduleDates(nextTasks, { axes: ['plan'] })
+          if (!validation.valid) {
+            setLevel1DateInputReset(value => value + 1)
+            void message.error(validation.violations[0].message)
+            return
           }
           latest.writeTasks(nextTasks)
           return
@@ -3885,7 +3902,7 @@ export default function ProjectSpaceContainer() {
         const isPlanField = field === 'planStartDate' || field === 'planEndDate'
         const business = isBusinessStage(selectedProject.type, getRawParent(record))
         const canEdit = Boolean(rawTask?.parentId) && isEditableField && (business
-          ? canMaintainLevel1BusinessTasks({ projectType: selectedProject.type, isDraft: isCurrentDraft, isLatestPublished, isSuperAdmin: isLevel1SuperAdmin, isSpm: isLevel1Spm })
+          ? (isPlanField ? canMaintainLevel1BusinessTasks : canEditLevel1BusinessActualDates)({ projectType: selectedProject.type, isDraft: isCurrentDraft, isLatestPublished, isSuperAdmin: isLevel1SuperAdmin, isSpm: isLevel1Spm })
           : canMaintainCurrentPlan && !followedTosLevel1ReadOnly && (isPlanField
             ? isCurrentDraft && isEditMode
             : (isCurrentDraft && isEditMode) || isLatestPublished))

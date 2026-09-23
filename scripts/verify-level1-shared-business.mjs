@@ -48,6 +48,12 @@ assert.equal(followed.some(task => task.stableId === 'shared-a'),false,'followin
 assert.equal(followed.find(task => task.stableId === 'own-tr').planStartDate,'2027-02-01','following market retains own MR dates')
 assert.equal(marketRules.mergeFollowMarketActualDates(draft, machine).some(task => task.stableId === 'shared-a'),false,'empty local business collection stays empty on follow')
 for (const type of ['整机产品项目','tOS版本项目']) {
+ for (const [isDraft, isLatestPublished, isSuperAdmin, isSpm, expected] of [
+  [false, true, true, false, true], [false, true, false, true, true],
+  [false, true, false, false, false], [true, false, true, true, false], [false, false, true, true, false],
+ ]) {
+  assert.equal(rules.canEditLevel1BusinessActualDates({projectType:type,isDraft,isLatestPublished,isSuperAdmin,isSpm}),expected,'MR actual editing is latest-published and maintainer only')
+ }
  for (const isDraft of [false,true]) {
   assert.equal(rules.canMaintainLevel1BusinessTasks({projectType:type,isDraft,isLatestPublished:!isDraft,isSuperAdmin:true,isSpm:false}),type==='tOS版本项目' && !isDraft)
  }

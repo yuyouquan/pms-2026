@@ -1072,6 +1072,13 @@ export const canMaintainLevel1BusinessTasks = (input: Level1StructurePermissionI
   && (input.isSuperAdmin || input.isSpm)
 )
 
+/** Machine MR structure/plan dates are derived, but maintainers record actual dates per market. */
+export const canEditLevel1BusinessActualDates = (input: Level1StructurePermissionInput): boolean => (
+  (getLevel1ProjectKind(input.projectType) === 'machine' || getLevel1ProjectKind(input.projectType) === 'tos')
+  && !input.isDraft && Boolean(input.isLatestPublished)
+  && (input.isSuperAdmin || input.isSpm)
+)
+
 export const getLevel1StructurePermissions = (
   input: Level1StructurePermissionInput,
 ): Level1StructurePermissions => {

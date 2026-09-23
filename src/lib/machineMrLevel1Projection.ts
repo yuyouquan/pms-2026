@@ -45,7 +45,9 @@ export function projectMachineMrLevel1Tasks(input: {
   overridesByKey: Readonly<Record<string, MrMarketOverride>>
   market: string
   mainMarket: string
+  previousTasks?: readonly Level1PlanTask[]
 }): Level1PlanTask[] {
+  const previousByStableId = new Map((input.previousTasks || []).map(task => [task.stableId || task.id, task]))
   const stages = buildMachineLevel1Tasks(false).filter(task => task.stableId === MACHINE_STAGES.launch || task.stableId === MACHINE_STAGES.lifecycle)
   const stageByPhase = new Map<Phase, Level1PlanTask>(stages.map(stage => [
     stage.stableId === MACHINE_STAGES.launch ? 'launch' : 'lifecycle', stage,
@@ -74,10 +76,13 @@ export function projectMachineMrLevel1Tasks(input: {
       .filter(Boolean).sort()
     const sourceIdentity = instance.sourceLevel1TaskId || canonicalVersion
     const stableId = `machine-mr:${JSON.stringify([version.tosProjectId, sourceIdentity])}`
+    const previous = previousByStableId.get(stableId)
     return [{
       id: stableId, stableId, parentId: stage.id, order: number,
       taskName: `MR${++number}`, source: 'template', nodeKind: 'business-period',
       planStartDate: dates[0] || '', planEndDate: dates.at(-1) || '',
+      ...(previous?.actualStartDate !== undefined ? { actualStartDate: previous.actualStartDate } : {}),
+      ...(previous?.actualEndDate !== undefined ? { actualEndDate: previous.actualEndDate } : {}),
     }]
   })
   return [...stages, ...children]

@@ -82,18 +82,19 @@ export function startTosMrLevel1Sync(eventTarget: Window = window) {
           instancesByProjectId: mr.tosInstancesByProjectId, marketRows,
         })
         for (const market of projection.markets) {
-          const tasks = projectMachineMrLevel1Tasks({
-            versions: projection.versions, instancesByProjectId: mr.tosInstancesByProjectId,
-            sourceTasksByProjectId, overridesByKey: mr.marketOverridesByKey,
-            market, mainMarket: projection.mainMarket,
-          })
           const scope = getLevel1BusinessScopeKey(project.id, 'market', market)
           const latest = getMarketVersions(plan.marketVersionsByKey, project.id, market, plan.versions)
             .filter(version => version.status === '已发布').sort((left, right) => comparePlanVersions(right, left))[0]
           const snapshotKey = latest ? getProjectMarketSnapshotKey(project.id, market, latest.id) : undefined
-          const shared = captureLevel1BusinessTasks(project.type, tasks)
           const existing = usePlanStore.getState().level1BusinessTasksByScope[scope]
           const snapshot = snapshotKey ? usePlanStore.getState().publishedSnapshots[snapshotKey] : undefined
+          const tasks = projectMachineMrLevel1Tasks({
+            versions: projection.versions, instancesByProjectId: mr.tosInstancesByProjectId,
+            sourceTasksByProjectId, overridesByKey: mr.marketOverridesByKey,
+            market, mainMarket: projection.mainMarket,
+            previousTasks: existing ? Object.values(existing).flat() : snapshot,
+          })
+          const shared = captureLevel1BusinessTasks(project.type, tasks)
           const snapshotCurrent = !snapshot || JSON.stringify(applyLevel1BusinessTasks(project.type, snapshot, shared)) === JSON.stringify(snapshot)
           if (JSON.stringify(existing) !== JSON.stringify(shared) || !snapshotCurrent) {
             usePlanStore.getState().setLevel1BusinessTasks(scope, project.type, tasks, snapshotKey)
