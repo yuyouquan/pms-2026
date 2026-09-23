@@ -2234,7 +2234,9 @@ export default function ProjectSpaceContainer() {
   }
 
   const navigateWithEditGuard = (action: () => void) => {
-    if (basicInfoEditMode || (isEditMode && (projectSpaceModule === 'resources' || !isCurrentDraft))) {
+    // Resource blur/outside handlers save before navigation; read their synchronous draft state.
+    const hasUnsavedEdits = projectSpaceModule === 'resources' ? useUiStore.getState().isEditMode : isEditMode && !isCurrentDraft
+    if (basicInfoEditMode || hasUnsavedEdits) {
       setPendingNavigation(() => {
         setBasicInfoEditMode(false)
         setEditingProjectFields({})

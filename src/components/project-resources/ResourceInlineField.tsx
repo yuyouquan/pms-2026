@@ -16,15 +16,17 @@ export default function ResourceInlineField({ label, value, display, readOnly = 
   renderEditor: (value: unknown, change: (value: unknown) => void, popup: () => HTMLElement) => ReactNode
 }) {
   const [, redraw] = useReducer(n => n + 1, 0)
-  const session = useRef(createInlineFieldSession(redraw)).current
+  const id = useId()
+  const session = useRef(createInlineFieldSession(state => {
+    setFieldEditing(id, state.editing && state.dirty)
+    redraw()
+  })).current
   const root = useRef<HTMLDivElement>(null)
   const popupRoot = useRef<HTMLDivElement | null>(null)
   const saveRef = useRef(onSave); saveRef.current = onSave
-  const id = useId()
   const { editing, error } = session.state
   useEffect(() => {
     if (!editing) return
-    setFieldEditing(id, true)
     const inside = (target: Node) => !!(root.current?.contains(target) || popupRoot.current?.contains(target))
     const outside = (event: PointerEvent) => {
       if (!session.leave(inside(event.target as Node), saveRef.current)) {
