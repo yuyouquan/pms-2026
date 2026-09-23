@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState, type HTMLAttributes, type ReactNode } from 'react'
-import { Alert, Card, DatePicker, Empty, Radio, Spin, Table, Tooltip, message } from 'antd'
+import { Alert, Card, DatePicker, Empty, Input, Radio, Select, Spin, Table, Tooltip, message } from 'antd'
 import { AppstoreOutlined, ExclamationCircleOutlined, TableOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { ColumnsType } from 'antd/es/table'
@@ -11,6 +11,7 @@ import { getMainMarket } from '@/lib/marketRules'
 import { projectMachineMrMetadata } from '@/lib/mrPlanSourceAdapters'
 import {
   getMachineMarketDate,
+  filterMachineMrProjection,
   projectMachineMarketMrVersions,
 } from '@/lib/mrMachineMarketRules'
 import { validateJointMachineRows, validateMachineMarketDate } from '@/lib/mrDateRules'
@@ -84,6 +85,8 @@ export default function MachineMrVersionPlan({
 }: MachineMrVersionPlanProps) {
   const [messageApi, messageContextHolder] = message.useMessage()
   const [hydrated, setHydrated] = useState(false)
+  const [filters, setFilters] = useState({ tosVersion: '', mrNumber: '', markets: [] as string[] })
+  useEffect(() => { setFilters({ tosVersion: '', mrNumber: '', markets: [] }) }, [project.id])
   const machinePlansByKey = useMrVersionPlanStore(state => state.machinePlansByKey)
   const tosInstancesByProjectId = useMrVersionPlanStore(state => state.tosInstancesByProjectId)
   const marketOverridesByKey = useMrVersionPlanStore(state => state.marketOverridesByKey)
@@ -105,6 +108,8 @@ export default function MachineMrVersionPlan({
     instancesByProjectId: tosInstancesByProjectId,
     marketRows,
   }), [machinePlansByKey, marketRows, project.id, tosInstancesByProjectId])
+  const filteredProjection = useMemo(() => filterMachineMrProjection(projection, filters), [projection, filters])
+  const mrNumbers = useMemo(() => new Map(projection.versions.map((version, index) => [version.key, `MR${index + 1}`])), [projection.versions])
   const configuredMainMarket = getMainMarket(marketRows)
   const mainMarket = projection.mainMarket || configuredMainMarket
   const jointErrors = useMemo(() => validateJointMachineRows({
@@ -199,20 +204,20 @@ export default function MachineMrVersionPlan({
     )
   }
 
-  const verticalRows = useMemo<VerticalRow[]>(() => projection.versions.flatMap(version => (
+  const verticalRows = useMemo<VerticalRow[]>(() => filteredProjection.versions.flatMap(version => (
     numberMrTemplateActivities(version.activities).map(activity => ({
       key: `${version.key}::${activity.id}`,
       version,
       activity,
       number: activity.number,
     }))
-  )), [projection.versions])
+  )), [filteredProjection.versions])
   const verticalColumns: ColumnsType<VerticalRow> = [
     { title: 'tOS版本号', key: 'tosVersion', width: 150, fixed: 'left', render: (_, row) => row.version.tosVersion },
-    { title: 'MR号', key: 'mrNumber', width: 90, fixed: 'left', render: (_, row) => `MR${projection.versions.findIndex(version => version.key === row.version.key) + 1}` },
+    { title: 'MR号', key: 'mrNumber', width: 90, fixed: 'left', render: (_, row) => mrNumbers.get(row.version.key) },
     { title: '活动序号', dataIndex: 'number', key: 'number', width: 110, fixed: 'left' },
     { title: '活动名称', key: 'activityName', width: 240, fixed: 'left', render: (_, row) => row.activity.activityName },
-    ...projection.markets.map(market => ({
+    ...filteredProjection.markets.map(market => ({
       title: market,
       key: market,
       width: 190,
@@ -223,9 +228,9 @@ export default function MachineMrVersionPlan({
     })),
   ]
 
-  const horizontalRows = useMemo<HorizontalRow[]>(() => projection.versions.flatMap(version => (
-    projection.markets.map(market => ({ key: `${version.key}::${market}`, version, market }))
-  )), [projection.markets, projection.versions])
+  const horizontalRows = useMemo<HorizontalRow[]>(() => filteredProjection.versions.flatMap(version => (
+    filteredProjection.markets.map(market => ({ key: `${version.key}::${market}`, version, market }))
+  )), [filteredProjection.markets, filteredProjection.versions])
   const horizontalGroups = useMemo(() => {
     const groups: ReturnType<typeof projectTosMrHorizontalColumns> = []
     const pairs = new Set<string>()
@@ -253,7 +258,7 @@ export default function MachineMrVersionPlan({
   }
   const horizontalColumns: ColumnsType<HorizontalRow> = [
     { title: 'tOS版本号', key: 'tosVersion', width: 150, fixed: 'left', render: (_, row) => row.version.tosVersion },
-    { title: 'MR号', key: 'mrNumber', width: 90, fixed: 'left', render: (_, row) => `MR${projection.versions.findIndex(version => version.key === row.version.key) + 1}` },
+    { title: 'MR号', key: 'mrNumber', width: 90, fixed: 'left', render: (_, row) => mrNumbers.get(row.version.key) },
     { title: '市场项目', dataIndex: 'market', key: 'market', width: 120, fixed: 'left' },
     ...horizontalGroups.map(group => ({
       title: group.title,
@@ -281,6 +286,15 @@ export default function MachineMrVersionPlan({
   return (
     <Card className="pms-machine-mr-card" styles={{ body: { padding: 12 } }}>
       {messageContextHolder}
+      <div className="pms-machine-mr-filters">
+        <Input aria-label="筛选tOS版本号" placeholder="tOS版本号" allowClear value={filters.tosVersion}
+          onChange={event => setFilters(previous => ({ ...previous, tosVersion: event.target.value }))} />
+        <Input aria-label="筛选MR号" placeholder="MR号" allowClear value={filters.mrNumber}
+          onChange={event => setFilters(previous => ({ ...previous, mrNumber: event.target.value }))} />
+        <Select aria-label="筛选市场项目" placeholder="市场项目" mode="multiple" allowClear maxTagCount="responsive"
+          value={filters.markets} options={projection.markets.map(market => ({ label: market, value: market }))}
+          onChange={markets => setFilters(previous => ({ ...previous, markets }))} />
+      </div>
       <div className="pms-machine-mr-toolbar">
         <span className="pms-machine-mr-hint">主市场实时同步；{MARKET_LATER_MESSAGE}</span>
         <Radio.Group
@@ -307,6 +321,8 @@ export default function MachineMrVersionPlan({
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未配置市场" />
       ) : !projection.versions.length ? (
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无MR版本计划" />
+      ) : !filteredProjection.versions.length || !filteredProjection.markets.length ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无符合筛选条件的MR版本计划" />
       ) : mode === 'vertical' ? (
         <Table<VerticalRow>
           aria-label="整机MR版本计划竖版表格"

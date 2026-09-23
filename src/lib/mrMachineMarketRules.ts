@@ -88,3 +88,19 @@ export function getMachineMarketDate(input: {
     getMrMarketOverrideKey(input.plan.projectId, input.plan.tosVersion, input.market)
   ]?.dates[input.activityId] ?? ''
 }
+
+/** Filter the displayed projection only; MR numbering uses the complete ordered source. */
+export function filterMachineMrProjection(
+  projection: MrMachineMarketProjectionResult,
+  filters: { tosVersion: string; mrNumber: string; markets: readonly string[] },
+): MrMachineMarketProjectionResult {
+  const tosQuery = filters.tosVersion.trim().toLowerCase()
+  const mrQuery = filters.mrNumber.trim().toLowerCase()
+  return {
+    ...projection,
+    versions: projection.versions.filter((version, index) => (
+      version.tosVersion.toLowerCase().includes(tosQuery) && `mr${index + 1}`.includes(mrQuery)
+    )),
+    markets: projection.markets.filter(market => !filters.markets.length || filters.markets.includes(market)),
+  }
+}
