@@ -27,7 +27,7 @@ export default function ResourceDashboardMetrics({ sources, analyses, accounting
       </article>
     })}
     <article className="pms-dashboard-metric" style={{ '--budget-color': '#497dc0' } as CSSProperties} aria-label="累至今日预估投入指标">
-      <div className="pms-dashboard-metric-heading"><h3>累至今日预估投入</h3><Tooltip title={cumulative ? `来源：${sourceLabel} ${cumulative.source.version.versionNumber} · 正式版本。部门预估投入 × 阶段比例 × 里程碑间已过自然日占比，截止 ${details.today}，仅随部门筛选变化。${cumulative.issues.join('；')}` : '未设置可用的正式项目预算、年度预算或项目概算。'}><InfoCircleOutlined /></Tooltip></div>
+      <div className="pms-dashboard-metric-heading"><h3>累至今日预估投入</h3><Tooltip title={cumulative ? `来源：${sourceLabel} ${cumulative.source.version.versionNumber} · 正式版本。部门预估投入 × 阶段比例 × 里程碑间已过自然日占比，截止 ${details.today}，仅随部门筛选变化。费用为预估人力费加截至今日非人力计划费用，当月非人力费用按已过工作日占比折算。${cumulative.issues.join('；')}` : '未设置可用的正式项目预算、年度预算或项目概算。'}><InfoCircleOutlined /></Tooltip></div>
       <div className="pms-dashboard-metric-value">{format(cumulative?.labor)} <small>人月</small></div>
       <div className="pms-dashboard-metric-cost">{format(cumulative?.cost, 2)} 万元</div>
       <span className="pms-dashboard-metric-caption">{cumulative ? `${sourceLabel} ${cumulative.source.version.versionNumber}` : '暂无正式版本'}</span>
@@ -40,22 +40,21 @@ export default function ResourceDashboardMetrics({ sources, analyses, accounting
       <span className="pms-dashboard-metric-caption">人天 ÷ 当月工作日</span>
     </article>
     <article className="pms-dashboard-metric" aria-label="概算到预算偏差指标">
-      <div className="pms-dashboard-metric-heading"><h3>概算 → 预算偏差</h3><Tooltip title="（项目预算费用－项目概算费用）÷ 项目概算费用；分母为零或缺失时不计算。"><InfoCircleOutlined /></Tooltip></div>
-      <div className={`pms-dashboard-metric-value${(metrics.costDelta?.percent ?? 0) > 0 ? ' pms-resource-difference' : ''}`}>{signed(metrics.costDelta?.percent)}<small> %</small></div>
+      <div className="pms-dashboard-metric-heading"><h3>概算 → 预算偏差</h3><Tooltip title="（项目预算－项目概算）÷ 项目概算；分别按人月、总费用计算，分母为零或缺失时显示 —。"><InfoCircleOutlined /></Tooltip></div>
+      <div className={`pms-dashboard-metric-value${(metrics.laborDelta?.percent ?? 0) > 0 ? ' pms-resource-difference' : ''}`}>{signed(metrics.laborDelta?.percent)}<small> % 人月</small></div>
+      <div className="pms-dashboard-metric-cost">人月差 {signed(metrics.laborDelta?.amount)}</div>
+      <div className={`pms-dashboard-metric-cost${(metrics.costDelta?.percent ?? 0) > 0 ? ' pms-resource-difference' : ''}`}>费用 {signed(metrics.costDelta?.percent)}%</div>
       <div className="pms-dashboard-metric-cost">费用差 {signed(metrics.costDelta?.amount, 2)} 万元</div>
-      <span className="pms-dashboard-metric-caption">人月差 {signed(metrics.laborDelta?.amount)}</span>
     </article>
-    <article className="pms-dashboard-metric" aria-label="累至今日执行率指标">
-      <div className="pms-dashboard-metric-heading"><h3>累至今日执行率</h3><Tooltip title={`截至 ${details.today} 的核算人月 ÷ 累至今日预估人月，仅随部门筛选变化；分母为零或缺失时不计算。`}><InfoCircleOutlined /></Tooltip></div>
-      <div className={`pms-dashboard-metric-value${(details.total.toDateExecution ?? 0) > 100 ? ' pms-resource-difference' : ''}`}>{format(details.total.toDateExecution)}<small> %</small></div>
-      <div className="pms-dashboard-metric-cost">{format(details.actualToDate?.labor, 3)} / {format(cumulative?.labor, 3)} 人月</div>
-      <span className="pms-dashboard-metric-caption">截至 {details.today}</span>
-    </article>
-    <article className="pms-dashboard-metric" aria-label="全生命周期预算执行率指标">
-      <div className="pms-dashboard-metric-heading"><h3>全生命周期预算执行率</h3><Tooltip title="项目核算费用 ÷ 项目预算费用；沿用当前部门及日期筛选。分母为零或缺失时不计算。"><InfoCircleOutlined /></Tooltip></div>
-      <div className={`pms-dashboard-metric-value${(metrics.execution ?? 0) > 100 ? ' pms-resource-difference' : ''}`}>{format(metrics.execution)}<small> %</small></div>
-      <div className="pms-dashboard-metric-cost">{format(actual?.cost, 2)} / {format(budget?.cost, 2)} 万元</div>
-      <span className="pms-dashboard-metric-caption">{format(actual?.labor)} / {format(budget?.labor)} 人月</span>
-    </article>
+    {([
+      { key: 'toDate', label: '累至今日执行率', labor: details.total.toDateExecution, cost: details.total.toDateCostExecution, planned: cumulative, tooltip: `项目核算 ÷ 累至今日预估投入，分别按人月和总费用计算。分子与项目核算卡片一致；预估截至 ${details.today}，仅随部门筛选变化。` },
+      { key: 'lifecycle', label: '全生命周期预算执行率', labor: details.total.lifecycleExecution, cost: details.total.lifecycleCostExecution, planned: budget, tooltip: '项目核算 ÷ 项目预算，分别按人月和总费用计算，沿用当前部门及日期筛选。' },
+    ] as const).map(item => <article key={item.key} className="pms-dashboard-metric" aria-label={`${item.label}指标`}>
+      <div className="pms-dashboard-metric-heading"><h3>{item.label}</h3><Tooltip title={`${item.tooltip} 总费用含人力费用及非人力费用；分母为零或缺失时显示 —。`}><InfoCircleOutlined /></Tooltip></div>
+      <div className={`pms-dashboard-metric-value${(item.labor ?? 0) > 100 ? ' pms-resource-difference' : ''}`}>{format(item.labor)}<small> % 人月</small></div>
+      <div className="pms-dashboard-metric-cost">{format(actual?.labor, 3)} / {format(item.planned?.labor, 3)} 人月</div>
+      <div className={`pms-dashboard-metric-cost${(item.cost ?? 0) > 100 ? ' pms-resource-difference' : ''}`}>费用 {format(item.cost)}%</div>
+      <div className="pms-dashboard-metric-cost">{format(actual?.cost, 2)} / {format(item.planned?.cost, 2)} 万元</div>
+    </article>)}
   </div></div>
 }

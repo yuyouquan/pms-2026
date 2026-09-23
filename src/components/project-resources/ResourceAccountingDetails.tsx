@@ -5,7 +5,7 @@ import type { ResourceDepartmentDetails as Details } from '@/components/project-
 import ResourceDepartmentDetails from '@/components/project-resources/ResourceDepartmentDetails'
 export default function ResourceAccountingDetails({ analysis, details }: { analysis?: AccountingAnalysis; details: Details }) {
   return <section className="pms-resource-panel pms-dashboard-ledger" aria-label="资源投入明细">
-    <Tabs items={[{ key: 'worklog', label: '工时投入明细', children: <div aria-label="工时投入明细">
+    <Tabs defaultActiveKey="department" items={[{ key: 'department', label: '部门投入明细', children: <ResourceDepartmentDetails details={details} /> }, { key: 'worklog', label: '工时投入明细', children: <div aria-label="工时投入明细">
     <div className="pms-dashboard-panel-head"><span>{analysis?.worklogs.length ?? 0} 条 · 合计 {analysis?.personDays.toFixed(2) ?? '—'} 人天 / {analysis?.labor.toFixed(3) ?? '—'} 人月</span></div>
     <p className="pms-dashboard-ledger-note">人月 = 人天 ÷ 来源当月工作日，逐条折算后汇总。当前为独立模拟明细，尚未接入 IPM；模拟工作日按周一至周五，接入后使用 IPM 日历口径。</p>
     {analysis?.issues.map(issue => <Alert key={issue} type="warning" showIcon message={issue} />)}
@@ -21,6 +21,6 @@ export default function ResourceAccountingDetails({ analysis, details }: { analy
       ]} />
 
     </>}
-    </div> }, { key: 'department', label: '部门投入明细', children: <ResourceDepartmentDetails details={details} /> }]} />
+    </div> }]} />
   </section>
 }

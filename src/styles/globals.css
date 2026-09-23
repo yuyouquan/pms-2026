@@ -9750,6 +9750,7 @@ input.ant-input,
 .pms-dashboard-filters label { display: flex; align-items: center; gap: 8px; font-size: 12px; }
 .pms-dashboard-filters .ant-select { width: 154px; }
 .pms-dashboard-filter-note { margin-left: auto; }
+.pms-dashboard-filter-actions { display: flex; align-items: center; gap: 8px; }
 .pms-dashboard-sources { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .pms-dashboard-source { padding: 13px 14px 10px; border: 1px solid var(--pms-border); border-top: 3px solid var(--budget-color); border-radius: 13px; background: var(--pms-bg-elevated, #fff); min-width: 0; }
 .pms-dashboard-source-focused { box-shadow: 0 2px 12px color-mix(in srgb, var(--budget-color) 9%, transparent); }
