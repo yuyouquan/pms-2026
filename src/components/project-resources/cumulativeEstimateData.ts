@@ -1,12 +1,13 @@
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
+import { cloneNonLaborInvestment, nonLaborMonths } from '@/lib/nonLaborInvestment'
 import { resolveMachineDepartmentInvestments } from '@/lib/resourceAllocation'
 import { getResourcePhaseRatios } from '@/lib/resourceRatios'
 import { withMachineDerivedMilestones } from '@/lib/hrMachinePeriods'
 import type { ResourceAccountingDataset } from '@/types/resourceAccounting'
-import { buildAccountingAnalysis, matchesDashboardDepartment, UNASSIGNED_PRIMARY, type AccountingAnalysis, type DashboardFilter } from '@/components/project-resources/resourceAccounting'
+import { buildAccountingAnalysis, dashboardDepartmentParents, matchesDashboardDepartment, UNASSIGNED_PRIMARY, type AccountingAnalysis, type DashboardFilter } from '@/components/project-resources/resourceAccounting'
 import { buildDashboardAnalysis, type DashboardAnalysis, type DashboardSource } from '@/components/project-resources/resourceDashboardData'
 import { resourceInvestmentStages } from '@/components/project-resources/resourceMonthlyPresentation'
-import { validDashboardDate } from '@/components/project-resources/resourceDashboardPeriods'
+import { dashboardMonthFraction, validDashboardDate } from '@/components/project-resources/resourceDashboardPeriods'
 import type { ResourceMonthlyRow } from '@/components/project-resources/resourceVersionViewData'
 
 export interface DashboardInvestment { labor?: number; cost?: number }
@@ -37,10 +38,10 @@ export function buildCumulativeEstimate(category: HrProjectCategory, sources: re
   const rawDates = 'milestones' in version ? version.milestones : version
   const dates = (category === 'machine' ? withMachineDerivedMilestones(rawDates) : rawDates) as unknown as Record<string, string | null>
   const stages = resourceInvestmentStages(category, version)
-  const groups = new Map<string, { key: string; primary: string; secondary: string; labor: number; issues: string[] }>()
+  const groups = new Map<string, { key: string; primary: string; secondary: string; labor: number; nonLaborYuan: number; issues: string[] }>()
   for (const row of upper.filter(row => matchesDashboardDepartment(row.primaryDepartment, row.secondaryDepartment, filter))) {
     const primary = row.primaryDepartment || UNASSIGNED_PRIMARY, secondary = row.secondaryDepartment, key = keyOf(primary, secondary)
-    const group = groups.get(key) ?? { key, primary, secondary, labor: 0, issues: [] }
+    const group = groups.get(key) ?? { key, primary, secondary, labor: 0, nonLaborYuan: 0, issues: [] }
     const ratios = category === 'machine' ? undefined : getResourcePhaseRatios(category, version, row)
     const amounts = stages.map(stage => category === 'machine' ? Number((row as unknown as Record<string, unknown>)[stage.key] ?? 0) : row.estimatedInvestment * (ratios?.[stage.key] ?? 0) / 100)
     if (!Number.isFinite(row.estimatedInvestment) || row.estimatedInvestment < 0 || amounts.some(value => !Number.isFinite(value) || value < 0)
@@ -56,29 +57,46 @@ export function buildCumulativeEstimate(category: HrProjectCategory, sources: re
     })
     groups.set(key, group)
   }
+  const expenses = cloneNonLaborInvestment(version.nonLaborInvestment)
+  const months = nonLaborMonths(expenses)
+  const parents = filter.departmentParents ?? dashboardDepartmentParents(upper)
+  for (const item of expenses.items) {
+    const primary = parents[item.secondaryDepartment] ?? UNASSIGNED_PRIMARY
+    if (!matchesDashboardDepartment(primary, item.secondaryDepartment, filter)) continue
+    const key = keyOf(primary, item.secondaryDepartment)
+    const group = groups.get(key) ?? { key, primary, secondary: item.secondaryDepartment, labor: 0, nonLaborYuan: 0, issues: [] }
+    for (const month of months) {
+      const amount = Number(item.monthlyAmounts[month] ?? 0)
+      if (!Number.isFinite(amount) || amount < 0) group.issues.push(`${primary} / ${item.secondaryDepartment}：非人力费用无效`)
+      else group.nonLaborYuan += amount * dashboardMonthFraction(month, { endDate: today })
+    }
+    groups.set(key, group)
+  }
   const validRate = Number.isFinite(rate) && rate >= 0
-  const rows = [...groups.values()].map(row => ({ ...row, labor: row.issues.length ? undefined : row.labor, cost: row.issues.length || !validRate ? undefined : row.labor * rate }))
+  const rows = [...groups.values()].map(row => ({ ...row, labor: row.issues.length ? undefined : row.labor, cost: row.issues.length || !validRate ? undefined : row.labor * rate + row.nonLaborYuan / 10000 }))
   const issues = [...new Set(rows.flatMap(row => row.issues))]
   if (!upper.length && version.estimatedInvestment > 0) issues.push('来源版本缺少部门投入明细')
   const labor = issues.length ? undefined : rows.reduce((sum, row) => sum + (row.labor ?? 0), 0)
-  return { source, today, rows, issues, labor, cost: labor === undefined || !validRate ? undefined : labor * rate }
+  return { source, today, rows, issues, labor, cost: labor === undefined || !validRate ? undefined : rows.reduce((sum, row) => sum + (row.cost ?? 0), 0) }
 }
 export type CumulativeEstimate = ReturnType<typeof buildCumulativeEstimate>
 
 export interface ResourceDepartmentDetail {
   key: string; primary: string; secondary: string
   annual?: DashboardInvestment; estimate?: DashboardInvestment; budget?: DashboardInvestment
-  cumulative?: DashboardInvestment; actual?: DashboardInvestment; actualToDate?: DashboardInvestment
-  toDateExecution?: number; lifecycleExecution?: number
+  cumulative?: DashboardInvestment; actual?: DashboardInvestment
+  toDateExecution?: number; toDateCostExecution?: number; lifecycleExecution?: number; lifecycleCostExecution?: number
 }
 const visible = (analysis: DashboardAnalysis | AccountingAnalysis | undefined): DashboardInvestment | undefined => analysis?.months.length ? { labor: analysis.labor, cost: analysis.cost } : undefined
 
 export function buildResourceDepartmentDetails(category: HrProjectCategory, sources: readonly (DashboardSource | undefined)[], monthly: readonly ResourceMonthlyRow[],
-  rate: number, dataset: ResourceAccountingDataset | undefined, filter: DashboardFilter, today: string, projectStart?: string) {
+  rate: number, dataset: ResourceAccountingDataset | undefined, filter: DashboardFilter, today: string) {
+  filter = { ...filter, departmentParents: filter.departmentParents ?? dashboardDepartmentParents([
+    ...sources.flatMap(source => source ? 'hrModelVersion' in source.version ? resolveMachineDepartmentInvestments(source.version) : source.version.departmentInvestments : []),
+    ...monthly.filter(row => sources.some(source => source?.version.id === row.versionId) && !row.isArchived),
+    ...(dataset?.worklogs ?? []), ...(dataset?.expenses ?? []),
+  ]) }
   const cumulative = buildCumulativeEstimate(category, sources, rate, filter, today)
-  // Life-to-date is intentionally independent of the trend's date/year filters.
-  const toDateFilter = { primary: filter.primary, department: filter.department, startDate: projectStart, endDate: today }
-  const actualToDate = buildAccountingAnalysis(dataset, rate, toDateFilter)
   const analyses = sources.map(source => source && buildDashboardAnalysis(category, source, monthly, rate, filter))
   const actual = buildAccountingAnalysis(dataset, rate, filter)
   const departments = new Map<string, { primary: string; secondary: string }>()
@@ -90,18 +108,19 @@ export function buildResourceDepartmentDetails(category: HrProjectCategory, sour
     analysis?.source.version.nonLaborInvestment?.items.forEach(row => add(filter.departmentParents?.[row.secondaryDepartment] ?? UNASSIGNED_PRIMARY, row.secondaryDepartment))
   })
   cumulative?.rows.forEach(row => add(row.primary, row.secondary))
-  ;[...(actual?.worklogs ?? []), ...(actual?.expenses ?? []), ...(actualToDate?.worklogs ?? [])].forEach(row => add(row.primaryDepartment, row.secondaryDepartment))
+  ;[...(actual?.worklogs ?? []), ...(actual?.expenses ?? [])].forEach(row => add(row.primaryDepartment, row.secondaryDepartment))
   const rows: ResourceDepartmentDetail[] = [...departments].map(([key, { primary, secondary }]) => {
     const scoped = { ...filter, primary, department: secondary }
     const planned = sources.map(source => source && visible(buildDashboardAnalysis(category, source, monthly, rate, scoped)))
     const currentActual = visible(buildAccountingAnalysis(dataset, rate, scoped))
-    const toDateActual = actualToDate ? buildAccountingAnalysis(dataset, rate, { ...toDateFilter, primary, department: secondary }) : undefined
     const estimate = cumulative?.rows.find(row => row.key === key) ?? (cumulative ? cumulative.issues.length && !cumulative.rows.length ? {} : { labor: 0, cost: 0 } : undefined)
-    return { key, primary, secondary, annual: planned[0], estimate: planned[1], budget: planned[2], cumulative: estimate, actual: currentActual, actualToDate: toDateActual,
-      toDateExecution: executionPercent(toDateActual?.labor, estimate?.labor), lifecycleExecution: executionPercent(currentActual?.cost, planned[2]?.cost) }
+    return { key, primary, secondary, annual: planned[0], estimate: planned[1], budget: planned[2], cumulative: estimate, actual: currentActual,
+      toDateExecution: executionPercent(currentActual?.labor, estimate?.labor), toDateCostExecution: executionPercent(currentActual?.cost, estimate?.cost),
+      lifecycleExecution: executionPercent(currentActual?.labor, planned[2]?.labor), lifecycleCostExecution: executionPercent(currentActual?.cost, planned[2]?.cost) }
   }).sort((a, b) => a.primary.localeCompare(b.primary, 'zh-CN') || a.secondary.localeCompare(b.secondary, 'zh-CN'))
   const total: ResourceDepartmentDetail = { key: 'total', primary: '合计', secondary: '', annual: visible(analyses[0]), estimate: visible(analyses[1]), budget: visible(analyses[2]),
-    cumulative, actual: visible(actual), actualToDate, toDateExecution: executionPercent(actualToDate?.labor, cumulative?.labor), lifecycleExecution: executionPercent(visible(actual)?.cost, visible(analyses[2])?.cost) }
-  return { cumulative, actualToDate, rows, total, today }
+    cumulative, actual: visible(actual), toDateExecution: executionPercent(visible(actual)?.labor, cumulative?.labor), toDateCostExecution: executionPercent(visible(actual)?.cost, cumulative?.cost),
+    lifecycleExecution: executionPercent(visible(actual)?.labor, visible(analyses[2])?.labor), lifecycleCostExecution: executionPercent(visible(actual)?.cost, visible(analyses[2])?.cost) }
+  return { cumulative, rows, total, today }
 }
 export type ResourceDepartmentDetails = ReturnType<typeof buildResourceDepartmentDetails>

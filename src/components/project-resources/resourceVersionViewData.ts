@@ -1,5 +1,5 @@
 export const RESOURCE_TABS = [
-  { key: 'dashboard', label: '项目资源看板' },
+  { key: 'dashboard', label: '总览' },
   { key: 'annual', label: '年度预算' },
   { key: 'projectEstimate', label: '项目概算' },
   { key: 'projectBudget', label: '项目预算' },
