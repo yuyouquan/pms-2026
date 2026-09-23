@@ -1764,7 +1764,8 @@ assert.deepEqual(acceptanceTosErrors('16.3.0.135'), [])
 assert.deepEqual(acceptanceTosErrors('16.3.0.140'), [])
 assert.equal(acceptanceTosByVersion['16.3.0.140'].dates['mr-node-change-collection'], tosBoundsByVersion['16.3.0.140'].planStartDate)
 assert.equal(acceptanceTosByVersion['16.3.0.140'].dates['mr-node-ota-deploy'], tosBoundsByVersion['16.3.0.140'].planEndDate)
-assert.deepEqual(acceptanceTosErrors('16.3.0.145').map(error => ({
+assert.deepEqual(acceptanceTosErrors('16.3.0.145'), [], 'normal source dates must match generated machine MR phase bounds')
+assert.deepEqual(planRules.validateTosMrInstanceDates({ ...acceptanceTosByVersion['16.3.0.145'], dates: { ...acceptanceTosByVersion['16.3.0.145'].dates, 'mr-node-change-collection': '2026-06-15' } }, tosBoundsByVersion['16.3.0.145']).map(error => ({
   activityId: error.activityId,
   message: error.message,
   boundaryDate: error.boundaryDate,
@@ -1775,7 +1776,8 @@ assert.deepEqual(acceptanceTosErrors('16.3.0.145').map(error => ({
   boundaryDate: '2026-06-16',
   boundaryType: 'minimum',
 }])
-assert.deepEqual(acceptanceTosErrors('16.3.0.150').map(error => ({
+assert.deepEqual(acceptanceTosErrors('16.3.0.150'), [], 'normal source OTA end must not overlap next MR phase')
+assert.deepEqual(planRules.validateTosMrInstanceDates({ ...acceptanceTosByVersion['16.3.0.150'], dates: { ...acceptanceTosByVersion['16.3.0.150'].dates, 'mr-node-ota-deploy': '2026-08-16' } }, tosBoundsByVersion['16.3.0.150']).map(error => ({
   activityId: error.activityId,
   message: error.message,
   boundaryDate: error.boundaryDate,
@@ -1990,7 +1992,7 @@ assert.equal(
 )
 assert.equal(
   tosAcceptanceSnapshot.find(task => task.stableId === 'tos-ms-str5')?.planEndDate,
-  '2026-05-15',
+  '2026-04-15',
   'tOS MR eligibility must bind STR5 through its stable id',
 )
 const assertAcceptanceMilestoneBuffer = (snapshot, stableIds, scopeName) => {
@@ -2667,7 +2669,7 @@ legacyPlanFixture.publishedSnapshots['project::tos::tos-type::Full::level3::v1::
 legacyPlanFixture.publishedSnapshots['project::machine::level3::level1::v1'] = [{ id: 'literal-level3-market' }]
 legacyPlanFixture.publishedSnapshots['project::level3::level1::v1'] = [{ id: 'literal-level3-project' }]
 const planStore = loadTypeScriptModule(root, 'src/stores/plan.ts')
-assert.equal(planStore.PLAN_STORE_VERSION, 17, 'MR migration composes with shared business nodes and the machine stage split upgrade')
+assert.equal(planStore.PLAN_STORE_VERSION, 18, 'MR migration composes with shared business nodes and the machine stage split upgrade')
 const migratedPlanFixture = planStore.migratePlanStoreState(structuredClone(legacyPlanFixture), 9)
 assert.equal('level3TemplateTasksByType' in migratedPlanFixture, false)
 assert.equal('level3ScopesByKey' in migratedPlanFixture, false)

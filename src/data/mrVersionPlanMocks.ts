@@ -121,7 +121,7 @@ const MR_ACCEPTANCE_DATES: Record<string, Record<string, string>> = {
     'mr-node-ota-deploy': '2026-06-15',
   },
   '16.3.0.145': {
-    'mr-node-change-collection': '2026-06-15',
+    'mr-node-change-collection': '2026-06-16',
     'mr-node-change-lock': '2026-06-18',
     'mr-node-mp-intake-start': '2026-06-19',
     'mr-node-mp-intake-deadline': '2026-06-20',
@@ -142,7 +142,7 @@ const MR_ACCEPTANCE_DATES: Record<string, Record<string, string>> = {
     'mr-node-test-complete': '2026-08-01',
     'mr-node-review': '2026-08-03',
     'mr-node-archive': '2026-08-05',
-    'mr-node-ota-deploy': '2026-08-16',
+    'mr-node-ota-deploy': '2026-08-15',
   },
   '16.3.0.155': {
     'mr-node-change-collection': '2026-08-16',
@@ -446,7 +446,11 @@ const tosSnapshot = (
   dayOffset = 0,
   businessNodes: readonly TosBusinessNodeFixture[] = MR_ACCEPTANCE_TOS_BUSINESS_NODES,
 ): Level1PlanTask[] => {
-  const tasks = withAcceptanceMilestoneDates(buildTosLevel1Tasks(false), dayOffset)
+  const firstBusinessDate = businessNodes.map(node => node.planStartDate).filter(Boolean).sort()[0]
+  const milestoneOffset = firstBusinessDate
+    ? Math.min(0, Math.round((Date.parse(firstBusinessDate) - Date.parse(MR_ACCEPTANCE_FIXED_MILESTONE_DATES['tos-ms-str5'])) / 86400000) - 1)
+    : 0
+  const tasks = withAcceptanceMilestoneDates(buildTosLevel1Tasks(false), dayOffset + milestoneOffset)
   const launchStage = tasks.find(task => task.stableId === 'tos-stage-launch-iteration')!
   const maintenanceStage = tasks.find(task => task.stableId === 'tos-stage-maintenance')!
   const businessNode = (
@@ -511,6 +515,11 @@ export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
       versionOffset(version.versionNo),
       MR_SECONDARY_TOS_BUSINESS_NODES,
     )
+    // A following type owns different business versions even while ordinary milestones follow Full.
+    publishedSnapshots[`project::19::tos-type::Slim::level1::${version.id}::snapshot`] = tosSnapshot(versionOffset(version.versionNo), [
+      { id: 'tos-slim-mr-130', stage: 'launch', order: 0, taskName: '16.3.0.130', planStartDate: '2026-04-16', planEndDate: '2026-05-20' },
+      { id: 'tos-slim-mr-165', stage: 'maintenance', order: 0, taskName: '16.3.0.165', planStartDate: '', planEndDate: '' },
+    ])
   }
   return {
     publishedSnapshots,
@@ -521,6 +530,7 @@ export function createMrAcceptancePlanScopeSeed(): MrAcceptancePlanScopeSeed {
     tosTypeVersionsByKey: {
       'project::6::tos-type::Slim::level1::versions': tosVersions.map(version => ({ ...version })),
       'project::19::tos-type::Full::level1::versions': tosVersions.map(version => ({ ...version })),
+      'project::19::tos-type::Slim::level1::versions': tosVersions.map(version => ({ ...version })),
     },
   }
 }

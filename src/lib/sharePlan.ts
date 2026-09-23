@@ -10,6 +10,8 @@ import {
   type TosTypeConfigRow,
 } from '@/lib/tosTypeRules'
 import type { PlanState } from '@/stores/plan'
+import { applyLevel1BusinessTasks, captureLevel1BusinessTasks } from '@/lib/level1SharedBusinessTasks'
+import { buildTosLevel1Tasks } from '@/lib/level1PlanRules'
 
 interface ShareProject {
   id: string
@@ -78,7 +80,12 @@ export const resolveSharedLevel1Plan = (state: SharedPlanState, query: SharedPla
     : scope.kind === 'tos-type'
       ? getTosTypeSnapshotKey(projectId, scope.sourceValue, 'level1', version.id)
       : getProjectLevel1MockSnapshotKey(projectId, version.id)
-  const tasks = state.publishedSnapshots[snapshotKey]
+  let tasks = state.publishedSnapshots[snapshotKey]
   if (!Array.isArray(tasks)) return { ok: false }
+  if (scope.kind === 'tos-type' && scope.sourceValue !== scope.value) {
+    const ownTasks = state.publishedSnapshots[getTosTypeSnapshotKey(projectId, scope.value, 'level1', version.id)]
+    tasks = applyLevel1BusinessTasks(PROJECT_TYPE_TOS_VERSION, tasks,
+      captureLevel1BusinessTasks(PROJECT_TYPE_TOS_VERSION, ownTasks || buildTosLevel1Tasks(false)))
+  }
   return { ok: true, scope: { ...scope }, version: { ...version }, tasks: JSON.parse(JSON.stringify(tasks)) }
 }

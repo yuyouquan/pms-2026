@@ -75,7 +75,9 @@ export interface MrVersionPlanActions {
   syncTosInstancesFromLevel1: (projectId: string, candidates: readonly TosMrVersionCandidate[], sourceType?: string) => void
   addTosVersionInstance: (input: AddTosInstanceInput, permission: MrPermissionResult) => boolean
   updateTosDate: (projectId: string, tosVersion: string, activityId: string, value: string, actor: string, permission: MrPermissionResult) => boolean
-  reconcileMachinePlans: (input: Omit<ReconcileJointInput, 'tosInstances' | 'persistedPlans' | 'stopRecords'>) => ReconcileJointResult
+  reconcileMachinePlans: (input: Omit<ReconcileJointInput, 'tosInstances' | 'persistedPlans' | 'stopRecords'> & {
+    preserveMachineProjectIds?: readonly string[]
+  }) => ReconcileJointResult
   updateMachineTransferType: (key: string, value: MrTransferType, actor: string, permission: MrPermissionResult) => boolean
   updateMachineDate: (key: string, activityId: string, value: string, actor: string, permission: MrPermissionResult) => boolean
   lockMachineRows: (rows: readonly MrMachineRowIdentity[], actor: string, permission: MrPermissionResult) => MrBatchLockResult
@@ -824,22 +826,28 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
     reconcileMachinePlans: input => {
       const state = get()
       const tosInstances = selectCanonicalTosMrInstances(state.tosInstancesByProjectId)
+      const preservedMachineIds = new Set(input.preserveMachineProjectIds || [])
       const result = reconcileJointMachinePlans({
         ...input,
+        machineProjects: input.machineProjects.filter(machine => !preservedMachineIds.has(machine.id)),
         tosInstances,
         persistedPlans: state.machinePlansByKey,
         stopRecords: state.stopReleaseRecords,
       })
-      const machinePlansByKey = cloneMachinePlans(result.persistedPlans)
-      const retainedPlanKeys = new Set(Object.keys(result.persistedPlans))
+      const machinePlansByKey = {
+        ...cloneMachinePlans(result.persistedPlans),
+        ...cloneMachinePlans(Object.fromEntries(Object.entries(state.machinePlansByKey)
+          .filter(([, plan]) => preservedMachineIds.has(plan.projectId)))),
+      }
+      const retainedPlanKeys = new Set(Object.keys(machinePlansByKey))
       const marketOverridesByKey = Object.fromEntries(Object.entries(state.marketOverridesByKey)
         .filter(([, override]) => retainedPlanKeys.has(`${override.projectId}::${override.tosVersion}`))
         .map(([key, override]) => [key, { ...override, dates: { ...override.dates } }]))
       const machineRowLocks = sanitizeMachineRowLocks(state.machineRowLocks, machinePlansByKey)
-      if (!sameJson(state.machinePlansByKey, result.persistedPlans) || !sameJson(state.marketOverridesByKey, marketOverridesByKey) || !sameJson(state.machineRowLocks, machineRowLocks)) {
+      if (!sameJson(state.machinePlansByKey, machinePlansByKey) || !sameJson(state.marketOverridesByKey, marketOverridesByKey) || !sameJson(state.machineRowLocks, machineRowLocks)) {
         set({ machinePlansByKey, marketOverridesByKey, machineRowLocks })
       }
-      return result
+      return { ...result, persistedPlans: cloneMachinePlans(machinePlansByKey) }
     },
     updateMachineTransferType: (keyInput, value, actor, permission) => {
       const key = text(keyInput)

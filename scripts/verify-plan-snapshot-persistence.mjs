@@ -19,5 +19,11 @@ assert.deepEqual(writes, [], 'unchanged snapshot initialization must not persist
 store.getState().setPublishedSnapshots(previous => ({ ...previous, 'qa-new-snapshot': [] }))
 assert.deepEqual(writes, ['pms-plan-store'], 'actual snapshot change is still persisted once')
 assert.deepEqual(JSON.parse(storage.getItem('pms-plan-store')).state.publishedSnapshots['qa-new-snapshot'], [])
+const rules = load(path.resolve('src/lib/level1PlanRules.ts'))
+const tasks = rules.buildTosLevel1Tasks(false)
+store.getState().setLevel1BusinessTasks('test-scope', 'tOS版本项目', tasks, 'qa-new-snapshot')
+writes.length = 0
+store.getState().setLevel1BusinessTasks('test-scope', 'tOS版本项目', tasks, 'qa-new-snapshot')
+assert.deepEqual(writes, [], 'unchanged derived business sync must not write persistence')
 console.log('PASS snapshot initializer skips persisted no-op writes and persists real changes')
 process.exit(0)

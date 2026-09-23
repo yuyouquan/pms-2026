@@ -46,9 +46,7 @@ export function selectLevel1BusinessSeedTasks(input: {
   latestPublishedTasks?: readonly Level1PlanTask[]
   projectSeedTasks: readonly Level1PlanTask[]
 }): Level1PlanTask[] {
-  const tasks = input.projectType === '整机产品项目'
-    ? input.latestPublishedTasks || input.projectSeedTasks
-    : input.hasDraft ? input.liveTasks : input.latestPublishedTasks || input.liveTasks
+  const tasks = input.latestPublishedTasks || (input.projectType === '整机产品项目' ? input.projectSeedTasks : input.liveTasks)
   return tasks.map(task => ({ ...task }))
 }
 

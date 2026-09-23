@@ -1,3 +1,6 @@
+import { applyLevel1BusinessTasks, captureLevel1BusinessTasks } from '@/lib/level1SharedBusinessTasks'
+import { buildMachineLevel1Tasks } from '@/lib/level1PlanRules'
+
 export const MARKET_OPTIONS = ['OP', 'RU', 'TR', 'OPPJ', 'COCL', 'IN', 'EU']
 
 export type MarketYesNoValue = '是' | '否'
@@ -75,7 +78,7 @@ export const mergeFollowMarketActualDates = (
   historicalFollowTasks: any[] = [],
 ) => {
   const historicalTasks = buildTaskMapByActualDateKey(historicalFollowTasks)
-  return clone(mainTasks || []).map((task: any) => {
+  const followed = clone(mainTasks || []).map((task: any) => {
     const key = getTaskActualDateKey(task)
     const historicalTask = key ? historicalTasks.get(key) : undefined
     if (historicalTask?.actualTimeDetachedFromMain) {
@@ -92,6 +95,12 @@ export const mergeFollowMarketActualDates = (
       actualEndDate: task.actualEndDate || '',
     })
   })
+  // Post-launch MR periods belong to this market; only ordinary milestones follow the main market.
+  const ownBusiness = {
+    ...captureLevel1BusinessTasks('整机产品项目', buildMachineLevel1Tasks(false)),
+    ...captureLevel1BusinessTasks('整机产品项目', historicalFollowTasks),
+  }
+  return applyLevel1BusinessTasks('整机产品项目', followed, ownBusiness)
 }
 
 export const markTaskActualTimeDetachedFromMain = (

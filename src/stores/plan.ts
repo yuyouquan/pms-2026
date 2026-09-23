@@ -51,7 +51,7 @@ import { withDefaultBudgetScheduleIntervals } from '@/lib/budgetMilestoneSchedul
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 17
+export const PLAN_STORE_VERSION = 18
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -874,6 +874,14 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
         sharedByScope: migrated.level1BusinessTasksByScope || {},
       })
     : { sharedByScope: migrated.level1BusinessTasksByScope || {}, snapshots: migratedSnapshots }
+  if (persistedVersion < 18) {
+    // Backfill the independent Slim demo without replacing any saved project/type data.
+    const versionKey = 'project::19::tos-type::Slim::level1::versions'
+    if (!tosTypeVersionsByKey[versionKey]) tosTypeVersionsByKey[versionKey] = workbenchAcceptanceSeed.tosTypeVersionsByKey[versionKey]
+    for (const [key, tasks] of Object.entries(workbenchAcceptanceSeed.publishedSnapshots)) {
+      if (key.startsWith('project::19::tos-type::Slim::') && !legacyBusiness.snapshots[key]) legacyBusiness.snapshots[key] = tasks
+    }
+  }
   return {
     ...migrated,
     tasks: Array.isArray(migrated.tasks)
@@ -1262,7 +1270,7 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
 
   // Market plan data — 整机产品项目按市场维度维护独立的计划数据
   marketPlanData: Object.fromEntries(['OP', 'TR', 'RU'].map(market => [market, {
-    tasks: getDefaultLevel1TasksForProjectType(PROJECT_CATEGORY_MACHINE, true),
+    tasks: initialMrAcceptancePlanScope.publishedSnapshots['project::1::OP::level1::v3'].map(task => ({ ...task })),
     level2Tasks: [],
     createdLevel2Plans: [...FIXED_LEVEL2_PLANS],
   }])),
@@ -1315,20 +1323,25 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   })),
   setCollapsedNodes: (v) => set((s) => ({ collapsedNodes: typeof v === 'function' ? v(s.collapsedNodes) : v })),
 
-  setLevel1BusinessTasks: (scope, projectType, tasks, latestSnapshotKey) => set(state => {
+  setLevel1BusinessTasks: (scope, projectType, tasks, latestSnapshotKey) => {
+    const state = get()
     const shared = { ...state.level1BusinessTasksByScope[scope], ...captureLevel1BusinessTasks(projectType, tasks) }
-    if (JSON.stringify(state.level1BusinessTasksByScope[scope]) === JSON.stringify(shared)) return state
     const published = latestSnapshotKey ? state.publishedSnapshots[latestSnapshotKey] : undefined
-    return {
-      level1BusinessTasksByScope: { ...state.level1BusinessTasksByScope, [scope]: shared },
-      ...(published && latestSnapshotKey ? {
+    const nextPublished = published ? applyLevel1BusinessTasks(projectType, published, shared) : undefined
+    const sharedChanged = JSON.stringify(state.level1BusinessTasksByScope[scope]) !== JSON.stringify(shared)
+    const snapshotChanged = JSON.stringify(published) !== JSON.stringify(nextPublished)
+    // Avoid storage-event feedback: persist writes even if set returns the same state.
+    if (!sharedChanged && !snapshotChanged) return
+    set({
+      ...(sharedChanged ? { level1BusinessTasksByScope: { ...state.level1BusinessTasksByScope, [scope]: shared } } : {}),
+      ...(snapshotChanged && latestSnapshotKey && nextPublished ? {
         publishedSnapshots: {
           ...state.publishedSnapshots,
-          [latestSnapshotKey]: applyLevel1BusinessTasks(projectType, published, shared),
+          [latestSnapshotKey]: nextPublished,
         },
       } : {}),
-    }
-  }),
+    })
+  },
   setPublishedSnapshots: (v) => {
     const previous = get().publishedSnapshots
     const publishedSnapshots = typeof v === 'function' ? v(previous) : v

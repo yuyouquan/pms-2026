@@ -47,6 +47,10 @@ import type {
   TosMrVersionInstance,
 } from '@/types/mrVersionPlan'
 import { filterFormalRegistryProjects } from '@/lib/projectManagementUi'
+import { PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
+import { buildTosTypeRows } from '@/lib/tosTypeRules'
+import { selectActiveTosMrTasks } from '@/lib/tosMrLevel1Sync'
+import { classifyMachineMrSource } from '@/lib/machineMrLevel1Projection'
 
 export const MR_TRANSFER_OPTIONS: MrTransferType[] = ['N/A', '1', '2', '3', '4', '5', '6', '7', '8']
 
@@ -170,6 +174,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   const [projectFilter, setProjectFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState<MrTransferType | undefined>()
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([])
+  const [sourcesHydrated, setSourcesHydrated] = useState(() => useProjectStore.persist.hasHydrated() && usePlanStore.persist.hasHydrated())
 
   const { projects, marketConfigsByProjectId, tosTypeConfigsByProjectId, currentLoginUser } = useProjectStore()
   const {
@@ -177,6 +182,8 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     marketVersionsByKey,
     tosTypeVersionsByKey,
     publishedSnapshots,
+    level1BusinessTasksByScope,
+    tosTypePlanDataByProjectId,
   } = usePlanStore()
   const globalRoles = usePermissionStore(state => state.globalRoles)
   const enumRowsByType = useEnumStore(state => state.rowsByType)
@@ -196,6 +203,12 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     let active = true
     void hydrateJointMrStoreOnce().then(() => { if (active) setHydrated(true) })
     return () => { active = false }
+  }, [])
+  useEffect(() => {
+    const update = () => setSourcesHydrated(useProjectStore.persist.hasHydrated() && usePlanStore.persist.hasHydrated())
+    const unsubscribe = [useProjectStore.persist.onFinishHydration(update), usePlanStore.persist.onFinishHydration(update)]
+    update()
+    return () => unsubscribe.forEach(stop => stop())
   }, [])
 
   const today = useShanghaiBusinessDate()
@@ -221,20 +234,36 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     tosTypeVersionsByKey,
   ])
   const sources = useMemo(() => buildMrAggregationSources(sourceInput), [sourceInput])
+  const preserveMachineProjectIds = useMemo(() => {
+    const sourceTasksByProjectId = Object.fromEntries(sourceInput.projects
+      .filter(project => project.type === PROJECT_TYPE_TOS_VERSION)
+      .map(project => {
+        const tosTypeRows = buildTosTypeRows(project.versionTypes || [], project.versionType || '', tosTypeConfigsByProjectId[project.id])
+        return [project.id, selectActiveTosMrTasks({
+          project, tosTypeRows, tosTypeVersionsByKey, publishedSnapshots,
+          fallbackVersions, sharedBusinessTasks: level1BusinessTasksByScope,
+          tosTypePlanData: tosTypePlanDataByProjectId,
+        })]
+      }))
+    return sources.machineProjects
+      .filter(machine => classifyMachineMrSource(machine, sources.tosProjects, sourceTasksByProjectId) === 'pending')
+      .map(machine => machine.id)
+  }, [sources, sourceInput.projects, tosTypeConfigsByProjectId, tosTypeVersionsByKey, publishedSnapshots, fallbackVersions, level1BusinessTasksByScope, tosTypePlanDataByProjectId])
   const tosInstances = useMemo(
     () => selectCanonicalTosMrInstances(tosInstancesByProjectId),
     [tosInstancesByProjectId],
   )
 
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || !sourcesHydrated) return
     reconcileMachinePlans({
       today,
       tosProjects: sources.tosProjects,
       machineProjects: sources.machineProjects,
       latestPublishedLevel1ByProjectId: sources.latestPublishedLevel1ByProjectId,
+      preserveMachineProjectIds,
     })
-  }, [hydrated, reconcileMachinePlans, sources, today, tosInstancesByProjectId])
+  }, [hydrated, sourcesHydrated, reconcileMachinePlans, sources, today, tosInstancesByProjectId, preserveMachineProjectIds])
 
   const projection = useMemo(() => reconcileJointMachinePlans({
     today,
