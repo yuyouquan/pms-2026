@@ -1389,7 +1389,7 @@ assert.match(projectSpaceSource, /insertLevel1BusinessNode/, 'project-space adds
 assert.match(projectSpaceSource, /projectLevel1Plan/, 'project-space projects governed plans into the standard tree rows')
 assert.match(projectSpaceSource, /buildPlanGanttTasks/, 'project-space builds typed Gantt tasks')
 assert.match(projectSpaceSource, /onTaskDateChange/, 'project-space persists accepted Gantt date changes')
-assert.match(projectSpaceSource, /aria-label="计划版本"/, 'project-space version selector has an accessible plan-version label')
+assert.match(read('src/components/plans/PlanVersionTabs.tsx'), /role="tablist" aria-label="计划版本"/, 'project-space version selector has an accessible plan-version label')
 assert.match(projectSpaceSource, /const isGovernedLevel1Table = !isLevel2Custom\s*&& projectPlanLevel === 'level1'/, 'all level-one plans retain the existing governance branch')
 assert.doesNotMatch(projectSpaceSource, /isFlatGovernedLevel1Table|pms-level1-flat-milestone-table|pms-level1-flat-date-invalid/, 'governed project plans have no special flat-table branch or naming')
 assert.match(projectSpaceSource, /filterLevel1TreeRows\(/, 'table and Gantt filtering share the hierarchy-preserving helper')

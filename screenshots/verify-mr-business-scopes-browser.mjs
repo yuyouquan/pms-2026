@@ -64,7 +64,6 @@ async function openPlan(page, projectName) {
 }
 async function version(page, label) {
   await page.bringToFront()
-  await page.$eval('input[aria-label="计划版本"]', input => input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
   await clickText(page, label)
   await wait(300)
 }

@@ -39,11 +39,11 @@ export function PlanWorkspaceShell({
         styles={{ body: { padding: 'var(--pms-card-padding)' } }}
       >
         <Row justify="space-between" align="middle" gutter={[12, 8]}>
-          <Col>
-            <Space size={8} separator={<Divider orientation="vertical" style={{ margin: 0 }} />}>
+          <Col flex="auto" style={{ minWidth: 0, width: 0 }}>
+            <div className="pms-plan-version-toolbar">
               <div aria-label="计划版本操作">{versionControls}</div>
-              {primaryActions}
-            </Space>
+              {primaryActions && <div className="pms-plan-structure-actions">{primaryActions}</div>}
+            </div>
           </Col>
           <Col>
             <Space size={6}>

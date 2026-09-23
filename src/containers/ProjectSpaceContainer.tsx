@@ -54,6 +54,7 @@ import { compareVersionsForTable } from '@/lib/versionCompare'
 import { ensurePublishedComparisonSnapshots, resolveComparisonVersionTasks } from '@/lib/versionComparisonSnapshots'
 import { shouldShowLatestPublishedLevel1Summary } from '@/lib/projectBasicInfoPresentation'
 import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
+import { PlanVersionTabs } from '@/components/plans/PlanVersionTabs'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
@@ -1391,7 +1392,6 @@ export default function ProjectSpaceContainer() {
       </Space>
     )
   }
-  const versionSelectWidth = isWholeMachineProject && projectPlanLevel === 'level1' ? 250 : 150
   const updateCurrentTosTypeData = (type: string, updater: (previous: TosTypePlanEntry) => TosTypePlanEntry) => {
     if (!selectedProject || !isTosTypeScoped) return
     setTosTypePlanDataByProjectId(previous => {
@@ -1862,9 +1862,7 @@ export default function ProjectSpaceContainer() {
           : `无${currentPlanPermissionLabel}编辑权限`
       return (
         <Tooltip title={disabledReason}>
-          <Button type="primary" icon={<PlusOutlined />} style={buttonStyle} disabled aria-label="创建修订">
-            创建修订
-          </Button>
+          <Button type="primary" icon={<PlusOutlined />} style={buttonStyle} disabled aria-label="创建修订" />
         </Tooltip>
       )
     }
@@ -1874,12 +1872,32 @@ export default function ProjectSpaceContainer() {
         trigger={['click']}
         placement="bottomLeft"
       >
-        <Button type="primary" icon={<PlusOutlined />} style={buttonStyle} aria-label="创建修订" title="创建修订">
-          创建修订
-        </Button>
+        <Button type="primary" icon={<PlusOutlined />} style={buttonStyle} aria-label="创建修订" title="创建修订" />
       </Dropdown>
     )
   }
+
+  const renderPlanVersionTabs = (canMaintain = canMaintainCurrentPlan) => (
+    <PlanVersionTabs
+      versions={versions.filter(version => version.status !== '修订中' || canViewDraft)}
+      activeVersion={currentVersion}
+      latestPublishedId={latestPublishedVersion?.id}
+      onChange={value => navigateWithEditGuard(() => { setCurrentVersion(value); setIsEditMode(false) })}
+      renderLabel={renderVersionLabel}
+      createRevision={(followedTosLevel1ReadOnly || !hasDraftVersion) ? renderCreateRevisionButton() : undefined}
+      draftActions={(
+        <>
+          <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>
+          <Tooltip title={canMaintain ? '发布' : followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}>
+            <Button type="primary" size="small" icon={<SaveOutlined />} disabled={!canMaintain} onClick={handlePublish} aria-label="发布" />
+          </Tooltip>
+          <Tooltip title={canMaintain ? '取消修订' : followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}>
+            <Button danger size="small" icon={<StopOutlined />} disabled={!canMaintain} onClick={handleCancelRevision} aria-label="取消修订" />
+          </Tooltip>
+        </>
+      )}
+    />
+  )
 
   const getCurrentTosTypeRows = () => (
     selectedProject
@@ -5446,36 +5464,8 @@ export default function ProjectSpaceContainer() {
         {isTosVersionTrainPlan && (
           <Card size="small" style={{ marginBottom: 16, borderRadius: 8 }} styles={{ body: { padding: '12px 16px' } }}>
             <Row justify="space-between" align="middle">
-              <Col>
-                <Space size={8} split={<Divider type="vertical" style={{ margin: 0 }} />}>
-                  <Space size={6}>
-                    <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
-                    <Select
-                      value={currentVersion}
-                      onChange={(value) => navigateWithEditGuard(() => {
-                        setCurrentVersion(value)
-                        setIsEditMode(false)
-                      })}
-                      style={{ width: 150 }}
-                    >
-                      {versions
-                        .filter(version => version.status !== '修订中' || canViewDraft)
-                        .map(version => <Option key={version.id} value={version.id}>{renderVersionLabel(version)}</Option>)}
-                    </Select>
-                    {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
-                  </Space>
-                  <Space size={6}>
-                    {!hasDraftVersion && (canEditLevel2Plan
-                      ? renderCreateRevisionButton({ borderRadius: 6 })
-                      : <Tooltip title="无二级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} disabled>创建修订</Button></Tooltip>)}
-                    {isCurrentDraft && (canEditLevel2Plan
-                      ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} onClick={handlePublish} aria-label="发布" /></Tooltip>
-                      : <Tooltip title="无二级计划编辑权限"><Button type="primary" icon={<SaveOutlined />} disabled aria-label="发布" /></Tooltip>)}
-                    {isCurrentDraft && (canEditLevel2Plan
-                      ? <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
-                      : <Tooltip title="无二级计划编辑权限"><Button danger icon={<StopOutlined />} disabled aria-label="取消修订" /></Tooltip>)}
-                  </Space>
-                </Space>
+              <Col flex="auto" style={{ minWidth: 0, width: 0 }}>
+                {renderPlanVersionTabs(canEditLevel2Plan)}
               </Col>
               <Col>
                 <Tooltip title="版本对比">
@@ -5497,31 +5487,8 @@ export default function ProjectSpaceContainer() {
           <PlanWorkspaceShell
             scopeTabs={planWorkspaceScopeTabs}
             notices={planWorkspaceNotices}
-            versionControls={(
-              <Space size={6}>
-                <span style={{ color: '#9ca3af', fontSize: 13 }}>版本</span>
-                <Select aria-label="计划版本" value={currentVersion} onChange={(val) => navigateWithEditGuard(() => { setCurrentVersion(val); setIsEditMode(false) })} style={{ width: versionSelectWidth }} size="middle">
-                  {versions
-                    .filter(v => v.status !== '修订中' || canViewDraft)
-                    .map(v => <Option key={v.id} value={v.id}>{renderVersionLabel(v)}</Option>)}
-                </Select>
-                {isCurrentDraft && <Tag color="green" style={{ fontSize: 12, margin: 0 }}>自动保存</Tag>}
-              </Space>
-            )}
-            primaryActions={(
-              <Space size={6}>
-                {projectPlanLevel === 'level1' && renderLevel1StructureActions()}
-                {(followedTosLevel1ReadOnly || !hasDraftVersion) && (canEditCurrentPlan
-                  ? renderCreateRevisionButton({ borderRadius: 6 })
-                  : <Tooltip title={`无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled aria-label="创建修订">创建修订</Button></Tooltip>)}
-                {isCurrentDraft && (canMaintainCurrentPlan
-                  ? <Tooltip title="发布"><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} onClick={handlePublish} aria-label="发布" /></Tooltip>
-                  : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled aria-label="发布" /></Tooltip>)}
-                {isCurrentDraft && (canMaintainCurrentPlan
-                  ? <Tooltip title="取消修订"><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} onClick={handleCancelRevision} aria-label="取消修订" /></Tooltip>
-                  : <Tooltip title={followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`}><Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} disabled aria-label="取消修订" /></Tooltip>)}
-              </Space>
-            )}
+            versionControls={renderPlanVersionTabs()}
+            primaryActions={projectPlanLevel === 'level1' ? renderLevel1StructureActions() : undefined}
             utilityActions={(
               <Space size={6}>
                   {projectPlanLevel === 'level1' && projectPlanViewMode === 'gantt' && (

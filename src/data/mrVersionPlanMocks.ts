@@ -15,6 +15,7 @@ import {
   type Level1PlanTask,
 } from '@/lib/level1PlanRules'
 import { applyStopRelease } from '@/lib/mrAggregationRules'
+import { buildProjectListMockPlanTasks } from '@/data/projectListPlanMocks'
 
 const defaultMrTemplateActivities: MrTemplateActivity[] = [
   { id: 'mr-stage-requirements', parentId: null, order: 0, activityName: '需求&修改点' },
@@ -201,6 +202,24 @@ function createTosInstance(projectId: string, tosVersion: string): TosMrVersionI
   }
 }
 
+/** Keep the default tOS16.1 MR story dated within its real level-one periods. */
+function createDefaultTosMrInstances(): TosMrVersionInstance[] {
+  const tasks = buildProjectListMockPlanTasks('2', buildTosLevel1Tasks(true).map(task => ({ ...task })), {
+    projectType: 'tOS版本项目', projectName: 'tOS16.1',
+  })
+  const leaves = DEFAULT_MR_TEMPLATE_ACTIVITIES.filter(activity => activity.parentId !== null)
+  return tasks.filter(task => task.nodeKind === 'business-period').map(task => {
+    const start = Date.parse(`${task.planStartDate}T00:00:00Z`)
+    const duration = Date.parse(`${task.planEndDate}T00:00:00Z`) - start
+    return {
+      ...createTosInstance('2', task.taskName), sourceLevel1TaskId: task.stableId,
+      dates: Object.fromEntries(leaves.map((activity, index) => [
+        activity.id, new Date(start + Math.floor(duration / 86400000 * index / (leaves.length - 1)) * 86400000).toISOString().slice(0, 10),
+      ])),
+    }
+  })
+}
+
 function createMachinePlan(
   projectId: string,
   tosVersion: string,
@@ -288,6 +307,13 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
   }, '演示用户04')
 
   const rawPlans = [
+    // These eligible rows were formerly generated with empty dates by reconciliation.
+    ...[
+      ['12', '16.3.0.140'], ['13', '16.3.0.140'], ['17', '16.3.0.140'],
+      ['13', '16.3.0.145'], ['16', '16.3.0.145'], ['15', '16.3.0.150'],
+      ['16', '16.3.0.155'], ['17', '16.3.0.155'],
+      ['15', '16.3.0.160'], ['16', '16.3.0.160'], ['17', '16.3.0.160'],
+    ].map(([projectId, version]) => createMachinePlan(projectId, version, '1', MR_ACCEPTANCE_DATES[version], '演示用户01')),
     createMachinePlan('14', '16.3.0.135', '1', MR_ACCEPTANCE_DATES['16.3.0.135'], '演示成员06'),
     createMachinePlan('15', '16.3.0.135', '2', shiftDates(MR_ACCEPTANCE_DATES['16.3.0.135'], 7), '演示成员11'),
     createMachinePlan('16', '16.3.0.135', 'N/A', {}, '演示用户07'),
@@ -339,7 +365,7 @@ export function createInitialMrVersionPlanState(): InitialMrVersionPlanStateSeed
     templateVersions,
     currentTemplateVersionId: templateVersions[0].id,
     templateHistory: [],
-    tosInstancesByProjectId: { '6': secondaryTosInstances, '19': tosInstances },
+    tosInstancesByProjectId: { '2': createDefaultTosMrInstances(), '6': secondaryTosInstances, '19': tosInstances },
     machinePlansByKey: stoppedState.persistedPlans,
     marketOverridesByKey: {
       '1::16.3.0.140::TR': createMarketOverride('1', '16.3.0.140', 'TR', {

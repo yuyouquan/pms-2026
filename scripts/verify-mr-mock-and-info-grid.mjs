@@ -23,7 +23,7 @@ assert.deepEqual(versions, [
   '16.3.0.155',
   '16.3.0.160',
 ], 'the joint acceptance story must expose six sorted tOS versions')
-assert.ok(plans.length >= 25 && plans.length <= 30, `visible machine-plan count must be 25-30, received ${plans.length}`)
+assert.equal(plans.length, 39, 'every eligible seeded machine MR row must include a complete demo entry')
 assert.equal(stateA.stopReleaseRecords.length, 4, 'the acceptance seed must include four stopped-release records')
 assert.ok(plans.filter(plan => plan.transferType === 'N/A').length >= 4, 'the acceptance seed must include at least four N/A rows')
 assert.ok(plans.filter(plan => plan.transferType === 'N/A').every(plan => Object.keys(plan.dates).length === 0), 'N/A rows must persist no dates')

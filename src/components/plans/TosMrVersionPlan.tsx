@@ -116,7 +116,7 @@ export default function TosMrVersionPlan({
     tosProjectId: project.id,
   }), [currentUser, globalAdminUsers, project])
   const scopeKey = `tos::${project.id}`
-  const mode: MrPlanViewMode = viewModeByScope[scopeKey] ?? 'vertical'
+  const mode: MrPlanViewMode = viewModeByScope[scopeKey] ?? 'horizontal'
   const instanceAccessByVersion = useMemo(() => new Map(sortedInstances.map(instance => [
     instance.tosVersion,
     resolveTosMrInstanceDateAccess(instance.tosVersion, candidates),
