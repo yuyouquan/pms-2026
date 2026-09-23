@@ -37,3 +37,10 @@
 - 技术 DEMO-TECH-V2：TDT 与子项目 TAB 正常；左右方向键可移动版本焦点，Enter 切换；子项目创建 V1.1 非正式修订、确认取消成功。
 - 演示用户08无当前技术项目角色，切换后项目内容保持无权访问；恢复管理组后操作恢复。
 - 上述浏览器流程 error 日志为空。
+
+## 追加：新版本 TAB 排在最前
+
+- 共用版本 TAB 按版本号数值降序排列，覆盖整机、tOS、技术项目及技术子项目；不修改原始版本数组，创建修订图标仍位于最新已发布 TAB 前。
+- 组件渲染校验通过：V10、V3、V2、V1.10、V1.2 顺序正确；原数组保持不变；创建图标位置正确；仅激活修订版本时显示发布操作。
+- `verify-plan-versioning`、`verify-plan-workspace-shell`、`npx tsc --noEmit`、`npm run build` 通过。
+- 首次发布已在生产页面读回版本 TAB、版本切换和 MR 默认横版，浏览器 error 日志为空。追加排序的浏览器复核暂受工具连接异常阻塞（Unable to load browser request-header policy），不将组件渲染校验作为浏览器验收。
