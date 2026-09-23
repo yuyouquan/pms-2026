@@ -72,7 +72,7 @@ export default function ProjectResourceDashboard({ project, category }: {
   }), dashboardStageDefinition(category, formalDates, display)]
   const stages = stagesFor(sources)
   const trend = dashboardBusinessTrend(analyses, accounting, mode, grain, stages)
-  const details = buildResourceDepartmentDetails(category, sources, store.monthlyInvestments, rate, dataset, filter, today)
+  const details = buildResourceDepartmentDetails(category, sources, store.monthlyInvestments, rate, dataset, filter, today, project.planStartDate)
   const period = dates ? `${dates[0]}～${dates[1]}` : '全周期'
   const canExport = canResourceAction({ pmsProjectId: project.id }, 'export', project.id)
   const exportAnalysis = () => {
@@ -84,7 +84,7 @@ export default function ProjectResourceDashboard({ project, category }: {
     }
     const currentRate = Number(useHrConfigStore.getState().data.feeRate?.[0]?.value ?? 5)
     const currentAnalyses = currentSources.map(source => source && buildDashboardAnalysis(category, source, current.monthlyInvestments, currentRate, filter))
-    exportResourceBusinessDashboard(project.name, currentAnalyses, buildAccountingAnalysis(dataset, currentRate, filter), filter, mode, grain, stagesFor(currentSources), buildResourceDepartmentDetails(category, currentSources, current.monthlyInvestments, currentRate, dataset, filter, dayjs().format('YYYY-MM-DD')))
+    exportResourceBusinessDashboard(project.name, currentAnalyses, buildAccountingAnalysis(dataset, currentRate, filter), filter, mode, grain, stagesFor(currentSources), buildResourceDepartmentDetails(category, currentSources, current.monthlyInvestments, currentRate, dataset, filter, dayjs().format('YYYY-MM-DD'), project.planStartDate))
   }
   return <section className="pms-resource-dashboard" aria-label="资源总览">
     <div className="pms-dashboard-filters">

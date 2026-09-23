@@ -248,7 +248,12 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     hrSidebarCollapsed: typeof v === 'function' ? v(s.hrSidebarCollapsed) : v,
   })),
   setSelectedProjectType: (v) => set({ selectedProjectType: v }),
-  setProjectSpaceModule: (v) => set({ projectSpaceModule: resolveProjectSpaceModule(useProjectStore.getState().selectedProject, v) }),
+  setProjectSpaceModule: (v) => set(state => {
+    const projectSpaceModule = resolveProjectSpaceModule(useProjectStore.getState().selectedProject, v)
+    // The navigation guard has already handled the previous module's drafts.
+    // A plan's automatic edit mode must not become a resource input draft.
+    return { projectSpaceModule, ...(projectSpaceModule === 'resources' && state.projectSpaceModule !== 'resources' ? { isEditMode: false } : {}) }
+  }),
   setPlanNavigationIntent: (v) => set({ planNavigationIntent: v }),
   setProjectInfoNavigationIntent: (v) => set({ projectInfoNavigationIntent: v }),
   setMrPlanNavigationIntent: (v) => set({ mrPlanNavigationIntent: v }),

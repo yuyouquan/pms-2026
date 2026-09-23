@@ -9863,24 +9863,30 @@ input.ant-input,
   overflow-y: auto;
 }
 
-/* Business resource dashboard: one comparable six-metric row, then trend and ledger. */
-.pms-dashboard-metrics-scroll { overflow-x: auto; padding-bottom: 2px; }
-.pms-dashboard-eight-metrics { display: grid; grid-template-columns: repeat(8, minmax(180px, 1fr)); gap: 8px; }
+/* Business resource dashboard: eight responsive metrics, then trend and ledger. */
+.pms-dashboard-metrics-scroll { min-width: 0; container: dashboard-metrics / inline-size; }
+.pms-dashboard-eight-metrics { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
 .pms-dashboard-department-value { display: flex; flex-direction: column; gap: 2px; font-variant-numeric: tabular-nums; }
 .pms-dashboard-department-value small { font-size: 11px; color: var(--pms-text-secondary); }
 .pms-dashboard-metric { display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 12px 10px 9px; background: var(--pms-bg-elevated, #fff); border: 1px solid var(--pms-border); border-top: 3px solid var(--budget-color, #b7b2c9); border-radius: 12px; }
-.pms-dashboard-metric-heading { display: flex; align-items: center; justify-content: space-between; gap: 5px; min-height: 21px; }
-.pms-dashboard-metric-heading h3 { font-size: 12px; white-space: nowrap; }
+.pms-dashboard-metric-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 5px; min-height: 34px; }
+.pms-dashboard-metric-heading h3 { flex: 1; min-width: 0; font-size: 12px; line-height: 17px; white-space: normal; overflow-wrap: anywhere; }
 .pms-dashboard-metric-heading .ant-tag { margin: 0; padding-inline: 5px; font-size: 10px; line-height: 18px; }
-.pms-dashboard-metric-heading > .anticon { color: var(--pms-text-secondary); }
-.pms-dashboard-metric-value { font-size: 26px; font-weight: 700; line-height: 1.35; font-variant-numeric: tabular-nums; letter-spacing: -.4px; margin-top: 3px; white-space: nowrap; }
-.pms-dashboard-metric-cost { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--pms-text-secondary); min-height: 19px; }
+.pms-dashboard-metric-info { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 17px; height: 17px; padding: 0; border: 0; background: transparent; color: var(--pms-text-secondary); cursor: help; border-radius: 3px; }
+.pms-dashboard-metric-info:focus-visible, .pms-dashboard-metric-hover:focus-visible { outline: 2px solid var(--pms-brand, #7d5ce7); outline-offset: 2px; }
+.pms-dashboard-metric-value { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px; font-size: clamp(20px, 1.7cqw, 26px); font-weight: 700; line-height: 1.35; font-variant-numeric: tabular-nums; letter-spacing: -.4px; margin-top: 3px; }
+.pms-dashboard-metric-value > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.pms-dashboard-metric-value > small { white-space: nowrap; }
+.pms-dashboard-metric-cost { font-size: 12px; font-variant-numeric: tabular-nums; color: var(--pms-text-secondary); min-height: 19px; overflow-wrap: anywhere; }
+.pms-dashboard-metric-breakdown { display: flex; flex-direction: column; gap: 6px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .pms-dashboard-metric-caption { min-height: 24px; display: flex; align-items: center; font-size: 12px; color: var(--pms-text-secondary); }
 .pms-dashboard-metric > .ant-select { width: 100%; font-size: 11px; }
 .pms-dashboard-metric-footer { border-top: 1px solid var(--pms-border); padding-top: 7px; margin-top: auto; font-size: 10px; color: var(--pms-text-secondary); min-height: 29px; display: flex; align-items: center; }
 .pms-dashboard-metric-footer .ant-btn { padding: 0; font-size: 11px; height: auto; }
 .pms-dashboard-trend-panel, .pms-dashboard-ledger { padding: 14px; margin: 0; }
-.pms-dashboard-business-trend svg { height: 248px; }
+.pms-dashboard-business-trend { width: 100%; min-width: 0; }
+.pms-dashboard-business-trend svg { display: block; width: 100%; height: 248px; }
+.pms-dashboard-trend-table .ant-table-cell { overflow-wrap: anywhere; }
 .pms-dashboard-ledger-note { color: var(--pms-text-secondary); font-size: 12px; line-height: 1.6; margin-bottom: 12px !important; }
 .pms-dashboard-ledger .ant-alert { margin-bottom: 10px; }
 .pms-dashboard-more { border: 1px solid var(--pms-border); border-radius: 12px; padding: 12px 14px; }
@@ -9892,8 +9898,13 @@ input.ant-input,
 .pms-dashboard-lock-state { border-radius: 5px; padding: 2px 5px; font-size: 10px; white-space: nowrap; color: var(--pms-text-secondary); background: #f1f0f5; }
 .pms-dashboard-lock-state.is-locked { color: var(--pms-brand-strong); background: #eee8ff; }
 
-.pms-dashboard-official-version { font-size: 11px; color: var(--pms-brand-strong); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pms-dashboard-metric-heading h3 { flex-shrink: 0; }
+.pms-dashboard-official-version { flex: none; max-width: 45%; font-size: 11px; color: var(--pms-brand-strong); overflow-wrap: anywhere; }
+@container dashboard-metrics (max-width: 959px) {
+  .pms-dashboard-eight-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@container dashboard-metrics (max-width: 639px) {
+  .pms-dashboard-eight-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* Version tabs keep revision actions beside their owning version, without nested buttons. */
 .pms-plan-version-toolbar {
