@@ -70,17 +70,19 @@ const dataset = { projectId: 'p', startDate: '2026-09-01', endDate: '2026-09-30'
 const snapshot = JSON.stringify({ sources, monthly, dataset })
 const details = buildResourceDepartmentDetails('capability', sources, monthly, 5, dataset, {}, '2026-09-11')
 assert.equal(details.rows.length, 2, 'same secondary department under different parents stays separate')
-close(details.actualToDate.labor, 1.3, 'today included, future excluded, source calendar retained')
-close(details.total.toDateExecution, 1.3 / 50 * 100, 'labor execution ignores nonlabor actual expenses')
-close(details.total.lifecycleExecution, (6.3 * 5 + 1) / 500 * 100, 'lifecycle retains full-filter cost basis')
+close(details.total.actual.labor, 6.3, 'numerator matches displayed accounting, including later records')
+close(details.total.toDateExecution, 6.3 / 50 * 100, 'labor execution uses displayed actual person-months')
+close(details.total.lifecycleExecution, 6.3 / 100 * 100, 'lifecycle primary percentage uses person-months')
+close(details.total.lifecycleCostExecution, (6.3 * 5 + 1) / 500 * 100, 'lifecycle cost percentage includes actual nonlabor')
+close(details.total.toDateCostExecution, (6.3 * 5 + 1) / 250 * 100, 'cumulative cost has its own percentage')
 for (const key of ['annual', 'estimate', 'budget', 'cumulative', 'actual']) for (const unit of ['labor', 'cost']) close(details.rows.reduce((sum, row) => sum + row[key][unit], 0), details.total[key][unit], `${key} ${unit} reconciles`)
-const totalsFromParts = details.rows.reduce((sum, row) => sum + row.actualToDate.labor, 0) / details.rows.reduce((sum, row) => sum + row.cumulative.labor, 0) * 100
+const totalsFromParts = details.rows.reduce((sum, row) => sum + row.actual.labor, 0) / details.rows.reduce((sum, row) => sum + row.cumulative.labor, 0) * 100
 close(details.total.toDateExecution, totalsFromParts, 'total rate is ratio of sums')
 const edited = monthly.map(row => ({ ...row, monthlyData: { '2026-09': 999 } }))
 close(buildResourceDepartmentDetails('capability', sources, edited, 5, dataset, {}, '2026-09-11').cumulative.labor, 50, 'manual monthly edits do not change estimate')
 const filtered = buildResourceDepartmentDetails('capability', sources, monthly, 5, dataset, { primary: '研发', startDate: '2026-09-25', endDate: '2026-09-30' }, '2026-09-11')
 close(filtered.cumulative.labor, 30, 'top date has no effect on planned-to-date')
-close(filtered.actualToDate.labor, .5, 'top date has no effect on actual-to-date')
+close(filtered.total.toDateExecution, 5 / 30 * 100, 'date filter changes both actual card and cumulative numerator')
 close(filtered.total.actual.labor, 5, 'existing actual column still respects date')
 assert.equal(buildResourceDepartmentDetails('capability', sources, monthly, 5, undefined, {}, '2026-09-11').total.toDateExecution, undefined)
 const incomplete = structuredClone(budget)
@@ -91,3 +93,29 @@ const incompleteDetails = buildResourceDepartmentDetails('capability', [undefine
 close(incompleteDetails.rows.reduce((sum, row) => sum + row.budget.labor, 0), 100, 'unfilled secondary department never includes other department totals')
 assert.equal(JSON.stringify({ sources, monthly, dataset }), snapshot, 'analytics never mutate stores')
 console.log('PASS cumulative estimates: official fallback, four project types, phase/date boundaries, missing/zero data, monthly independence, department detail reconciliation, source calendars and rate formulas')
+
+const withExpenses = structuredClone(budget)
+withExpenses.version.nonLaborInvestment = { startMonth: '2026-08', endMonth: '2026-10', items: [
+  { id: 'expense', secondaryDepartment: '软件', monthlyAmounts: { '2026-08': 10000, '2026-09': 22000, '2026-10': 30000, '2026-11': 999999 } },
+  { id: 'expense-only', secondaryDepartment: '采购', monthlyAmounts: { '2026-09': 22000 } },
+] }
+const expenseSources = [annual, estimate, withExpenses]
+const expenseFilter = { departmentParents: { 软件: '研发', 采购: '供应链' } }
+const expenseDetails = buildResourceDepartmentDetails('capability', expenseSources, monthly, 5, dataset, expenseFilter, '2026-09-11')
+// September 2026 has 22 weekdays; 9 have elapsed through Friday September 11.
+close(expenseDetails.cumulative.cost, 250 + 1 + .9 + .9, 'cumulative cost adds past and prorated current nonlabor, excludes future and hidden months')
+const expenseOnly = expenseDetails.rows.find(row => row.secondary === '采购')
+close(expenseOnly.cumulative.labor, 0, 'expense-only department does not gain labor')
+close(expenseOnly.cumulative.cost, .9, 'expense-only department retains planned costs')
+close(expenseDetails.total.toDateCostExecution, 32.5 / 252.8 * 100, 'nonlabor changes cost execution independently')
+assert.notEqual(expenseDetails.total.toDateCostExecution, expenseDetails.total.toDateExecution)
+for (const key of ['annual', 'estimate', 'budget', 'cumulative', 'actual']) for (const unit of ['labor', 'cost']) close(expenseDetails.rows.reduce((sum, row) => sum + row[key][unit], 0), expenseDetails.total[key][unit], `expense-bearing ${key} ${unit} reconciles`)
+close(buildCumulativeEstimate('capability', expenseSources, 5, { ...expenseFilter, startDate: '2030-01-01', endDate: '2030-01-31', year: '2030' }, '2026-09-11').cost, 252.8, 'cumulative expense ignores top date/year filters')
+const ambiguous = buildCumulativeEstimate('capability', expenseSources, 5, {}, '2026-09-11')
+close(ambiguous.rows.find(row => row.primary === '未归属一级部门' && row.secondary === '软件').cost, 1.9, 'ambiguous expenses counted once in unassigned parent')
+const expenseActual = { ...dataset, worklogs: [], expenses: [{ id: 'only', date: '2026-09-11', primaryDepartment: '供应链', secondaryDepartment: '采购', amountYuan: 18000 }] }
+const onlyDetails = buildResourceDepartmentDetails('capability', expenseSources, monthly, 5, expenseActual, { ...expenseFilter, primary: '供应链' }, '2026-09-11')
+assert.equal(onlyDetails.total.toDateExecution, undefined, 'zero labor denominator stays undefined')
+close(onlyDetails.total.toDateCostExecution, 200, 'positive expense denominator remains independently usable')
+assert.equal(buildResourceDepartmentDetails('capability', sources, monthly, 5, dataset, { startDate: '2030-01-01', endDate: '2030-01-31' }, '2026-09-11').total.toDateExecution, undefined, 'missing displayed actual cannot become zero numerator')
+console.log('PASS overview revision: displayed actual numerator, independent labor/cost rates, partial-month nonlabor, expense-only departments and sum reconciliation')

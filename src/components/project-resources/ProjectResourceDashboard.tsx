@@ -1,8 +1,8 @@
 'use client'
 import { useEffect, useState } from 'react'
 import dayjs from 'dayjs'
-import { App, Button, DatePicker, Select, Segmented, Tooltip } from 'antd'
-import { DownloadOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import { App, Button, DatePicker, Select, Segmented } from 'antd'
+import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { ProjectItem } from '@/types/app'
 import { resolveHrFormalSource, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import { resourceStore, useResourceStore } from '@/components/project-resources/resourceVersionAdapter'
@@ -45,7 +45,6 @@ export default function ProjectResourceDashboard({ project, category }: {
   const formal = resolveHrFormalSource(category, null, project.id)
   const display = category === 'capability' ? undefined : resolveBudgetScheduleDisplay(planState, category)
   const formalDates: Record<string, string | null | undefined> = category === 'capability' ? { projectStartTime: formal.projectStartTime, projectEndTime: formal.projectEndTime } : formal.milestones
-  const projectStart = formalDates[display?.firstAnchorKey ?? 'projectStartTime'] ?? undefined
   const available = DASHBOARD_BUDGETS.map(item => dashboardSources(store.projects, project.id, item.key))
   const sources = available.map(items => selectDashboardSource(items))
   const dataset = resourceAccountingDataset(project.id)
@@ -73,7 +72,7 @@ export default function ProjectResourceDashboard({ project, category }: {
   }), dashboardStageDefinition(category, formalDates, display)]
   const stages = stagesFor(sources)
   const trend = dashboardBusinessTrend(analyses, accounting, mode, grain, stages)
-  const details = buildResourceDepartmentDetails(category, sources, store.monthlyInvestments, rate, dataset, filter, today, projectStart)
+  const details = buildResourceDepartmentDetails(category, sources, store.monthlyInvestments, rate, dataset, filter, today)
   const period = dates ? `${dates[0]}～${dates[1]}` : '全周期'
   const canExport = canResourceAction({ pmsProjectId: project.id }, 'export', project.id)
   const exportAnalysis = () => {
@@ -85,18 +84,15 @@ export default function ProjectResourceDashboard({ project, category }: {
     }
     const currentRate = Number(useHrConfigStore.getState().data.feeRate?.[0]?.value ?? 5)
     const currentAnalyses = currentSources.map(source => source && buildDashboardAnalysis(category, source, current.monthlyInvestments, currentRate, filter))
-    exportResourceBusinessDashboard(project.name, currentAnalyses, buildAccountingAnalysis(dataset, currentRate, filter), filter, mode, grain, stagesFor(currentSources), buildResourceDepartmentDetails(category, currentSources, current.monthlyInvestments, currentRate, dataset, filter, dayjs().format('YYYY-MM-DD'), projectStart))
+    exportResourceBusinessDashboard(project.name, currentAnalyses, buildAccountingAnalysis(dataset, currentRate, filter), filter, mode, grain, stagesFor(currentSources), buildResourceDepartmentDetails(category, currentSources, current.monthlyInvestments, currentRate, dataset, filter, dayjs().format('YYYY-MM-DD')))
   }
-  return <section className="pms-resource-dashboard" aria-label="项目资源看板">
-    <div className="pms-dashboard-toolbar">
-      <div><h2>项目资源看板</h2><Tooltip title={`费用 = 人月 × 费率 ${rate} 万元/人月 + 非人力费用（元）÷ 10000。四类数据独立比较。`}><span className="pms-dashboard-definition"><InfoCircleOutlined /> 人月与费用分析</span></Tooltip></div>
-      <div><Button icon={<ReloadOutlined />} onClick={() => { setPrimary('all'); setDepartment('all'); setDates(undefined) }}>重置筛选</Button>{canExport && <Button icon={<DownloadOutlined />} disabled={!sources.some(Boolean) && !accounting} onClick={exportAnalysis}>导出分析</Button>}</div>
-    </div>
+  return <section className="pms-resource-dashboard" aria-label="资源总览">
     <div className="pms-dashboard-filters">
       <label><span>一级部门</span><Select aria-label="看板一级部门" showSearch optionFilterProp="label" value={effectivePrimary} onChange={value => { setPrimary(value); setDepartment('all') }} options={[{ value: 'all', label: '全部一级部门' }, ...primaries.map(value => ({ value, label: value }))]} /></label>
       <label><span>二级部门</span><Select aria-label="看板二级部门" showSearch optionFilterProp="label" value={effectiveDepartment} onChange={setDepartment} options={[{ value: 'all', label: '全部二级部门' }, ...departments.map(value => ({ value, label: value }))]} /></label>
       <label><span>日期</span><DatePicker.RangePicker aria-label="看板日期范围" value={dates ? [dayjs(dates[0]), dayjs(dates[1])] : null} onChange={value => setDates(value?.[0] && value[1] ? [value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')] : undefined)} /></label>
       <span className="pms-dashboard-filter-note">{period} · 正式版本</span>
+      <div className="pms-dashboard-filter-actions"><Button icon={<ReloadOutlined />} onClick={() => { setPrimary('all'); setDepartment('all'); setDates(undefined) }}>重置筛选</Button>{canExport && <Button icon={<DownloadOutlined />} disabled={!sources.some(Boolean) && !accounting} onClick={exportAnalysis}>导出分析</Button>}</div>
     </div>
     <ResourceDashboardMetrics sources={sources} analyses={analyses} accounting={accounting} details={details} />
     <section className="pms-resource-panel pms-dashboard-trend-panel">
