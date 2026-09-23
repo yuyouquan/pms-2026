@@ -122,7 +122,7 @@ export default function MachineMrVersionPlan({
     machineProjectId: project.id,
   }), [currentUser, globalAdminUsers, metadata.spm, metadata.spmUsers, project.id])
   const scopeKey = `machine::${project.id}`
-  const mode: MrPlanViewMode = viewModeByScope[scopeKey] ?? 'vertical'
+  const mode: MrPlanViewMode = viewModeByScope[scopeKey] ?? 'horizontal'
 
   const valueFor = (version: MrMachineMarketProjection, market: string, activityId: string) => (
     getMachineMarketDate({ plan: version.plan, overridesByKey: marketOverridesByKey, market, mainMarket, activityId })

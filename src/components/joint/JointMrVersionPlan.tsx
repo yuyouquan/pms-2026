@@ -24,7 +24,7 @@ import { makeMrMachineRowLockKey, rehydrateMrVersionPlanStore, useMrVersionPlanS
 import { ensureEnumHydrated, useEnumStore } from '@/stores/enums'
 import { buildMrAggregationSources, selectCanonicalTosMrInstances } from '@/lib/mrPlanSourceAdapters'
 import { reconcileJointMachinePlans } from '@/lib/mrAggregationRules'
-import { validateJointMachineRows } from '@/lib/mrDateRules'
+import { getJointTransferTypeGaps, validateJointMachineRows } from '@/lib/mrDateRules'
 import { createShanghaiBusinessDateTicker, getShanghaiBusinessDate } from '@/lib/shanghaiBusinessDate'
 import {
   buildJointMrColumnSchema,
@@ -311,6 +311,10 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     () => projection.rows.filter((row): row is MrJointMachineRow => row.kind === 'machine').map(row => row.plan),
     [projection.rows],
   )
+  const transferTypeGaps = useMemo(
+    () => getJointTransferTypeGaps({ tosInstances, machinePlans: machineRows }),
+    [machineRows, tosInstances],
+  )
   const machineErrors = useMemo(
     () => validateJointMachineRows({ tosInstances, machinePlans: machineRows }),
     [machineRows, tosInstances],
@@ -465,6 +469,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         if (row.kind === 'tos-reference') return '1'
         const permission = permissionByRowKey.get(row.key)
         return (
+          <Tooltip title={transferTypeGaps[row.key] ? `同一tOS版本缺少1+N转测类型${transferTypeGaps[row.key]}，请补齐后续转测类型的顺序` : undefined}>
           <Select
             aria-label={`${row.projectId}-${row.tosVersion}-1+N版本类型`}
             value={row.plan.transferType}
@@ -473,6 +478,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
             onChange={value => handleTransferType(row, value, permission!)}
             style={{ width: 88 }}
           />
+          </Tooltip>
         )
       },
     },
@@ -604,7 +610,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         pagination={false}
         scroll={{ x: 'max-content', y: 620 }}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无MR版本计划" /> }}
-        rowClassName={row => row.kind === 'tos-reference' ? 'pms-joint-mr-reference-row' : ''}
+        rowClassName={row => row.kind === 'tos-reference' ? 'pms-joint-mr-reference-row' : transferTypeGaps[row.key] ? 'pms-joint-mr-type-gap-row' : ''}
         onRow={row => ({
           'data-mr-row-key': row.key,
           'data-mr-row-kind': row.kind,
