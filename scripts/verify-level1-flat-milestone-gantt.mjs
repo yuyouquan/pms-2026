@@ -25,7 +25,7 @@ const level1Rules = await loadTypescriptModule('src/lib/level1PlanRules.ts')
 const technicalRules = await loadTypescriptModule('src/lib/technicalPlanRules.ts')
 const ganttRules = loadTypeScriptModule(root, 'src/lib/planGanttRules.ts')
 const projectSpaceLevel1Rules = loadTypeScriptModule(root, 'src/lib/projectSpaceLevel1Rules.ts')
-const versionCompareRules = await loadTypescriptModule('src/lib/versionCompare.ts')
+const versionCompareRules = loadTypeScriptModule(root, 'src/lib/versionCompare.ts')
 
 assert.equal(typeof ganttRules.buildVisiblePlanGanttColumns, 'function', 'gantt column projection must be centralized')
 assert.deepEqual(
@@ -92,6 +92,7 @@ assert.deepEqual(
     delayStatus: '延期',
     manpowerPercent: null,
     isMilestone: true,
+    displaySequence: '1.1',
   },
   'fixed milestones expose completion points without start dates or durations',
 )

@@ -6,6 +6,7 @@ import type {
   MrCellError,
   MrGroupedColumn,
   MrLeafColumn,
+  MrLevel1TaskLike,
   MrPermissionInput,
   MrPermissionResult,
   MrTemplateActivity,
@@ -19,7 +20,7 @@ import type {
 const TOS_STAGES = new Set(['上市迭代阶段', '维护阶段'])
 const COLLECT_START = '修改点收集开始时间'
 const OTA_RELEASE = 'OTA开放验证&部署'
-const STALE_TOS_VERSION_REASON = '当前tOS版本在最新发布的一级计划中不存在，无法修改日期'
+const STALE_TOS_VERSION_REASON = '当前tOS版本在一级计划中不存在，无法修改日期'
 const INCOMPLETE_TOS_BOUNDS_REASON = '请先完善一级计划中的计划开始时间和计划完成时间'
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/
 const EXPLICIT_ISO_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/
@@ -132,8 +133,12 @@ export function selectTosMrVersionCandidates(input: TosMrCandidateInput): TosMrV
 
   const snapshot = input.getSnapshot(latest.id)
   if (!snapshot) return []
+  return selectTosMrVersionCandidatesFromTasks(snapshot, input.usedVersions)
+}
+
+export function selectTosMrVersionCandidatesFromTasks(snapshot: readonly MrLevel1TaskLike[], usedVersions: readonly string[] = []): TosMrVersionCandidate[] {
   const parents = sortByOrder(snapshot.filter(task => task.parentId == null && TOS_STAGES.has(trim(task.taskName))))
-  const used = new Set(input.usedVersions.map(value => trim(value)))
+  const used = new Set(usedVersions.map(value => trim(value)))
   const seen = new Set<string>()
   const candidates: TosMrVersionCandidate[] = []
 
@@ -149,6 +154,7 @@ export function selectTosMrVersionCandidates(input: TosMrCandidateInput): TosMrV
       candidates.push({
         value,
         label: value,
+        sourceLevel1TaskId: trim(child.stableId) || trim(child.id) || undefined,
         planStartDate,
         planEndDate,
         disabled,

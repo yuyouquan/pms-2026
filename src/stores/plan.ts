@@ -1,3 +1,4 @@
+import { applyLevel1BusinessTasks, captureLevel1BusinessTasks, restoreOwnedLegacyLevel1BusinessTasks, type Level1BusinessTasks } from '@/lib/level1SharedBusinessTasks'
 import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -21,7 +22,7 @@ import type {
 } from '@/lib/tosTypeRules'
 import type { CompareTableRow } from '@/lib/versionCompare'
 import { comparePlanVersions } from '@/lib/planVersioning'
-import { buildLevel1TasksForProjectType, splitMachineLevel1DevelopmentStage } from '@/lib/level1PlanRules'
+import { buildLevel1TasksForProjectType, splitMachineLevel1DevelopmentStage, type Level1PlanTask } from '@/lib/level1PlanRules'
 import { pickScopedPlanPersistence } from '@/lib/projectSpaceLevel1Rules'
 import { getTemplateSnapshotKey, isRetiredLevel3SnapshotKey } from '@/lib/projectTemplateCompatibility'
 import {
@@ -50,7 +51,7 @@ import { withDefaultBudgetScheduleIntervals } from '@/lib/budgetMilestoneSchedul
 
 export { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 
-export const PLAN_STORE_VERSION = 16
+export const PLAN_STORE_VERSION = 17
 export const PLAN_STORE_STORAGE_KEY = 'pms-plan-store'
 
 // ─── Exported constants ───────────────────────────────────────────────
@@ -863,6 +864,16 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
         || ''
     }
   }
+  const legacyBusiness = persistedVersion < 17
+    ? restoreOwnedLegacyLevel1BusinessTasks({
+        marketTasks: migrated.marketPlanData || {},
+        versionsByKey: migrated.marketVersionsByKey || {},
+        fallbackVersions: migrated.versions || VERSION_DATA,
+        originalSnapshots: migrated.publishedSnapshots || {},
+        snapshots: migratedSnapshots,
+        sharedByScope: migrated.level1BusinessTasksByScope || {},
+      })
+    : { sharedByScope: migrated.level1BusinessTasksByScope || {}, snapshots: migratedSnapshots }
   return {
     ...migrated,
     tasks: Array.isArray(migrated.tasks)
@@ -870,9 +881,15 @@ export const migratePlanStoreState = (persistedState: unknown, persistedVersion 
           ? migrateLevel1TasksForProjectType(migrated.tasks, PROJECT_CATEGORY_MACHINE, true)
           : shouldSplitMachineStages ? splitMachineLevel1DevelopmentStage(migrated.tasks) : migrated.tasks)
       : LEVEL1_TASKS.map(task => ({ ...task })),
+    // Preserve unowned legacy drafts once; never assign them based on which project opens first.
+    legacyUnscopedMarketTasksByMarket: migrated.legacyUnscopedMarketTasksByMarket
+      || (persistedVersion < 17 ? Object.fromEntries(Object.entries(migrated.marketPlanData || {})
+        .filter(([, entry]: [string, any]) => Array.isArray(entry?.tasks))
+        .map(([market, entry]: [string, any]) => [market, JSON.parse(JSON.stringify(entry.tasks))])) : {}),
     marketPlanData: migratedMarketPlanData,
     tosTypePlanDataByProjectId: migratedTosTypePlanDataByProjectId,
-    publishedSnapshots: migratedSnapshots,
+    level1BusinessTasksByScope: legacyBusiness.sharedByScope,
+    publishedSnapshots: legacyBusiness.snapshots,
     configTemplateTasksByType: migratedConfigTemplates,
     columnSettingsByView,
     configTemplateVersionScopes,
@@ -1059,6 +1076,8 @@ export interface PlanState {
   collapsedNodes: Record<string, Set<string>>
 
   // Published snapshots
+  legacyUnscopedMarketTasksByMarket: Record<string, Level1PlanTask[]>
+  level1BusinessTasksByScope: Record<string, Level1BusinessTasks>
   publishedSnapshots: Record<string, any[]>
   configTemplateTasksByType: Record<string, any[]>
   configTemplateVersionScopes: Record<string, ConfigTemplateVersionScope>
@@ -1126,6 +1145,7 @@ export interface PlanActions {
   ) => void
   setCollapsedNodes: (v: Record<string, Set<string>> | ((prev: Record<string, Set<string>>) => Record<string, Set<string>>)) => void
 
+  setLevel1BusinessTasks: (scope: string, projectType: string, tasks: Level1PlanTask[], latestSnapshotKey?: string) => void
   setPublishedSnapshots: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
   setConfigTemplateTasksByType: (v: Record<string, any[]> | ((prev: Record<string, any[]>) => Record<string, any[]>)) => void
   setTechnicalTemplateTasks: (kind: TechnicalTemplateKind, v: any[] | ((prev: any[]) => any[])) => void
@@ -1222,6 +1242,8 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   collapsedNodes: {},
 
   // Published snapshots
+  legacyUnscopedMarketTasksByMarket: {},
+  level1BusinessTasksByScope: {},
   publishedSnapshots: {
     ...createInitialTemplatePublishedSnapshots(),
     ...initialMrAcceptancePlanScope.publishedSnapshots,
@@ -1293,6 +1315,20 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   })),
   setCollapsedNodes: (v) => set((s) => ({ collapsedNodes: typeof v === 'function' ? v(s.collapsedNodes) : v })),
 
+  setLevel1BusinessTasks: (scope, projectType, tasks, latestSnapshotKey) => set(state => {
+    const shared = { ...state.level1BusinessTasksByScope[scope], ...captureLevel1BusinessTasks(projectType, tasks) }
+    if (JSON.stringify(state.level1BusinessTasksByScope[scope]) === JSON.stringify(shared)) return state
+    const published = latestSnapshotKey ? state.publishedSnapshots[latestSnapshotKey] : undefined
+    return {
+      level1BusinessTasksByScope: { ...state.level1BusinessTasksByScope, [scope]: shared },
+      ...(published && latestSnapshotKey ? {
+        publishedSnapshots: {
+          ...state.publishedSnapshots,
+          [latestSnapshotKey]: applyLevel1BusinessTasks(projectType, published, shared),
+        },
+      } : {}),
+    }
+  }),
   setPublishedSnapshots: (v) => set((s) => {
     const publishedSnapshots = typeof v === 'function' ? v(s.publishedSnapshots) : v
     // Snapshot initialization may run again while legacy project data resolves.
@@ -1408,6 +1444,8 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
     versions: state.versions,
     currentVersion: state.currentVersion,
     publishedSnapshots: state.publishedSnapshots,
+    level1BusinessTasksByScope: state.level1BusinessTasksByScope,
+    legacyUnscopedMarketTasksByMarket: state.legacyUnscopedMarketTasksByMarket,
     configTemplateTasksByType: state.configTemplateTasksByType,
     configTemplateVersionScopes: state.configTemplateVersionScopes,
     configTemplateCompareScopes: state.configTemplateCompareScopes,

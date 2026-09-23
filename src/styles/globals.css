@@ -8033,6 +8033,8 @@ input.ant-input,
 
 /* Governed machine/tOS level-one hierarchy. Keep every override scoped so technical plans stay unchanged. */
 .pms-level1-tree-table .ant-table-cell { vertical-align: middle; }
+.pms-level1-tree-table .pms-level1-sequence-cell { white-space: nowrap; }
+.pms-level1-tree-table .pms-level1-sequence-cell > .ant-space { vertical-align: middle; }
 .pms-level1-tree-table .pms-level1-row-level-0 > td {
   background: #f8fafc !important;
   color: #111827;

@@ -548,16 +548,16 @@ assert.match(
 )
 assert.match(projectSpaceSource, /navigateWithEditGuard\(\(\)\s*=>\s*\{[\s\S]*setIsEditMode\(false\)[\s\S]*setProjectPlanLevel/)
 
-assert.match(tosMrVersionPlanSource, /新增tOS版本号/)
-assert.match(tosMrVersionPlanSource, /selectLatestPublishedTosLevel1/)
+assert.doesNotMatch(tosMrVersionPlanSource, /新增tOS版本号/)
+assert.match(tosMrVersionPlanSource, /selectActiveTosMrTasks/)
 assert.match(tosMrVersionPlanSource, /selectTosMrVersionCandidates/)
 assert.match(tosMrVersionPlanSource, /resolveMrPermissions/)
 assert.match(tosMrVersionPlanSource, /validateTosMrInstanceDates/)
 assert.match(tosMrVersionPlanSource, /resolveTosMrInstanceDateAccess/)
 assert.match(tosMrVersionPlanSource, /rehydrateMrVersionPlanStore/)
 assert.match(tosMrVersionPlanSource, /请先在配置中心发布三级计划-MR版本计划模板/)
-assert.match(tosMrVersionPlanSource, /请先完善一级计划中的计划开始时间和计划完成时间/)
-assert.match(tosMrVersionPlanSource, /当前tOS版本在最新发布的一级计划中不存在，无法修改日期/)
+
+assert.match(tosMrVersionPlanSource, /当前tOS版本在一级计划中不存在，无法修改日期/)
 assert.match(tosMrVersionPlanSource, /if\s*\(!access\?\.canEdit\)/)
 assert.match(tosMrVersionPlanSource, /instance\.activities[\s\S]*filter\(activity\s*=>\s*activity\.parentId\s*!==\s*null\)/)
 assert.match(tosMrVersionPlanSource, /tos::\$\{project\.id\}/)
@@ -565,7 +565,7 @@ assert.match(tosMrVersionPlanSource, /vertical/)
 assert.match(tosMrVersionPlanSource, /horizontal/)
 assert.match(tosMrVersionPlanSource, /aria-label=['"]竖版视图['"]/)
 assert.match(tosMrVersionPlanSource, /aria-label=['"]横版视图['"]/)
-assert.match(tosMrVersionPlanSource, /addTosVersionInstance/)
+assert.doesNotMatch(tosMrVersionPlanSource, /addTosVersionInstance/)
 assert.match(tosMrVersionPlanSource, /updateTosDate/)
 assert.match(tosMrVersionPlanSource, /selectCanonicalTosMrInstances\(state\.tosInstancesByProjectId,\s*project\.id\)/)
 assert.match(tosMrVersionPlanSource, /if\s*\(!updated\)/)
@@ -576,13 +576,10 @@ assert.match(
   tosMrVersionPlanSource,
   /const\s+visibleInstances\s*=\s*useMemo\([\s\S]*versionQuery\.trim\(\)\.toLocaleLowerCase\(\)[\s\S]*sortedInstances\.filter\([\s\S]*tosVersion\.toLocaleLowerCase\(\)\.includes\(query\)[\s\S]*:\s*sortedInstances[\s\S]*\[sortedInstances,\s*versionQuery\]/,
 )
-assert.match(tosMrVersionPlanSource, /usedVersions:\s*sortedInstances\.map\(/)
 assert.match(tosMrVersionPlanSource, /new Map\(sortedInstances\.map\(/)
 assert.match(tosMrVersionPlanSource, /visibleInstances\.forEach\(instance\s*=>/)
 assert.match(tosMrVersionPlanSource, /const rows:\s*MrPlanGridRow\[\]\s*=\s*visibleInstances\.map\(/)
 assert.match(tosMrVersionPlanSource, /<Input\.Search[\s\S]*allowClear[\s\S]*aria-label=['"]搜索tOS版本号['"][\s\S]*value=\{versionQuery\}[\s\S]*onChange=\{event\s*=>\s*setVersionQuery\(event\.target\.value\)\}/)
-assert.match(tosMrVersionPlanSource, /<Input\.Search[\s\S]*aria-label=['"]搜索tOS版本号['"][\s\S]*<Button[\s\S]*aria-label=['"]新增tOS版本号['"]/, '搜索输入必须位于新增按钮左侧')
-assert.match(tosMrVersionPlanSource, /description=\{versionQuery\.trim\(\)\s*\?\s*['"]未找到匹配的tOS版本号['"]\s*:\s*['"]暂无MR版本计划['"]\}/)
 assert.match(tosMrVersionPlanSource, /<MrPlanGrid[\s\S]*logicalRows=\{rows\}/)
 assert.doesNotMatch(tosMrVersionPlanSource, /useMrVersionPlanStore\([^\n]*versionQuery/)
 assert.doesNotMatch(tosMrVersionPlanSource, /localStorage[\s\S]*versionQuery|versionQuery[\s\S]*localStorage/)
@@ -962,7 +959,7 @@ assert.deepEqual(planRules.resolveTosMrInstanceDateAccess('016.03.0.110', [
   { value: '16.3.0.115', label: '16.3.0.115', planStartDate: '2026-01-10', planEndDate: '2026-01-20', disabled: false },
 ]), {
   canEdit: false,
-  reason: '当前tOS版本在最新发布的一级计划中不存在，无法修改日期',
+  reason: '当前tOS版本在一级计划中不存在，无法修改日期',
 })
 assert.deepEqual(planRules.resolveTosMrInstanceDateAccess('016.03.0.110', [
   { value: '16.3.0.110', label: '16.3.0.110', planStartDate: '', planEndDate: '2026-01-20', disabled: true, reason: '该tOS版本号已添加' },
@@ -999,7 +996,7 @@ assert.deepEqual(planRules.selectTosMrVersionCandidates({
     return id === 'v5' ? latestPublishedSnapshot : draftTasks
   },
   usedVersions: ['5.0'],
-}), [{ value: '5.0', label: '5.0', planStartDate: '2026-02-01', planEndDate: '2026-02-02', disabled: true, reason: '该tOS版本号已添加' }])
+}), [{ value: '5.0', label: '5.0', sourceLevel1TaskId: 'valid-child', planStartDate: '2026-02-01', planEndDate: '2026-02-02', disabled: true, reason: '该tOS版本号已添加' }])
 assert.deepEqual(readSnapshots, ['v5'])
 assert.deepEqual(planRules.selectTosMrVersionCandidates({
   versions: [{ id: 'zero', versionNo: 'V0', status: '已发布' }, { id: 'unsafe', versionNo: 'V9007199254740992', status: '已发布' }],
@@ -2525,7 +2522,7 @@ assert.equal(invalidHistoricalSelection.currentTemplateVersionId, 'draft-v3-sele
 const persistedOnly = mrStore.partializeMrVersionPlanState(machineStore.getState())
 assert.deepEqual(Object.keys(persistedOnly).sort(), [
   'currentTemplateVersionId', 'machinePlansByKey', 'machineRowLocks', 'marketOverridesByKey', 'stopReleaseRecords',
-  'templateHistory', 'templateVersions', 'tosInstancesByProjectId', 'viewModeByScope',
+  'templateHistory', 'templateVersions', 'tosInstancesByProjectId', 'tosInstancesByType', 'activeTosTypeByProjectId', 'tosDownstreamByType', 'viewModeByScope',
 ].sort())
 assert.equal(Object.values(persistedOnly).some(value => typeof value === 'function'), false)
 hydrationStorage.setItem(mrStore.MR_VERSION_PLAN_STORAGE_KEY, JSON.stringify({
@@ -2670,7 +2667,7 @@ legacyPlanFixture.publishedSnapshots['project::tos::tos-type::Full::level3::v1::
 legacyPlanFixture.publishedSnapshots['project::machine::level3::level1::v1'] = [{ id: 'literal-level3-market' }]
 legacyPlanFixture.publishedSnapshots['project::level3::level1::v1'] = [{ id: 'literal-level3-project' }]
 const planStore = loadTypeScriptModule(root, 'src/stores/plan.ts')
-assert.equal(planStore.PLAN_STORE_VERSION, 16, 'MR migration composes with the machine stage split upgrade')
+assert.equal(planStore.PLAN_STORE_VERSION, 17, 'MR migration composes with shared business nodes and the machine stage split upgrade')
 const migratedPlanFixture = planStore.migratePlanStoreState(structuredClone(legacyPlanFixture), 9)
 assert.equal('level3TemplateTasksByType' in migratedPlanFixture, false)
 assert.equal('level3ScopesByKey' in migratedPlanFixture, false)

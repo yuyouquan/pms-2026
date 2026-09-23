@@ -65,7 +65,7 @@ export const buildVisiblePlanGanttColumns = (
   definitions: readonly { key: string; title?: unknown }[],
 ): VisiblePlanGanttColumn[] => {
   const columnsByKey: Record<string, VisiblePlanGanttColumn> = {
-    id: { name: 'id', label: '序号', width: 70, align: 'center', template: listCell('id') },
+    id: { name: 'id', label: '序号', width: 70, align: 'center', template: task => escapeGanttCell(task.planGridValues?.displaySequence ?? task.planGridValues?.id ?? task.id) },
     sequence: { name: 'sequence', label: '序号', width: 70, align: 'center', template: listCell('sequence') },
     taskName: { name: 'text', label: '任务名称', width: 180, tree: true, template: listCell('taskName', 'text') },
     activityName: { name: 'text', label: '阶段/节点', width: 180, tree: true, template: listCell('activityName', 'text') },

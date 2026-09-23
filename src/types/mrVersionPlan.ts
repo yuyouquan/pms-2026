@@ -35,6 +35,7 @@ export interface MrTemplateChangeLog {
 }
 
 export interface TosMrVersionInstance {
+  sourceLevel1TaskId?: string
   projectId: string
   tosVersion: string
   templateVersionId: string
@@ -69,6 +70,7 @@ export interface TosMrCandidateInput {
 }
 
 export interface TosMrVersionCandidate {
+  sourceLevel1TaskId?: string
   value: string
   label: string
   planStartDate: string
