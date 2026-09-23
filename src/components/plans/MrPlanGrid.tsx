@@ -12,6 +12,7 @@ import type { MrActivityDateMap, MrGroupedColumn, MrPlanViewMode, MrTemplateActi
 export interface MrPlanGridRow {
   key: string
   version: string
+  versionWarning?: string
   activities: MrTemplateActivity[]
   dates: MrActivityDateMap
   identity?: Record<string, string>
@@ -67,6 +68,20 @@ export function MrDateCellContent({ content, errors, ariaLabel }: MrDateCellCont
       </Tooltip>
     </span>
   )
+}
+
+export function MrVersionLabel({ row }: { row: MrPlanGridRow }) {
+  return <span className="pms-mr-version-label">
+    <span>{row.version}</span>
+    {row.versionWarning && <Tooltip color="red" title={row.versionWarning}>
+      <ExclamationCircleOutlined
+        className="pms-mr-cell-error-icon pms-mr-version-warning"
+        tabIndex={0}
+        role="img"
+        aria-label={`${row.version} 日期不可填写：${row.versionWarning}`}
+      />
+    </Tooltip>}
+  </span>
 }
 
 function buildHorizontalSchema(rows: readonly MrPlanGridRow[]): MrGroupedColumn[] {
@@ -157,7 +172,7 @@ export default function MrPlanGrid({
         width: 150,
         fixed: 'left',
         className: 'pms-mr-sticky-version',
-        render: (_, row) => row.logicalRow.version,
+        render: (_, row) => <MrVersionLabel row={row.logicalRow} />,
       },
       ...identityColumns.map(column => ({
         title: column.title,
@@ -209,6 +224,7 @@ export default function MrPlanGrid({
       width: 150,
       fixed: 'left',
       className: 'pms-mr-sticky-version',
+      render: (_, row) => <MrVersionLabel row={row} />,
     },
     ...identityColumns.map(column => ({
       title: column.title,
