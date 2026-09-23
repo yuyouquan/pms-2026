@@ -67,7 +67,8 @@ if (previousPath) {
   const kept = { ...customized, ...refreshTransferMockState(customized) }
   assert.deepEqual(kept.tmChecklistItems.filter(row => row.applicationId === 'ta001'), customized.tmChecklistItems.filter(row => row.applicationId === 'ta001'))
   assert.deepEqual(kept.transferApplications.find(app => app.id === 'ta001'), customized.transferApplications.find(app => app.id === 'ta001'))
-  assert.deepEqual(kept.tmTemplateVersions['整机产品项目'], customized.tmTemplateVersions['整机产品项目'])
+  assert.deepEqual(kept.tmTemplateVersions['整机产品项目'].checklist.slice(0, -1), customized.tmTemplateVersions['整机产品项目'].checklist)
+  assert.deepEqual(kept.tmTemplateVersions['整机产品项目'].checklist.at(-1).rows, fresh.tmTemplateVersions['整机产品项目'].checklist[0].rows)
   assert.equal(kept.tmChecklistItems.filter(row => row.applicationId === 'ta002').length, 51)
   console.log('PASS previous-release upgrade, custom imports and edited applications preserved, idempotence')
 }
@@ -78,3 +79,13 @@ const customActive = { ...current, tmMockTemplateRevision: '', transferApplicati
 customActive.transferApplications.push({ ...fresh.transferApplications.find(app => app.id === 'ta005'), id: 'user-created-tos' })
 assert.equal(refreshTransferMockState(customActive).transferApplications.some(app => app.id === 'ta005'), false)
 console.log('PASS existing current data remains unchanged and user-created tOS applications are not duplicated')
+
+// Simulate the first refresh already run with a previously imported QA template.
+const imported = { ...fresh, tmMockTemplateRevision: source.TRANSFER_TEMPLATE_REVISION, tmTemplateVersions: structuredClone(fresh.tmTemplateVersions) }
+imported.tmTemplateVersions['整机产品项目'].checklist = [{ ...imported.tmTemplateVersions['整机产品项目'].checklist[0], id: 'user-import', createdBy: '演示用户01', rows: [{ ...whole[0], checkItem: '验收标准' }] }]
+const importedNext = { ...imported, ...refreshTransferMockState(imported) }
+assert.deepEqual(importedNext.tmTemplateVersions['整机产品项目'].checklist[0], imported.tmTemplateVersions['整机产品项目'].checklist[0])
+assert.equal(importedNext.tmTemplateVersions['整机产品项目'].checklist.at(-1).rows.length, 51)
+assert.equal(importedNext.tmTemplateVersions['整机产品项目'].checklist.at(-1).version, 'v2.0')
+assert.equal(refreshTransferMockState(importedNext), null)
+console.log('PASS source refresh publishes latest version while retaining prior imports in version history')

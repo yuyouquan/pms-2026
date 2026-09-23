@@ -469,6 +469,7 @@ export const MOCK_HISTORY: HistoryRecord[] = [
   { id: 'h013', applicationId: 'ta003', action: '通过', operator: '演示用户07', detail: '维护SPM审核通过，转维流程完成', timestamp: '2026-03-01 17:30:00' },
   { id: 'h014', applicationId: 'ta004', action: '创建', operator: '演示用户02', detail: '创建转维申请', timestamp: '2026-03-05 11:00:00' },
   { id: 'h015', applicationId: 'ta004', action: '关闭', operator: '演示用户02', detail: '项目延期，取消转维计划', timestamp: '2026-03-18 09:15:00' },
+  { id: 'h016', applicationId: 'ta005', action: '创建', operator: '演示用户01', detail: '按最新版tOS CheckList创建演示转维申请，共26项，计划评审日期：2026-10-15', timestamp: '2026-09-23 09:00:00' },
 ]
 
 // ========== Helper 函数 ==========
