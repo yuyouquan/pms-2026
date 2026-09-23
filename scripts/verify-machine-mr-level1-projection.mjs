@@ -50,6 +50,14 @@ const versions = markets.projectMachineMarketMrVersions({
 })
 assert.deepEqual(versions.versions.map(row => row.tosVersion), ['16.3.0.2', '16.3.0.3', '16.3.0.10'])
 assert.deepEqual(versions.markets, ['OP', 'TR', 'RU'])
+const sourceBeforeFilter = structuredClone(versions)
+const filtered = markets.filterMachineMrProjection(versions, { tosVersion: ' .0.3 ', mrNumber: ' mr2 ', markets: ['RU', 'TR'] })
+assert.deepEqual(filtered.versions.map(row => row.tosVersion), ['16.3.0.3'], 'fuzzy filters combine and MR number uses unfiltered order')
+assert.deepEqual(filtered.markets, ['TR', 'RU'], 'multi-market filter keeps source market order')
+assert.equal(markets.filterMachineMrProjection(versions, { tosVersion: '', mrNumber: '3', markets: [] }).versions[0].tosVersion, '16.3.0.10')
+assert.equal(markets.filterMachineMrProjection(versions, { tosVersion: 'missing', mrNumber: '', markets: [] }).versions.length, 0)
+assert.deepEqual(markets.filterMachineMrProjection(versions, { tosVersion: '', mrNumber: '', markets: [] }), versions, 'clearing filters restores all rows')
+assert.deepEqual(versions, sourceBeforeFilter, 'filtering does not mutate plan data')
 const overrides = {
   [markets.getMrMarketOverrideKey(projectId, '16.3.0.2', 'TR')]: {
     projectId, tosVersion: '16.3.0.2', market: 'TR', mainMarket: 'OP',
@@ -71,6 +79,18 @@ assert.deepEqual(children('TR').map(task => [task.planStartDate, task.planEndDat
 ], 'follow markets use only their own MR overrides')
 assert.ok(children('RU').every(task => task.planStartDate === '' && task.planEndDate === ''), 'missing market dates stay blank')
 const launched = children('OP')[0]
+const actualInput = {
+  versions: versions.versions, instancesByProjectId: { [tosProjectId]: Object.values(instances) },
+  sourceTasksByProjectId: { [tosProjectId]: sourceTasks }, overridesByKey: overrides,
+  market: 'OP', mainMarket: 'OP',
+  previousTasks: [{ ...launched, actualStartDate: '2027-01-09', actualEndDate: '2027-01-22', planEndDate: '2099-01-01' }],
+}
+const actualProjection = projection.projectMachineMrLevel1Tasks(actualInput)
+assert.equal(actualProjection.find(task => task.stableId === launched.stableId).actualStartDate, '2027-01-09', 'MR refresh preserves entered actual dates')
+assert.equal(actualProjection.find(task => task.stableId === launched.stableId).actualEndDate, '2027-01-22')
+assert.equal(actualProjection.find(task => task.stableId === launched.stableId).planEndDate, '2027-01-21', 'plan dates still come from current MR activities')
+assert.ok(actualProjection.filter(task => task.parentId && task.stableId !== launched.stableId).every(task => !task.actualStartDate), 'other MR nodes do not inherit actual dates')
+assert.ok(projection.projectMachineMrLevel1Tasks({ ...actualInput, versions: [] }).every(task => !task.parentId), 'removed MR nodes are not resurrected by actual dates')
 const renamedSource = sourceTasks.map(task => task.id === 'source-2' ? { ...task, taskName: '16.3.0.20' } : task)
 const renamedInstance = { ...instances['16.3.0.2'], tosVersion: '16.3.0.20' }
 const renamedVersion = { ...versions.versions[0], tosVersion: '16.3.0.20', key: 'renamed', plan: { ...plans.two, tosVersion: '16.3.0.20' } }
@@ -146,6 +166,29 @@ assert.equal(mrStore.getState().marketOverridesByKey[markets.getMrMarketOverride
 assert.equal(mrStore.getState().machineRowLocks[`${detachedMachine.id}::${tosProjectId}::16.3.0.2`], undefined, 'unbound machine lock is pruned')
 assert.deepEqual(planStore.getState().level1BusinessTasksByScope[detachedScope]['machine-stage-launch'], [], 'unbound machine L1 clears while another machine source is pending')
 assert.ok(mrStore.getState().machinePlansByKey[`${readyMachine.id}::17.1.0.120`], 'ready machine MR is created while another machine source is pending')
+mrStore.setState(state => ({ machinePlansByKey: { ...state.machinePlansByKey,
+  [`${readyMachine.id}::17.1.0.120`]: { ...state.machinePlansByKey[`${readyMachine.id}::17.1.0.120`], dates: readyInstance.dates },
+} }))
+await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+const readyScope = shared.getLevel1BusinessScopeKey(readyMachine.id, 'market', 'OP')
+const readySnapshotKey = `project::${readyMachine.id}::OP::level1::ready-v1`
+const readyBusiness = planStore.getState().level1BusinessTasksByScope[readyScope]
+const readyChild = readyBusiness['machine-stage-launch'][0]
+assert.ok(readyChild)
+const actualTasks = shared.applyLevel1BusinessTasks('整机产品项目', readyTasks, readyBusiness).map(task =>
+  task.stableId === readyChild.stableId ? { ...task, actualStartDate: relativeDate(0), actualEndDate: relativeDate(1) } : task)
+planStore.getState().setLevel1BusinessTasks(readyScope, '整机产品项目', actualTasks, readySnapshotKey)
+await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+assert.equal(planStore.getState().level1BusinessTasksByScope[readyScope]['machine-stage-launch'][0].actualEndDate, relativeDate(1), 'global MR refresh retains actual dates after editing')
+assert.equal(planStore.getState().publishedSnapshots[readySnapshotKey].find(task => task.stableId === readyChild.stableId).actualStartDate, relativeDate(0), 'latest published snapshot is updated')
+const summary = load(path.resolve('src/lib/level1PlanRules.ts')).projectLevel1Plan(planStore.getState().publishedSnapshots[readySnapshotKey]).rows.find(task => task.stableId === 'machine-stage-launch')
+assert.equal(summary.actualStartDate, relativeDate(0), 'stage start aggregates MR actual dates')
+assert.equal(summary.actualEndDate, relativeDate(1), 'stage end aggregates MR actual dates')
+const persistedActuals = JSON.parse(localStorage.getItem('pms-plan-store')).state.level1BusinessTasksByScope[readyScope]
+assert.equal(persistedActuals['machine-stage-launch'][0].actualEndDate, relativeDate(1), 'actual dates survive persistence')
+planStore.getState().setLevel1BusinessTasks(readyScope, '整机产品项目', actualTasks.map(task => task.stableId === readyChild.stableId ? { ...task, actualStartDate: '', actualEndDate: '' } : task), readySnapshotKey)
+await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+assert.equal(planStore.getState().level1BusinessTasksByScope[readyScope]['machine-stage-launch'][0].actualEndDate, '', 'cleared actual dates are not restored by synchronization')
 projectStore.setState({ projects: [machineProject] })
 await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
 assert.deepEqual(planStore.getState().level1BusinessTasksByScope[scope]['machine-stage-launch'], [], 'deleted tOS project clears launch children')

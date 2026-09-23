@@ -2393,6 +2393,22 @@ body:not(.pms-project-list-is-resizing) .pms-project-list-column-resize-handle:h
 }
 
 /* Machine project MR plan. Keep sticky layers and invalid feedback local. */
+.pms-machine-mr-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pms-machine-mr-filters > .ant-input-affix-wrapper {
+  width: 180px;
+}
+
+.pms-machine-mr-filters > .ant-select {
+  width: 240px;
+  max-width: 100%;
+}
+
 .pms-machine-mr-toolbar {
   display: flex;
   align-items: center;
