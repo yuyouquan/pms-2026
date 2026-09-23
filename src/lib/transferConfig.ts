@@ -1,4 +1,5 @@
-import { MOCK_CHECKLIST_TEMPLATES, MOCK_REVIEW_ELEMENT_TEMPLATES, type CheckListTemplate, type ReviewElementTemplate, type TMTeamMember } from '@/mock/transfer-maintenance'
+import type { CheckListTemplate, ReviewElementTemplate, TMTeamMember } from '@/mock/transfer-maintenance'
+import { MOCK_CHECKLIST_TEMPLATES, MOCK_TOS_CHECKLIST_TEMPLATES, MOCK_REVIEW_ELEMENT_TEMPLATES, TRANSFER_TEMPLATE_REVISION } from '@/mock/transfer-template-source'
 import { resolveProjectClassification } from '@/constants/projectTypes'
 
 export type TransferProjectType = '整机产品项目' | 'tOS版本项目'
@@ -41,13 +42,14 @@ export function createTransferTemplateVersions(): TransferTemplateVersions {
     let sequence = 0, last = ''
     const roles = getTransferRoleConfig(project)
     const resolveRole = (role: string) => roles.find(candidate => candidate.roleName === role || candidate.ipmRoleCode === (role === '测试' ? 'TPM' : role))
-    const rows: TransferTemplateRow[] = (kind === 'checklist' ? MOCK_CHECKLIST_TEMPLATES : MOCK_REVIEW_ELEMENT_TEMPLATES).filter(row => resolveRole(row.responsibleRole)).map(row => {
+    const source = kind === 'review' ? MOCK_REVIEW_ELEMENT_TEMPLATES : project === 'tOS版本项目' ? MOCK_TOS_CHECKLIST_TEMPLATES : MOCK_CHECKLIST_TEMPLATES
+    const rows: TransferTemplateRow[] = source.map(row => {
       const text = 'checkItem' in row ? row.checkItem : row.standard
       if (text !== last) { sequence++; last = text }
       const role = resolveRole(row.responsibleRole)!.roleName
       return { ...row, responsibleRole: role, entryRole: `在研${role}`, reviewRole: `维护${role}`, seq: row.seq ?? sequence, ...(!('checkItem' in row) ? { type: row.type ?? '检查项' } : {}) }
     })
-    return [{ id: `${project}-${kind}-1`, version: 'v1.0', date: '2026-09-22', createdBy: '系统', kind, rows }]
+    return [{ id: `${project}-${kind}-${TRANSFER_TEMPLATE_REVISION}`, version: 'v1.0', date: '2026-09-23', createdBy: '系统', kind, rows }]
   }
   return Object.fromEntries(TRANSFER_PROJECT_TYPES.map(project => [project, { checklist: create(project, 'checklist'), review: create(project, 'review') }])) as TransferTemplateVersions
 }

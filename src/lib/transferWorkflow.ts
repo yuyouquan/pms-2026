@@ -107,13 +107,4 @@ export function syncTransferPipeline(app: TransferApplication, checklist: CheckL
   const reviewStarted = items.some(item => item.reviewStatus !== 'not_reviewed')
   return { ...app, updatedAt: new Date().toISOString(), pipeline: { ...app.pipeline, roleProgress, dataEntry: entered ? 'success' : 'in_progress', maintenanceReview: reviewed ? 'success' : reviewStarted ? 'in_progress' : 'not_started', maintenanceSpmReview: reviewed ? 'in_progress' : 'not_started', infoChange: 'not_started' } }
 }
-export function seedTransferMaterials(app: TransferApplication) {
-  const generated = createTransferMaterials(app)
-  const applyStatus = <T extends TransferItem>(item: T): T => {
-    const role = app.pipeline.roleProgress.find(progress => progress.role === item.responsibleRole)
-    const entered = app.pipeline.dataEntry === 'success' || role?.entryStatus === 'completed'
-    const reviewed = app.pipeline.maintenanceReview === 'success' || role?.reviewStatus === 'completed'
-    return { ...item, entryStatus: entered ? 'entered' : 'not_entered', aiCheckStatus: entered ? 'passed' : 'not_started', entryContent: entered ? '已完成资料录入（模拟数据）' : undefined, reviewStatus: reviewed ? 'passed' : role?.reviewStatus === 'rejected' ? 'rejected' : entered ? 'reviewing' : 'not_reviewed' }
-  }
-  return { checklist: generated.checklist.map(applyStatus), reviewElements: generated.reviewElements.map(applyStatus) }
-}
+export { createMockTransferMaterials as seedTransferMaterials } from '@/mock/transfer-materials'

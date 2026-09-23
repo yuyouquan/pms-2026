@@ -3,8 +3,10 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { hasGlobalPermission } from '@/stores/permission'
 import { createTransferTemplateVersions, getTransferRoleConfig, validateTransferTeamConfig, type TransferProjectType, type TransferTeamRole, type TransferTemplateVersions, type TransferTemplateKind, type TransferTemplateRow } from '@/lib/transferConfig'
-import { seedTransferMaterials, syncTransferPipeline } from '@/lib/transferWorkflow'
+import { syncTransferPipeline } from '@/lib/transferWorkflow'
 import { getTransferAiCheckResult } from '@/lib/transferAiCheck'
+import { refreshTransferMockState } from '@/lib/transferMockRefresh'
+import { TRANSFER_TEMPLATE_REVISION } from '@/mock/transfer-template-source'
 import {
   MOCK_TM_USERS,
   MOCK_HISTORY,
@@ -23,6 +25,7 @@ import {
 } from '@/mock/transfer-maintenance'
 
 export interface TransferState {
+  tmMockTemplateRevision: string
   // Current user (transfer system mock user)
   currentUser: typeof MOCK_TM_USERS[0]
 
@@ -183,9 +186,8 @@ const VIEW_TRANSIENT_DEFAULTS = {
   tmSqaAction: 'approve' as const,
 }
 
-const additionalMaterials = MOCK_TRANSFER_APPLICATIONS.filter(app => !MOCK_CHECKLIST_ITEMS.some(item => item.applicationId === app.id)).map(seedTransferMaterials)
-
 export const useTransferStore = create<TransferState & TransferActions>()(persist((set, get) => ({
+  tmMockTemplateRevision: '',
   transferProjectType: '整机产品项目',
   tmTeamConfigs: { '整机产品项目': getTransferRoleConfig('整机产品项目'), 'tOS版本项目': getTransferRoleConfig('tOS版本项目') },
   tmTemplateVersions: createTransferTemplateVersions(),
@@ -208,8 +210,8 @@ export const useTransferStore = create<TransferState & TransferActions>()(persis
 
   // Data
   transferApplications: MOCK_TRANSFER_APPLICATIONS,
-  tmChecklistItems: [...MOCK_CHECKLIST_ITEMS, ...additionalMaterials.flatMap(materials => materials.checklist)],
-  tmReviewElements: [...MOCK_REVIEW_ELEMENTS, ...additionalMaterials.flatMap(materials => materials.reviewElements)],
+  tmChecklistItems: MOCK_CHECKLIST_ITEMS,
+  tmReviewElements: MOCK_REVIEW_ELEMENTS,
   tmBlockTasks: MOCK_BLOCK_TASKS,
   tmLegacyTasks: MOCK_LEGACY_TASKS,
 
@@ -339,19 +341,20 @@ export const useTransferStore = create<TransferState & TransferActions>()(persis
   setTmSqaAction: (v) => set({ tmSqaAction: v }),
 }), {
   name: 'pms-transfer-store', storage: createJSONStorage(() => pmsLocalStorage), skipHydration: true,
-  partialize: state => ({ tmTeamConfigs: state.tmTeamConfigs, tmTemplateVersions: state.tmTemplateVersions, transferApplications: state.transferApplications, tmChecklistItems: state.tmChecklistItems, tmReviewElements: state.tmReviewElements, tmBlockTasks: state.tmBlockTasks, tmLegacyTasks: state.tmLegacyTasks, tmHistory: state.tmHistory }),
+  partialize: state => ({ tmMockTemplateRevision: state.tmMockTemplateRevision, tmTeamConfigs: state.tmTeamConfigs, tmTemplateVersions: state.tmTemplateVersions, transferApplications: state.transferApplications, tmChecklistItems: state.tmChecklistItems, tmReviewElements: state.tmReviewElements, tmBlockTasks: state.tmBlockTasks, tmLegacyTasks: state.tmLegacyTasks, tmHistory: state.tmHistory }),
 }))
 let hydration: Promise<void> | undefined
-/** Refresh only the untouched legacy mock configuration; preserve imports and application snapshots. */
+/** Refresh untouched default fixtures; preserve custom templates and edited application snapshots. */
 export function upgradeTransferMockDefaults(): void {
   useTransferStore.setState(state => {
     const kind = 'tOS版本项目'
     const versions = state.tmTemplateVersions[kind]
     const untouchedTeam = JSON.stringify(state.tmTeamConfigs[kind]) === JSON.stringify(getTransferRoleConfig('整机产品项目'))
-    const untouchedTemplates = versions.checklist.length === 1 && versions.checklist[0].id === `${kind}-checklist-1` && versions.checklist[0].createdBy === '系统' && !versions.review.length
+    const untouchedTemplates = versions.checklist.length === 1 && [`${kind}-checklist-1`, `${kind}-checklist-${TRANSFER_TEMPLATE_REVISION}`].includes(versions.checklist[0].id) && versions.checklist[0].createdBy === '系统' && !versions.review.length
     if (!untouchedTeam || !untouchedTemplates) return state
     return { tmTeamConfigs: { ...state.tmTeamConfigs, [kind]: getTransferRoleConfig(kind) }, tmTemplateVersions: { ...state.tmTemplateVersions, [kind]: createTransferTemplateVersions()[kind] } }
   })
+  useTransferStore.setState(state => refreshTransferMockState(state) ?? state)
 }
 /** A reload drops browser timers; finish saved mock checks instead of leaving them stuck forever. */
 export function resumeTransferAiChecks(): void {
