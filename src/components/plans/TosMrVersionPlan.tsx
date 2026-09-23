@@ -125,26 +125,24 @@ export default function TosMrVersionPlan({
     const result: Record<string, string[]> = {}
     visibleInstances.forEach(instance => {
       const access = instanceAccessByVersion.get(instance.tosVersion)
-      if (!access?.canEdit) {
-        instance.activities
-          .filter(activity => activity.parentId !== null)
-          .forEach(activity => {
-            result[getMrPlanCellKey(`${instance.projectId}::${instance.tosVersion}`, activity.id)] = [
-              access?.reason ?? '当前tOS版本在一级计划中不存在，无法修改日期',
-            ]
-          })
-        return
-      }
-      validateTosMrInstanceDates(instance, access.bounds).forEach(error => {
+      // Missing source dates apply to the entire version; explain them once in
+      // the version column rather than marking every activity as a date error.
+      const bounds = access?.canEdit ? access.bounds : candidates.find(candidate => compareTosVersionNumbers(candidate.value, instance.tosVersion) === 0)
+      if (!bounds) return
+      validateTosMrInstanceDates(instance, bounds).forEach(error => {
         const key = getMrPlanCellKey(error.rowKey, error.activityId)
         result[key] = [...(result[key] ?? []), error.message]
       })
     })
     return result
-  }, [instanceAccessByVersion, visibleInstances])
+  }, [candidates, instanceAccessByVersion, visibleInstances])
   const rows: MrPlanGridRow[] = visibleInstances.map(instance => ({
     key: `${instance.projectId}::${instance.tosVersion}`,
     version: instance.tosVersion,
+    versionWarning: (() => {
+      const access = instanceAccessByVersion.get(instance.tosVersion)
+      return access && !access.canEdit ? access.reason : undefined
+    })(),
     activities: instance.activities,
     dates: instance.dates,
   }))

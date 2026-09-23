@@ -176,7 +176,10 @@ export function resolveTosMrInstanceDateAccess(
   if (!candidate) return { canEdit: false, reason: STALE_TOS_VERSION_REASON }
   const planStartDate = normalizeMrBusinessDate(candidate.planStartDate)
   const planEndDate = normalizeMrBusinessDate(candidate.planEndDate)
-  if (!planStartDate || !planEndDate) return { canEdit: false, reason: INCOMPLETE_TOS_BOUNDS_REASON }
+  if (!planStartDate || !planEndDate) {
+    const missing = [!planStartDate && '计划开始时间', !planEndDate && '计划完成时间'].filter(Boolean).join('和')
+    return { canEdit: false, reason: `一级计划未填写${missing}，暂不可填写MR日期，请先补齐一级计划时间` }
+  }
   return { canEdit: true, bounds: { planStartDate, planEndDate } }
 }
 

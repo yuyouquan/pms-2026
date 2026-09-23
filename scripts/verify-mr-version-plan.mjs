@@ -559,7 +559,7 @@ assert.match(tosMrVersionPlanSource, /请先在配置中心发布三级计划-MR
 
 assert.match(tosMrVersionPlanSource, /当前tOS版本在一级计划中不存在，无法修改日期/)
 assert.match(tosMrVersionPlanSource, /if\s*\(!access\?\.canEdit\)/)
-assert.match(tosMrVersionPlanSource, /instance\.activities[\s\S]*filter\(activity\s*=>\s*activity\.parentId\s*!==\s*null\)/)
+assert.match(tosMrVersionPlanSource, /versionWarning:/)
 assert.match(tosMrVersionPlanSource, /tos::\$\{project\.id\}/)
 assert.match(tosMrVersionPlanSource, /vertical/)
 assert.match(tosMrVersionPlanSource, /horizontal/)
@@ -965,7 +965,7 @@ assert.deepEqual(planRules.resolveTosMrInstanceDateAccess('016.03.0.110', [
   { value: '16.3.0.110', label: '16.3.0.110', planStartDate: '', planEndDate: '2026-01-20', disabled: true, reason: '该tOS版本号已添加' },
 ]), {
   canEdit: false,
-  reason: '请先完善一级计划中的计划开始时间和计划完成时间',
+  reason: '一级计划未填写计划开始时间，暂不可填写MR日期，请先补齐一级计划时间',
 })
 assert.deepEqual(planRules.resolveTosMrInstanceDateAccess('016.03.0.110', [
   { value: '16.3.0.110', label: '16.3.0.110', planStartDate: '2026-01-01', planEndDate: '2026-01-20', disabled: true, reason: '该tOS版本号已添加' },
