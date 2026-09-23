@@ -39,7 +39,7 @@ import type {
 } from '@/types/mrVersionPlan'
 
 export const MR_VERSION_PLAN_STORAGE_KEY = 'pms-mr-version-plan-store'
-export const MR_VERSION_PLAN_STORE_VERSION = 5
+export const MR_VERSION_PLAN_STORE_VERSION = 6
 const LEGACY_LEVEL3_STORAGE_KEY = 'pms-level3-plan-store'
 const TRANSFER_TYPES = new Set<MrTransferType>(['N/A', '1', '2', '3', '4', '5', '6', '7', '8'])
 const TEMPLATE_ACTIONS = new Set<MrTemplateChangeLog['action']>([
@@ -463,10 +463,47 @@ function mergeTosInstancesByStableKey(
   )
 }
 
+/** One-time repair of empty built-in demo rows; never refill edits on ordinary hydration. */
+function restoreEmptyMockDates(state: MrVersionPlanState, seed: MrVersionPlanState): MrVersionPlanState {
+  const isOriginalMockInstance = (instance: TosMrVersionInstance) => {
+    if (!instance.sourceLevel1TaskId) return true
+    const suffix = instance.tosVersion.split('.').at(-1)
+    const sourceId = instance.projectId === '19' ? `tos-mr-${suffix}`
+      : instance.projectId === '6' ? `tos-17-1-mr-${suffix}`
+        : seed.tosInstancesByProjectId[instance.projectId]?.find(row => row.tosVersion === instance.tosVersion)?.sourceLevel1TaskId
+    return instance.sourceLevel1TaskId === sourceId
+  }
+  const restoreInstances = (rows: MrVersionPlanState['tosInstancesByProjectId']) => Object.fromEntries(
+    Object.entries(rows).map(([projectId, instances]) => [projectId, instances.map(instance => {
+      const sample = seed.tosInstancesByProjectId[projectId]?.find(row => row.tosVersion === instance.tosVersion)
+      if (!sample || !isOriginalMockInstance(instance) || Object.keys(instance.dates).length) return instance
+      const ids = new Set(instance.activities.filter(row => row.parentId !== null).map(row => row.id))
+      return { ...instance, dates: sanitizeDates(sample.dates, ids) }
+    })]),
+  )
+  const restorePlans = (rows: MrVersionPlanState['machinePlansByKey']) => Object.fromEntries(
+    Object.entries(rows).map(([key, plan]) => {
+      const sample = seed.machinePlansByKey[key]
+      if (!sample || sample.tosProjectId !== plan.tosProjectId || plan.transferType !== sample.transferType
+        || plan.transferType === 'N/A' || Object.keys(plan.dates).length) return [key, plan]
+      const instance = state.tosInstancesByProjectId[plan.tosProjectId]?.find(row => row.tosVersion === plan.tosVersion)
+      if (!instance || !isOriginalMockInstance(instance)) return [key, plan]
+      const ids = new Set(instance?.activities.filter(row => row.parentId !== null).map(row => row.id) || [])
+      return [key, { ...plan, dates: sanitizeDates(sample.dates, ids) }]
+    }),
+  )
+  return {
+    ...state,
+    tosInstancesByProjectId: restoreInstances(state.tosInstancesByProjectId),
+    tosInstancesByType: Object.fromEntries(Object.entries(state.tosInstancesByType).map(([type, rows]) => [type, restoreInstances(rows)])),
+    machinePlansByKey: restorePlans(state.machinePlansByKey),
+  }
+}
+
 export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion: number): MrVersionPlanState {
   const fallback = initialMrVersionPlanState()
   if (!isRecord(persistedState)) return fallback
-  const shouldMergeStandardSeeds = _fromVersion >= 1 && _fromVersion < MR_VERSION_PLAN_STORE_VERSION
+  const shouldMergeStandardSeeds = _fromVersion >= 1 && _fromVersion < 5
   const templateVersions = sanitizeTemplateVersions(persistedState.templateVersions)
   const safeTemplateVersions = templateVersions.length ? templateVersions : fallback.templateVersions
   const draft = safeTemplateVersions.find(version => version.status === '修订中')
@@ -515,7 +552,7 @@ export function migrateMrVersionPlanState(persistedState: unknown, _fromVersion:
     viewModeByScope: sanitizeViewModes(persistedState.viewModeByScope),
     machineRowLocks: sanitizeMachineRowLocks(persistedState.machineRowLocks, machinePlansByKey),
   }
-  if (!shouldMergeStandardSeeds) return migrated
+  if (!shouldMergeStandardSeeds) return _fromVersion === 5 ? restoreEmptyMockDates(migrated, fallback) : migrated
 
   const mergedTosInstancesByProjectId = tosInstancesByProjectId
   const mergedStopRecords = [...new Map([

@@ -1679,7 +1679,7 @@ assert.deepEqual(
   acceptanceStateA.tosInstancesByProjectId['6'].map(instance => instance.tosVersion),
   ['17.1.0.120', '17.1.0.125'],
 )
-assert.equal(Object.values(acceptanceStateA.tosInstancesByProjectId).flat().length, 8)
+assert.equal(Object.values(acceptanceStateA.tosInstancesByProjectId).flat().length, 10)
 assert.equal(
   acceptanceStateA.tosInstancesByProjectId['6'][1].dates['mr-node-review'],
   undefined,
@@ -1688,7 +1688,7 @@ assert.equal(
 assert.ok(acceptanceStateA.tosInstancesByProjectId['19'].every(instance => (
   instance.activities.filter(activity => activity.parentId !== null).every(activity => /^\d{4}-\d{2}-\d{2}$/.test(instance.dates[activity.id]))
 )))
-assert.equal(Object.keys(acceptanceStateA.machinePlansByKey).length, 28)
+assert.equal(Object.keys(acceptanceStateA.machinePlansByKey).length, 39)
 assert.equal(acceptanceStateA.stopReleaseRecords.length, 4)
 assert.equal(Object.values(acceptanceStateA.machinePlansByKey).filter(plan => plan.transferType === 'N/A').length, 4)
 assert.ok(Object.keys(acceptanceStateA.marketOverridesByKey).length >= 4)
@@ -2110,7 +2110,7 @@ for (const screenshot of [
   'joint-invalid.png', 'eos-hidden.png', 'machine-vertical.png', 'machine-horizontal.png',
 ]) assert.match(mrBrowserVerifierSource, new RegExp(screenshot.replace('.', '\\.')))
 assert.match(mrBrowserVerifierSource, /PASS MR version plan browser verification/)
-assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 5)
+assert.equal(mrStore.MR_VERSION_PLAN_STORE_VERSION, 6)
 
 const legacyEmptyMrState = mrStore.migrateMrVersionPlanState({
   templateVersions: templateMocks.createInitialMrTemplateVersions(),
@@ -2124,12 +2124,12 @@ const legacyEmptyMrState = mrStore.migrateMrVersionPlanState({
 }, 1)
 assert.equal(
   Object.values(legacyEmptyMrState.tosInstancesByProjectId).flat().length,
-  8,
+  10,
   'V1 browser storage migrates in the visible tOS acceptance rows',
 )
 assert.equal(
   Object.keys(legacyEmptyMrState.machinePlansByKey).length,
-  28,
+  39,
   'V1 browser storage migrates in normal, abnormal and N/A machine rows',
 )
 assert.equal(legacyEmptyMrState.stopReleaseRecords.length, 4, 'V1 browser storage migrates stopped-release fixtures')
@@ -2540,7 +2540,7 @@ await mrStore.rehydrateMrVersionPlanStore(hydrationStore)
 assert.equal(hydrationStore.getState().viewModeByScope.hydrated, 'horizontal')
 assert.equal(hydrationStore.getState().viewModeByScope.bad, undefined)
 assert.equal(hydrationStorage.getItem('pms-level3-plan-store'), null)
-assert.equal(hydrationStore.persist.getOptions().version, 5)
+assert.equal(hydrationStore.persist.getOptions().version, 6)
 const selectedVersionHydrationStorage = createMemoryStorage()
 selectedVersionHydrationStorage.setItem(mrStore.MR_VERSION_PLAN_STORAGE_KEY, JSON.stringify({
   state: mrStore.migrateMrVersionPlanState({ templateVersions: historicalSelectionVersions, currentTemplateVersionId: 'published-v1' }, 0),
