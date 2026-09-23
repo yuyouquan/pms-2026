@@ -105,6 +105,36 @@ function latestPreviousMinimum(
   }, '')
 }
 
+/** Validate the complete projection, before UI filters are applied. tOS reference rows count as type 1. */
+export function getJointTransferTypeGaps(input: JointValidationInput): Record<string, number> {
+  const groupKey = (projectId: string, version: string) => `${projectId}::${canonicalizeTosMrVersion(version) ?? version}`
+  const typesByVersion = new Map<string, Set<number>>()
+  input.tosInstances.forEach(instance => {
+    typesByVersion.set(groupKey(instance.projectId, instance.tosVersion), new Set([1]))
+  })
+  input.machinePlans.forEach(row => {
+    const type = numericType(row)
+    if (type === null || type < 1) return
+    const key = groupKey(row.tosProjectId, row.tosVersion)
+    const types = typesByVersion.get(key) ?? new Set<number>()
+    types.add(type)
+    typesByVersion.set(key, types)
+  })
+  const firstGapByVersion = new Map<string, number>()
+  typesByVersion.forEach((types, key) => {
+    let missing = 1
+    while (types.has(missing)) missing += 1
+    firstGapByVersion.set(key, missing)
+  })
+  const gaps: Record<string, number> = {}
+  input.machinePlans.forEach(row => {
+    const type = numericType(row)
+    const missing = firstGapByVersion.get(groupKey(row.tosProjectId, row.tosVersion))
+    if (type !== null && missing !== undefined && type > missing) gaps[rowKey(row)] = missing
+  })
+  return gaps
+}
+
 export function validateJointMachineRows(input: JointValidationInput): MrCellError[] {
   const errors: MrCellError[] = []
   const instances = [...input.tosInstances].sort((left, right) => (

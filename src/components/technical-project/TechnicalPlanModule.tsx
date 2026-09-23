@@ -18,6 +18,7 @@ import * as XLSX from 'xlsx'
 import SubprojectConfigModal from '@/components/technical-project/SubprojectConfigModal'
 import { PlanVersionCompareModal } from '@/components/plans/PlanVersionCompareModal'
 import { ProjectSpaceTabs } from '@/components/shared/ProjectSpaceTabs'
+import { PlanVersionTabs } from '@/components/plans/PlanVersionTabs'
 import { PlanWorkspaceShell } from '@/components/plans/PlanWorkspaceShell'
 import { FloatingFilterPanel } from '@/components/shared/FloatingFilterPanel'
 import { FilterConditionValue } from '@/components/shared/FilterConditionValue'
@@ -850,50 +851,42 @@ export default function TechnicalPlanModule({
           </>
         )}
         versionControls={(
-          <Space size={6}>
-            <Text type="secondary">版本</Text>
-            <Select
-              aria-label="计划版本"
-              style={{ width: 150 }}
-              value={currentVersion?.id}
-              placeholder="暂无版本"
-              onChange={handleVersionChange}
-              options={visibleVersions.map(version => ({ value: version.id, label: `${version.versionNo}${version.status === '修订中' ? '（修订中）' : ''}` }))}
-            />
-            {isDraft && <Tag color="green">{viewMode === 'gantt' ? '甘特图日期调整自动保存' : '自动保存'}</Tag>}
-          </Space>
-        )}
-        primaryActions={(
-          <Space size={6}>
-            {!hasDraft && (
+          <PlanVersionTabs
+            versions={visibleVersions}
+            activeVersion={currentVersion?.id ?? ''}
+            latestPublishedId={latestPublishedVersion?.id}
+            onChange={handleVersionChange}
+            renderLabel={version => `${version.versionNo} (${version.status})`}
+            createRevision={!hasDraft ? (
               <Dropdown
                 menu={{ items: PLAN_REVISION_KIND_OPTIONS, onClick: handleCreateRevisionMenuClick }}
                 trigger={['click']}
                 placement="bottomLeft"
                 disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)}
               >
-                <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason}>
-                  <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} aria-label="创建修订">创建修订</Button>
+                <Tooltip title={!canEditTechnicalPlan ? '无计划编辑权限' : readOnlyReason || '创建修订'}>
+                  <Button type="primary" icon={<PlusOutlined />} disabled={!canEditTechnicalPlan || Boolean(readOnlyReason)} aria-label="创建修订" />
                 </Tooltip>
               </Dropdown>
-            )}
-            {tab?.templateKind === 'subproject' && canMaintain && (
-              <Tooltip title="添加转测版本"><Button icon={<PlusOutlined />} aria-label="添加转测版本" onClick={confirmAddTechnicalSubprojectTransfer}>添加转测版本</Button></Tooltip>
-            )}
-            {isDraft && (
-              <Tooltip title={!canPublish ? '无计划发布权限' : !canMaintain ? readOnlyReason : '发布'}>
-                <Button type="primary" icon={<SaveOutlined />} style={{ borderRadius: 6 }} disabled={!canPublish || !canMaintain} onClick={handlePublish} aria-label="发布" />
-              </Tooltip>
-            )}
-            {isDraft && (
-              <Popconfirm title="确认取消当前修订？" onConfirm={() => { if (cancelRevision(scope).ok) message.success('已取消修订') }}>
-                <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : '取消修订'}>
-                  <Button danger icon={<StopOutlined />} style={{ borderRadius: 6 }} disabled={!canMaintain} aria-label="取消修订" />
+            ) : undefined}
+            draftActions={(
+              <>
+                <Tag color="green" style={{ margin: 0 }}>自动保存</Tag>
+                <Tooltip title={!canPublish ? '无计划发布权限' : !canMaintain ? readOnlyReason : '发布'}>
+                  <Button type="primary" size="small" icon={<SaveOutlined />} disabled={!canPublish || !canMaintain} onClick={handlePublish} aria-label="发布" />
                 </Tooltip>
-              </Popconfirm>
+                <Popconfirm title="确认取消当前修订？" onConfirm={() => { if (cancelRevision(scope).ok) message.success('已取消修订') }}>
+                  <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : '取消修订'}>
+                    <Button danger size="small" icon={<StopOutlined />} disabled={!canMaintain} aria-label="取消修订" />
+                  </Tooltip>
+                </Popconfirm>
+              </>
             )}
-          </Space>
+          />
         )}
+        primaryActions={tab?.templateKind === 'subproject' && canMaintain ? (
+          <Tooltip title="添加转测版本"><Button icon={<PlusOutlined />} aria-label="添加转测版本" onClick={confirmAddTechnicalSubprojectTransfer}>添加转测版本</Button></Tooltip>
+        ) : undefined}
         utilityActions={(
           <Space size={6}>
             <FloatingFilterPanel

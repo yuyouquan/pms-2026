@@ -9878,3 +9878,45 @@ input.ant-input,
 
 .pms-dashboard-official-version { font-size: 11px; color: var(--pms-brand-strong); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pms-dashboard-metric-heading h3 { flex-shrink: 0; }
+
+/* Version tabs keep revision actions beside their owning version, without nested buttons. */
+.pms-plan-version-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.pms-plan-version-toolbar > [aria-label="计划版本操作"] { flex: 1; min-width: 0; }
+.pms-plan-structure-actions { flex: none; }
+.pms-plan-version-tabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  min-width: 0;
+}
+.pms-plan-version-item, .pms-plan-version-tab, .pms-plan-version-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+.pms-plan-version-tab { border-bottom: 2px solid transparent; }
+.pms-plan-version-tab.is-active { border-bottom-color: var(--pms-primary, #6c4dff); }
+.pms-plan-version-tab > button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 8px 4px;
+  white-space: nowrap;
+  font: inherit;
+}
+.pms-plan-version-tab.is-active > button { color: var(--pms-primary, #6c4dff); font-weight: 600; }
+.pms-plan-version-tab > button:focus-visible { outline: 2px solid #9b87ff; outline-offset: -2px; border-radius: 4px; }
+.pms-joint-mr-table .ant-table-tbody > tr.pms-joint-mr-type-gap-row > td,
+.pms-joint-mr-type-gap-row .pms-joint-mr-fixed-cell-content {
+  background: #fff1f0 !important;
+}

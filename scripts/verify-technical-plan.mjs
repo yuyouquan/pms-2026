@@ -68,7 +68,7 @@ assert.deepEqual(migrated.publishedSnapshots['template::技术项目::level1::v3
 const planSource = readSource(root, 'src/stores/plan.ts')
 const configSource = readSource(root, 'src/containers/ConfigContainer.tsx')
 assert.match(planSource, /PLAN_STORE_VERSION\s*=\s*\d+/, 'plan store declares a persistence version')
-assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 16, 'plan store preserves technical-plan and canonical MR migrations through the machine stage split upgrade')
+assert.equal(Number(planSource.match(/PLAN_STORE_VERSION\s*=\s*(\d+)/)?.[1]), 18, 'plan store preserves technical-plan and MR scope migrations through shared business-node isolation')
 assert.match(planSource, /setTechnicalTemplateTasks/, 'plan store exposes a validating technical-template setter')
 assert.match(planSource, /validateTechnicalTemplateDepth/, 'plan store enforces technical template depth')
 assert.doesNotMatch(configSource, /publishedSnapshots\[versionId\]/, 'config snapshots never fall back across template scopes')
@@ -471,14 +471,14 @@ const technicalShellMount = findJsxMount(technicalReachableNodes, technicalSourc
 assert.ok(technicalShellMount, 'technical plan module mounts the imported shared plan workspace shell')
 const technicalShellProps = jsxAttributeNames(technicalShellMount)
 const shellCapabilities = [
-  ['创建修订', 'primaryActions'],
+  ['创建修订', 'versionControls'],
   ['筛选', 'utilityActions'],
   ['全部展开', 'utilityActions'],
   ['全部收起', 'utilityActions'],
   ['版本对比', 'utilityActions'],
   ['分享计划', 'utilityActions'],
 ]
-for (const slot of ['primaryActions', 'utilityActions']) assert.equal(technicalShellProps.has(slot), true, `technical plan fills the shared shell ${slot} slot`)
+for (const slot of ['versionControls', 'primaryActions', 'utilityActions']) assert.equal(technicalShellProps.has(slot), true, `technical plan fills the shared shell ${slot} slot`)
 for (const [label, slot] of shellCapabilities) {
   const slotAttribute = jsxAttribute(technicalShellMount, slot)
   assert.ok(slotAttribute?.initializer && ts.isJsxExpression(slotAttribute.initializer) && slotAttribute.initializer.expression, `technical plan passes a live ${slot} expression for ${label}`)
@@ -583,22 +583,22 @@ assert.doesNotMatch(
 )
 assert.match(
   technicalModuleSource,
-  /<table[^>]*className="pms-level1-horizontal-table technical-horizontal-plan-table"/,
+  /<table[^>]*className="pms-level1-horizontal-table technical-horizontal-plan-table(?: [^"]*)?"/,
   'technical horizontal plans reuse the whole-machine two-row table visual contract',
 )
-assert.match(technicalModuleSource, /TECHNICAL_STAGE_COLORS/, 'technical horizontal stages use the same ordered color accents as whole-machine plans')
+assert.match(technicalModuleSource, /pms-phase-header-table/, 'technical horizontal stages use the shared phase header styling')
 assert.match(technicalModuleSource, /<EditOutlined[^>]*aria-label="修订中"/, 'technical revisions use the same compact edit icon as whole-machine plans')
 assert.equal((technicalModuleSource.match(/<ClickToEditDate\s+align="center"/g) || []).length >= 2, true, 'technical planned and actual completion dates use the same centered click-to-edit treatment')
 assert.match(technicalModuleSource, /technical-horizontal-current/, 'the latest technical version uses the same highlighted-row treatment')
 assert.match(technicalModuleSource, /technical-horizontal-actual/, 'the technical actual row uses the same highlighted-row treatment')
 assert.doesNotMatch(technicalModuleSource, /横版只读/, 'technical horizontal revisions do not show the redundant read-only label')
-const technicalHorizontalHeaderStart = technicalModuleSource.indexOf('{groups.map(({ stage, colSpan }, index) => {')
+const technicalHorizontalHeaderStart = technicalModuleSource.indexOf('{groups.map(({ stage, colSpan }) => {')
 const technicalHorizontalHeaderEnd = technicalModuleSource.indexOf('</thead>', technicalHorizontalHeaderStart)
 assert.ok(technicalHorizontalHeaderStart >= 0 && technicalHorizontalHeaderEnd > technicalHorizontalHeaderStart, 'technical horizontal stage header slice is present')
 const technicalHorizontalHeaderSource = technicalModuleSource.slice(technicalHorizontalHeaderStart, technicalHorizontalHeaderEnd)
 assert.match(technicalHorizontalHeaderSource, /stage\.estimatedDays == null \? '-' : `\$\{stage\.estimatedDays\}天`/, 'technical horizontal stages show estimated duration')
 assert.doesNotMatch(technicalHorizontalHeaderSource, /manpowerPercent|planStartDate|planEndDate|~/, 'technical horizontal stage headers omit percentages and date ranges')
-const technicalSummaryHeaderStart = technicalSummarySource.indexOf('{groups.map((group, index) => {')
+const technicalSummaryHeaderStart = technicalSummarySource.indexOf('{groups.map(group => {')
 const technicalSummaryHeaderEnd = technicalSummarySource.indexOf('</thead>', technicalSummaryHeaderStart)
 assert.ok(technicalSummaryHeaderStart >= 0 && technicalSummaryHeaderEnd > technicalSummaryHeaderStart, 'technical summary stage header slice is present')
 const technicalSummaryHeaderSource = technicalSummarySource.slice(technicalSummaryHeaderStart, technicalSummaryHeaderEnd)
