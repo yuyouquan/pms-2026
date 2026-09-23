@@ -1293,7 +1293,12 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
   })),
   setCollapsedNodes: (v) => set((s) => ({ collapsedNodes: typeof v === 'function' ? v(s.collapsedNodes) : v })),
 
-  setPublishedSnapshots: (v) => set((s) => ({ publishedSnapshots: typeof v === 'function' ? v(s.publishedSnapshots) : v })),
+  setPublishedSnapshots: (v) => set((s) => {
+    const publishedSnapshots = typeof v === 'function' ? v(s.publishedSnapshots) : v
+    // Snapshot initialization may run again while legacy project data resolves.
+    // Do not notify the whole project space when the updater made no change.
+    return publishedSnapshots === s.publishedSnapshots ? s : { publishedSnapshots }
+  }),
   setConfigTemplateTasksByType: (v) => set((s) => ({ configTemplateTasksByType: typeof v === 'function' ? v(s.configTemplateTasksByType) : v })),
   setTechnicalTemplateTasks: (kind, v) => {
     const key = TECHNICAL_TEMPLATE_STORAGE_KEYS[kind]
