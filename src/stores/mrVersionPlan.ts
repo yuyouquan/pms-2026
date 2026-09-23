@@ -404,6 +404,40 @@ function sanitizeMachineRowLocks(
   return result
 }
 
+/** Move all consumers with the source identity, before persistence can prune old version keys. */
+function reconcileSourceDownstream(
+  projectId: string,
+  previous: readonly TosMrVersionInstance[],
+  next: readonly TosMrVersionInstance[],
+  snapshot: TosDownstreamSnapshot,
+): TosDownstreamSnapshot {
+  const versions = new Map(previous.map(instance => {
+    const retained = next.find(row => instance.sourceLevel1TaskId
+      ? row.sourceLevel1TaskId === instance.sourceLevel1TaskId
+      : row.tosVersion === instance.tosVersion)
+    return [instance.tosVersion, retained?.tosVersion] as const
+  }))
+  const machinePlansByKey = Object.fromEntries(Object.entries(snapshot.machinePlansByKey).flatMap(([key, plan]) => {
+    if (plan.tosProjectId !== projectId) return [[key, plan]]
+    const tosVersion = versions.get(plan.tosVersion)
+    return tosVersion ? [[`${plan.projectId}::${tosVersion}`, tosVersion === plan.tosVersion ? plan : { ...plan, tosVersion }]] : []
+  }))
+  const marketOverridesByKey = Object.fromEntries(Object.entries(snapshot.marketOverridesByKey).flatMap(([key, row]) => {
+    const plan = snapshot.machinePlansByKey[`${row.projectId}::${row.tosVersion}`]
+    if (plan?.tosProjectId !== projectId) return [[key, row]]
+    const tosVersion = versions.get(row.tosVersion)
+    return tosVersion ? [[`${row.projectId}::${tosVersion}::${row.market}`, tosVersion === row.tosVersion ? row : { ...row, tosVersion }]] : []
+  }))
+  const machineRowLocks = Object.fromEntries(Object.entries(snapshot.machineRowLocks).flatMap(([key, row]) => {
+    if (row.tosProjectId !== projectId) return [[key, row]]
+    const tosVersion = versions.get(row.tosVersion)
+    if (!tosVersion) return []
+    const nextKey = makeMrMachineRowLockKey({ ...row, tosVersion })
+    return [[nextKey, tosVersion === row.tosVersion ? row : { ...row, key: nextKey, tosVersion }]]
+  }))
+  return { machinePlansByKey, marketOverridesByKey, machineRowLocks }
+}
+
 function initialMrVersionPlanState(): MrVersionPlanState {
   return { ...createInitialMrVersionPlanState(), tosInstancesByType: {}, activeTosTypeByProjectId: {}, tosDownstreamByType: {} }
 }
@@ -731,13 +765,17 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       }
       const existing = previousType && previousType !== type ? archives[type]?.[projectId] || [] : current
       const next = reconcileTosMrInstances({ projectId, candidates, existing, template: latestPublishedTemplate(state.templateVersions), now: clock() })
+      const consumers = reconcileSourceDownstream(projectId, existing, next, { machinePlansByKey, marketOverridesByKey, machineRowLocks })
       archives[type] = { ...archives[type], [projectId]: next }
-      if (previousType === type && sameJson(current, next) && sameJson(state.tosInstancesByType, archives)) return
+      if (previousType === type && sameJson(current, next) && sameJson(state.tosInstancesByType, archives)
+        && sameJson(state.machinePlansByKey, consumers.machinePlansByKey)
+        && sameJson(state.marketOverridesByKey, consumers.marketOverridesByKey)
+        && sameJson(state.machineRowLocks, consumers.machineRowLocks)) return
       set({
         tosInstancesByProjectId: { ...state.tosInstancesByProjectId, [projectId]: next },
         tosInstancesByType: archives,
         tosDownstreamByType: downstream,
-        machinePlansByKey, marketOverridesByKey, machineRowLocks,
+        ...consumers,
         activeTosTypeByProjectId: { ...state.activeTosTypeByProjectId, [projectId]: type },
       })
     },
