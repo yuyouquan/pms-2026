@@ -45,6 +45,7 @@ export interface Level1FlatMilestoneRow extends Level1PlanTask {
 }
 
 export interface Level1PlanViewRow extends Level1PlanTask {
+  displaySequence?: string
   planStartDate: string
   planEndDate: string
   estimatedDays: number | null
@@ -842,6 +843,12 @@ export const projectLevel1Plan = (
     stage.manpowerPercent = Number.isInteger(value) ? Math.trunc(value) : value
   })
 
+  roots.forEach((root, rootIndex) => {
+    computedById.get(root.id)!.displaySequence = String(rootIndex + 1)
+    sortByOrder(ordered.filter(task => task.parentId === root.id)).forEach((child, childIndex) => {
+      computedById.get(child.id)!.displaySequence = `${rootIndex + 1}.${childIndex + 1}`
+    })
+  })
   const rows = ordered.map(task => computedById.get(task.id)!)
   const stageGroups = roots.map(root => ({
     stage: computedById.get(root.id)!,
@@ -1035,6 +1042,7 @@ export const isBusinessStage = (projectType: string, task?: Level1PlanTask): boo
 export interface Level1StructurePermissionInput {
   projectType: string
   isDraft: boolean
+  isLatestPublished?: boolean
   isSuperAdmin: boolean
   isSpm: boolean
   task?: Level1PlanTask
@@ -1061,13 +1069,22 @@ export const getLevel1StructurePermissions = (
   input: Level1StructurePermissionInput,
 ): Level1StructurePermissions => {
   if (!getLevel1ProjectKind(input.projectType)) return denyLevel1StructurePermissions()
-  if (!input.isDraft) return denyLevel1StructurePermissions()
   const isCustomBusinessTask = input.task?.source === 'custom'
     && input.task.nodeKind === 'business-period'
   const businessParent = isBusinessStage(input.projectType, input.parent)
   const isBusinessActionTask = isCustomBusinessTask
     && businessParent
     && input.task?.parentId === input.parent?.id
+  if (!input.isDraft) {
+    if (!input.isLatestPublished || (!input.isSuperAdmin && !input.isSpm)) return denyLevel1StructurePermissions()
+    return {
+      canAddStage: false,
+      canAddChild: businessParent,
+      canRename: Boolean(isBusinessActionTask),
+      canDelete: Boolean(isBusinessActionTask),
+      canReorder: Boolean(isBusinessActionTask),
+    }
+  }
   if (input.isSuperAdmin) {
     return {
       canAddStage: false,
@@ -1091,6 +1108,7 @@ export const getLevel1StructurePermissions = (
 export interface DeleteLevel1GovernedTaskInput {
   projectType: string
   isDraft: boolean
+  isLatestPublished?: boolean
   isSuperAdmin: boolean
   isSpm: boolean
   taskStableId: string
@@ -1110,6 +1128,7 @@ export const deleteLevel1GovernedTask = (
   const permissions = getLevel1StructurePermissions({
     projectType: input.projectType,
     isDraft: input.isDraft,
+    isLatestPublished: input.isLatestPublished,
     isSuperAdmin: input.isSuperAdmin,
     isSpm: input.isSpm,
     task,

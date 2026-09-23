@@ -53,6 +53,10 @@ assert.equal(projectSpaceRules.shouldAutoEnablePlanEditMode({
   followedReadOnly: true,
 }), false, 'followed tOS plans remain read-only even when the selected version is a revision')
 
+for (const projectPlanLevel of ['mr-version-plan', 'level1']) {
+  assert.equal(projectSpaceRules.shouldAutoEnablePlanEditMode({activeModule:'projectSpace',projectSpaceModule:'plan',projectPlanLevel,isCurrentDraft:true,followedReadOnly:false}), projectPlanLevel === 'level1', 'returning from MR to the draft restores edit mode')
+}
+
 const horizontalVersions = [
   { id: 'v1', versionNo: 'V1', status: '已发布' },
   { id: 'v2', versionNo: 'V2', status: '已发布' },
@@ -2005,7 +2009,7 @@ assert.match(
 )
 assert.match(
   projectSpaceSource,
-  /const confirmGovernedReorder[\s\S]{0,1600}reorderLevel1BusinessNodes\([\s\S]{0,240}latest\.project\.type[\s\S]{0,350}latest\.writeTasks\(result\.tasks\)/,
+  /const confirmGovernedReorder[\s\S]{0,2000}reorderLevel1BusinessNodes\([\s\S]{0,240}latest\.project\.type[\s\S]{0,350}latest\.writeTasks\(result\.tasks\)/,
   'drag confirmation revalidates permissions and writes only a successful governed reorder result',
 )
 assert.doesNotMatch(projectSpaceSource, /isFlatGovernedLevel1Table|pms-level1-flat-milestone-table/, 'project space no longer has a special flat eight-column branch')

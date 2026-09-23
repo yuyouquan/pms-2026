@@ -1076,32 +1076,10 @@ try {
   })
   assert.equal(await page.$eval(searchSelector, input => input.value), '')
   assert.equal(Object.hasOwn((await readMrState()), 'versionQuery'), false)
-  await page.click('button[aria-label="新增tOS版本号"]')
-  await page.click('[aria-label="选择tOS版本号"]')
-  await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { visible: true })
-  const candidateState = await page.evaluate(() => [...document.querySelectorAll('.ant-select-item-option')].map(node => ({ text: node.textContent?.trim(), disabled: node.classList.contains('ant-select-item-option-disabled') })))
-  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.135') && item.disabled && item.text.includes('该tOS版本号已添加')))
-  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.140') && item.disabled && item.text.includes('该tOS版本号已添加')))
-  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.145') && item.disabled && item.text.includes('该tOS版本号已添加')))
-  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.150') && item.disabled && item.text.includes('该tOS版本号已添加')))
-  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.155') && item.disabled && item.text.includes('该tOS版本号已添加')))
-  assert.ok(candidateState.some(item => item.text?.startsWith('16.3.0.160') && item.disabled && item.text.includes('该tOS版本号已添加')))
-  await page.keyboard.press('Escape')
-  await page.waitForSelector('.ant-select-dropdown:not(.ant-select-dropdown-hidden)', { hidden: true })
-  await wait(200)
-  const cancelBox = await page.$eval('[role="dialog"]', dialog => {
-    const button = [...dialog.querySelectorAll('button')].find(node => node.textContent?.trim() === '取消')
-    if (!button) return null
-    const rect = button.getBoundingClientRect()
-    return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 }
-  })
-  assert.ok(cancelBox, 'add-version modal exposes a cancel action')
-  await page.mouse.click(cancelBox.x, cancelBox.y)
-  await page.waitForSelector('[role="dialog"]', { hidden: true })
-  await wait(300)
+  assert.equal(await page.$('button[aria-label="新增tOS版本号"]'), null, 'MR membership is managed by level-one business nodes')
   await clickVisibleText('竖版', 'label,button,span')
   await page.waitForSelector('[aria-label="MR版本计划竖版表格"]', { visible: true })
-  pass(11, 'add-version modal explains used and incomplete candidates')
+  pass(11, 'MR version membership follows level-one nodes without a manual add action')
 
   const initialTosProjectCells = await page.evaluate(() => {
     const inspect = ariaLabel => {
