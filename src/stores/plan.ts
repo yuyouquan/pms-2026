@@ -1329,12 +1329,14 @@ export const usePlanStore = create<PlanState & PlanActions>()(persist((set, get)
       } : {}),
     }
   }),
-  setPublishedSnapshots: (v) => set((s) => {
-    const publishedSnapshots = typeof v === 'function' ? v(s.publishedSnapshots) : v
-    // Snapshot initialization may run again while legacy project data resolves.
-    // Do not notify the whole project space when the updater made no change.
-    return publishedSnapshots === s.publishedSnapshots ? s : { publishedSnapshots }
-  }),
+  setPublishedSnapshots: (v) => {
+    const previous = get().publishedSnapshots
+    const publishedSnapshots = typeof v === 'function' ? v(previous) : v
+    // Persist writes even when set returns the same state. Skip set altogether:
+    // hydration-triggered initializers must not echo tab-local version pickers.
+    if (publishedSnapshots === previous) return
+    set({ publishedSnapshots })
+  },
   setConfigTemplateTasksByType: (v) => set((s) => ({ configTemplateTasksByType: typeof v === 'function' ? v(s.configTemplateTasksByType) : v })),
   setTechnicalTemplateTasks: (kind, v) => {
     const key = TECHNICAL_TEMPLATE_STORAGE_KEYS[kind]
