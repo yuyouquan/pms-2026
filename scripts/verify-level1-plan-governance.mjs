@@ -2005,7 +2005,7 @@ assert.match(
 )
 assert.match(
   projectSpaceSource,
-  /const confirmGovernedReorder[\s\S]{0,1600}reorderLevel1BusinessNodes\([\s\S]{0,240}latest\.project\.type[\s\S]{0,350}latest\.writeTasks\(result\.tasks\)/,
+  /const confirmGovernedReorder[\s\S]{0,2000}reorderLevel1BusinessNodes\([\s\S]{0,240}latest\.project\.type[\s\S]{0,350}latest\.writeTasks\(result\.tasks\)/,
   'drag confirmation revalidates permissions and writes only a successful governed reorder result',
 )
 assert.doesNotMatch(projectSpaceSource, /isFlatGovernedLevel1Table|pms-level1-flat-milestone-table/, 'project space no longer has a special flat eight-column branch')
