@@ -2,6 +2,7 @@
 
 import { useRef, type ReactNode, type KeyboardEvent } from 'react'
 import type { PlanVersionLike } from '@/lib/marketRules'
+import { comparePlanVersions } from '@/lib/planVersioning'
 
 interface PlanVersionTabsProps {
   versions: readonly PlanVersionLike[]
@@ -15,10 +16,11 @@ interface PlanVersionTabsProps {
 
 export function PlanVersionTabs({ versions, activeVersion, latestPublishedId, onChange, renderLabel, createRevision, draftActions }: PlanVersionTabsProps) {
   const listRef = useRef<HTMLDivElement>(null)
+  const orderedVersions = [...versions].sort((a, b) => comparePlanVersions(b, a))
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const nextIndex = event.key === 'ArrowRight' ? (index + 1) % versions.length
-      : event.key === 'ArrowLeft' ? (index + versions.length - 1) % versions.length
-        : event.key === 'Home' ? 0 : event.key === 'End' ? versions.length - 1 : -1
+    const nextIndex = event.key === 'ArrowRight' ? (index + 1) % orderedVersions.length
+      : event.key === 'ArrowLeft' ? (index + orderedVersions.length - 1) % orderedVersions.length
+        : event.key === 'Home' ? 0 : event.key === 'End' ? orderedVersions.length - 1 : -1
     if (nextIndex < 0) return
     event.preventDefault()
     listRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[nextIndex]?.focus()
@@ -26,7 +28,7 @@ export function PlanVersionTabs({ versions, activeVersion, latestPublishedId, on
   return (
     <div className="pms-plan-version-tabs" role="tablist" aria-label="计划版本" ref={listRef}>
       {!latestPublishedId && createRevision}
-      {versions.map((version, index) => {
+      {orderedVersions.map((version, index) => {
         const active = version.id === activeVersion
         return (
           <div className="pms-plan-version-item" key={version.id}>
