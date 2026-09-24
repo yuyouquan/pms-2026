@@ -1,34 +1,5 @@
 import assert from 'node:assert/strict'
-import { createRequire } from 'node:module'
-import fs from 'node:fs'
-import path from 'node:path'
-import vm from 'node:vm'
-import ts from 'typescript'
-
-const root = process.cwd()
-const require = createRequire(import.meta.url)
-const sourcePath = path.join(root, 'src/lib/marketRules.ts')
-
-if (!fs.existsSync(sourcePath)) {
-  throw new Error('src/lib/marketRules.ts is missing')
-}
-
-const source = fs.readFileSync(sourcePath, 'utf8')
-const compiled = ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.CommonJS,
-    target: ts.ScriptTarget.ES2020,
-    esModuleInterop: true,
-  },
-}).outputText
-
-const sandbox = {
-  exports: {},
-  module: { exports: {} },
-  require,
-}
-sandbox.exports = sandbox.module.exports
-vm.runInNewContext(compiled, sandbox, { filename: sourcePath })
+import { loadTypeScriptModule } from './lib/typescript-module-loader.mjs'
 
 const {
   buildFollowVersionMetaForPublish,
@@ -51,7 +22,7 @@ const {
   setMarketCurrentVersion,
   setMarketVersions,
   syncFollowMarketPlans,
-} = sandbox.module.exports
+} = loadTypeScriptModule('src/lib/marketRules.ts')
 
 assert.equal(isConfiguredMarket([], 'OP'), false, 'a default OP tab is not configured for an empty machine project')
 assert.equal(

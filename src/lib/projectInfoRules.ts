@@ -47,6 +47,18 @@ export const deriveProjectTosVersion = (
   existingValue = '',
 ): string => type === PROJECT_TYPE_TOS_VERSION ? projectName.trim() : existingValue
 
+/** Legacy project snapshots use English codes; enum configuration stores display values. */
+export const normalizeProjectHealthStatus = (value: unknown): string => {
+  const status = typeof value === 'string' ? value.trim() : ''
+  switch (status) {
+    case 'normal': return '正常'
+    case 'warning':
+    case 'attention': return '关注'
+    case 'risk': return '风险'
+    default: return status
+  }
+}
+
 interface ProjectHealthStatusInput {
   mode: 'create' | 'edit'
   projectType: string

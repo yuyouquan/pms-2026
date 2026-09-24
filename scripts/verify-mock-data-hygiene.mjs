@@ -46,7 +46,7 @@ function walk(value, visit, location = '') {
 const splitPeople = value => Array.isArray(value) ? value.flatMap(splitPeople)
   : typeof value === 'string' ? value.split(/[,，、;；]/).map(item => item.trim()).filter(Boolean) : []
 const isDemoPerson = value => /^演示(?:用户|成员|外协)\d{2}$/.test(value)
-const systemActors = new Set(['系统', '系统管理员'])
+const systemActors = new Set(['系统', '系统管理员', '一级计划同步'])
 const genericActorPlaceholders = new Set(['当前用户'])
 const roleOwners = new Set([...directory.FIXED_ROLES, ...permission.TECHNICAL_FIXED_ROLES, ...permission.TOS_FIXED_ROLES, 'SPM', 'TPM'])
 const peopleFields = new Set([

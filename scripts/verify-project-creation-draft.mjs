@@ -94,6 +94,8 @@ assert.deepEqual(await repository.get('演示用户02'), liSiDraft, 'clearing �
 
 assert.equal(isProjectCreationDraftEmpty({}), true)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '待立项' }), true)
+assert.equal(isProjectCreationDraftEmpty({ healthStatus: '正常', status: '待立项' }), true, 'canonical default health alone must not create a draft')
+assert.equal(isProjectCreationDraftEmpty({ healthStatus: '风险', status: '待立项' }), false)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'risk', status: '待立项' }), false)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '进行中' }), false)
 assert.equal(isProjectCreationDraftEmpty({ healthStatus: 'normal', status: '待立项', name: '项目 A' }), false)
