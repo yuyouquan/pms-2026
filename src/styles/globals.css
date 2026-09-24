@@ -7733,7 +7733,8 @@ input.ant-input,
   font-size: var(--pms-font-size-body);
 }
 
-.pms-roadmap-content-panel {
+.pms-roadmap-content-panel,
+.pms-joint-space__content-panel {
   overflow: visible;
   border: 1px solid #dedcf8;
   border-top: 2px solid #635bff;
@@ -8130,7 +8131,10 @@ input.ant-input,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  padding: 8px 12px 7px;
+  margin-bottom: 0;
+  border-bottom: 1px solid #f0eff8;
+  border-radius: 12px 12px 0 0;
 }
 
 .pms-joint-mr-batch-actions {
