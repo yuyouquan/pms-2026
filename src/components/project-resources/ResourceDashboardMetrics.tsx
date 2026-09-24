@@ -1,5 +1,5 @@
 'use client'
-import { Tag, Tooltip } from 'antd'
+import { Tooltip } from 'antd'
 import { InfoCircleOutlined } from '@ant-design/icons'
 import { useState, type CSSProperties, type ReactNode } from 'react'
 import { DASHBOARD_BUDGETS, type DashboardAnalysis, type DashboardSource } from '@/components/project-resources/resourceDashboardData'
@@ -52,10 +52,9 @@ export default function ResourceDashboardMetrics({ sources, analyses, accounting
       <div className="pms-dashboard-metric-cost">{format(cumulative?.cost, 2)} 万元</div>
     </article>
     <article className="pms-dashboard-metric" style={{ '--budget-color': '#31976c' } as CSSProperties} aria-label="项目核算指标">
-      <div className="pms-dashboard-metric-heading"><h3>项目核算</h3><Tag color="green">Mock</Tag></div>
+      <div className="pms-dashboard-metric-heading"><h3>项目核算</h3><MetricRule label="项目核算" title="人天 ÷ 当月工作日" /></div>
       <div className="pms-dashboard-metric-value"><span>{format(actual?.labor)}</span><small>人月</small></div>
       <div className="pms-dashboard-metric-cost">{format(actual?.cost, 2)} 万元</div>
-      <span className="pms-dashboard-metric-caption">人天 ÷ 当月工作日</span>
     </article>
     <HoverMetric label="概算 → 预算偏差" rule="(项目预算-项目概算)/项目概算" costs={<>
       <span>费用偏差 {signed(metrics.costDelta?.percent)}%</span>

@@ -7693,6 +7693,7 @@ input.ant-input,
 }
 
 .pms-roadmap-view-mode-row,
+.pms-joint-space__view-mode,
 .pms-project-management__view-mode {
   display: flex;
   align-items: center;
@@ -7713,6 +7714,7 @@ input.ant-input,
 }
 
 .pms-roadmap-view-mode-row .ant-segmented,
+.pms-joint-space__view-mode .ant-segmented,
 .pms-project-management__view-mode .ant-segmented {
   padding: 2px;
   border-radius: 7px;
@@ -7721,6 +7723,8 @@ input.ant-input,
 
 .pms-roadmap-view-mode-row .ant-segmented-item,
 .pms-roadmap-view-mode-row .ant-segmented-item-label,
+.pms-joint-space__view-mode .ant-segmented-item,
+.pms-joint-space__view-mode .ant-segmented-item-label,
 .pms-project-management__view-mode .ant-segmented-item,
 .pms-project-management__view-mode .ant-segmented-item-label {
   min-height: 28px;
@@ -8119,10 +8123,6 @@ input.ant-input,
 
 .pms-joint-space__card > .ant-card-body {
   padding: 12px 18px 18px;
-}
-
-.pms-joint-space__tabs > .ant-tabs-nav {
-  margin-bottom: 14px;
 }
 
 .pms-joint-mr-toolbar {
