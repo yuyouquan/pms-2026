@@ -51,6 +51,8 @@ export interface ProjectCreationNotification {
   subject: string
   body: string
   timestamp: string
+  /** Project-space editor entry; optional for historical simulation receipts. */
+  actionUrl?: string
 }
 export interface ProjectRegistryHistoryEntry {
   id: string
