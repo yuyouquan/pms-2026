@@ -60,7 +60,7 @@ export default function ResourceVersionViews({ category, version, rows, readOnly
   const peak = Math.max(1, ...view.months.map(month => totals[month]))
   const slot = (chartWidth - 64) / Math.max(1, view.months.length)
   return <section className="pms-resource-panel pms-resource-monthly" aria-label="当前版本月度投入">
-    <div className="pms-resource-section-head pms-resource-monthly-heading"><h3>月度人力投入</h3>
+    <div className="pms-resource-section-head pms-resource-monthly-heading"><h3 className="pms-resource-section-heading">月度人力投入</h3>
       <div className="pms-resource-monthly-summary"><span>版本预估 <strong>{formatPersonMonth(version.estimatedInvestment)}</strong></span><span>已分配 <strong>{formatPersonMonth(complete.allocatedTotal)}</strong></span><span>全周期投入 <strong>{formatPersonMonth(complete.visibleTotal)}</strong> 人月</span></div>
     </div>
     <Tabs className="pms-resource-year-tabs" activeKey={selectedYear} onChange={setYear} items={[
