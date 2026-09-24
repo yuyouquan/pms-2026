@@ -9975,11 +9975,56 @@ input.ant-input,
   box-shadow: none;
   background: transparent;
 }
+/* Three primary sections sit on a quiet canvas; only these owning surfaces
+   receive elevation, keeping tables and controls free from nested outlines. */
+.pms-project-resources .pms-resource-workspace {
+  gap: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #f3f4f8;
+}
+.pms-project-resources .pms-resource-inline-detail { gap: 16px; }
+.pms-project-resources .pms-resource-workspace .pms-resource-panel {
+  padding: 20px;
+  border-radius: 10px;
+  background: var(--pms-surface-solid);
+  box-shadow: 0 1px 3px rgb(36 42 66 / 5%);
+}
+.pms-project-resources .pms-resource-workspace .pms-resource-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  color: var(--pms-text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 22px;
+}
+.pms-project-resources .pms-resource-section-heading::before {
+  content: '';
+  flex: 0 0 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--pms-brand);
+}
+.pms-project-resources .pms-resource-monthly-heading { margin-bottom: 16px; }
+.pms-project-resources .pms-resource-monthly-heading .pms-resource-section-heading { margin-bottom: 0; }
+.pms-project-resources .pms-resource-basics-row { margin-bottom: 16px; }
+.pms-project-resources .pms-resource-metadata dt,
+.pms-project-resources .pms-budget-milestone-anchor-inputs label > span {
+  margin-bottom: 6px;
+  color: var(--pms-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 22px;
+}
+.pms-project-resources .pms-resource-metadata dd { font-size: 14px; line-height: 22px; }
+.pms-project-resources .pms-resource-investment-tabs > .ant-tabs-nav .ant-tabs-tab { font-size: 14px; font-weight: 500; }
 .pms-project-resources .pms-resource-version-context {
-  padding: 10px 14px;
+  padding: 0 4px;
   border: 0;
   border-radius: 8px;
-  background: var(--resource-surface);
+  background: transparent;
 }
 .pms-project-resources .pms-resource-version-tabs > .ant-tabs-nav::before { border: 0; }
 .pms-project-resources .pms-resource-version-tabs .ant-tabs-tab {
@@ -10076,6 +10121,8 @@ input.ant-input,
   :is(.ant-input-number, .ant-select, .ant-picker, .ant-input) { border-color: var(--pms-danger, #cf1322) !important; }
 @media (max-width: 800px) {
   .pms-project-resources :is(.pms-resource-dashboard, .pms-resource-workspace, .pms-resource-inline-detail) { gap: 18px; }
+  .pms-project-resources .pms-resource-workspace { padding: 10px; }
+  .pms-project-resources .pms-resource-workspace .pms-resource-panel { padding: 14px; }
   .pms-project-resources .pms-dashboard-eight-metrics { gap: 8px; }
   .pms-project-resources .pms-dashboard-metric { padding: 14px 10px; }
 }
