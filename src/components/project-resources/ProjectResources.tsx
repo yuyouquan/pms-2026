@@ -25,7 +25,7 @@ function ResourceNavigation({ project }: { project: ProjectItem }) {
     : matchesHrCategory(project, 'technical') ? 'technical' : 'capability'
   if (!can('resource:view')) return <Empty description="无项目资源查看权限" />
   return <HrResourceScope projectId={project.id}>
-    <div className="pms-project-resources">
+    <div className={tab === 'dashboard' ? 'pms-project-resources' : undefined}>
     <ProjectSpaceTabs className="pms-project-resource-tabs" navigationOnly activeKey={tab}
       onChange={key => useUiStore.getState().navigateWithEditGuard(() => { setTab(key as ResourceTab); setDetailVersionId(undefined) }, false)}
       items={RESOURCE_TABS.filter(item => getProjectAttribute(project) !== 'budget' || item.key === 'annual').map(item => ({ ...item }))} />
