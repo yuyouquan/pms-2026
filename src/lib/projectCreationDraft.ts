@@ -97,7 +97,7 @@ const isEmptyFieldValue = (value: unknown) =>
 
 export const isProjectCreationDraftEmpty = (values: Record<string, unknown>) =>
   Object.entries(values).every(([key, value]) => {
-    if (key === 'healthStatus' && value === 'normal') return true
+    if (key === 'healthStatus' && (value === 'normal' || value === '正常')) return true
     if (key === 'status' && value === '待立项') return true
     return isEmptyFieldValue(value)
   })

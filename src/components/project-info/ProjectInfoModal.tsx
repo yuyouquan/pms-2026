@@ -45,6 +45,7 @@ import {
   resolveRestoredActiveProjectInfoGroups,
   resolveProjectCreationDraftSourceStatus,
   resolveProjectHealthStatus,
+  normalizeProjectHealthStatus,
   resolveTechnicalProjectSecondaryCategory,
   validateProjectInfoValues,
 } from '@/lib/projectInfoRules'
@@ -134,7 +135,7 @@ export const PROJECT_CREATION_DRAFT_SAVE_DELAY_MS = 300
 
 const CREATE_FORM_DEFAULTS: ProjectInfoFormState = {
   responsiblePersons: [],
-  healthStatus: 'normal',
+  healthStatus: '正常',
   status: '',
 }
 
@@ -472,9 +473,7 @@ export default function ProjectInfoModal({
           ? String(editingProject.fieldValues?.ipmProjectType || editingProject.ipmProjectType || editingProject.secondaryCategory || '')
           : '',
       responsiblePersons: hydrationResponsiblePersons,
-      healthStatus: manualCompletion
-        ? ({ normal: '正常', attention: '关注', risk: '风险' } as Record<string, string>)[String(editingProject.healthStatus)] || String(editingProject.healthStatus || '')
-        : typeof editingProject.healthStatus === 'string' ? editingProject.healthStatus : '',
+      healthStatus: normalizeProjectHealthStatus(editingProject.healthStatus),
       status: typeof editingProject.status === 'string' ? editingProject.status : '',
       currentNode: typeof editingProject.currentNode === 'string' ? editingProject.currentNode : '',
       cancelPauseDate: typeof editingProject.cancelPauseDate === 'string' ? editingProject.cancelPauseDate : '',
@@ -552,6 +551,7 @@ export default function ProjectInfoModal({
         const restoredType = restoredClassification?.pmsProjectCategory || ''
         form.setFieldsValue({
           ...draft.values,
+          healthStatus: normalizeProjectHealthStatus(draft.values.healthStatus),
           type: restoredType || undefined,
           secondaryCategory: restoredType === PROJECT_CATEGORY_TECH
             ? restoredEntry?.ipmProjectCategoryName || draft.values.secondaryCategory

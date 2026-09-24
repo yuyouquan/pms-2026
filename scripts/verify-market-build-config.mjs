@@ -1,25 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import vm from 'node:vm'
 import ts from 'typescript'
-
-const evaluateTypeScriptModule = (filename) => {
-  const source = fs.readFileSync(filename, 'utf8')
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2020,
-    },
-  }).outputText
-  const module = { exports: {} }
-  vm.runInNewContext(output, {
-    module,
-    exports: module.exports,
-    require: (id) => { throw new Error(`Unexpected module: ${id}`) },
-    console,
-  }, { filename })
-  return module.exports
-}
+import { loadTypeScriptModule as evaluateTypeScriptModule } from './lib/typescript-module-loader.mjs'
 
 const marketRulesPath = 'src/lib/marketRules.ts'
 const dimensionMatrixPath = 'src/components/project-info/DimensionMatrixEditor.tsx'

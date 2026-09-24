@@ -23,6 +23,7 @@ for (const file of ['ProjectSpaceContainer', 'ConfigContainer']) {
   let discarded = false
   const ui = useUiStore.getState()
   const context = {
+    projectSpaceModule: 'basic', useUiStore,
     isEditMode: true, isCurrentDraft: false, basicInfoEditMode: false,
     setPendingNavigation: ui.setPendingNavigation,
     setShowLeaveConfirm: ui.setShowLeaveConfirm,
@@ -49,6 +50,19 @@ for (const file of ['ProjectSpaceContainer', 'ConfigContainer']) {
     useUiStore.getState().handleConfirmLeave()
     assert.equal(navigated, true)
     assert.equal(discarded, true, 'confirmed navigation clears the discarded basic draft')
+    context.projectSpaceModule = 'resources'
+    context.basicInfoEditMode = false
+    context.isEditMode = true // A render can still contain the value before blur saved it.
+    useUiStore.getState().setIsEditMode(false)
+    navigated = false
+    navigate(() => { navigated = true })
+    assert.equal(navigated, true, 'saved resource edits navigate without a stale confirmation')
+    useUiStore.getState().setIsEditMode(true)
+    navigated = false
+    navigate(() => { navigated = true })
+    assert.equal(navigated, false, 'a genuinely unsaved resource draft still requires confirmation')
+    useUiStore.getState().handleCancelLeave()
+    useUiStore.getState().setIsEditMode(false)
   }
 }
 console.log('Session navigation boundaries passed')
