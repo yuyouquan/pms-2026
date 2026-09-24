@@ -9951,3 +9951,131 @@ input.ant-input,
 .pms-joint-mr-type-gap-row .pms-joint-mr-fixed-cell-content {
   background: #fff1f0 !important;
 }
+
+/* Resource pages use spacing and quiet surfaces instead of nested outlined cards.
+   Scope these overrides so shared HR/configuration forms keep their own styling. */
+.pms-project-resources {
+  --resource-surface: #f7f8fa;
+  --resource-divider: #eceef3;
+  min-width: 0;
+}
+.pms-project-resources .pms-project-resource-tabs > .ant-tabs-nav {
+  padding-inline: 4px;
+  margin-bottom: 20px;
+  border: 0;
+  border-bottom: 1px solid var(--resource-divider);
+  border-radius: 0;
+  background: transparent;
+}
+.pms-project-resources :is(.pms-resource-dashboard, .pms-resource-workspace, .pms-resource-inline-detail) { gap: 24px; }
+.pms-project-resources .pms-resource-panel {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+.pms-project-resources .pms-resource-version-context {
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--resource-surface);
+}
+.pms-project-resources .pms-resource-version-tabs > .ant-tabs-nav::before { border: 0; }
+.pms-project-resources .pms-resource-version-tabs .ant-tabs-tab {
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: var(--resource-surface) !important;
+}
+.pms-project-resources .pms-resource-version-tabs .ant-tabs-tab-active { background: var(--pms-brand-surface) !important; }
+.pms-project-resources .pms-dashboard-filters {
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--resource-surface);
+}
+.pms-project-resources .pms-dashboard-eight-metrics { gap: 12px; }
+.pms-project-resources .pms-dashboard-metric {
+  padding: 16px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--resource-surface);
+}
+.pms-project-resources .pms-dashboard-metric-heading h3::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 6px 2px 0;
+  border-radius: 50%;
+  background: var(--budget-color, #9993ae);
+}
+.pms-project-resources .pms-dashboard-metric-hover { transition: background-color .15s ease; }
+.pms-project-resources .pms-dashboard-metric-hover:is(:hover, :focus-visible) { background: var(--pms-brand-surface); }
+.pms-project-resources .pms-dashboard-panel-head { margin-bottom: 16px; }
+.pms-project-resources .pms-dashboard-ledger-note { max-width: 1200px; line-height: 1.8; }
+.pms-project-resources .pms-dashboard-note { color: var(--pms-text-secondary); }
+
+/* Keep stage ownership clear with pale phase bands, without drawing every cell. */
+.pms-project-resources :is(.pms-budget-milestone-scroll, .pms-hr-milestone-details-scroll) { border: 0; border-radius: 8px; }
+.pms-project-resources .pms-budget-milestone-track { gap: 4px; }
+.pms-project-resources .pms-budget-milestone-stage { border: 0; }
+.pms-project-resources .pms-budget-milestone-stage-header {
+  color: var(--pms-text-primary);
+  background: color-mix(in srgb, var(--pms-budget-stage-color) 10%, white);
+  border-radius: 6px 6px 0 0;
+}
+.pms-project-resources .pms-budget-milestone-stage-header strong { color: var(--pms-budget-stage-color); }
+.pms-project-resources :is(.pms-budget-milestone-stage, .pms-hr-milestone-details) dl > div { border: 0; }
+.pms-project-resources :is(.pms-budget-milestone-stage, .pms-hr-milestone-details) dt { background: var(--resource-surface); }
+.pms-project-resources .pms-resource-view-stats { gap: 12px; margin-block: 12px 20px; }
+.pms-project-resources .pms-resource-view-stats > div { padding: 14px; border: 0; background: var(--resource-surface); }
+.pms-project-resources .pms-resource-year-tabs > .ant-tabs-nav .ant-tabs-tab {
+  border: 0;
+  border-radius: 6px;
+  background: var(--resource-surface);
+}
+.pms-project-resources .pms-resource-year-tabs > .ant-tabs-nav .ant-tabs-tab-active { background: var(--pms-brand-surface); }
+.pms-project-resources .pms-resource-department-actions { margin-block: 4px 12px; }
+.pms-project-resources :is(.pms-resource-department-actions, .pms-non-labor-actions) .ant-btn-dashed:not(:disabled) {
+  border-color: transparent !important;
+  background: var(--resource-surface);
+  box-shadow: none;
+}
+.pms-project-resources :is(.pms-resource-department-actions, .pms-non-labor-actions) .ant-btn-dashed:not(:disabled):hover { background: var(--pms-brand-surface); }
+
+/* Preserve row tracking and totals; remove vertical grid and heavy header rules. */
+.pms-project-resources .pms-table .ant-table { border-radius: 8px; }
+.pms-project-resources .pms-table .ant-table-thead > tr > th {
+  background: var(--resource-surface) !important;
+  border-bottom: 0 !important;
+  color: var(--pms-text-secondary);
+}
+.pms-project-resources .pms-table .ant-table-thead > tr > th::before { display: none; }
+.pms-project-resources .pms-table .ant-table-summary > tr > td {
+  border-top: 1px solid var(--resource-divider) !important;
+  background: #f7f6fc !important;
+}
+/* Inputs stay visible and editable. Only idle, valid fields lose their outline;
+   focused, invalid and disabled controls retain the normal Ant Design feedback. */
+.pms-project-resources .pms-resource-inline-field.is-editable:not(.is-editing):not(:has(.pms-resource-inline-error))
+  :is(.ant-input-number, .ant-select, .ant-picker, .ant-input):not([disabled]):not([class*='-disabled']):not([class*='-status-error']):not([class*='-status-warning']) {
+  border-color: transparent !important;
+  background-color: var(--resource-surface) !important;
+  box-shadow: none !important;
+}
+.pms-project-resources .pms-resource-inline-field.is-editable:not(.is-editing):hover
+  :is(.ant-input-number, .ant-select, .ant-picker, .ant-input):not([disabled]):not([class*='-disabled']):not([class*='-status-error']):not([class*='-status-warning']) {
+  border-color: var(--pms-brand-border) !important;
+}
+.pms-project-resources .pms-resource-inline-field.is-editing
+  :is(.ant-input-number, .ant-select, .ant-picker, .ant-input):not([class*='-status-error']):not([class*='-status-warning']) {
+  border-color: var(--pms-brand) !important;
+}
+.pms-project-resources .pms-resource-inline-field:has(.pms-resource-inline-error)
+  :is(.ant-input-number, .ant-select, .ant-picker, .ant-input) { border-color: var(--pms-danger, #cf1322) !important; }
+@media (max-width: 800px) {
+  .pms-project-resources :is(.pms-resource-dashboard, .pms-resource-workspace, .pms-resource-inline-detail) { gap: 18px; }
+  .pms-project-resources .pms-dashboard-eight-metrics { gap: 8px; }
+  .pms-project-resources .pms-dashboard-metric { padding: 14px 10px; }
+}
