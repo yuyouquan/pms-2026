@@ -40,7 +40,9 @@ export default function JointProjectSpaceContainer() {
             options={[{ label: 'tOS&整机1+N项目计划', value: 'mr-version-plan' }]}
           />
         </div>
-        <JointMrVersionPlan onOpenProject={handleOpenProject} />
+        <div className="pms-joint-space__content-panel">
+          <JointMrVersionPlan onOpenProject={handleOpenProject} />
+        </div>
       </Card>
     </section>
   )
