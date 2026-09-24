@@ -111,15 +111,14 @@ export default function ResourceInlineDetail({ category, project, version, scope
         : <Select aria-label={field.label} value={value || undefined} getPopupContainer={popup} style={{ width: '100%' }} onChange={change} notFoundContent="当前项目等级暂无可用人力模型" options={(field.key === 'projectLevel' ? getConfigProjectLevels(records) : getConfigModelVersions(records, machine.projectLevel)).map(label => ({ label, value: label }))} />} /> })) : []
   const machineRows = machine ? resolveMachineDepartmentInvestments(machine) : []
   const machinePhases = machine ? resolveMachinePhaseFields(machine) : []
-  const machineColumns = [{ title: '一级部门', dataIndex: 'primaryDepartment', width: 140, align: 'center' as const }, { title: '二级部门', dataIndex: 'secondaryDepartment', width: 140, align: 'center' as const },
-    { title: '预估投入合计', key: 'total', width: 130, align: 'center' as const, render: (_: unknown, row: InlineDepartment) => formatPersonMonth(row.estimatedInvestment) },
-    ...machinePhases.map(field => ({ title: field.label, key: field.key, width: 150, align: 'center' as const, render: (_: unknown, row: InlineDepartment) => {
+  const machineColumns = [{ title: '一级部门', dataIndex: 'primaryDepartment', width: 150, align: 'center' as const }, { title: '二级部门', dataIndex: 'secondaryDepartment', width: 150, align: 'center' as const },
+    { title: '预估投入合计', key: 'total', width: 140, align: 'center' as const, render: (_: unknown, row: InlineDepartment) => formatPersonMonth(row.estimatedInvestment) },
+    ...machinePhases.map(field => ({ title: field.label, key: field.key, width: 170, align: 'center' as const, render: (_: unknown, row: InlineDepartment) => {
       const amount = Number(row[field.key] ?? 0)
       return `${formatPersonMonth(amount)}（${(row.estimatedInvestment ? amount / row.estimatedInvestment * 100 : 0).toFixed(2)}%）`
     } }))]
   return <div className="pms-resource-inline-detail">
     <section className="pms-resource-panel pms-resource-basics" aria-label="基础信息与里程碑">
-    <h3 className="pms-resource-section-heading">{machine ? '基础信息与里程碑' : '里程碑计划'}</h3>
     {category !== 'capability' ? <BudgetMilestoneSchedule
       category={category}
       versionId={version.id}
@@ -132,7 +131,7 @@ export default function ResourceInlineDetail({ category, project, version, scope
       canEdit={key => canEditResourceMilestone(category, project, key)}
       onSaveDate={(key, value) => persist({ type: 'milestone', key, value })}
       onSchedule={(scheduledDates, modelSnapshot) => persist({ type: 'milestoneSchedule', dates: scheduledDates, modelSnapshot })}
-    /> : <section className="pms-hr-milestone-details" aria-label="里程碑信息">
+    /> : <section className="pms-hr-milestone-details" aria-label="里程碑信息"><h3 className="pms-hr-investment-section-title">里程碑信息</h3>
       <div className="pms-hr-milestone-details-scroll"><dl style={{ gridTemplateColumns: `repeat(${resourceMilestoneFields[category].length}, minmax(130px, 1fr))` }}>
         {resourceMilestoneFields[category].map(field => <div key={field.key}><dt>{field.label}</dt><dd><ResourceInlineField label={field.label} value={dates[field.key]} readOnly={setupReadOnly || !canEditResourceMilestone(category, project, field.key)}
           onSave={value => persist({ type: 'milestone', key: field.key, value: value ? String(value) : null })}
@@ -140,7 +139,6 @@ export default function ResourceInlineDetail({ category, project, version, scope
       </dl></div></section>}
     </section>
     <section className="pms-resource-panel" aria-label="预估投入">
-    <h3 className="pms-resource-section-heading">预估投入分配</h3>
     <Tabs className="pms-resource-investment-tabs" tabBarExtraContent={{ right: <NonLaborInvestmentRange value={cloneNonLaborInvestment(version.nonLaborInvestment)} /> }} items={[{ key: 'labor', label: '各部门人力（人月）投入', children: <>
 
     {!machine && !laborReadOnly && <Space size="small" className="pms-resource-department-actions">

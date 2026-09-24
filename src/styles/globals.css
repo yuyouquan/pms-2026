@@ -9952,8 +9952,8 @@ input.ant-input,
   background: #fff1f0 !important;
 }
 
-/* Resource pages use spacing and quiet surfaces instead of nested outlined cards.
-   Scope these overrides so shared HR/configuration forms keep their own styling. */
+/* Keep the approved overview presentation. Version workspaces use their original
+   shared styles above; the navigation wrapper applies this scope only to overview. */
 .pms-project-resources {
   --resource-surface: #f7f8fa;
   --resource-divider: #eceef3;
@@ -9967,7 +9967,7 @@ input.ant-input,
   border-radius: 0;
   background: transparent;
 }
-.pms-project-resources :is(.pms-resource-dashboard, .pms-resource-workspace, .pms-resource-inline-detail) { gap: 24px; }
+.pms-project-resources .pms-resource-dashboard { gap: 24px; }
 .pms-project-resources .pms-resource-panel {
   padding: 0;
   border: 0;
@@ -9975,64 +9975,6 @@ input.ant-input,
   box-shadow: none;
   background: transparent;
 }
-/* Three primary sections sit on a quiet canvas; only these owning surfaces
-   receive elevation, keeping tables and controls free from nested outlines. */
-.pms-project-resources .pms-resource-workspace {
-  gap: 16px;
-  padding: 16px;
-  border-radius: 12px;
-  background: #f3f4f8;
-}
-.pms-project-resources .pms-resource-inline-detail { gap: 16px; }
-.pms-project-resources .pms-resource-workspace .pms-resource-panel {
-  padding: 20px;
-  border-radius: 10px;
-  background: var(--pms-surface-solid);
-  box-shadow: 0 1px 3px rgb(36 42 66 / 5%);
-}
-.pms-project-resources .pms-resource-workspace .pms-resource-section-heading {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 0 18px;
-  color: var(--pms-text-primary);
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 22px;
-}
-.pms-project-resources .pms-resource-section-heading::before {
-  content: '';
-  flex: 0 0 3px;
-  height: 14px;
-  border-radius: 2px;
-  background: var(--pms-brand);
-}
-.pms-project-resources .pms-resource-monthly-heading { margin-bottom: 16px; }
-.pms-project-resources .pms-resource-monthly-heading .pms-resource-section-heading { margin-bottom: 0; }
-.pms-project-resources .pms-resource-basics-row { margin-bottom: 16px; }
-.pms-project-resources .pms-resource-metadata dt,
-.pms-project-resources .pms-budget-milestone-anchor-inputs label > span {
-  margin-bottom: 6px;
-  color: var(--pms-text-secondary);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 22px;
-}
-.pms-project-resources .pms-resource-metadata dd { font-size: 14px; line-height: 22px; }
-.pms-project-resources .pms-resource-investment-tabs > .ant-tabs-nav .ant-tabs-tab { font-size: 14px; font-weight: 500; }
-.pms-project-resources .pms-resource-version-context {
-  padding: 0 4px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-}
-.pms-project-resources .pms-resource-version-tabs > .ant-tabs-nav::before { border: 0; }
-.pms-project-resources .pms-resource-version-tabs .ant-tabs-tab {
-  border: 0 !important;
-  border-radius: 6px !important;
-  background: var(--resource-surface) !important;
-}
-.pms-project-resources .pms-resource-version-tabs .ant-tabs-tab-active { background: var(--pms-brand-surface) !important; }
 .pms-project-resources .pms-dashboard-filters {
   padding: 12px 14px;
   border: 0;
@@ -10061,34 +10003,6 @@ input.ant-input,
 .pms-project-resources .pms-dashboard-ledger-note { max-width: 1200px; line-height: 1.8; }
 .pms-project-resources .pms-dashboard-note { color: var(--pms-text-secondary); }
 
-/* Keep stage ownership clear with pale phase bands, without drawing every cell. */
-.pms-project-resources :is(.pms-budget-milestone-scroll, .pms-hr-milestone-details-scroll) { border: 0; border-radius: 8px; }
-.pms-project-resources .pms-budget-milestone-track { gap: 4px; }
-.pms-project-resources .pms-budget-milestone-stage { border: 0; }
-.pms-project-resources .pms-budget-milestone-stage-header {
-  color: var(--pms-text-primary);
-  background: color-mix(in srgb, var(--pms-budget-stage-color) 10%, white);
-  border-radius: 6px 6px 0 0;
-}
-.pms-project-resources .pms-budget-milestone-stage-header strong { color: var(--pms-budget-stage-color); }
-.pms-project-resources :is(.pms-budget-milestone-stage, .pms-hr-milestone-details) dl > div { border: 0; }
-.pms-project-resources :is(.pms-budget-milestone-stage, .pms-hr-milestone-details) dt { background: var(--resource-surface); }
-.pms-project-resources .pms-resource-view-stats { gap: 12px; margin-block: 12px 20px; }
-.pms-project-resources .pms-resource-view-stats > div { padding: 14px; border: 0; background: var(--resource-surface); }
-.pms-project-resources .pms-resource-year-tabs > .ant-tabs-nav .ant-tabs-tab {
-  border: 0;
-  border-radius: 6px;
-  background: var(--resource-surface);
-}
-.pms-project-resources .pms-resource-year-tabs > .ant-tabs-nav .ant-tabs-tab-active { background: var(--pms-brand-surface); }
-.pms-project-resources .pms-resource-department-actions { margin-block: 4px 12px; }
-.pms-project-resources :is(.pms-resource-department-actions, .pms-non-labor-actions) .ant-btn-dashed:not(:disabled) {
-  border-color: transparent !important;
-  background: var(--resource-surface);
-  box-shadow: none;
-}
-.pms-project-resources :is(.pms-resource-department-actions, .pms-non-labor-actions) .ant-btn-dashed:not(:disabled):hover { background: var(--pms-brand-surface); }
-
 /* Preserve row tracking and totals; remove vertical grid and heavy header rules. */
 .pms-project-resources .pms-table .ant-table { border-radius: 8px; }
 .pms-project-resources .pms-table .ant-table-thead > tr > th {
@@ -10101,28 +10015,8 @@ input.ant-input,
   border-top: 1px solid var(--resource-divider) !important;
   background: #f7f6fc !important;
 }
-/* Inputs stay visible and editable. Only idle, valid fields lose their outline;
-   focused, invalid and disabled controls retain the normal Ant Design feedback. */
-.pms-project-resources .pms-resource-inline-field.is-editable:not(.is-editing):not(:has(.pms-resource-inline-error))
-  :is(.ant-input-number, .ant-select, .ant-picker, .ant-input):not([disabled]):not([class*='-disabled']):not([class*='-status-error']):not([class*='-status-warning']) {
-  border-color: transparent !important;
-  background-color: var(--resource-surface) !important;
-  box-shadow: none !important;
-}
-.pms-project-resources .pms-resource-inline-field.is-editable:not(.is-editing):hover
-  :is(.ant-input-number, .ant-select, .ant-picker, .ant-input):not([disabled]):not([class*='-disabled']):not([class*='-status-error']):not([class*='-status-warning']) {
-  border-color: var(--pms-brand-border) !important;
-}
-.pms-project-resources .pms-resource-inline-field.is-editing
-  :is(.ant-input-number, .ant-select, .ant-picker, .ant-input):not([class*='-status-error']):not([class*='-status-warning']) {
-  border-color: var(--pms-brand) !important;
-}
-.pms-project-resources .pms-resource-inline-field:has(.pms-resource-inline-error)
-  :is(.ant-input-number, .ant-select, .ant-picker, .ant-input) { border-color: var(--pms-danger, #cf1322) !important; }
 @media (max-width: 800px) {
-  .pms-project-resources :is(.pms-resource-dashboard, .pms-resource-workspace, .pms-resource-inline-detail) { gap: 18px; }
-  .pms-project-resources .pms-resource-workspace { padding: 10px; }
-  .pms-project-resources .pms-resource-workspace .pms-resource-panel { padding: 14px; }
+  .pms-project-resources .pms-resource-dashboard { gap: 18px; }
   .pms-project-resources .pms-dashboard-eight-metrics { gap: 8px; }
   .pms-project-resources .pms-dashboard-metric { padding: 14px 10px; }
 }
