@@ -88,5 +88,9 @@ assert.ok(formalSchedule,'formal project milestones also use stage presentation'
 assert.equal(formalSchedule.props.allowSchedule,false,'formal project does not gain model scheduling permission')
 assert.equal(formalSchedule.props.dates,formalVersion.milestones)
 modules['@/types/projectRegistry'].getProjectAttribute=()=> 'budget'
-assert.equal(elements(renderTechnical()).find(node=>node.type==='BudgetMilestones').props.allowSchedule,true)
-console.log('PASS formal milestone stages reuse budget presentation while scheduling remains budget-only')
+const technicalBudgetSchedule=elements(renderTechnical()).find(node=>node.type==='BudgetMilestones')
+assert.equal(technicalBudgetSchedule.props.allowSchedule,false,'technical budgets hide the planning-start/EDCP model-scheduling toolbar')
+assert.equal(technicalBudgetSchedule.props.dates,formalVersion.milestones,'hiding the toolbar preserves saved technical milestone data')
+const tosBudget=compiled.exports.default({category:'tos',project:{id:'tos-budget'},version:formalVersion,scopeId:'tos-budget',laborReadOnly:false,nonLaborReadOnly:false,setupReadOnly:false})
+assert.equal(elements(tosBudget).find(node=>node.type==='BudgetMilestones').props.allowSchedule,true,'tOS budgets retain their scheduling toolbar')
+console.log('PASS formal and technical projects keep milestones without scheduling controls; tOS budget scheduling remains available')
