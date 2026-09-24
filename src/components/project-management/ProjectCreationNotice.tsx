@@ -1,4 +1,4 @@
-import { Tag } from 'antd'
+import { Button, Tag } from 'antd'
 import type { ProjectCreationNotification } from '@/types/projectRegistry'
 
 export default function ProjectCreationNotice({ notice }: { notice: ProjectCreationNotification }) {
@@ -8,6 +8,7 @@ export default function ProjectCreationNotice({ notice }: { notice: ProjectCreat
       <div className="pms-project-creation-notice__meta"><span>接收人</span><strong>{notice.recipients.join('、')}</strong></div>
       <div className="pms-project-creation-notice__meta"><span>生成时间</span><span>{new Date(notice.timestamp).toLocaleString('zh-CN', { hour12: false })}</span></div>
       <div className="pms-project-creation-notice__message"><strong>{notice.subject}</strong><p>{notice.body}</p></div>
+      {notice.actionUrl && <Button type="primary" href={notice.actionUrl} target="_blank" rel="noopener noreferrer">打开项目空间并补全信息</Button>}
       <div className="pms-project-creation-notice__hint">当前为模拟通知，未向飞书发送真实消息。可在项目历史中查看。</div>
     </section>
   )

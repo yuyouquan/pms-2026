@@ -21,6 +21,7 @@ import ConfigContainer from '@/containers/ConfigContainer'
 import JointProjectSpaceContainer from '@/containers/JointProjectSpaceContainer'
 import HrPipelineContainer from '@/containers/HrPipelineContainer'
 import { useActivateProject } from '@/hooks/useActivateProject'
+import { useProjectInfoLink } from '@/hooks/useProjectInfoLink'
 import type { ProjectItem } from '@/types/app'
 import ProjectSpaceAccessBoundary from '@/components/permission/ProjectSpaceAccessBoundary'
 
@@ -32,6 +33,7 @@ const globalStyles = `
 `
 
 export default function Home() {
+  const projectInfoLinkError = useProjectInfoLink()
   useHrFormalProjectSync()
   useTosMrLevel1Sync()
   useEffect(() => { void rehydrateTransferStore() }, [])
@@ -82,6 +84,7 @@ export default function Home() {
     <>
       <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
       <div className="pms-page-shell">
+        {projectInfoLinkError && <Alert type="warning" showIcon message={projectInfoLinkError} />}
         {/* Project Space — full-screen layout with its own header */}
         {activeModule === 'projectSpace' && selectedProject ? (
           <ProjectSpaceAccessBoundary>

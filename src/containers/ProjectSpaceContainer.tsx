@@ -5838,7 +5838,7 @@ export default function ProjectSpaceContainer() {
               <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
             </Card>
           )}
-          {isTechnicalProject && selectedProject && (
+          {selectedProject && (isTechnicalProject || getProjectAttribute(selectedProject) === 'budget') && (
             <ProjectInfoModal
               mode="edit"
               open={showProjectInfoEditor}
