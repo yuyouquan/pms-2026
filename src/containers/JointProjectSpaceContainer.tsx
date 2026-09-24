@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, Tabs } from 'antd'
+import { Card, Segmented } from 'antd'
 import JointMrVersionPlan from '@/components/joint/JointMrVersionPlan'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { useProjectStore } from '@/stores/project'
@@ -33,15 +33,14 @@ export default function JointProjectSpaceContainer() {
   return (
     <section className="pms-joint-space" aria-label="项目组合管理">
       <Card className="pms-joint-space__card pms-solid-surface" variant="borderless">
-        <Tabs
-          className="pms-joint-space__tabs"
-          activeKey="mr-version-plan"
-          items={[{
-            key: 'mr-version-plan',
-            label: 'tOS&整机1+N项目计划',
-            children: <JointMrVersionPlan onOpenProject={handleOpenProject} />,
-          }]}
-        />
+        <div className="pms-joint-space__view-mode">
+          <Segmented
+            aria-label="项目组合管理视图"
+            value="mr-version-plan"
+            options={[{ label: 'tOS&整机1+N项目计划', value: 'mr-version-plan' }]}
+          />
+        </div>
+        <JointMrVersionPlan onOpenProject={handleOpenProject} />
       </Card>
     </section>
   )
