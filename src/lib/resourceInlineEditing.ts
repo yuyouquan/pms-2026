@@ -57,22 +57,23 @@ export const canEditResourceMilestone = (category: HrProjectCategory, project: R
 /** Incomplete pairs are persisted only here; canonical modal/import validation stays strict. */
 export function validateInlineNonLabor(value: NonLaborInvestment, previous: NonLaborInvestment | undefined, config: Config) {
   const result = cloneNonLaborInvestment(value)
-  const subjects = config.nonLaborSubject ?? [], pairs = nonLaborDepartmentPairs(config.techModuleDept ?? [])
+  const subjects = config.nonLaborSubject ?? [], pairs = nonLaborDepartmentPairs(Object.values(config).flat())
   const ids = new Set<string>(), keys = new Set<string>()
   for (const item of result.items) {
     for (const key of ['secondaryDepartment', 'tertiaryDepartment', 'secondarySubject', 'tertiarySubject'] as const) item[key] = item[key].trim()
     if (!item.id || ids.has(item.id)) throw new Error('非人力投入行标识重复')
     ids.add(item.id)
     const old = previous?.items.find(row => row.id === item.id)
-    const retainedDepartment = old?.secondaryDepartment === item.secondaryDepartment && old?.tertiaryDepartment === item.tertiaryDepartment
-    if ((item.secondaryDepartment || item.tertiaryDepartment) && !retainedDepartment && !pairs.some(row => row.secondaryDepartment === item.secondaryDepartment && (!item.tertiaryDepartment || row.tertiaryDepartment === item.tertiaryDepartment))) throw new Error('请选择有效的二级部门和对应三级部门')
+    if (item.primaryDepartment !== undefined) item.primaryDepartment = item.primaryDepartment.trim()
+    const retainedDepartment = !!old && (old.primaryDepartment ?? '') === (item.primaryDepartment ?? '') && old.secondaryDepartment === item.secondaryDepartment && old?.tertiaryDepartment === item.tertiaryDepartment
+    if ((item.primaryDepartment || item.secondaryDepartment || item.tertiaryDepartment) && !retainedDepartment && !pairs.some(row => (row.primaryDepartment ?? '') === (item.primaryDepartment ?? '') && (!item.secondaryDepartment || row.secondaryDepartment === item.secondaryDepartment) && (!item.tertiaryDepartment || row.tertiaryDepartment === item.tertiaryDepartment))) throw new Error('请选择有效的一级部门、二级部门和对应三级部门')
     const retainedSubject = old?.subjectId === item.subjectId && old?.secondarySubject === item.secondarySubject && old?.tertiarySubject === item.tertiarySubject
     if ((item.secondarySubject || item.tertiarySubject || item.subjectId) && !retainedSubject && !subjects.some(row => row.enabled !== false && row.secondarySubject === item.secondarySubject && (!item.tertiarySubject && !item.subjectId || row.tertiarySubject === item.tertiarySubject && row.id === item.subjectId))) throw new Error('请选择有效的二级科目和对应三级科目')
     if ([item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject].every(Boolean)) {
       const key = nonLaborItemKey(item)
-      if (keys.has(key)) throw new Error('同一版本中的二级部门、三级部门、二级科目和三级科目组合不能重复')
+      if (keys.has(key)) throw new Error('同一版本中的一级部门、二级部门、三级部门、二级科目和三级科目组合不能重复')
       keys.add(key)
-      validateNonLaborInvestment({ ...result, items: [item] }, subjects, previous, config.techModuleDept ?? [])
+      validateNonLaborInvestment({ ...result, items: [item] }, subjects, previous, Object.values(config).flat())
     }
     for (const [month, amount] of Object.entries(item.monthlyAmounts)) {
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('费用投入月份格式不正确')

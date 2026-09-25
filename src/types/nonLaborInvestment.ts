@@ -1,11 +1,15 @@
 /** 科目名称保存在版本中，配置项变更或删除不会改写已有预算。 */
 export interface NonLaborInvestmentItem {
   id: string
+  /** Legacy rows may not yet have a primary department. */
+  primaryDepartment?: string
   secondaryDepartment: string
   tertiaryDepartment: string
   subjectId: string
   secondarySubject: string
   tertiarySubject: string
+  /** Last selected description, retained if the subject is removed. */
+  subjectDescription?: string
   /** 费用金额，单位：元。 */
   monthlyAmounts: Record<string, number>
 }

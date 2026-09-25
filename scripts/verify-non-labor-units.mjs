@@ -17,8 +17,8 @@ const subjects = [{ id: 'flight', secondarySubject: '交通费', tertiarySubject
 const labels = ['软件部', '驱动开发', '交通费', '机票']
 const yuanHeaders = ['二级部门', '三级部门', '二级科目', '三级科目', '2026年01月（元）', '2026年02月（元）']
 const wanHeaders = yuanHeaders.map(header => header.replace('（元）', '（万元）'))
-assert.deepEqual(sheet.nonLaborSpreadsheetColumns(range).map(column => column.title), yuanHeaders)
-assert.deepEqual(sheet.nonLaborSpreadsheetColumns(range, '万元').map(column => column.title), wanHeaders)
+assert.deepEqual(sheet.nonLaborSpreadsheetColumns(range).map(column => column.title), ['一级部门', ...yuanHeaders])
+assert.deepEqual(sheet.nonLaborSpreadsheetColumns(range, '万元').map(column => column.title), ['一级部门', ...wanHeaders])
 
 const units = load('src/lib/nonLaborAmountUnit.ts')
 for (const amount of [0, 0.01, 0.29, 1.01, 100, 12345.67, 999999.99]) {
@@ -129,13 +129,25 @@ assert.equal(elements(yuanTable.props.summary()).filter(node => node.type === 'S
 const yuanReadonly = elements(Section({ ...props, unit: '元', readOnly: true })).find(node => node.type === Table)
 assert.equal(yuanReadonly.props.columns.find(column => column.key === '2026-01').render(null, first), '12,345.67')
 elements(yuanPanel).find(node => node.props?.['aria-label']?.startsWith('下载非人力投入模板')).props.onClick()
-assert.deepEqual(workbookExport.sheets[0].columns.map(column => column.title), yuanHeaders)
+assert.deepEqual(workbookExport.sheets[0].columns.map(column => column.title), ['一级部门', ...yuanHeaders])
 elements(rendered).find(node => node.props?.['aria-label']?.startsWith('下载非人力投入模板')).props.onClick()
 assert.match(workbookExport.filename, /万元/)
-assert.deepEqual(workbookExport.sheets[0].columns.map(column => column.title), wanHeaders)
+assert.deepEqual(workbookExport.sheets[0].columns.map(column => column.title), ['一级部门', ...wanHeaders])
 await elements(rendered).find(node => node.type === 'Upload').props.beforeUpload({ arrayBuffer: async () => XLSX.write(excel, { type: 'buffer', bookType: 'xlsx' }) })
 assert.ok(confirmation)
 confirmation.onOk()
 assert.equal(changes.at(-1).items[0].monthlyAmounts['2026-01'], 12345.67)
 assert.deepEqual(warnings, [])
 console.log('PASS non-labor yuan/wan-yuan conversion, cent precision, template/header guards, Excel round trip, component input/summary/import and resource exports')
+
+assert.equal(yuanTable.props.columns[0].key, 'primaryDepartment')
+for (const readonly of [false, true]) {
+  const view = elements(Section({ ...props, inline: true, readOnly: readonly })).find(node => node.type === Table)
+  const subjectCell = view.props.columns.find(column => column.key === 'tertiarySubject').render(null, first)
+  assert.equal(elements(subjectCell).filter(node => node.props?.['aria-label'] === '科目说明：机票').length, 1)
+  const tooltip = elements(subjectCell).find(node => node.type === 'Tooltip')
+  assert.deepEqual(tooltip.props.trigger, ['hover', 'focus'])
+  assert.equal(tooltip.props.title.props.children, '暂无科目说明')
+  if (!readonly) assert.ok(elements(subjectCell).some(node => node.type === 'InlineControl'), 'help icon must not bypass inline saving')
+}
+console.log('PASS primary column order and subject help in editable/readonly inline cells')

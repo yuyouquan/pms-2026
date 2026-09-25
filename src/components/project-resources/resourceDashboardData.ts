@@ -51,7 +51,7 @@ export function buildDashboardAnalysis(category: HrProjectCategory, source: Dash
   const complete = buildResourceMonthlyView(rows, version.id, range.startMonth ?? undefined, range.endMonth ?? undefined)
   const expense = cloneNonLaborInvestment(version.nonLaborInvestment)
   const expenseMonths = nonLaborMonths(expense)
-  const expenseItems = expense.items.filter(item => matches(departmentParents[item.secondaryDepartment] ?? UNASSIGNED_PRIMARY, item.secondaryDepartment))
+  const expenseItems = expense.items.filter(item => matches(item.primaryDepartment || departmentParents[item.secondaryDepartment] || UNASSIGNED_PRIMARY, item.secondaryDepartment))
   const allMonths = [...new Set([...complete.months, ...expenseMonths])].sort()
   const months = allMonths.filter(month => dashboardMonthDates(month).some(date => matchesDashboardDate(date, filter)))
   const years = [...new Set(allMonths.map(month => month.slice(0, 4)))]

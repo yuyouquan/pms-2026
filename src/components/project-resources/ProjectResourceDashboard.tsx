@@ -55,7 +55,7 @@ export default function ProjectResourceDashboard({ project, category }: {
   const actualPairs = [...(dataset?.worklogs ?? []), ...(dataset?.expenses ?? [])]
   const fallbackParents = dashboardDepartmentParents((config.hrModel ?? []).map(row => ({ primaryDepartment: String(row.primaryDepartment ?? ''), secondaryDepartment: String(row.secondaryDepartment ?? '') })))
   const departmentParents = { ...fallbackParents, ...dashboardDepartmentParents([...pairs, ...actualPairs]) }
-  const expensePairs = sources.flatMap(source => source?.version.nonLaborInvestment?.items.map(item => ({ primaryDepartment: departmentParents[item.secondaryDepartment] ?? UNASSIGNED_PRIMARY, secondaryDepartment: item.secondaryDepartment })) ?? [])
+  const expensePairs = sources.flatMap(source => source?.version.nonLaborInvestment?.items.map(item => ({ primaryDepartment: item.primaryDepartment || departmentParents[item.secondaryDepartment] || UNASSIGNED_PRIMARY, secondaryDepartment: item.secondaryDepartment })) ?? [])
   const allPairs = [...pairs, ...actualPairs, ...expensePairs]
   const primaries = [...new Set(allPairs.map(row => row.primaryDepartment || UNASSIGNED_PRIMARY))].sort()
   const effectivePrimary = primaries.includes(primary) ? primary : 'all'

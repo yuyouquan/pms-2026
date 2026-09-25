@@ -10,7 +10,7 @@ const departments = [
 ]
 const subjects = [{ id:'flight', secondarySubject:'交通费', tertiarySubject:'机票' }]
 const headers = ['二级部门','三级部门','二级科目','三级科目','2026年12月（元）','2027年01月（元）','2027年02月（元）']
-assert.deepEqual(nonLaborSpreadsheetColumns(range).map(column=>column.title), headers)
+assert.deepEqual(nonLaborSpreadsheetColumns(range).map(column=>column.title), ['一级部门', ...headers])
 const rows = [headers, [' 软件部 ','驱动开发','交通费','机票',1200.5,'2,500.00',''], ['硬件部','电源设计','交通费','机票',500,0,0]]
 const sheet = XLSX.utils.aoa_to_sheet(rows)
 const workbook = XLSX.utils.book_new()

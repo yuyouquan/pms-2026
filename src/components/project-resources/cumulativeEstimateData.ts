@@ -63,7 +63,7 @@ export function buildCumulativeEstimate(_category: HrProjectCategory, sources: r
   const months = nonLaborMonths(expenses)
   const parents = filter.departmentParents ?? dashboardDepartmentParents([...upper, ...sourceRows])
   for (const item of expenses.items) {
-    const primary = parents[item.secondaryDepartment] ?? UNASSIGNED_PRIMARY
+    const primary = item.primaryDepartment || parents[item.secondaryDepartment] || UNASSIGNED_PRIMARY
     if (!matchesDashboardDepartment(primary, item.secondaryDepartment, filter)) continue
     const group = getGroup(primary, item.secondaryDepartment)
     for (const month of months) {
@@ -107,7 +107,7 @@ export function buildResourceDepartmentDetails(category: HrProjectCategory, sour
   }
   analyses.forEach(analysis => {
     analysis?.departments.forEach(row => add(row.primary, row.secondary))
-    analysis?.source.version.nonLaborInvestment?.items.forEach(row => add(filter.departmentParents?.[row.secondaryDepartment] ?? UNASSIGNED_PRIMARY, row.secondaryDepartment))
+    analysis?.source.version.nonLaborInvestment?.items.forEach(row => add(row.primaryDepartment || filter.departmentParents?.[row.secondaryDepartment] || UNASSIGNED_PRIMARY, row.secondaryDepartment))
   })
   cumulative?.rows.forEach(row => add(row.primary, row.secondary))
   ;[...(actual?.worklogs ?? []), ...(actual?.expenses ?? [])].forEach(row => add(row.primaryDepartment, row.secondaryDepartment))

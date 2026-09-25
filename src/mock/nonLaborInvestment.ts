@@ -2,11 +2,11 @@ import type { NonLaborInvestment } from '@/types/nonLaborInvestment'
 
 export function mockNonLaborInvestment(versionId: string, minorVersion: number): NonLaborInvestment {
   return { startMonth: '2026-12', endMonth: '2027-02', items: [
-    { id: versionId + '-transport', secondaryDepartment: '软件部', tertiaryDepartment: '驱动开发', subjectId: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票',
+    { id: versionId + '-transport', primaryDepartment: '研发中心', secondaryDepartment: '软件部', tertiaryDepartment: '驱动开发', subjectId: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票',
       monthlyAmounts: { '2026-12': 1200, '2027-01': 2500 + minorVersion * 1000, '2027-02': 0 } },
-    { id: versionId + '-hotel', secondaryDepartment: '软件部', tertiaryDepartment: '驱动开发', subjectId: 'non-labor-travel-hotel', secondarySubject: '差旅费', tertiarySubject: '住宿费',
+    { id: versionId + '-hotel', primaryDepartment: '研发中心', secondaryDepartment: '软件部', tertiaryDepartment: '驱动开发', subjectId: 'non-labor-travel-hotel', secondarySubject: '差旅费', tertiarySubject: '住宿费',
       monthlyAmounts: { '2026-12': 2000, '2027-01': 1500, '2027-02': minorVersion * 1000 } },
-    { id: versionId + '-hardware-flight', secondaryDepartment: '硬件部', tertiaryDepartment: '电源设计', subjectId: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票',
+    { id: versionId + '-hardware-flight', primaryDepartment: '研发中心', secondaryDepartment: '硬件部', tertiaryDepartment: '电源设计', subjectId: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票',
       monthlyAmounts: { '2026-12': 800, '2027-01': 600, '2027-02': 450.5 } },
   ] }
 }

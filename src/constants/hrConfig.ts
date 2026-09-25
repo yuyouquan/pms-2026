@@ -17,6 +17,7 @@ export const CONFIG_MODULES: ConfigModuleMeta[] = [
     columns: [
       { key: 'secondarySubject', label: '二级科目', width: 220, editable: true, inputType: 'text' },
       { key: 'tertiarySubject', label: '三级科目', width: 220, editable: true, inputType: 'text' },
+      { key: 'description', label: '科目说明', width: 360, editable: true, inputType: 'textarea', required: false },
     ],
   },
   /* ── 整机产品 ── */
@@ -82,6 +83,7 @@ export const CONFIG_MODULES: ConfigModuleMeta[] = [
     description: '配置技术项目模块与部门层级映射关系',
     columns: [
       { key: 'module', label: '模块', width: 160, editable: true, inputType: 'text' },
+      { key: 'primaryDepartment', label: '一级部门', width: 140, editable: true, inputType: 'text', required: false },
       { key: 'secondaryDepartment', label: '二级部门', width: 140, editable: true, inputType: 'text' },
       { key: 'tertiaryDepartment', label: '三级部门', width: 140, editable: true, inputType: 'text' },
     ],
@@ -468,12 +470,12 @@ export function supplementMachineModelFixtures(records: ConfigRecord[]): ConfigR
 export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
   feeRate: [{ id: 'resource-fee-rate', value: 5, enabled: true }],
   nonLaborSubject: [
-    { id: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票', enabled: true },
-    { id: 'non-labor-transport-rail', secondarySubject: '交通费', tertiarySubject: '火车票', enabled: true },
-    { id: 'non-labor-transport-taxi', secondarySubject: '交通费', tertiarySubject: '市内交通', enabled: true },
-    { id: 'non-labor-travel-hotel', secondarySubject: '差旅费', tertiarySubject: '住宿费', enabled: true },
-    { id: 'non-labor-travel-meals', secondarySubject: '差旅费', tertiarySubject: '出差补贴', enabled: true },
-    { id: 'non-labor-office-supplies', secondarySubject: '办公费', tertiarySubject: '办公耗材', enabled: true },
+    { id: 'non-labor-transport-flight', secondarySubject: '交通费', tertiarySubject: '机票', description: '项目出差发生的航空交通费用。', enabled: true },
+    { id: 'non-labor-transport-rail', secondarySubject: '交通费', tertiarySubject: '火车票', description: '项目出差发生的铁路交通费用。', enabled: true },
+    { id: 'non-labor-transport-taxi', secondarySubject: '交通费', tertiarySubject: '市内交通', description: '项目活动相关的出租车、公交等市内交通费用。', enabled: true },
+    { id: 'non-labor-travel-hotel', secondarySubject: '差旅费', tertiarySubject: '住宿费', description: '项目出差期间发生的住宿费用。', enabled: true },
+    { id: 'non-labor-travel-meals', secondarySubject: '差旅费', tertiarySubject: '出差补贴', description: '按公司规定发放的项目出差补贴。', enabled: true },
+    { id: 'non-labor-office-supplies', secondarySubject: '办公费', tertiarySubject: '办公耗材', description: '项目使用的日常办公消耗品费用。', enabled: true },
   ],
   hrModel: [...LEGACY_MOCK_HR_MODELS.map(row => ({
     id: row.id, enabled: row.enabled, projectLevel: row.projectLevel, modelVersion: row.modelVersion,
@@ -499,10 +501,10 @@ export const MOCK_CONFIG_DATA: Record<ConfigModuleKey, ConfigRecord[]> = {
     { id: makeId('tosBrand', 5), brand: 'itel', productLine: 'A', allocationRatio: 10 },
   ],
   techModuleDept: [
-    { id: makeId('techMod', 1), module: '摄像头驱动', secondaryDepartment: '软件部', tertiaryDepartment: '驱动开发' },
-    { id: makeId('techMod', 2), module: '显示驱动', secondaryDepartment: '软件部', tertiaryDepartment: '驱动开发' },
-    { id: makeId('techMod', 3), module: '电源管理', secondaryDepartment: '硬件部', tertiaryDepartment: '电源设计' },
-    { id: makeId('techMod', 4), module: '射频调试', secondaryDepartment: '硬件部', tertiaryDepartment: '射频设计' },
+    { id: makeId('techMod', 1), module: '摄像头驱动', primaryDepartment: '研发中心', secondaryDepartment: '软件部', tertiaryDepartment: '驱动开发' },
+    { id: makeId('techMod', 2), module: '显示驱动', primaryDepartment: '研发中心', secondaryDepartment: '软件部', tertiaryDepartment: '驱动开发' },
+    { id: makeId('techMod', 3), module: '电源管理', primaryDepartment: '研发中心', secondaryDepartment: '硬件部', tertiaryDepartment: '电源设计' },
+    { id: makeId('techMod', 4), module: '射频调试', primaryDepartment: '研发中心', secondaryDepartment: '硬件部', tertiaryDepartment: '射频设计' },
   ],
   techTmg: [
     { id: makeId('techTmg', 1), tmg: '影像技术', techDomain: '摄像头', subDomain: '后摄' },
