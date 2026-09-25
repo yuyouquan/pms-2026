@@ -348,7 +348,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
             createdBy: useProjectStore.getState().currentLoginUser,
             estimatedInvestment: sumDepartmentInvestments(form.departmentInvestments),
             milestones,
-            nonLaborInvestment: validateNonLaborInvestment(form.nonLaborInvestment ?? cloneNonLaborInvestment(latest?.nonLaborInvestment), useHrConfigStore.getState().data.nonLaborSubject ?? [], latest?.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []),
+            nonLaborInvestment: validateNonLaborInvestment(form.nonLaborInvestment ?? cloneNonLaborInvestment(latest?.nonLaborInvestment), useHrConfigStore.getState().data.nonLaborSubject ?? [], latest?.nonLaborInvestment, Object.values(useHrConfigStore.getState().data).flat()),
             departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
             createdAt: new Date().toISOString(),
             lockedAt: null,
@@ -394,7 +394,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
 
             const updated: HrTechnicalVersion = {
               ...v,
-              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
+              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, Object.values(useHrConfigStore.getState().data).flat()) : v.nonLaborInvestment,
               batch: permitted.batch === undefined ? v.batch : permitted.batch,
               estimatedInvestment: permitted.estimatedInvestment ?? v.estimatedInvestment,
               milestones: permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones,
@@ -435,7 +435,7 @@ export const useHrTechnicalStore = create<HrTechnicalState & HrTechnicalActions>
             return normalizeHrEditedVersion({
               ...v,
               milestones: permittedMilestones ? { ...v.milestones, ...permittedMilestones } : v.milestones,
-              nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
+              nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, Object.values(useHrConfigStore.getState().data).flat()) : v.nonLaborInvestment,
               estimatedInvestment: Math.round(newEstimatedTotal * 10) / 10,
               departmentPhaseRatios: resourceRatiosAfterDepartmentWrite('technical', v, departmentInvestments),
               departmentInvestments,

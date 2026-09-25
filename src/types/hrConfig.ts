@@ -27,7 +27,8 @@ export interface ConfigColumnDef {
   /** 是否可编辑 */
   editable?: boolean
   /** 输入类型 */
-  inputType?: 'text' | 'number' | 'select'
+  inputType?: 'text' | 'textarea' | 'number' | 'select'
+  required?: boolean
   /** 下拉选项（inputType === 'select' 时使用） */
   options?: { value: string; label: string }[]
   /** 对齐方式 */

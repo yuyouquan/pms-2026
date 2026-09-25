@@ -39,6 +39,6 @@ export function exportResourceVersion(projectName: string, version: ResourceVers
     {sheetName:'里程碑',rows:milestones,columns:[{key:'field',title:'节点'},{key:'value',title:'时间'}]},
     {sheetName:'部门预估投入',rows:departments,columns:[{key:'primaryDepartment',title:'一级部门'},{key:'secondaryDepartment',title:'二级部门'},{key:'estimatedInvestment',title:'合计（人月）'},...phaseColumns]},
     {sheetName:'月度人力投入',rows:view.rows.map(row=>({...row,...row.monthlyData})),columns:[{key:'primaryDepartment',title:'一级部门'},{key:'secondaryDepartment',title:'二级部门'},...view.months.map(month=>({key:month,title:month+'（人月）'}))]},
-    {sheetName:'非人力投入',rows:nonLaborRows,columns:[{key:'secondaryDepartment',title:'二级部门'},{key:'tertiaryDepartment',title:'三级部门'},{key:'secondarySubject',title:'二级科目'},{key:'tertiarySubject',title:'三级科目'},{key:'estimatedInvestment',title:`合计（${nonLaborUnit}）`},...moneyMonths.map(month=>({key:month,title:`${month}（${nonLaborUnit}）`}))]},
+    {sheetName:'非人力投入',rows:nonLaborRows,columns:[{key:'primaryDepartment',title:'一级部门'},{key:'secondaryDepartment',title:'二级部门'},{key:'tertiaryDepartment',title:'三级部门'},{key:'secondarySubject',title:'二级科目'},{key:'tertiarySubject',title:'三级科目'},{key:'estimatedInvestment',title:`合计（${nonLaborUnit}）`},...moneyMonths.map(month=>({key:month,title:`${month}（${nonLaborUnit}）`}))]},
   ],`${projectName}-${BUDGET_TYPE_LABELS[version.budgetType]}-${version.versionNumber}-${exportTimestamp()}.xlsx`)
 }

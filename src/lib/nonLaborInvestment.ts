@@ -6,19 +6,27 @@ export const cloneNonLaborInvestment = (value?: NonLaborInvestment): NonLaborInv
   ? { ...value, items: value.items.map(item => ({ ...item, secondaryDepartment: item.secondaryDepartment ?? '', tertiaryDepartment: item.tertiaryDepartment ?? '', monthlyAmounts: { ...item.monthlyAmounts } })) }
   : emptyNonLaborInvestment()
 
-export const nonLaborItemKey = (item: Pick<NonLaborInvestmentItem, 'secondaryDepartment' | 'tertiaryDepartment' | 'secondarySubject' | 'tertiarySubject'>): string =>
-  JSON.stringify([item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject].map(value => (value ?? '').trim()))
+export const nonLaborItemKey = (item: Pick<NonLaborInvestmentItem, 'primaryDepartment' | 'secondaryDepartment' | 'tertiaryDepartment' | 'secondarySubject' | 'tertiarySubject'>): string =>
+  JSON.stringify([item.primaryDepartment, item.secondaryDepartment, item.tertiaryDepartment, item.secondarySubject, item.tertiarySubject].map(value => (value ?? '').trim()))
 
 export function nonLaborDepartmentPairs(records: readonly ConfigRecord[]) {
-  const pairs = new Map<string, { secondaryDepartment: string; tertiaryDepartment: string }>()
+  const pairs = new Map<string, { primaryDepartment?: string; secondaryDepartment: string; tertiaryDepartment: string }>()
   for (const row of records) {
     const secondaryDepartment = String(row.secondaryDepartment ?? '').trim()
     const tertiaryDepartment = String(row.tertiaryDepartment ?? '').trim()
-    if (row.enabled !== false && secondaryDepartment && tertiaryDepartment) {
-      pairs.set(JSON.stringify([secondaryDepartment, tertiaryDepartment]), { secondaryDepartment, tertiaryDepartment })
+    if (row.enabled === false || !secondaryDepartment || !tertiaryDepartment) continue
+    const primary = String(row.primaryDepartment ?? '').trim()
+    const parents = primary ? [primary] : [...new Set(records.filter(parent => parent.enabled !== false && parent.secondaryDepartment === secondaryDepartment && parent.primaryDepartment).map(parent => String(parent.primaryDepartment).trim()))]
+    for (const primaryDepartment of parents.length ? parents : [undefined]) {
+      pairs.set(JSON.stringify([primaryDepartment, secondaryDepartment, tertiaryDepartment]), { ...(primaryDepartment ? { primaryDepartment } : {}), secondaryDepartment, tertiaryDepartment })
     }
   }
   return [...pairs.values()]
+}
+
+export function nonLaborSubjectDescription(item: Pick<NonLaborInvestmentItem, 'subjectId' | 'subjectDescription'>, subjects: readonly ConfigRecord[]): string {
+  const current = subjects.find(subject => subject.id === item.subjectId)
+  return String(current ? current.description ?? '' : item.subjectDescription ?? '').trim() || '暂无科目说明'
 }
 
 export const formatNonLaborAmount = (amount: number): string => amount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -48,20 +56,21 @@ export function validateNonLaborInvestment(value: NonLaborInvestment, subjects: 
   const keys = new Set<string>(), ids = new Set<string>()
   const departments = nonLaborDepartmentPairs(departmentRecords)
   for (const item of result.items) {
+    if (item.primaryDepartment !== undefined) item.primaryDepartment = item.primaryDepartment.trim()
     item.secondaryDepartment = item.secondaryDepartment.trim()
     item.tertiaryDepartment = item.tertiaryDepartment.trim()
     item.secondarySubject = item.secondarySubject.trim()
     item.tertiarySubject = item.tertiarySubject.trim()
     const key = nonLaborItemKey(item)
-    if (keys.has(key)) throw new Error('同一版本中的二级部门、三级部门、二级科目和三级科目组合不能重复')
+    if (keys.has(key)) throw new Error('同一版本中的一级部门、二级部门、三级部门、二级科目和三级科目组合不能重复')
     keys.add(key)
     if (!item.id || ids.has(item.id)) throw new Error('非人力投入行标识重复')
     ids.add(item.id)
-    const matchesDepartment = (row: Pick<NonLaborInvestmentItem, 'secondaryDepartment' | 'tertiaryDepartment'>) =>
-      row.secondaryDepartment === item.secondaryDepartment && row.tertiaryDepartment === item.tertiaryDepartment
+    const matchesDepartment = (row: Pick<NonLaborInvestmentItem, 'primaryDepartment' | 'secondaryDepartment' | 'tertiaryDepartment'>) =>
+      (row.primaryDepartment ?? '') === (item.primaryDepartment ?? '') && row.secondaryDepartment === item.secondaryDepartment && row.tertiaryDepartment === item.tertiaryDepartment
     const retainedDepartment = previous?.items.some(row => row.id === item.id && matchesDepartment(row))
     if (!item.secondaryDepartment || !item.tertiaryDepartment || (!departments.some(matchesDepartment) && !retainedDepartment)) {
-      throw new Error('请选择有效的二级部门和对应三级部门')
+      throw new Error('请选择有效的一级部门、二级部门和对应三级部门')
     }
     const matches = (row: { subjectId?: string; id: string; secondarySubject?: unknown; tertiarySubject?: unknown }) =>
       (row.subjectId ?? row.id) === item.subjectId && row.secondarySubject === item.secondarySubject && row.tertiarySubject === item.tertiarySubject
@@ -84,6 +93,7 @@ export function validateNonLaborSubjects(records: readonly ConfigRecord[]): void
   for (const record of records) {
     const secondary = String(record.secondarySubject ?? '').trim()
     const tertiary = String(record.tertiarySubject ?? '').trim()
+    if (String(record.description ?? '').length > 500) throw new Error('科目说明最多 500 字')
     if (!secondary || !tertiary) throw new Error('请输入二级科目和三级科目')
     const key = secondary + '\u0000' + tertiary
     if (pairs.has(key)) throw new Error('该二级科目下已存在相同三级科目')

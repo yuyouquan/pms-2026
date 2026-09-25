@@ -79,7 +79,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
           const opt = col.options.find(o => o.value === String(value))
           return <Tag style={{ marginInlineEnd: 0 }}>{opt?.label ?? String(value)}</Tag>
         }
-        return String(value)
+        return col.inputType === 'textarea' ? <span style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{String(value)}</span> : String(value)
       },
     }))
 

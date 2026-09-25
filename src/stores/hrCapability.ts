@@ -306,7 +306,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
           estimatedInvestment,
           projectStartTime: form.projectStartTime,
           projectEndTime: form.projectEndTime,
-          nonLaborInvestment: validateNonLaborInvestment(form.nonLaborInvestment ?? cloneNonLaborInvestment(getHrVersionSeed(project.versions, form.budgetType)?.nonLaborInvestment), useHrConfigStore.getState().data.nonLaborSubject ?? [], getHrVersionSeed(project.versions, form.budgetType)?.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []),
+          nonLaborInvestment: validateNonLaborInvestment(form.nonLaborInvestment ?? cloneNonLaborInvestment(getHrVersionSeed(project.versions, form.budgetType)?.nonLaborInvestment), useHrConfigStore.getState().data.nonLaborSubject ?? [], getHrVersionSeed(project.versions, form.budgetType)?.nonLaborInvestment, Object.values(useHrConfigStore.getState().data).flat()),
           departmentInvestments: form.departmentInvestments.map(department => ({ ...department })),
           createdAt: nowISO(),
           lockedAt: null,
@@ -356,7 +356,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
             if (version.id !== versionId) return version
             const permitted = allowedHrVersionUpdates(project, version, updates)
             if (Object.keys(permitted).length === 0) return version
-            if (permitted.nonLaborInvestment) permitted.nonLaborInvestment = validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? [])
+            if (permitted.nonLaborInvestment) permitted.nonLaborInvestment = validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, Object.values(useHrConfigStore.getState().data).flat())
             return normalizeHrEditedVersion({ ...version, ...permitted, operationLogs: [...version.operationLogs, makeLog('edited', useProjectStore.getState().currentLoginUser, permitted.batch !== undefined ? '更新批次' : '编辑版本信息')] }, 'capability')
           }) }
         }))
@@ -369,7 +369,7 @@ export const useHrCapabilityStore = create<HrCapabilityState>()(
         const projects = synchronizeProjects(get().projects.map(project => {
           if (project.id !== projectId) return project
           return { ...project, versions: project.versions.map(version => version.id === versionId && isHrVersionEditable(project, version)
-            ? normalizeHrEditedVersion({ ...version, ...allowedHrVersionUpdates(project, version, dates ?? {}), nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : version.nonLaborInvestment, departmentPhaseRatios: resourceRatiosAfterDepartmentWrite('capability', version, departmentInvestments), departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }, 'capability')
+            ? normalizeHrEditedVersion({ ...version, ...allowedHrVersionUpdates(project, version, dates ?? {}), nonLaborInvestment: nonLaborInvestment ? validateNonLaborInvestment(nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, Object.values(useHrConfigStore.getState().data).flat()) : version.nonLaborInvestment, departmentPhaseRatios: resourceRatiosAfterDepartmentWrite('capability', version, departmentInvestments), departmentInvestments, estimatedInvestment: sumDepartmentInvestments(departmentInvestments), operationLogs: [...version.operationLogs, makeLog('deptUpdated', useProjectStore.getState().currentLoginUser, '更新部门预估投入')] }, 'capability')
             : version) }
         }))
         set({ projects, monthlyInvestments: syncMonthlyInvestments(projects, get().monthlyInvestments) })
