@@ -68,11 +68,11 @@ function expenseChanges(changes: Changes, before: ResourceVersion, after: Resour
   const oldRows = previous?.items ?? [], newRows = current?.items ?? []
   for (const id of new Set([...oldRows, ...newRows].map(row => row.id))) {
     const old = oldRows.find(row => row.id === id), next = newRows.find(row => row.id === id), row = next ?? old!
-    const department = [row.secondaryDepartment, row.tertiaryDepartment].filter(Boolean).join(' / ') || '待填部门'
+    const department = [row.primaryDepartment, row.secondaryDepartment, row.tertiaryDepartment].filter(Boolean).join(' / ') || '待填部门'
     const subject = [row.secondarySubject, row.tertiarySubject].filter(Boolean).join(' / ') || '待填科目'
     const path = `非人力「${department} · ${subject}」`
     if (!old || !next) add(changes, `${path} · 明细`, old ? '已有明细' : undefined, next ? '新增明细' : undefined)
-    for (const key of ['secondaryDepartment', 'tertiaryDepartment', 'secondarySubject', 'tertiarySubject'] as const) add(changes, `${path} · ${labels[key]}`, old?.[key], next?.[key])
+    for (const key of ['primaryDepartment', 'secondaryDepartment', 'tertiaryDepartment', 'secondarySubject', 'tertiarySubject'] as const) add(changes, `${path} · ${labels[key]}`, old?.[key], next?.[key])
     for (const month of new Set([...Object.keys(old?.monthlyAmounts ?? {}), ...Object.keys(next?.monthlyAmounts ?? {})])) add(changes, `${path} · ${month} 金额`, old?.monthlyAmounts[month] ?? 0, next?.monthlyAmounts[month] ?? 0)
   }
 }

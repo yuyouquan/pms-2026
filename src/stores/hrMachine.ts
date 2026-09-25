@@ -294,7 +294,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         }
         if (!isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], versionMeta.projectLevel, versionMeta.hrModelVersion)) throw new Error('请选择已配置七个区间的启用整机人力模型')
         const seed = getHrVersionSeed(sourceProject.versions, budgetType)?.nonLaborInvestment
-        const nonLaborInvestment = validateNonLaborInvestment(versionMeta.nonLaborInvestment ?? cloneNonLaborInvestment(seed), useHrConfigStore.getState().data.nonLaborSubject ?? [], seed, useHrConfigStore.getState().data.techModuleDept ?? [])
+        const nonLaborInvestment = validateNonLaborInvestment(versionMeta.nonLaborInvestment ?? cloneNonLaborInvestment(seed), useHrConfigStore.getState().data.nonLaborSubject ?? [], seed, Object.values(useHrConfigStore.getState().data).flat())
         if (versionMeta.metadata) {
           const project = get().projects.find(item => item.id === projectId)
           const canonical = getHrRegistryProject(project)
@@ -387,7 +387,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
         if (!project || !version || !canEditHrInScope(project)) return
         const allowed = allowedHrVersionUpdates(project, version, updates)
         if (allowed.estimatedInvestment !== undefined && allowed.estimatedInvestment !== version.estimatedInvestment) throw new Error('整机预估投入只读，请修改人力模型')
-        if (allowed.nonLaborInvestment) validateNonLaborInvestment(allowed.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? [])
+        if (allowed.nonLaborInvestment) validateNonLaborInvestment(allowed.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], version.nonLaborInvestment, Object.values(useHrConfigStore.getState().data).flat())
         if ((allowed.projectLevel !== undefined && allowed.projectLevel !== version.projectLevel) || (allowed.levelCoefficient !== undefined && allowed.levelCoefficient !== version.levelCoefficient) || (allowed.hrModelVersion !== undefined && allowed.hrModelVersion !== version.hrModelVersion)) {
           const coefficient = allowed.levelCoefficient ?? version.levelCoefficient
           if (!Number.isFinite(coefficient) || coefficient < 0 || !isHrModelAvailable(useHrConfigStore.getState().data.hrModel ?? [], allowed.projectLevel ?? version.projectLevel, allowed.hrModelVersion ?? version.hrModelVersion)) throw new Error('请选择有效的项目等级、人力模型版本号和等级系数')
@@ -417,7 +417,7 @@ export const useHrMachineStore = create<HrMachineState & HrMachineActions>()(
 
             const updated: HrMachineVersion = {
               ...v,
-              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, useHrConfigStore.getState().data.techModuleDept ?? []) : v.nonLaborInvestment,
+              nonLaborInvestment: permitted.nonLaborInvestment ? validateNonLaborInvestment(permitted.nonLaborInvestment, useHrConfigStore.getState().data.nonLaborSubject ?? [], v.nonLaborInvestment, Object.values(useHrConfigStore.getState().data).flat()) : v.nonLaborInvestment,
               batch: permitted.batch === undefined ? v.batch : permitted.batch,
               estimatedInvestment: permitted.estimatedInvestment ?? v.estimatedInvestment,
               milestones: withMachineDerivedMilestones(permitted.milestones ? { ...v.milestones, ...permitted.milestones } : v.milestones),

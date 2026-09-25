@@ -104,7 +104,7 @@ export default function ConfigEditModal({
                   label={col.label}
                   dependencies={isSecondaryDepartment ? ['primaryDepartment'] : undefined}
                   rules={[
-                    { required: true, message: `${isSelection ? '请选择' : '请输入'}${col.label}` },
+                    { required: col.required !== false, message: `${isSelection ? '请选择' : '请输入'}${col.label}` },
                     ...(isSecondaryDepartment ? [{
                       validator: (_rule: unknown, secondary: unknown) => {
                         if (!secondary || isValidPair(String(form.getFieldValue('primaryDepartment') ?? ''), String(secondary))) {
@@ -134,6 +134,8 @@ export default function ConfigEditModal({
                       showSearch
                       optionFilterProp="label"
                     />
+                  ) : col.inputType === 'textarea' ? (
+                    <Input.TextArea placeholder={`请输入${col.label}`} autoSize={{ minRows: 3, maxRows: 6 }} maxLength={500} showCount />
                   ) : col.inputType === 'number' ? (
                     <InputNumber
                       style={{ width: '100%' }}

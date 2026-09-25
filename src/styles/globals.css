@@ -10020,3 +10020,10 @@ input.ant-input,
   .pms-project-resources .pms-dashboard-eight-metrics { gap: 8px; }
   .pms-project-resources .pms-dashboard-metric { padding: 14px 10px; }
 }
+
+/* Subject help stays available in both editable and readonly expense rows. */
+.pms-non-labor-subject { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pms-non-labor-subject-value { flex: 1; min-width: 0; }
+.pms-non-labor-subject-info { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--pms-text-tertiary); cursor: help; }
+.pms-non-labor-subject-info:hover { color: var(--pms-brand); }
+.pms-non-labor-subject-info:focus-visible { outline: 2px solid var(--pms-brand); outline-offset: 1px; border-radius: 4px; }

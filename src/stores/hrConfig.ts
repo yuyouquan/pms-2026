@@ -76,6 +76,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
         if (moduleKey === 'nonLaborSubject') {
           record.secondarySubject = String(record.secondarySubject ?? '').trim()
           record.tertiarySubject = String(record.tertiarySubject ?? '').trim()
+          record.description = String(record.description ?? '').trim()
           validateNonLaborSubjects([...(s.data.nonLaborSubject ?? []), record])
         }
         const newRecord = moduleKey === 'hrModel'
@@ -96,6 +97,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
         const records = s.data[moduleKey] ?? []
         if (moduleKey === 'nonLaborSubject') {
           values = { ...values }
+          if ('description' in values) values.description = String(values.description ?? '').trim()
           if ('secondarySubject' in values) values.secondarySubject = String(values.secondarySubject ?? '').trim()
           if ('tertiarySubject' in values) values.tertiarySubject = String(values.tertiarySubject ?? '').trim()
           validateNonLaborSubjects(records.map(record => record.id === recordId ? { ...record, ...values } : record))
@@ -143,7 +145,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
         const combined = [...(s.data[moduleKey] ?? [])]
         records.forEach(record => {
           const normalized = moduleKey === 'nonLaborSubject'
-            ? { ...record, secondarySubject: String(record.secondarySubject ?? '').trim(), tertiarySubject: String(record.tertiarySubject ?? '').trim() } : record
+            ? { ...record, description: String(record.description ?? '').trim(), secondarySubject: String(record.secondarySubject ?? '').trim(), tertiarySubject: String(record.tertiarySubject ?? '').trim() } : record
           combined.push(moduleKey === 'hrModel' ? inheritModelVersionStatus(combined, normalized) : normalized)
         })
         if (moduleKey === 'nonLaborSubject') validateNonLaborSubjects(combined)
@@ -166,6 +168,16 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       merge: (persisted, current) => {
         const saved = (persisted ?? {}) as Partial<HrConfigState>
         const data = { ...current.data, ...saved.data }
+        // Supplement only missing fields on unchanged shipped configuration rows.
+        for (const key of ['techModuleDept', 'nonLaborSubject'] as const) {
+          data[key] = data[key].map(row => {
+            const seed = MOCK_CONFIG_DATA[key].find(item => item.id === row.id && (key === 'techModuleDept'
+              ? item.secondaryDepartment === row.secondaryDepartment && item.tertiaryDepartment === row.tertiaryDepartment
+              : item.secondarySubject === row.secondarySubject && item.tertiarySubject === row.tertiarySubject))
+            const field = key === 'techModuleDept' ? 'primaryDepartment' : 'description'
+            return seed && row[field] === undefined ? { ...row, [field]: seed[field] } : row
+          })
+        }
         data.hrModel = refreshMachineModelFixtures(data.hrModel ?? [])
         return { ...current, data: JSON.stringify(data) === JSON.stringify(current.data) ? current.data : data }
       },
