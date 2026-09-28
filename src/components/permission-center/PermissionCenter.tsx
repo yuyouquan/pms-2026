@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type Key } from 'react'
 import { Button, Empty, Input, Modal, Space, Tooltip, Tree } from 'antd'
 import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
 import type { DataNode } from 'antd/es/tree'
-import { PERMISSION_MENUS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
+import { SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
 import { useMenuPermission, usePermissionStore } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
@@ -12,6 +12,7 @@ import { CollapsibleSidebarShell } from '@/components/shared/CollapsibleWorkspac
 import type { PermissionCenterRole, PermissionMenuId } from '@/types/permissionCenter'
 import PolicyEditor from '@/components/permission-center/PolicyEditor'
 import RoleForm from '@/components/permission-center/RoleForm'
+import { buildPermissionMenuTree, CONFIGURABLE_PERMISSION_MENUS, getMenuGroupKeys, type PermissionMenuNode } from '@/components/permission-center/menuTree'
 import styles from '@/components/permission-center/PermissionCenter.module.css'
 
 export default function PermissionCenter() {
@@ -25,7 +26,7 @@ export default function PermissionCenter() {
   const [roleCollapsed, setRoleCollapsed] = useState(false)
   const [narrow, setNarrow] = useState(false)
   const [roleExpanded, setRoleExpanded] = useState<Key[]>(() => model?.groups.map(group => group.id) ?? [])
-  const [menuExpanded, setMenuExpanded] = useState<Key[]>(() => [...new Set(PERMISSION_MENUS.map(menu => menu.category))])
+  const [menuExpanded, setMenuExpanded] = useState<Key[]>(() => getMenuGroupKeys(buildPermissionMenuTree()))
   const [formRole, setFormRole] = useState<PermissionCenterRole | 'new' | null>(null)
   const [conditionDirty, setConditionDirty] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
@@ -41,7 +42,7 @@ export default function PermissionCenter() {
     return () => media.removeEventListener('change', adapt)
   }, [])
   const role = model?.roles.find(role => role.id === roleId) ?? model?.roles[0]
-  const menu = PERMISSION_MENUS.find(menu => menu.id === menuId)
+  const menu = CONFIGURABLE_PERMISSION_MENUS.find(menu => menu.id === menuId)
   const navigate = (action: () => void) => useUiStore.getState().navigateWithEditGuard(() => {
     setConditionDirty(false); setFormDirty(false); setDraft(false); setEditorEpoch(value => value + 1); action()
   }, false)
@@ -51,11 +52,12 @@ export default function PermissionCenter() {
     const roles = model.roles.filter(role => role.groupId === group.id && `${group.name} ${role.name}`.toLowerCase().includes(roleSearch.toLowerCase()))
     return roles.length ? [{ key: group.id, title: title(group.name), selectable: false, children: roles.map(role => ({ key: role.id, title: title(role.name), isLeaf: true })) }] : []
   })
-  const categories = [...new Set(PERMISSION_MENUS.map(menu => menu.category))]
-  const menuTree: DataNode[] = categories.flatMap(category => {
-    const menus = PERMISSION_MENUS.filter(menu => menu.category === category && `${category} ${menu.label}`.toLowerCase().includes(menuSearch.toLowerCase()))
-    return menus.length ? [{ key: category, title: title(category), selectable: false, children: menus.map(menu => ({ key: menu.id, title: title(menu.label), isLeaf: true })) }] : []
-  })
+  const menuNodes = buildPermissionMenuTree(menuSearch)
+  const toTreeData = (nodes: PermissionMenuNode[]): DataNode[] => nodes.map(node => ({
+    key: node.key, title: title(node.label), isLeaf: node.isLeaf, selectable: node.isLeaf,
+    ...(node.children ? { children: toTreeData(node.children) } : {}),
+  }))
+  const menuTree = toTreeData(menuNodes)
   const closeForm = () => navigate(() => setFormRole(null))
   const deleteRole = () => {
     if (!role) return
@@ -90,9 +92,9 @@ export default function PermissionCenter() {
             <div className={styles.menuNavigationTitle}>功能菜单</div>
             <Input className={styles.search} prefix={<SearchOutlined />} placeholder="搜索菜单" aria-label="搜索菜单" value={menuSearch} onChange={event => setMenuSearch(event.target.value)} allowClear />
             <div className={styles.menuTree}>
-              {menuTree.length ? <Tree blockNode treeData={menuTree} selectedKeys={[menuId]} expandedKeys={menuSearch ? menuTree.map(node => node.key) : menuExpanded}
+              {menuTree.length ? <Tree blockNode treeData={menuTree} selectedKeys={[menuId]} expandedKeys={menuSearch.trim() ? getMenuGroupKeys(menuNodes) : menuExpanded}
                 onClick={(_, node) => { if (!node.isLeaf) setMenuExpanded(previous => previous.includes(node.key) ? previous.filter(key => key !== node.key) : [...previous, node.key]) }}
-                onExpand={setMenuExpanded} onSelect={keys => { const selected = PERMISSION_MENUS.find(menu => menu.id === keys[0]); if (selected) navigate(() => setMenuId(selected.id)) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到菜单" />}
+                onExpand={setMenuExpanded} onSelect={keys => { const selected = CONFIGURABLE_PERMISSION_MENUS.find(menu => menu.id === keys[0]); if (selected) navigate(() => setMenuId(selected.id)) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到菜单" />}
             </div>
           </nav>
           <div className={styles.policyPane}>
