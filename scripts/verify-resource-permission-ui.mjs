@@ -101,7 +101,8 @@ for (const action of actions.filter(action => action !== 'view')) {
   assert.equal(props.setupReadOnly, action !== 'createVersion')
   assert.equal(tree.find(node => node.type === 'ResourceVersionViews').props.readOnly, action !== 'laborEdit')
   for (const [permission, label] of Object.entries({ createVersion: '新建版本', lockVersion: '锁定', setOfficialVersion: '取消设置为正式版本', deleteVersion: '删除', export: '导出版本' })) assert.equal(!!button(tree, label), action === permission, `${action}: ${label}`)
-  assert.ok(button(tree, '版本操作日志'))
+  assert.ok(button(tree, '查看操作日志'))
+  assert.ok(!button(tree, '版本操作日志'), 'version context does not duplicate the audit entry')
 }
 for (const source of ['locked', 'linked']) {
   reset()
@@ -143,6 +144,20 @@ reset(); defer = true
 button(renderWorkspace(), '查看操作日志').props.onClick()
 granted.delete('view'); pending()
 assert.equal(hooks[1], undefined, 'pending log dialog rechecks resource view')
+reset()
+current.projects[0].resourceOperationLogs = [
+  { id: 'edit', versionId: 'v1', versionNumber: 'V0.1', budgetType, action: '修改版本', changes: [] },
+  { id: 'deleted', versionId: 'removed', versionNumber: 'V0.2', budgetType, action: '删除版本', changes: [] },
+  { id: 'other-type', versionId: 'annual', versionNumber: 'V0.1', budgetType: 'annual', action: '创建版本', changes: [] },
+]
+button(renderWorkspace(), '查看操作日志').props.onClick()
+let logDialog = renderWorkspace().find(node => node.type === 'LogDialog')
+assert.equal(logDialog.props.versionId, undefined, 'top entry opens every version by default')
+assert.deepEqual(logDialog.props.logs.map(log => log.id), ['edit', 'deleted', 'created-v1'])
+current.projects[0].versions = []
+assert.ok(button(renderWorkspace(), '查看操作日志'), 'audit remains available after every version is deleted')
+logDialog = renderWorkspace().find(node => node.type === 'LogDialog')
+assert.deepEqual(logDialog.props.logs.map(log => log.id), ['edit', 'deleted'])
 console.log('PASS workspace independent actions, logs, monthly labor, locked/linked readonly, deferred revocation and fresh export data')
 
 reset()

@@ -100,9 +100,20 @@ export function resourceVersionChanges(before?: ResourceVersion, after?: Resourc
   }
   return changes
 }
+/** Legacy versions carry creation metadata even when no durable audit exists yet. */
+export function resourceCreationLog(version: ResourceVersion): ResourceOperationLog {
+  return {
+    id: `created-${version.id}`, versionId: version.id, versionNumber: version.versionNumber, budgetType: version.budgetType,
+    operator: version.createdBy || '未知', timestamp: version.createdAt, action: '创建版本',
+    changes: [{ field: '版本号', before: '', after: version.versionNumber }],
+  }
+}
 export function appendResourceOperation<P extends ResourceProject>(project: P, version: ResourceVersion, action: string, changes: Changes): P {
   if (!changes.length) return project
-  return { ...project, resourceOperationLogs: [...(project.resourceOperationLogs ?? []), {
+  const saved = project.resourceOperationLogs ?? []
+  const creation = !/创建|复制/.test(action) && !saved.some(log => log.versionId === version.id && /创建|复制/.test(log.action))
+    ? [resourceCreationLog(version)] : []
+  return { ...project, resourceOperationLogs: [...saved, ...creation, {
     id: `resource-log-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`, versionId: version.id, versionNumber: version.versionNumber,
     budgetType: version.budgetType, operator: useProjectStore.getState().currentLoginUser, timestamp: new Date().toISOString(), action, changes,
   }] }

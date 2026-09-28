@@ -9712,7 +9712,9 @@ input.ant-input,
 .pms-resource-audit-title { display: flex; align-items: center; gap: 8px; }
 .pms-resource-audit-title > .anticon { color: var(--pms-brand); }
 .pms-resource-audit-title small { margin-left: 4px; font-size: 12px; color: var(--pms-text-secondary); font-weight: 400; }
-.pms-resource-audit-toolbar { display: flex; gap: 10px; margin-top: 16px; }
+.pms-resource-audit-modal.ant-modal .ant-modal-header { margin-bottom: 0; }
+.pms-resource-audit-modal.ant-modal .ant-modal-body { padding-top: 16px; }
+.pms-resource-audit-toolbar { display: flex; gap: 10px; }
 .pms-resource-audit-toolbar > .ant-select { width: 190px; flex: 0 0 190px; }
 .pms-resource-audit-toolbar > .ant-input-affix-wrapper { flex: 1; min-width: 0; }
 .pms-resource-audit-summary { display: flex; justify-content: space-between; gap: 12px; margin: 12px 0; color: var(--pms-text-secondary); font-size: 12px; }
@@ -10027,3 +10029,14 @@ input.ant-input,
 .pms-non-labor-subject-info { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--pms-text-tertiary); cursor: help; }
 .pms-non-labor-subject-info:hover { color: var(--pms-brand); }
 .pms-non-labor-subject-info:focus-visible { outline: 2px solid var(--pms-brand); outline-offset: 1px; border-radius: 4px; }
+
+/* Version actions share a quiet icon treatment; deletion turns red on interaction. */
+.pms-resource-version-actions .ant-btn-text.ant-btn-dangerous:not(:disabled) {
+  color: var(--pms-text-primary) !important;
+  border-color: transparent !important;
+  box-shadow: none;
+}
+.pms-resource-version-actions .ant-btn-text.ant-btn-dangerous:not(:disabled):is(:hover, :focus-visible) {
+  color: var(--danger) !important;
+  background: #fff1f0;
+}
