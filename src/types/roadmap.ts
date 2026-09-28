@@ -193,6 +193,7 @@ export interface RoadmapStoreState {
   filters: RoadmapFilterCondition[]
   columnOrder: RoadmapColumnKey[]
   columnOrderByView: Record<RoadmapViewMode, RoadmapColumnKey[]>
+  columnWidths: Partial<Record<RoadmapColumnKey, number>>
   visibleColumns: RoadmapColumnKey[]
   visibleColumnsByView: Record<RoadmapViewMode, RoadmapColumnKey[]>
   sort: RoadmapSortState
@@ -277,6 +278,7 @@ export interface RoadmapStoreActions {
   setProductTypeFilter: (productType: 'all' | RoadmapProductType) => void
   setFilters: (filters: RoadmapFilterCondition[]) => void
   setColumnSettings: (value: SortableColumnSettingsValue<RoadmapColumnKey>) => void
+  setColumnWidth: (key: RoadmapColumnKey, width: number) => void
   setVisibleColumns: (columns: RoadmapColumnKey[]) => void
   setSort: (sort: RoadmapSortState) => void
   setSelectedConflictKey: (key: string | null) => void

@@ -595,9 +595,9 @@ registerAssertion('roadmap product-line and planned-project validation enforce o
   if (validation.isExactRoadmapDuplicate(validInput, existing, 'planned-1')) throw new Error('edit duplicate check did not exclude self')
 
   const missingRequired = { ...validInput }
-  delete missingRequired.chipCode
+  delete missingRequired.firstSaleTosVersionId
   const requiredErrors = validation.validatePlannedProject(missingRequired, [], undefined, validTosIds)
-  if (!requiredErrors.chipCode || requiredErrors.remark) throw new Error(`required-field errors are wrong: ${JSON.stringify(requiredErrors)}`)
+  if (!requiredErrors.firstSaleTosVersionId || requiredErrors.chipCode || requiredErrors.remark) throw new Error(`required-field errors are wrong: ${JSON.stringify(requiredErrors)}`)
 
   const badBrandLineErrors = validation.validatePlannedProject({ ...validInput, productLine: '示例系列H' }, [], undefined, validTosIds)
   if (!badBrandLineErrors.productLine) throw new Error('brand/product-line mismatch must be rejected')
@@ -1150,7 +1150,7 @@ registerAssertion('roadmap setters sanitize columns and persistence excludes tra
   if (store.getState().visibleColumns.length < 1) throw new Error('at least one business field must remain visible')
   store.getState().setSelectedConflictKey('DEMO017|Android 16|新品')
   const persisted = storeModule.partializeRoadmapState(store.getState())
-  const expectedKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId', 'brandFilter', 'productTypeFilter', 'filters', 'columnOrder', 'columnOrderByView', 'visibleColumns', 'visibleColumnsByView', 'sort']
+  const expectedKeys = ['plannedProjects', 'tosVersions', 'changeLogs', 'viewMode', 'selectedTosVersionId', 'brandFilter', 'productTypeFilter', 'filters', 'columnOrder', 'columnWidths', 'columnOrderByView', 'visibleColumns', 'visibleColumnsByView', 'sort']
   if (JSON.stringify(Object.keys(persisted)) !== JSON.stringify(expectedKeys)) throw new Error(`persistence boundary is wrong: ${Object.keys(persisted)}`)
   if ('selectedConflictKey' in persisted || 'normalProjects' in persisted || 'conflictGroups' in persisted) throw new Error('transient/derived state was persisted')
 })
@@ -1621,7 +1621,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     { id: 'tos-16-3', name: 'tOS 16.3', major: 16, minor: 3, targets: [], createdAt: '', updatedAt: '' },
   ]
   const normal = adapter.adaptNormalProject({
-    id: 'normal-1', name: 'DEMO017-DEMOCHIP001_DEMOBOARD016', type: '整机-手机', status: '在研',
+    id: 'normal-1', name: 'DEMO017-DEMOCHIP001_DEMOBOARD016', type: '整机-手机', secondaryCategory: '整机-手机', status: '在研',
     androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', currentTosVersionId: 'tos-16-3', tosVersion: 'tOS16.3',
     projectCode: ' DEMO017 ', model: 'legacy-code', brand: '示例品牌A', productLine: '示例系列B', productSeries: '示例系列B 60', marketName: '示例系列B 60',
     productType: '升级', platform: 'explicit-platform', cpu: 'legacy-cpu', startRam: '8GB', memory: '6GB+128GB', versionType: 'Full',
@@ -1644,6 +1644,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
   const switched = adapter.adaptNormalProject({
     ...normal,
     id: 'normal-switch',
+    secondaryCategory: '整机-手机',
     source: undefined,
     readOnly: undefined,
     type: '整机-PAD',
@@ -1689,8 +1690,8 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
     type: '整机产品项目',
     secondaryCategory: undefined,
     currentTosVersionId: 'tos-16-3',
-  }, versions)?.machineProjectType !== '整机-手机') {
-    throw new Error('normal adapter did not apply the default phone secondary category')
+  }, versions) !== null) {
+    throw new Error('normal adapter invented a missing required secondary category')
   }
 
   const plannedInput = {
@@ -1707,6 +1708,7 @@ registerAssertion('normal and planned roadmap adapters enforce source boundaries
       ...normal,
       id: 'normal-merge',
       type: '整机-手机',
+      secondaryCategory: '整机-手机',
       currentTosVersionId: normal.firstSaleTosVersionId,
     }, { ...normal, ...plannedInput, name: plannedInput.displayName, type: '整机产品项目', projectAttribute: 'roadmap', secondaryCategory: plannedInput.machineProjectType }],
     [plannedInput],
@@ -1723,7 +1725,7 @@ registerAssertion('normal adapter rejects invalid business values without invent
     { id: 'tos-17-2', name: 'tOS 17.2', major: 17, minor: 2, targets: [], createdAt: '', updatedAt: '' },
   ]
   const validNormal = {
-    id: 'normal-valid', name: 'DEMO017-DEMOCHIP001_DEMOBOARD016', type: '整机-手机', status: '在研',
+    id: 'normal-valid', name: 'DEMO017-DEMOCHIP001_DEMOBOARD016', type: '整机-手机', secondaryCategory: '整机-手机', status: '在研',
     androidVersion: 'Android 16', firstSaleTosVersionId: 'tos-17-2', projectCode: 'DEMO017',
     brand: '示例品牌A', productLine: '示例系列B', productSeries: '示例系列B 60', marketName: '示例系列B 60',
     productType: '新品', platform: 'G100', startRam: '8GB', versionType: 'Full',
@@ -1732,7 +1734,7 @@ registerAssertion('normal adapter rejects invalid business values without invent
   const invalidCases = [
     ['missing product type', { productType: undefined }],
     ['invalid Android version', { androidVersion: 'Android 19', operatingSystem: 'Android 16' }],
-    ['invalid brand', { brand: 'Unknown' }],
+    ['missing secondary category', { secondaryCategory: '' }],
     ['missing project code', { projectCode: null, model: null, name: null }],
   ]
   for (const [label, override] of invalidCases) {
@@ -3488,7 +3490,9 @@ registerAssertion('two-digit roadmap contracts stay canonical end to end', () =>
   }
 
   const card = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'), 'utf8')
-  if (!card.includes('row.marketName?.trim()') || card.includes('pms-roadmap-evolution-source-tag')) {
+  const cardModule = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapProjectCard.tsx'))
+  if (cardModule.formatEvolutionCardTitle(roadmapRow({ source: 'planned', marketName: '示例品牌A-示例市场' })) !== '示例市场（DEMO017）'
+    || card.includes('pms-roadmap-evolution-source-tag')) {
     throw new Error('evolution card title/source layout is stale')
   }
   if (!card.includes("column.key === 'launchDate' && row.launchEstimated")) {
@@ -3834,7 +3838,7 @@ registerAssertion('tOS roadmap normalizes the chip-code domain and migrates lega
     periodStartDate: '', periodEndDate: '', targets: [], createdAt: '', updatedAt: '',
   }]
   const normal = adapter.adaptNormalProject({
-    id: 'normal-chip', name: 'DEMO017-DEMOCHIP001_DEMOBOARD016', type: '整机-手机', status: '在研',
+    id: 'normal-chip', name: 'DEMO017-DEMOCHIP001_DEMOBOARD016', type: '整机-手机', secondaryCategory: '整机-手机', status: '在研',
     androidVersion: 'Android 17', firstSaleTosVersionId: '17.2', projectCode: 'DEMO017',
     brand: '示例品牌A', productLine: '示例系列B', productSeries: '示例系列B 90', marketName: '示例系列B 90',
     productType: '新品', platform: 'DEMOSOC003', cpu: 'DEMOSOC003', chipPlatform: '示例平台A', startRam: '8GB',
@@ -3846,6 +3850,7 @@ registerAssertion('tOS roadmap normalizes the chip-code domain and migrates lega
   const noChipFallback = adapter.adaptNormalProject({
     ...normal,
     id: 'normal-no-chip-fallback',
+    secondaryCategory: '整机-手机',
     source: undefined,
     readOnly: undefined,
     type: '整机-手机',

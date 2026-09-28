@@ -22,6 +22,9 @@ import {
 import { getTemplateSnapshotKey } from '@/lib/projectTemplateCompatibility'
 import { comparePlanVersions } from '@/lib/planVersioning'
 import { formatTosSnapshot } from '@/lib/enumConsumers'
+import { formatMarketName } from '@/lib/marketNameDisplay'
+import { compareIsoDate, compareLocalizedText, compareRam, compareSemanticTos } from '@/lib/roadmapSorting'
+import { normalizeLegacyTosVersionName } from '@/lib/roadmapValidation'
 import {
   getProjectListMatrix,
   isOverdueProjectListDate,
@@ -372,6 +375,134 @@ export interface ProjectSummaryRow extends Record<string, unknown> {
   key: string
   projectId: string
   projectName: string
+}
+
+export type ProjectSummarySortDirection = 'ascend' | 'descend' | null
+export interface ProjectSummarySortState {
+  field: string | null
+  direction: ProjectSummarySortDirection
+  variant?: ProjectListVariant
+}
+
+export function resolveProjectSummarySort(
+  sort: ProjectSummarySortState,
+  visibleKeys: readonly string[],
+  variant?: ProjectListVariant,
+): ProjectSummarySortState {
+  return sort.field && sort.direction && sort.variant === variant && visibleKeys.includes(sort.field)
+    ? sort
+    : { field: null, direction: null, variant }
+}
+
+const NUMERIC_SUMMARY_FIELDS = new Set(['projectCount', 'subprojectCount', 'levelCoefficient'])
+const RAM_SUMMARY_FIELDS = new Set(['startingRam', 'startRam', 'memorySize'])
+const SUMMARY_HIERARCHY_FALLBACKS = {
+  brand: '未配置品牌',
+  productLine: '未配置产品线',
+  productSeries: '未配置产品系列',
+} as const
+
+function summaryHierarchyLabel(row: ProjectSummaryRow, field: keyof typeof SUMMARY_HIERARCHY_FALLBACKS): string {
+  const value = String(row[field] ?? '').trim()
+  return !value || value === '-' || value === '—' ? SUMMARY_HIERARCHY_FALLBACKS[field] : value
+}
+
+function compareProjectSummaryValue(
+  field: string,
+  inputType: ProjectSummaryFieldDefinition['inputType'] | undefined,
+  left: unknown,
+  right: unknown,
+): number {
+  if (NUMERIC_SUMMARY_FIELDS.has(field)) {
+    const parse = (value: unknown) => {
+      const text = String(value ?? '').trim()
+      return /^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null
+    }
+    const leftNumber = parse(left)
+    const rightNumber = parse(right)
+    if (leftNumber !== null && rightNumber !== null) return leftNumber - rightNumber
+    if (leftNumber !== null) return -1
+    if (rightNumber !== null) return 1
+  }
+  if (RAM_SUMMARY_FIELDS.has(field)) return compareRam(left, right)
+  if (/tosVersion/i.test(field)) {
+    const leftVersion = normalizeLegacyTosVersionName(String(left ?? ''))
+    const rightVersion = normalizeLegacyTosVersionName(String(right ?? ''))
+    if (leftVersion && rightVersion) return compareSemanticTos(leftVersion, rightVersion)
+    if (leftVersion) return -1
+    if (rightVersion) return 1
+  }
+  if (inputType === 'date' || /Date$/.test(field) || field.startsWith('milestone::')) {
+    return compareIsoDate(left, right)
+  }
+  return compareLocalizedText(String(left ?? ''), String(right ?? ''))
+}
+
+/** Sort the complete filtered set; machine groups stay contiguous for merged cells. */
+export function sortProjectSummaryRows<T extends ProjectSummaryRow>(
+  rows: readonly T[],
+  field: string | null,
+  direction: ProjectSummarySortDirection,
+  definitions: readonly Pick<ProjectSummaryFieldDefinition, 'key' | 'inputType'>[],
+  options: { machineHierarchy?: boolean; parentField?: string } = {},
+): T[] {
+  if (!field || !direction) return [...rows]
+  const inputType = definitions.find(definition => definition.key === field)?.inputType
+  const factor = direction === 'ascend' ? 1 : -1
+  const seriesCountByKey = new Map<string, number>()
+  const seriesKey = (row: T) => (['brand', 'productLine', 'productSeries'] as const)
+    .map(groupField => summaryHierarchyLabel(row, groupField))
+    .join('\u0000')
+  if (options.machineHierarchy && field === 'projectCount') {
+    rows.forEach(row => {
+      const key = seriesKey(row)
+      seriesCountByKey.set(key, (seriesCountByKey.get(key) ?? 0) + 1)
+    })
+  }
+  const compare = (left: T, right: T) => factor * (
+    options.machineHierarchy && field === 'projectCount'
+      ? (seriesCountByKey.get(seriesKey(left)) ?? 0) - (seriesCountByKey.get(seriesKey(right)) ?? 0)
+      : compareProjectSummaryValue(
+          field,
+          inputType,
+          field === 'marketName' ? formatMarketName(left[field], left.brand) : left[field],
+          field === 'marketName' ? formatMarketName(right[field], right.brand) : right[field],
+        )
+  )
+  const stableSort = (items: readonly T[]) => [...items].sort(compare)
+  if (!options.machineHierarchy) {
+    if (!options.parentField) return stableSort(rows)
+    const groups = new Map<string, T[]>()
+    rows.forEach(row => {
+      const key = String(row[options.parentField!] ?? '')
+      const group = groups.get(key) ?? []
+      group.push(row)
+      groups.set(key, group)
+    })
+    return [...groups.values()]
+      .map(stableSort)
+      .sort((left, right) => compare(left[0], right[0]))
+      .flat()
+  }
+
+  const groupLevels = ['brand', 'productLine', 'productSeries'] as const
+  const sortLevel = (items: readonly T[], level: number): T[] => {
+    if (level === groupLevels.length) return stableSort(items)
+    const groups = new Map<string, T[]>()
+    items.forEach(row => {
+      const key = groupLevels.slice(0, level + 1)
+        .map(groupField => summaryHierarchyLabel(row, groupField))
+        .join('\u0000')
+      const group = groups.get(key) ?? []
+      group.push(row)
+      groups.set(key, group)
+    })
+    return [...groups.values()]
+      .map(group => sortLevel(group, level + 1))
+      .sort((left, right) => compare(left[0], right[0]))
+      .flat()
+  }
+  return sortLevel(rows, 0)
 }
 
 function findProjectTaskDate(

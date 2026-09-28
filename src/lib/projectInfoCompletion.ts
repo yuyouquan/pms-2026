@@ -9,22 +9,12 @@ import type { WorkbenchTodo } from '@/lib/todoAggregation'
 
 export interface MissingProjectInfoField { key: string; label: string }
 
-// These are the required inputs of the former planned-project creation form.
+// Only these fields gate a roadmap project's completion and visibility.
 const ROADMAP_REQUIRED_FIELDS: MissingProjectInfoField[] = [
   { key: 'secondaryCategory', label: '项目二级分类' },
   { key: 'androidVersion', label: '安卓版本' },
   { key: 'productType', label: '产品类型' },
   { key: 'firstSaleTosVersion', label: 'tOS 版本' },
-  { key: 'brand', label: '品牌' },
-  { key: 'productLine', label: '产品线' },
-  { key: 'productSeries', label: '产品系列' },
-  { key: 'marketName', label: '市场名' },
-  { key: 'chipCode', label: '芯片编码' },
-  { key: 'startingRam', label: '起步 RAM' },
-  { key: 'versionType', label: '版本类型' },
-  { key: 'developmentMode', label: '开发模式' },
-  { key: 'str5Date', label: 'STR5 时间' },
-  { key: 'launchDate', label: '上市时间' },
 ]
 
 const isMissing = (value: unknown): boolean => (
@@ -46,7 +36,9 @@ export function getMissingProjectInfoFields(project: ProjectItem): MissingProjec
     (!field.visibleWhen || field.visibleWhen(values))
     && isMissing(getProjectInfoValue(source, field.key))
   )).map(({ key, label }) => ({ key, label }))
-  const fanTrialError = isMachineProjectType(project.type) ? validateFanTrial(values) : null
+  const fanTrialError = isMachineProjectType(project.type) && getProjectAttribute(project) !== 'roadmap'
+    ? validateFanTrial(values)
+    : null
   if (fanTrialError && !missing.some(field => field.key === fanTrialError.fieldKey)) missing.push({ key: fanTrialError.fieldKey, label: fanTrialError.fieldKey === 'fanTrialEnabled' ? '是否粉丝试用' : '粉丝试用国家及试用台数' })
   return missing
 }

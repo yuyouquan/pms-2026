@@ -103,7 +103,7 @@ export default function PlannedProjectModal({
   const androidVersion = Form.useWatch('androidVersion', form)
   const productType = Form.useWatch('productType', form)
   const brand = Form.useWatch('brand', form)
-  const chipCode = Form.useWatch('chipCode', form) || editingProject?.chipCode || ''
+  const chipCode = Form.useWatch('chipCode', form) ?? ''
 
   const tosVersionOptions = useSingleEnumOptions(
     'first-sale-tos',
@@ -128,7 +128,17 @@ export default function PlannedProjectModal({
       : []
     return buildChipOptions(rowsByType, historical)
   }, [editingProject?.chipCode, enumReady, liveChipRow, rowsByType])
-  const selectedChipOptionId = liveChipRow?.id ?? chipOptions.find(option => option.historical)?.value
+  const chipCodeOptions = useMemo(() => {
+    const seen = new Set<string>()
+    return chipOptions.flatMap(option => {
+      const code = option.historical
+        ? editingProject?.chipCode ?? ''
+        : resolveChipRow(rowsByType, option.value)?.chipCode ?? ''
+      if (!code || seen.has(code)) return []
+      seen.add(code)
+      return [{ ...option, value: code }]
+    })
+  }, [chipOptions, editingProject?.chipCode, rowsByType])
   const hasActiveChipCodes = enumReady && rowsByType['chip-mapping'].some(row => row.enabled !== false && Boolean(row.chipCode.trim()))
   const hasInactiveChipCode = Boolean(editingProject?.chipCode && !liveChipRow)
   const preservesHistoricalChipCode = Boolean(
@@ -207,8 +217,8 @@ export default function PlannedProjectModal({
     })
   }
 
-  const handleBrandChange = (nextBrand: RoadmapBrand) => {
-    const nextOptions = getProductLineOptions(nextBrand)
+  const handleBrandChange = (nextBrand: RoadmapBrand | undefined) => {
+    const nextOptions = nextBrand ? getProductLineOptions(nextBrand) : []
     const currentLine = form.getFieldValue('productLine')
     if (!nextOptions.some(option => option === currentLine)) form.setFieldValue('productLine', undefined)
     if (nextOptions.length === 1) form.setFieldValue('productLine', nextOptions[0])
@@ -230,7 +240,7 @@ export default function PlannedProjectModal({
         editingProject?.chipCode.trim()
         && submittedChipCode === editingProject.chipCode.trim(),
       )
-      if (!enumState.rowsByType['chip-mapping'].some(row => row.enabled !== false && Boolean(row.chipCode.trim()))
+      if (submittedChipCode && !enumState.rowsByType['chip-mapping'].some(row => row.enabled !== false && Boolean(row.chipCode.trim()))
         && !preservesExistingChipCode) {
         const chipConfigMessage = '请先在配置中心维护芯片编码'
         form.setFields([{ name: 'chipCode', errors: [chipConfigMessage] }])
@@ -250,13 +260,18 @@ export default function PlannedProjectModal({
       setSubmitting(true)
       const input = {
         ...values,
-        projectCode: values.projectCode.trim(),
-        productSeries: values.productSeries.trim(),
-        marketName: values.marketName.trim(),
-        chipCode: values.chipCode.trim(),
+        projectCode: String(values.projectCode ?? '').trim(),
+        brand: values.brand || '',
+        productLine: values.productLine || '',
+        productSeries: String(values.productSeries ?? '').trim(),
+        marketName: String(values.marketName ?? '').trim(),
+        chipCode: String(values.chipCode ?? '').trim(),
+        startRam: values.startRam || '',
+        versionType: values.versionType || '',
+        developMode: values.developMode || '',
         remark: values.remark?.trim() ?? '',
-        str5Date: values.str5Date.format('YYYY-MM-DD'),
-        launchDate: values.launchDate.format('YYYY-MM-DD'),
+        str5Date: values.str5Date?.format('YYYY-MM-DD') ?? '',
+        launchDate: values.launchDate?.format('YYYY-MM-DD') ?? '',
         actor: currentUser,
       }
       if (onSaveProject) {
@@ -361,7 +376,7 @@ export default function PlannedProjectModal({
                 type="primary"
                 onClick={handleSubmit}
                 loading={submitting}
-                disabled={!enumReady || (!hasActiveChipCodes && !preservesHistoricalChipCode) || duplicateExists || submitting}
+                disabled={!enumReady || duplicateExists || submitting}
               >
                 {editingProject ? '保存修改' : '创建项目'}
               </Button>
@@ -398,8 +413,8 @@ export default function PlannedProjectModal({
               showIcon
               message="暂无可用芯片编码"
               description={preservesHistoricalChipCode
-                ? '可保留当前历史芯片编码并修改其他字段；新建或更换芯片编码前需先完善配置。'
-                : '请先在配置中心维护芯片编码后再保存。'}
+                ? '可保留当前历史芯片编码并修改其他字段；更换芯片编码前需先完善配置。'
+                : '芯片编码可留空；如需填写，请先在配置中心维护芯片编码。'}
             />
           ) : null}
           <Card size="small" title="项目分类与识别" style={sectionStyle}>
@@ -417,7 +432,7 @@ export default function PlannedProjectModal({
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="项目名" name="projectCode" rules={[{ required: true, whitespace: true, message: '请输入项目名' }]}>
+                <Form.Item label="项目名" name="projectCode" rules={projectSpace ? [] : [{ required: true, whitespace: true, message: '请输入项目名' }]}>
                   <Input disabled={projectSpace} placeholder="例如 DEMO017" maxLength={80} autoComplete="off" />
                 </Form.Item>
               </Col>
@@ -480,8 +495,9 @@ export default function PlannedProjectModal({
           <Card size="small" title="产品与版本" style={sectionStyle}>
             <Row gutter={[16, 0]}>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="品牌" name="brand" rules={[{ required: true, message: '请选择品牌' }]}>
+                <Form.Item label="品牌" name="brand">
                   <Select
+                    allowClear
                     placeholder="请选择品牌"
                     onChange={handleBrandChange}
                     options={BRANDS.map(value => ({ label: value, value }))}
@@ -489,20 +505,21 @@ export default function PlannedProjectModal({
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="产品线" name="productLine" rules={[{ required: true, message: '请选择产品线' }]}>
+                <Form.Item label="产品线" name="productLine">
                   <Select
+                    allowClear
                     placeholder={brand ? '请选择产品线' : '请先选择品牌'}
                     options={productLineOptions.map(value => ({ label: value, value }))}
                   />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="产品系列" name="productSeries" rules={[{ required: true, whitespace: true, message: '请输入产品系列' }]}>
-                  <Select showSearch optionFilterProp="label" placeholder="请选择产品系列" options={productSeriesOptions} />
+                <Form.Item label="产品系列" name="productSeries">
+                  <Select allowClear showSearch optionFilterProp="label" placeholder="请选择产品系列" options={productSeriesOptions} />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="市场名" name="marketName" rules={[{ required: true, whitespace: true, message: '请输入市场名' }]}>
+                <Form.Item label="市场名" name="marketName">
                   <Input placeholder="请输入市场名" maxLength={80} />
                 </Form.Item>
               </Col>
@@ -510,14 +527,12 @@ export default function PlannedProjectModal({
                 <Form.Item
                   label="芯片编码"
                   name="chipCode"
-                  getValueProps={() => ({ value: selectedChipOptionId })}
-                  getValueFromEvent={(rowId: string) => resolveChipRow(rowsByType, rowId)?.chipCode || ''}
-                  rules={[{ required: true, message: '请选择芯片编码' }]}
                 >
                   <Select
+                    allowClear
                     showSearch
                     optionFilterProp="label"
-                    options={chipOptions}
+                    options={chipCodeOptions}
                     placeholder={hasActiveChipCodes ? '请选择芯片编码' : '请先在配置中心维护芯片编码'}
                   />
                 </Form.Item>
@@ -531,18 +546,18 @@ export default function PlannedProjectModal({
                 ) : null}
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="起步 RAM" name="startRam" rules={[{ required: true, message: '请选择起步 RAM' }]}>
-                  <Select options={ramOptions} />
+                <Form.Item label="起步 RAM" name="startRam">
+                  <Select allowClear options={ramOptions} />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="版本类型" name="versionType" rules={[{ required: true, message: '请选择版本类型' }]}>
-                  <Select options={versionTypeOptions} />
+                <Form.Item label="版本类型" name="versionType">
+                  <Select allowClear options={versionTypeOptions} />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="开发模式" name="developMode" rules={[{ required: true, message: '请选择开发模式' }]}>
-                  <Select options={developModeOptions} />
+                <Form.Item label="开发模式" name="developMode">
+                  <Select allowClear options={developModeOptions} />
                 </Form.Item>
               </Col>
             </Row>
@@ -551,9 +566,9 @@ export default function PlannedProjectModal({
           <Card size="small" title="时间与备注" style={sectionStyle}>
             <Row gutter={[16, 0]}>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="STR5 时间" required>
+                <Form.Item label="STR5 时间">
                   <Flex align="center" gap={8} wrap={false}>
-                    <Form.Item name="str5Date" noStyle rules={[{ required: true, message: '请选择 STR5 时间' }]}>
+                    <Form.Item name="str5Date" noStyle>
                       <DatePicker format="YYYY-MM-DD" style={{ flex: 1, minWidth: 0 }} placeholder="请选择具体日期" />
                     </Form.Item>
                     <Form.Item name="str5Estimated" valuePropName="checked" noStyle>
@@ -563,10 +578,9 @@ export default function PlannedProjectModal({
                 </Form.Item>
               </Col>
               <Col xs={24} sm={12} md={8} xl={projectSpace ? 4 : 8}>
-                <Form.Item label="上市时间" required>
+                <Form.Item label="上市时间">
                   <Flex align="center" gap={8} wrap={false}>
                     <Form.Item name="launchDate" noStyle dependencies={['str5Date']} rules={[
-                      { required: true, message: '请选择上市时间' },
                       ({ getFieldValue }) => ({ validator: (_, value: Dayjs | undefined) => {
                         const str5 = getFieldValue('str5Date') as Dayjs | undefined
                         return value && str5 && value.isBefore(str5, 'day')
