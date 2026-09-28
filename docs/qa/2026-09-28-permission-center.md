@@ -1,5 +1,7 @@
 # 权限中心验证记录
 
+> 以下保留前序菜单级授权验收历史；当前角色级授权、角色/人员视图与最终测试见 [角色与人员视图验收](2026-09-28-permission-center-role-views.md)。
+
 分支：`codex/feature-permission-config`。基线：`f531a96071465253038ef8499bdc3cabfe865d3c`。
 
 ## 实现范围

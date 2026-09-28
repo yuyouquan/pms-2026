@@ -38,12 +38,12 @@ assert.match(homePage, /<ProjectSpaceAccessBoundary>[\s\S]*?<ProjectSpaceContain
 assert.match(globalContainer, /<PermissionCenter\s/, 'global route mounts the guarded permission-center implementation')
 assert.doesNotMatch(globalContainer, /GlobalPermissionConfig/, 'legacy unguarded global editor is not rendered')
 
-const manager = 'permission-test-manager'
-const policy = { ...createEmptyMenuPolicy('ordinary-manager', 'permission.center'), users: [manager], actions: ['view', 'manage'] }
+const manager = '演示用户02'
+const policy = { ...createEmptyMenuPolicy('ordinary-manager', 'permission.center'), actions: ['view', 'manage'] }
 const model = {
-  version: 1,
+  version: 2,
   groups: [{ id: 'group', name: '普通角色' }],
-  roles: [{ id: 'ordinary-manager', groupId: 'group', name: '权限管理员', description: '', members: [] }],
+  roles: [{ id: 'ordinary-manager', groupId: 'group', name: '权限管理员', description: '', members: [manager], departments: [] }],
   policies: [policy],
 }
 assert.equal(navigation.canAccessMainModule(undefined, manager, 'globalPermission'), false, 'uninitialized authorization fails closed')

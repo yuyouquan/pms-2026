@@ -22,14 +22,14 @@ const oldProjectOnly = { rolesByProject: {}, rolePermissionsByProject: {} }
 store.setState(merge(module.migratePermissionState(oldProjectOnly, 2), fresh), true)
 assert.equal(store.getState().ensurePermissionCenter().ok, true, 'recognized legacy project-only snapshot keeps first global migration')
 assert.equal(module.isGlobalAdmin('演示用户01'), true)
-const legacy = { globalRoles: [{ name: '管理组', members: ['legacy-admin'] }], globalRolePerms: { 管理组: {} } }
+const legacy = { globalRoles: [{ name: '管理组', members: ['演示用户02'] }], globalRolePerms: { 管理组: {} } }
 store.setState(merge(legacy, fresh), true)
 assert.equal(store.getState().ensurePermissionCenter().ok, true)
-assert.equal(module.isGlobalAdmin('legacy-admin'), true)
-assert.equal(module.isGlobalAdmin('演示用户01'), false)
+assert.equal(module.isGlobalAdmin('演示用户02'), false, 'recognized mock legacy global memberships refresh to explicit demo assignments')
+assert.equal(module.isGlobalAdmin('演示用户01'), true)
 const saved = module.partializePermissionState(store.getState())
 store.setState(merge(saved, fresh), true)
-assert.equal(module.isGlobalAdmin('legacy-admin'), true, 'valid new model roundtrip remains authoritative')
+assert.equal(module.isGlobalAdmin('演示用户01'), true, 'valid new model roundtrip remains authoritative')
 // Exercise the actual storage envelope reader, not just migration helpers.
 let raw = null
 const storageMap = new Map([['pms:mock-dataset-version', '2026-09-15-v1']])

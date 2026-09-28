@@ -52,7 +52,7 @@ const projects = types.map((type, index) => ({
   spm: 'unrelated-root-spm', technicalLead: ['owner-2'], fieldValues: { tosVersionProjectManager: ['owner-1'] },
 }))
 store.setState({
-  globalRoles: [{ name: '管理组', members: ['global-admin'] }, { name: '编辑组', members: ['global-editor'] }, { name: '查看组', members: ['global-viewer'] }],
+  globalRoles: [{ name: '管理组', members: ['演示用户01'] }, { name: '编辑组', members: ['演示用户02'] }, { name: '查看组', members: ['演示用户05'] }],
 })
 store.getState().ensureProjectPermissions(projects)
 
@@ -65,9 +65,9 @@ await check('New projects retain derived owners through initializer; ordinary me
     checkKeys(`owner-${index}`, project.id, keys)
     checkKeys(`member-${index}`, project.id, basic)
     checkKeys('nonmember', project.id, [])
-    checkKeys('global-editor', project.id, [])
-    checkKeys('global-viewer', project.id, [])
-    checkKeys('global-admin', project.id, keys)
+    checkKeys('演示用户02', project.id, [])
+    checkKeys('演示用户05', project.id, [])
+    checkKeys('演示用户01', project.id, keys)
     checkKeys(`owner-${(index + 1) % 4}`, project.id, [])
   }
 })

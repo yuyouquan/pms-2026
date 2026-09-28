@@ -16,13 +16,13 @@ const output = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
 }).outputText
 const load = createTypeScriptModuleLoader()
-const { migrateLegacyPermissionCenter, evaluateMenuPermission, createEmptyMenuPolicy } = load(path.resolve('src/lib/permissionCenter.ts'))
+const { evaluateMenuPermission, createEmptyMenuPolicy } = load(path.resolve('src/lib/permissionCenter.ts'))
 const state = {
-  currentLoginUser: '管理员',
-  globalRoles: [{ name: '管理组', members: ['管理员', '第二位管理员'] }, { name: '项目管理员', members: ['普通用户'] }],
+  currentLoginUser: '演示用户01',
+  globalRoles: [{ name: '管理组', members: ['演示用户01', '演示用户07'] }, { name: '项目管理员', members: ['演示用户05'] }],
   projectManagementTab: 'configuration',
 }
-state.permissionCenter = migrateLegacyPermissionCenter(state.globalRoles, {})
+state.permissionCenter = load(path.resolve('src/lib/permissionCenterSeed.ts')).createPermissionCenterSeed()
 const store = selector => selector({ ...state, setProjectManagementTab: value => { state.projectManagementTab = value } })
 let offeredTabs = []
 const mocks = {
@@ -54,7 +54,7 @@ assert.match(admin, /项目配置/)
 assert.match(admin, /配置内容/)
 assert.deepEqual(offeredTabs, ['view', 'configuration'])
 
-for (const user of ['普通用户']) {
+for (const user of ['演示用户05']) {
   state.currentLoginUser = user
   for (const tab of ['view', 'configuration']) {
     state.projectManagementTab = tab
@@ -65,7 +65,7 @@ for (const user of ['普通用户']) {
   }
 }
 
-state.currentLoginUser = '第二位管理员'
+state.currentLoginUser = '演示用户07'
 state.projectManagementTab = 'configuration'
 assert.match(render(), /配置内容/, 'access follows group membership, not a hardcoded login')
 state.permissionCenter = { ...state.permissionCenter, roles: state.permissionCenter.roles.map(role => role.builtin === 'superadmin' ? { ...role, members: [] } : role) }
@@ -80,11 +80,12 @@ for (const user of ['无角色用户', '']) {
   assert.deepEqual(offeredTabs, [], 'no unauthorized tab remains mounted')
 }
 state.currentLoginUser = '游进'
-state.permissionCenter = { ...state.permissionCenter, policies: state.permissionCenter.policies.map(policy => policy.menuId === 'project.config' ? { ...policy, users: policy.users.filter(user => user !== '游进') } : policy) }
+state.permissionCenter = { ...state.permissionCenter, roles: state.permissionCenter.roles.map(role => role.id.startsWith('project-registry:') ? { ...role, members: role.members.filter(user => user !== '游进') } : role) }
 assert.doesNotMatch(render(), /配置内容/, 'scoped manager access can be revoked after migration')
-state.currentLoginUser = '新配置用户'
-state.permissionCenter.roles.push({ id: 'new-config', groupId: 'group-project', name: 'New config grant', description: '', members: [] })
-state.permissionCenter.policies.push({ ...createEmptyMenuPolicy('new-config', 'project.config'), users: [state.currentLoginUser], actions: ['view'] })
+state.currentLoginUser = '演示用户06'
+state.permissionCenter.roles = state.permissionCenter.roles.map(role => ({ ...role, members: role.members.filter(user => user !== state.currentLoginUser), departments: [] }))
+state.permissionCenter.roles.push({ id: 'new-config', groupId: 'group-project', name: 'New config grant', description: '', members: [state.currentLoginUser], departments: [] })
+state.permissionCenter.policies.push({ ...createEmptyMenuPolicy('new-config', 'project.config'), actions: ['view'] })
 assert.match(render(), /配置内容/, 'new explicit config grants do not require legacy manager identity')
 assert.deepEqual(offeredTabs, ['configuration'], 'config-only access does not mount the project view')
 state.permissionCenter.policies = state.permissionCenter.policies.filter(policy => policy.roleId !== 'new-config')

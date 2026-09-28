@@ -1,5 +1,6 @@
-import { PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
-import { createEmptyMenuPolicy, evaluateMenuPermission, getAuthorizedColumns, isPermissionCenterAdmin, legacyPermissionTargets, migrateLegacyPermissionCenter, normalizePermissionName, normalizePolicyActions, parsePermissionCenter, projectAuthorizedRows, validateMenuPolicy } from '@/lib/permissionCenter'
+import { createPermissionCenterSeed } from '@/lib/permissionCenterSeed'
+import { PERMISSION_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
+import { createEmptyMenuPolicy, evaluateMenuPermission, getAuthorizedColumns, isPermissionCenterAdmin, legacyPermissionTargets, isValidLegacyPermissionCenter, normalizePermissionName, normalizePolicyActions, parsePermissionCenter, projectAuthorizedRows, validateMenuPolicy } from '@/lib/permissionCenter'
 import type { CenterRoleInput, MenuPolicy, PermissionAction, PermissionCenterModel, PermissionMenuId, PermissionMutationResult } from '@/types/permissionCenter'
 import { getPmsLocalStorage, isPmsHydrationWriteSuppressed } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
@@ -95,7 +96,7 @@ export const resolvePermissionProjectId = (projectId: string, parentProjectId?: 
 )
 
 export const PERMISSION_STORAGE_KEY = 'pms-project-permissions'
-export const PERMISSION_STORAGE_VERSION = 3
+export const PERMISSION_STORAGE_VERSION = 4
 
 // ─── Defaults shared by every project's initial role-permission slot ─
 
@@ -361,21 +362,21 @@ const sanitizeGlobalPermissions = (value: unknown) => {
 }
 
 const PERMISSION_CORRUPTION_ERROR = '本地权限数据已损坏，已停止全局授权。请恢复有效的权限配置后重新加载。'
-const emptyPermissionCenter = (): PermissionCenterModel => ({ version: 1, groups: [], roles: [], policies: [] })
+const emptyPermissionCenter = (): PermissionCenterModel => ({ version: 2, groups: [], roles: [], policies: [] })
 
 /** Recognize generated snapshots, not merely JSON-valid objects. */
 function isPermissionSnapshot(value: unknown, version?: unknown): value is Record<string, unknown> {
   if (!isRecord(value)) return false
   if (Object.prototype.hasOwnProperty.call(value, 'permissionCenter')) {
     const center = value.permissionCenter
-    return isRecord(center) && center.version === 1 && Array.isArray(center.groups) && Array.isArray(center.roles) && Array.isArray(center.policies)
+    return isRecord(center) && (center.version === 1 ? isValidLegacyPermissionCenter(center) : center.version === 2 && Array.isArray(center.groups) && Array.isArray(center.roles) && Array.isArray(center.policies))
   }
   const hasGlobals = Object.prototype.hasOwnProperty.call(value, 'globalRoles') || Object.prototype.hasOwnProperty.call(value, 'globalRolePerms')
-  if (hasGlobals) return Array.isArray(value.globalRoles) && value.globalRoles.every(role => isRecord(role) && typeof role.name === 'string' && Array.isArray(role.members) && role.members.every(member => typeof member === 'string')) && isRecord(value.globalRolePerms)
+  if (hasGlobals) return Array.isArray(value.globalRoles) && value.globalRoles.every(role => isRecord(role) && typeof role.name === 'string' && !!role.name.trim() && Array.isArray(role.members) && role.members.every(member => typeof member === 'string' && PERMISSION_USERS.includes(member))) && value.globalRoles.length > 0 && isRecord(value.globalRolePerms) && Object.values(value.globalRolePerms).every(grants => isRecord(grants) && Object.values(grants).every(enabled => typeof enabled === 'boolean'))
   // Only known old envelope versions may predate global roles. The merge phase
   // receives the in-memory marker because Zustand no longer passes its version.
   const migratedLegacy = (value as Record<PropertyKey, unknown>)[LEGACY_PROJECT_ONLY_MIGRATION] === true
-  const knownOldVersion = typeof version === 'number' && Number.isInteger(version) && version >= 0 && version < PERMISSION_STORAGE_VERSION
+  const knownOldVersion = typeof version === 'number' && Number.isInteger(version) && version >= 0 && version < 3
   return (knownOldVersion || migratedLegacy) && isRecord(value.rolesByProject) && isRecord(value.rolePermissionsByProject)
 }
 
@@ -393,7 +394,11 @@ export function migratePermissionState(persistedState: unknown, version: number)
   return {
     ...(!Object.prototype.hasOwnProperty.call(persistedState, 'permissionCenter') && !Object.prototype.hasOwnProperty.call(persistedState, 'globalRoles') ? { [LEGACY_PROJECT_ONLY_MIGRATION]: true as const } : {}),
     ...(persistedState.permissionCenterError ? { permissionCenterError: PERMISSION_CORRUPTION_ERROR } : {}),
-    ...(Object.prototype.hasOwnProperty.call(persistedState, 'permissionCenter') ? { permissionCenter: parsePermissionCenter(persistedState.permissionCenter) } : {}),
+    ...(persistedState.permissionCenterError ? { permissionCenter: emptyPermissionCenter() }
+      : Object.prototype.hasOwnProperty.call(persistedState, 'permissionCenter') ? {
+        permissionCenter: isRecord(persistedState.permissionCenter) && persistedState.permissionCenter.version === 1
+          ? createPermissionCenterSeed() : parsePermissionCenter(persistedState.permissionCenter),
+      } : Array.isArray(persistedState.globalRoles) ? { permissionCenter: createPermissionCenterSeed() } : {}),
     ...(isRecord(persistedState.projectTypesByProject) ? { projectTypesByProject: Object.fromEntries(Object.entries(persistedState.projectTypesByProject).filter(([id, type]) => id.trim() && typeof type === 'string' && type.trim())) as Record<string, string> } : {}),
     ...(Array.isArray(persistedState.globalRoles) ? { globalRoles: sanitizeRolesByProject({ global: persistedState.globalRoles }).global ?? [] } : {}),
     ...(isRecord(persistedState.globalRolePerms) ? { globalRolePerms: sanitizeGlobalPermissions(persistedState.globalRolePerms) } : {}),
@@ -522,6 +527,7 @@ export interface PermissionActions {
   updateCenterRole: (actor: string, roleId: string, input: CenterRoleInput) => PermissionMutationResult
   deleteCenterRole: (actor: string, roleId: string) => PermissionMutationResult
   updateMenuPolicy: (actor: string, roleId: string, menuId: PermissionMenuId, update: Partial<MenuPolicy> | ((previous: MenuPolicy) => MenuPolicy)) => PermissionMutationResult
+  setCenterRoleAssignees: (actor: string, roleId: string, assignees: { users: string[]; departments: string[] }) => PermissionMutationResult
   setSuperAdminMembers: (actor: string, members: string[]) => PermissionMutationResult
 
   // Per-project actions
@@ -585,14 +591,14 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   ensurePermissionCenter: () => {
     if (get().permissionCenterError) return { ok: false, error: get().permissionCenterError! }
     if (get().permissionCenter) return { ok: true }
-    return commitPermissionCenter(get, set, migrateLegacyPermissionCenter(get().globalRoles, get().globalRolePerms))
+    return commitPermissionCenter(get, set, createPermissionCenterSeed())
   },
   createCenterRole: (actor, input) => mutatePermissionCenter(get, set, actor, model => {
     const error = validateRoleInput(model, input)
     if (error) return { ok: false, error }
     const group = ensureCenterGroup(model, input.groupName)
     const roleId = `role:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`
-    model.roles.push({ id: roleId, groupId: group.id, name: input.name.trim(), description: input.description?.trim() ?? '', members: [] })
+    model.roles.push({ id: roleId, groupId: group.id, name: input.name.trim(), description: input.description?.trim() ?? '', members: [], departments: [] })
     return { ok: true, roleId }
   }),
   updateCenterRole: (actor, roleId, input) => mutatePermissionCenter(get, set, actor, model => {
@@ -616,22 +622,29 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     const previous = model.policies.find(policy => policy.roleId === roleId && policy.menuId === menuId) ?? createEmptyMenuPolicy(roleId, menuId)
     const next = typeof update === 'function' ? update(structuredClone(previous)) : { ...previous, ...update }
     next.roleId = roleId; next.menuId = menuId
-    next.users = [...new Set(next.users.map(user => user.trim()).filter(Boolean))]
-    next.departments = [...new Set(next.departments)]
     next.actions = normalizePolicyActions(next.actions, previous.actions)
     const result = validateMenuPolicy(next)
     if (!result.ok) return result
+    if (next.data.mode === 'all') next.data = { ...next.data, conditions: [] }
     model.policies = [...model.policies.filter(policy => policy.roleId !== roleId || policy.menuId !== menuId), next]
     return { ok: true }
   }),
-  setSuperAdminMembers: (actor, members) => mutatePermissionCenter(get, set, actor, model => {
-    if (!isPermissionCenterAdmin(model, actor)) return { ok: false, error: '只有超级管理员可以分配超级管理员身份' }
-    const normalized = [...new Set(members.map(member => member.trim()).filter(Boolean))]
-    if (normalized.some(member => !PERMISSION_USERS.includes(member))) return { ok: false, error: '请选择有效的系统人员' }
-    if (!normalized.length) return { ok: false, error: '必须保留至少一位超级管理员' }
-    model.roles.find(role => role.id === SUPER_ADMIN_ROLE_ID)!.members = normalized
+  setCenterRoleAssignees: (actor, roleId, assignees) => mutatePermissionCenter(get, set, actor, model => {
+    const role = model.roles.find(role => role.id === roleId)
+    if (!role) return { ok: false, error: '角色不存在' }
+    if (!assignees || !Array.isArray(assignees.users) || !Array.isArray(assignees.departments) || assignees.users.some(user => typeof user !== 'string' || !PERMISSION_USERS.includes(user)) || assignees.departments.some(dept => !PERMISSION_DEPARTMENTS.includes(dept))) return { ok: false, error: '请选择有效的系统人员和部门' }
+    const members = [...new Set(assignees.users)]
+    const departments = [...new Set(assignees.departments)]
+    if (roleId === SUPER_ADMIN_ROLE_ID) {
+      if (!isPermissionCenterAdmin(model, actor)) return { ok: false, error: '只有超级管理员可以分配超级管理员身份' }
+      if (departments.length) return { ok: false, error: '超级管理员仅支持人员授权' }
+      if (!members.length) return { ok: false, error: '必须保留至少一位超级管理员' }
+    }
+    role.members = members
+    role.departments = departments
     return { ok: true }
   }),
+  setSuperAdminMembers: (actor, members) => get().setCenterRoleAssignees(actor, SUPER_ADMIN_ROLE_ID, { users: members, departments: [] }),
 
   // Per-project setters
   setRolesForProject: (projectId, v) => set((s) => {

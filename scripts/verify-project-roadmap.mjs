@@ -448,14 +448,14 @@ registerAssertion('workspace links category and supported secondary-category fil
     throw new Error('secondary category filter must reject a different classification')
   }
   registerProjectPermissionFields()
-  const role = id => ({ id, groupId: 'classification-tests', name: id, description: '', members: [] })
+  const role = id => ({ id, groupId: 'classification-tests', name: id, description: '', members: ['演示用户02'], departments: [] })
   const policy = (id, name, fields) => ({
-    ...createEmptyMenuPolicy(id, 'project.view'), users: ['classification-reader'], actions: ['view'],
+    ...createEmptyMenuPolicy(id, 'project.view'), actions: ['view'],
     data: { mode: 'conditions', conjunction: 'all', conditions: [{ id: 'name', field: 'name', operator: 'eq', value: name }] },
     columns: { mode: 'selected', fields: ['name', ...fields] },
   })
   const model = {
-    version: 1, groups: [{ id: 'classification-tests', name: 'Classification tests' }],
+    version: 2, groups: [{ id: 'classification-tests', name: 'Classification tests' }],
     roles: [role('read-category'), role('hidden-category'), role('read-parent-only')],
     policies: [
       policy('read-category', 'Visible classification', ['type', 'secondaryCategory']),
@@ -464,7 +464,7 @@ registerAssertion('workspace links category and supported secondary-category fil
     ],
   }
   const row = name => ({ name, type: '整机产品项目', secondaryCategory: '整机-手机' })
-  const matches = (name, category, secondary = 'all') => matchesAuthorizedProjectClassification(model, 'classification-reader', row(name), category, secondary)
+  const matches = (name, category, secondary = 'all') => matchesAuthorizedProjectClassification(model, '演示用户02', row(name), category, secondary)
   if (!matches('Visible classification', '整机产品项目', '整机-手机')
     || matches('Visible classification', '技术项目')
     || matches('Visible classification', '整机产品项目', '整机-平板')) {

@@ -11,6 +11,37 @@ export interface PermissionMenuNode {
   children?: PermissionMenuNode[]
 }
 
+export interface PermissionMatrixRow {
+  menu: PermissionMenu
+  parents: string[]
+  leaf: string
+  /** Zero means the same full ancestor path is merged with an earlier row. */
+  spans: number[]
+}
+
+/** Build table rows with spans keyed by every ancestor, not just the displayed label. */
+export function buildPermissionMatrixRows(query = ''): { rows: PermissionMatrixRow[]; depth: number } {
+  const flatten = (nodes: readonly PermissionMenuNode[], parents: string[] = []): Omit<PermissionMatrixRow, 'spans'>[] =>
+    nodes.flatMap(node => node.children ? flatten(node.children, [...parents, node.label]) : {
+      menu: CONFIGURABLE_PERMISSION_MENUS.find(menu => menu.id === node.key)!,
+      parents, leaf: node.label,
+    })
+  const flat = flatten(buildPermissionMenuTree(query))
+  const depth = Math.max(0, ...flat.map(row => row.parents.length))
+  const rows = flat.map((row, index) => ({
+    ...row,
+    spans: Array.from({ length: depth }, (_, level) => {
+      if (!row.parents[level]) return 1
+      const prefix = row.parents.slice(0, level + 1).join('\u0000')
+      if (index > 0 && flat[index - 1].parents.slice(0, level + 1).join('\u0000') === prefix) return 0
+      let count = 1
+      while (index + count < flat.length && flat[index + count].parents.slice(0, level + 1).join('\u0000') === prefix) count++
+      return count
+    }),
+  }))
+  return { rows, depth }
+}
+
 function getMenuPath(menu: PermissionMenu): string[] {
   const labels = menu.id.startsWith('config.transfer:') ? menu.label.split(' / ') : [menu.label]
   return [...menu.category.split(' / '), ...labels]

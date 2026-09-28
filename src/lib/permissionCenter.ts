@@ -1,17 +1,27 @@
-import { getPermissionFields, getPermissionMenu, PERMISSION_DEPARTMENTS, PERMISSION_MENUS, PERMISSION_USER_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
 import { canConfigureProjectScope, PROJECT_REGISTRY_MANAGERS } from '@/lib/projectRegistryPermissions'
+import { getPermissionFields, getPermissionMenu, PERMISSION_DEPARTMENTS, PERMISSION_MENUS, PERMISSION_USER_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
 import { getRegistryProjectTypes, getProjectAttribute, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
-import type { MenuPolicy, PermissionAction, PermissionCenterModel, PermissionCondition, PermissionField, PermissionMenuId, PermissionMutationResult } from '@/types/permissionCenter'
+import type { MenuPolicy, PermissionAction, PermissionCenterModel, PermissionCondition, PermissionCenterRole, PermissionField, PermissionMenuId, PermissionMutationResult } from '@/types/permissionCenter'
 export const normalizePermissionName = (name: string) => name.trim().normalize('NFKC').toLocaleLowerCase()
-export const createEmptyMenuPolicy = (roleId: string, menuId: PermissionMenuId): MenuPolicy => ({ roleId, menuId, users: [], departments: [], actions: [], data: { mode: 'all', conjunction: 'all', conditions: [] }, columns: { mode: 'all', fields: [] } })
-export const isPermissionCenterAdmin = (model: PermissionCenterModel | undefined, user: string) => !!user && !!model?.roles.some(role => role.id === SUPER_ADMIN_ROLE_ID && role.builtin === 'superadmin' && role.members.includes(user))
+export const createEmptyMenuPolicy = (roleId: string, menuId: PermissionMenuId): MenuPolicy => ({ roleId, menuId, actions: [], data: { mode: 'all', conjunction: 'all', conditions: [] }, columns: { mode: 'all', fields: [] } })
+const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
+const validRoleAssignees = (role: PermissionCenterRole) => strings(role.members) && strings(role.departments) && role.members.every(user => PERMISSION_USERS.includes(user)) && role.departments.every(dept => PERMISSION_DEPARTMENTS.includes(dept))
+export function isRoleAssignedToUser(role: PermissionCenterRole, user: string): boolean {
+  if (!user || !role || !validRoleAssignees(role)) return false
+  if (role.id === SUPER_ADMIN_ROLE_ID || role.builtin === 'superadmin') return role.id === SUPER_ADMIN_ROLE_ID && role.builtin === 'superadmin' && role.departments.length === 0 && role.members.includes(user)
+  return role.members.includes(user) || role.departments.some(dept => PERMISSION_USER_DEPARTMENTS[user]?.includes(dept))
+}
+export function getAssignedPermissionUsers(model: PermissionCenterModel): string[] {
+  return model?.version === 2 ? PERMISSION_USERS.filter(user => model.roles.some(role => isRoleAssignedToUser(role, user))) : []
+}
+export const isPermissionCenterAdmin = (model: PermissionCenterModel | undefined, user: string) => model?.version === 2 && !!model.roles.some(role => role.id === SUPER_ADMIN_ROLE_ID && role.builtin === 'superadmin' && isRoleAssignedToUser(role, user))
 export const getPermissionOperators = (field: PermissionField): PermissionCondition['operator'][] => ['eq', 'neq', 'in', 'notIn', 'empty', 'notEmpty', ...(field.kind === 'number' || field.kind === 'date' ? ['gt', 'gte', 'lt', 'lte'] as const : ['contains', 'notContains'] as const)]
 const invalid = (error: string): PermissionMutationResult => ({ ok: false, error })
 export function validateMenuPolicy(policy: MenuPolicy): PermissionMutationResult {
   if (!policy || typeof policy !== 'object') return invalid('权限策略格式无效')
   const menu = getPermissionMenu(policy.menuId)
-  if (!menu || !policy.roleId || !Array.isArray(policy.actions) || !Array.isArray(policy.users) || !Array.isArray(policy.departments) || policy.users.some(user => typeof user !== 'string' || !user.trim()) || policy.departments.some(dept => !PERMISSION_DEPARTMENTS.includes(dept))) return invalid('菜单、人员或部门无效')
+  if (!menu || !policy.roleId || !Array.isArray(policy.actions) || 'users' in policy || 'departments' in policy) return invalid('菜单或策略格式无效')
   if (policy.actions.some(action => !menu.actions.includes(action)) || (policy.actions.length > 0 && !policy.actions.includes('view'))) return invalid('功能权限无效；其他操作需要查看权限')
   if (!policy.data || !['all', 'conditions'].includes(policy.data.mode) || !['all', 'any'].includes(policy.data.conjunction) || !Array.isArray(policy.data.conditions)) return invalid('数据权限格式无效')
   const fields = getPermissionFields(policy.menuId)
@@ -65,8 +75,8 @@ export function matchesPermissionCondition(row: Record<string, unknown>, conditi
 }
 export const matchesPermissionData = (policy: MenuPolicy, row: Record<string, unknown>) => policy.data.mode === 'all' || (policy.data.conjunction === 'all' ? policy.data.conditions.every(condition => matchesPermissionCondition(row, condition, getPermissionFields(policy.menuId).find(field => field.key === condition.field))) : policy.data.conditions.some(condition => matchesPermissionCondition(row, condition, getPermissionFields(policy.menuId).find(field => field.key === condition.field))))
 export function getMatchingMenuPolicies(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction, row?: Record<string, unknown>): MenuPolicy[] {
-  if (!model || !user || !getPermissionMenu(menuId)?.actions.includes(action)) return []
-  return model.policies.filter(policy => policy.menuId === menuId && model.roles.some(role => role.id === policy.roleId && role.id !== SUPER_ADMIN_ROLE_ID) && validateMenuPolicy(policy).ok && (policy.users.includes(user) || policy.departments.some(dept => PERMISSION_USER_DEPARTMENTS[user]?.includes(dept))) && policy.actions.includes(action) && (!row || matchesPermissionData(policy, row)))
+  if (model?.version !== 2 || !user || !getPermissionMenu(menuId)?.actions.includes(action)) return []
+  return model.policies.filter(policy => policy.menuId === menuId && model.roles.some(role => role.id === policy.roleId && role.id !== SUPER_ADMIN_ROLE_ID && isRoleAssignedToUser(role, user)) && validateMenuPolicy(policy).ok && policy.actions.includes(action) && (!row || matchesPermissionData(policy, row)))
 }
 export function evaluateMenuPermission(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction = 'view', row?: Record<string, unknown>): boolean {
   if (!getPermissionMenu(menuId)?.actions.includes(action)) return false
@@ -107,12 +117,13 @@ export function legacyPermissionTargets(key: string): { menuId: PermissionMenuId
     return menu.actions.includes(targetAction) ? [{ menuId: menu.id, action: targetAction }] : []
   })
 }
+/** Ephemeral fallback for old standalone consumers only; persisted initialization uses clean v2 seeds. */
 export function migrateLegacyPermissionCenter(roles: readonly { name: string; members: string[] }[], perms: Record<string, Record<string, boolean>>): PermissionCenterModel {
-  const model: PermissionCenterModel = { version: 1, groups: [{ id: 'group-admin', name: '管理组' }, { id: 'group-roadmap', name: 'tOS路标组' }, { id: 'group-project', name: '项目组' }, { id: 'group-compat', name: '历史兼容授权' }], roles: [], policies: [] }
-  model.roles.push({ id: SUPER_ADMIN_ROLE_ID, groupId: 'group-admin', name: '系统超级管理员', description: '内置全系统超级管理员', members: [...new Set(roles.filter(role => role.name === '管理组').flatMap(role => role.members))], builtin: 'superadmin' })
+  const model: PermissionCenterModel = { version: 2, groups: [{ id: 'group-admin', name: '管理组' }, { id: 'group-roadmap', name: 'tOS路标组' }, { id: 'group-project', name: '项目组' }, { id: 'group-compat', name: '历史兼容授权' }], roles: [], policies: [] }
+  model.roles.push({ id: SUPER_ADMIN_ROLE_ID, groupId: 'group-admin', name: '系统超级管理员', description: '内置全系统超级管理员', members: [...new Set(roles.filter(role => role.name === '管理组').flatMap(role => role.members))], departments: [], builtin: 'superadmin' })
   roles.filter(role => role.name !== '管理组').forEach((role, index) => {
     const id = `legacy:${index}`
-    model.roles.push({ id, groupId: 'group-compat', name: role.name, description: '迁移原全局角色', members: [] })
+    model.roles.push({ id, groupId: 'group-compat', name: role.name, description: '迁移原全局角色', members: [...role.members], departments: [] })
     const byMenu = new Map<PermissionMenuId, MenuPolicy>()
     Object.entries(perms[role.name] ?? {}).filter(([, enabled]) => enabled).forEach(([key]) => {
       const targets = legacyPermissionTargets(key)
@@ -120,50 +131,79 @@ export function migrateLegacyPermissionCenter(roles: readonly { name: string; me
       if (key === 'configCenter:hrModelEdit') targets.push({ menuId: 'config.hrPipeline:feeRate', action: 'edit' }, { menuId: 'config.hrPipeline:hrModel', action: 'import' })
       if (key === 'configCenter:nonLaborSubjectEdit') targets.push({ menuId: 'config.hrPipeline:nonLaborSubject', action: 'import' })
       targets.forEach(({ menuId, action }) => {
-      const policy = byMenu.get(menuId) ?? { ...createEmptyMenuPolicy(id, menuId), users: [...role.members] }
+      const policy = byMenu.get(menuId) ?? createEmptyMenuPolicy(id, menuId)
       policy.actions = [...new Set(['view' as const, ...policy.actions, action])]; byMenu.set(menuId, policy)
       })
     })
     model.policies.push(...byMenu.values())
   })
   const compatibilityId = 'compat:existing-navigation'
-  model.roles.push({ id: compatibilityId, groupId: 'group-compat', name: '历史公开入口', description: '原先未配置全局权限的入口；可在此撤销', members: [] })
-  const users = [...new Set([...PERMISSION_USERS, ...roles.flatMap(role => role.members)])]
+  model.roles.push({ id: compatibilityId, groupId: 'group-compat', name: '历史公开入口', description: '原先未配置全局权限的入口；可在此撤销', members: [], departments: [] })
+  model.roles.find(role => role.id === compatibilityId)!.members = [...PERMISSION_USERS]
   PERMISSION_MENUS.filter(menu => !menu.id.startsWith('roadmap.') && menu.id !== 'permission.center' && menu.id !== 'project.config').forEach(menu => {
     const actions: PermissionAction[] = ['view']
     if (menu.id === 'project.view' || menu.id.startsWith('config.transfer:') || menu.id.startsWith('config.hrPipeline:') || menu.id.startsWith('hr.config/')) {
       if (menu.actions.includes('export')) actions.push('export')
     }
     if (menu.id.startsWith('hr.config/')) actions.push('edit', 'import')
-    model.policies.push({ ...createEmptyMenuPolicy(compatibilityId, menu.id), users, actions })
+    model.policies.push({ ...createEmptyMenuPolicy(compatibilityId, menu.id), actions })
   })
   for (const attribute of ['formal', 'budget', 'roadmap'] as const) for (const type of getRegistryProjectTypes(attribute)) {
     const members = PROJECT_REGISTRY_MANAGERS.filter(user => canConfigureProjectScope(user, attribute, type, false))
     if (!members.length) continue
     const id = `compat:registry:${attribute}:${type}`
-    model.roles.push({ id, groupId: 'group-compat', name: `项目配置负责人 / ${PROJECT_ATTRIBUTE_LABELS[attribute]} / ${type}`, description: '保留原指定负责人和项目类型、属性范围', members: [] })
-    model.policies.push({ ...createEmptyMenuPolicy(id, 'project.config'), users: members, actions: ['view', 'create', 'edit'], data: { mode: 'conditions', conjunction: 'all', conditions: [{ id: 'attribute', field: 'projectAttribute', operator: 'eq', value: attribute }, { id: 'type', field: 'type', operator: 'eq', value: type }] } })
+    model.roles.push({ id, groupId: 'group-compat', name: `项目配置负责人 / ${PROJECT_ATTRIBUTE_LABELS[attribute]} / ${type}`, description: '保留原指定负责人和项目类型、属性范围', members, departments: [] })
+    model.policies.push({ ...createEmptyMenuPolicy(id, 'project.config'), actions: ['view', 'create', 'edit'], data: { mode: 'conditions', conjunction: 'all', conditions: [{ id: 'attribute', field: 'projectAttribute', operator: 'eq', value: attribute }, { id: 'type', field: 'type', operator: 'eq', value: type }] } })
   }
   const templates = [['管理员', 'group-admin'], ['tOS路标管理组', 'group-roadmap'], ...['全量查看', 'TECNO', 'Infinix', 'itel'].map(name => [`tOS路标查看组-${name}`, 'group-roadmap']), ...['项目经理', 'XPM', '开发代表', '一般查看组'].map(name => [name, 'group-project'])]
-  templates.forEach(([name, groupId], index) => { if (!model.roles.some(role => normalizePermissionName(role.name) === normalizePermissionName(name))) model.roles.push({ id: `template:${index}`, groupId, name, description: '', members: [] }) })
+  templates.forEach(([name, groupId], index) => { if (!model.roles.some(role => normalizePermissionName(role.name) === normalizePermissionName(name))) model.roles.push({ id: `template:${index}`, groupId, name, description: '', members: [], departments: [] }) })
   return model
 }
-/** Persisted corruption never falls back to a newly privileged default. */
+/** Runtime models never read menu-level assignees. */
 export function parsePermissionCenter(value: unknown): PermissionCenterModel {
-  const empty: PermissionCenterModel = { version: 1, groups: [], roles: [], policies: [] }
+  const empty: PermissionCenterModel = { version: 2, groups: [], roles: [], policies: [] }
   if (!value || typeof value !== 'object') return empty
   const model = value as PermissionCenterModel
-  if (model.version !== 1 || !Array.isArray(model.groups) || !Array.isArray(model.roles) || !Array.isArray(model.policies)) return empty
-  const groups = model.groups.filter(group => group && typeof group.id === 'string' && typeof group.name === 'string')
-  const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
-  const roles = model.roles.filter(role => role && typeof role.id === 'string' && typeof role.name === 'string' && (role.description === undefined || typeof role.description === 'string') && strings(role.members) && groups.some(group => group.id === role.groupId)).map(role => ({ ...role, description: role.description ?? '' }))
-  // Keep structurally valid dynamic-field policies until their consumer registers metadata.
-  // Drop malformed nested data before any UI/consumer reads it; never repair it to all.
-  const policies = model.policies.filter(policy => {
-    if (!policy || typeof policy !== 'object' || !roles.some(role => role.id === policy.roleId) || typeof policy.menuId !== 'string' || !strings(policy.users) || !strings(policy.departments) || !strings(policy.actions)) return false
-    const { data, columns } = policy
-    if (!data || !['all', 'conditions'].includes(data.mode) || !['all', 'any'].includes(data.conjunction) || !Array.isArray(data.conditions) || !columns || !['all', 'selected'].includes(columns.mode) || !strings(columns.fields)) return false
-    return data.conditions.every(condition => condition && typeof condition.id === 'string' && typeof condition.field === 'string' && typeof condition.operator === 'string' && (condition.value === undefined || typeof condition.value === 'string' || (typeof condition.value === 'number' && Number.isFinite(condition.value)) || strings(condition.value)))
+  if (model.version !== 2 || !Array.isArray(model.groups) || !Array.isArray(model.roles) || !Array.isArray(model.policies)) return empty
+  const groups = model.groups.filter(group => group && typeof group.id === 'string' && !!group.id.trim() && typeof group.name === 'string')
+  const roles = model.roles.filter(role => role && typeof role.id === 'string' && !!role.id.trim() && typeof role.name === 'string' && typeof role.description === 'string' && validRoleAssignees(role) && groups.some(group => group.id === role.groupId) && (role.builtin === undefined || role.builtin === 'superadmin' && role.id === SUPER_ADMIN_ROLE_ID && !role.departments.length)).filter(role => model.roles.filter(candidate => candidate?.id === role.id).length === 1)
+  // Preserve structurally valid dynamic-field conditions until metadata registers.
+  const policies = model.policies.filter(policy => isStructuralPolicy(policy, roles.map(role => role.id), false)).map(policy => policy.data.mode === 'all' ? { ...policy, data: { ...policy.data, conditions: [] } } : policy)
+  return { version: 2, groups, roles, policies }
+}
+function isStructuralPolicy(value: unknown, roleIds: string[], legacy: boolean): boolean {
+  if (!value || typeof value !== 'object') return false
+  const policy = value as MenuPolicy & { users?: unknown; departments?: unknown }
+  if (!roleIds.includes(policy.roleId) || !getPermissionMenu(policy.menuId) || !strings(policy.actions) || policy.actions.some(action => !getPermissionMenu(policy.menuId)!.actions.includes(action)) || policy.actions.length > 0 && !policy.actions.includes('view')) return false
+  if (legacy ? !strings(policy.users) || !strings(policy.departments) || policy.users.some(user => !PERMISSION_USERS.includes(user)) || policy.departments.some(dept => !PERMISSION_DEPARTMENTS.includes(dept)) : 'users' in policy || 'departments' in policy) return false
+  const { data, columns } = policy
+  if (!data || !['all', 'conditions'].includes(data.mode) || !['all', 'any'].includes(data.conjunction) || !Array.isArray(data.conditions) || !columns || !['all', 'selected'].includes(columns.mode) || !strings(columns.fields)) return false
+  if (data.mode === 'conditions' && !data.conditions.length || columns.mode === 'selected' && !columns.fields.length) return false
+  const fields = getPermissionFields(policy.menuId)
+  if (columns.mode === 'selected' && (columns.fields.some(key => !key.trim()) || fields.some(field => field.required && !columns.fields.includes(field.key)))) return false
+  // All-data ignores discarded filter drafts, matching validation and evaluation.
+  if (data.mode === 'all') return true
+  return data.conditions.every(condition => {
+    if (!condition || typeof condition.id !== 'string' || !condition.id.trim() || typeof condition.field !== 'string' || !condition.field.trim() || !['eq', 'neq', 'contains', 'notContains', 'in', 'notIn', 'empty', 'notEmpty', 'gt', 'gte', 'lt', 'lte'].includes(condition.operator)) return false
+    const field = fields.find(field => field.key === condition.field)
+    if (field && !getPermissionOperators(field).includes(condition.operator)) return false
+    if (['empty', 'notEmpty'].includes(condition.operator)) return true
+    const value = condition.value
+    if (['in', 'notIn'].includes(condition.operator) ? !strings(value) || !value.length || value.some(item => !item.trim()) : (typeof value !== 'string' && typeof value !== 'number') || !String(value).trim()) return false
+    const values = Array.isArray(value) ? value : [value]
+    if (values.some(item => typeof item === 'number' && !Number.isFinite(item))) return false
+    if (field?.kind === 'number' && values.some(item => !Number.isFinite(Number(item)))) return false
+    if (field?.kind === 'date' && values.some(item => !Number.isFinite(Date.parse(String(item))))) return false
+    return true
   })
-  return { version: 1, groups, roles, policies }
+}
+/** A reset grants demo authority, so recognize the complete old snapshot before resetting. */
+export function isValidLegacyPermissionCenter(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const model = value as { version: number; groups: PermissionCenterModel['groups']; roles: PermissionCenterRole[]; policies: unknown[] }
+  if (model.version !== 1 || !Array.isArray(model.groups) || !model.groups.length || !Array.isArray(model.roles) || !model.roles.length || !Array.isArray(model.policies)) return false
+  if (!model.groups.every(group => group && typeof group.id === 'string' && !!group.id.trim() && typeof group.name === 'string' && !!group.name.trim()) || new Set(model.groups.map(group => group.id)).size !== model.groups.length) return false
+  if (!model.roles.every(role => role && typeof role.id === 'string' && !!role.id.trim() && typeof role.name === 'string' && !!role.name.trim() && (role.description === undefined || typeof role.description === 'string') && strings(role.members) && role.members.every(user => PERMISSION_USERS.includes(user)) && model.groups.some(group => group.id === role.groupId) && (role.builtin === undefined || role.builtin === 'superadmin' && role.id === SUPER_ADMIN_ROLE_ID)) || new Set(model.roles.map(role => role.id)).size !== model.roles.length) return false
+  if (!model.roles.some(role => role.id === SUPER_ADMIN_ROLE_ID && role.builtin === 'superadmin' && role.members.length)) return false
+  return model.policies.every(policy => isStructuralPolicy(policy, model.roles.map(role => role.id), true))
 }
