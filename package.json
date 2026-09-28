@@ -26,6 +26,8 @@
     "verify:project-info-todos": "node scripts/verify-project-info-todos.mjs",
     "verify:tos-project-status": "node scripts/verify-tos-project-status.mjs",
     "verify:project-roadmap": "node scripts/verify-project-roadmap.mjs",
+    "verify:tos-roadmap-enhancements": "node scripts/verify-project-summary-sorting.mjs && node scripts/verify-project-view-market-display.mjs && node scripts/verify-roadmap-table-interactions.mjs && node scripts/verify-roadmap-visibility-optional.mjs",
+    "verify:tos-roadmap-enhancements-browser": "node screenshots/verify-tos-roadmap-enhancements-browser.mjs && node screenshots/verify-roadmap-row-height-browser.mjs",
     "verify:enum-status": "node scripts/verify-enum-status.mjs",
     "verify:enum-config": "node scripts/verify-enum-config.mjs",
     "verify:enum-consumers": "node scripts/verify-enum-consumers.mjs",

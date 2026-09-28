@@ -4,6 +4,7 @@ import { JiraProjectTags, FanTrialTags } from '@/components/project-info/Project
 import type { ProjectInfoValue } from '@/types/app'
 import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import { getProjectListExportValue } from '@/lib/projectListExport'
+import { formatMarketName } from '@/lib/marketNameDisplay'
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -81,6 +82,9 @@ import {
   getProjectSummaryQuickFilterDefinitions,
   getTemplateTaskFieldDefinitions,
   normalizeStoredProjectSummaryFilters,
+  resolveProjectSummarySort,
+  sortProjectSummaryRows,
+  type ProjectSummarySortState,
   updateLinkedQuickFilterCondition,
   type ProjectSummaryFieldDefinition,
   type ProjectSummaryRow,
@@ -234,6 +238,7 @@ export default function ProjectSummaryTable({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const [collapsedMachineSeries, setCollapsedMachineSeries] = useState<Set<string>>(() => new Set())
   const [selectedRowKey, setSelectedRowKey] = useState('')
+  const [sort, setSort] = useState<ProjectSummarySortState>({ field: null, direction: null, variant: matrixVariant })
   const [uncontrolledTablePage, setUncontrolledTablePage] = useState(1)
   const tablePage = controlledTablePage ?? uncontrolledTablePage
   const setTablePage = (page: number) => {
@@ -306,6 +311,18 @@ export default function ProjectSummaryTable({
   const [columnSettings, setColumnSettings] = useState<SortableColumnSettingsValue<string>>(
     defaultColumnSettings,
   )
+  const visibleSortKeys = useMemo(() => expandProjectListUnitSettings(
+    columnUnitDefinitions,
+    columnSettings,
+  ).visible, [columnSettings, columnUnitDefinitions])
+  const activeSort = useMemo(() => resolveProjectSummarySort(
+    sort,
+    visibleSortKeys,
+    matrixVariant,
+  ), [matrixVariant, sort, visibleSortKeys])
+  useEffect(() => {
+    if (sort.field && !activeSort.field) setSort(activeSort)
+  }, [activeSort, sort.field])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [headerDragState, setHeaderDragState] = useState<ProjectListColumnDragState | null>(null)
   const tableShellRef = useRef<HTMLDivElement>(null)
@@ -463,11 +480,19 @@ export default function ProjectSummaryTable({
     [baseRows, filterFieldDefinitions, filters],
   )
 
+  const sortedRows = useMemo(() => sortProjectSummaryRows(
+    filteredRows,
+    activeSort.field,
+    activeSort.direction,
+    fieldDefinitions,
+    { machineHierarchy, parentField: matrixVariant === 'technical-subproject' ? 'targetProjectId' : undefined },
+  ), [activeSort.direction, activeSort.field, fieldDefinitions, filteredRows, machineHierarchy, matrixVariant])
+
   const machineOrderedRows = useMemo<ProjectSummaryRow[]>(() => (
     machineHierarchy
-      ? buildMachineProjectHierarchyPage(filteredRows, filteredRows, new Set())
-      : filteredRows
-  ), [filteredRows, machineHierarchy])
+      ? buildMachineProjectHierarchyPage(sortedRows, sortedRows, new Set())
+      : sortedRows
+  ), [sortedRows, machineHierarchy])
 
   const displayedRows = useMemo<ProjectSummaryRow[]>(() => {
     if (machineHierarchy) {
@@ -475,13 +500,13 @@ export default function ProjectSummaryTable({
         ? machineOrderedRows.slice((tablePage - 1) * tablePageSize, tablePage * tablePageSize)
         : machineOrderedRows
       return buildMachineProjectHierarchyPage(
-        filteredRows,
+        sortedRows,
         pageRows,
         collapsedMachineSeries,
       )
     }
-    if (!groupBy) return filteredRows
-    return groupProjectListRows(filteredRows, groupBy.key, groupBy.fallbackLabel)
+    if (!groupBy) return sortedRows
+    return groupProjectListRows(sortedRows, groupBy.key, groupBy.fallbackLabel)
       .flatMap(group => {
         const isCollapsed = collapsedGroups.has(group.key)
         if (isCollapsed) {
@@ -510,7 +535,7 @@ export default function ProjectSummaryTable({
     collapsedGroups,
     collapsedMachineSeries,
     fieldDefinitions,
-    filteredRows,
+    sortedRows,
     groupBy,
     machineHierarchy,
     machineOrderedRows,
@@ -621,6 +646,9 @@ export default function ProjectSummaryTable({
         fixed,
         width: fieldWidth,
         ellipsis: isProjectName ? false : column.ellipsis,
+        sorter: true,
+        sortDirections: ['ascend', 'descend'] as ['ascend', 'descend'],
+        sortOrder: activeSort.field === key ? activeSort.direction : null,
         render: isProjectName
           ? (value: unknown, _record: ProjectSummaryRow, _index: number) => {
               const projectName = String(value ?? '-').trim() || '-'
@@ -630,14 +658,19 @@ export default function ProjectSummaryTable({
                 </Tooltip>
               )
             }
+          : key === 'marketName' ? (value: unknown, row: ProjectSummaryRow) => formatMarketName(value, row.brand)
           : key === 'jiraProjects' ? (_value: unknown, row: ProjectSummaryRow) => <JiraProjectTags value={row.__jiraProjects} compact />
           : key === 'fanTrialEnabled' ? (value: unknown, row: ProjectSummaryRow) => row.__fanTrialEnabled === '是' ? <FanTrialTags value={row.__fanTrialCountries as ProjectInfoValue} compact /> : String(value ?? '否')
           : undefined,
         onHeaderCell: () => {
           const headerCell = baseHeaderCell?.() ?? {}
           const unitKey = field?.source === 'templateTask' ? 'milestone' : key
+          const ariaSort: 'none' | 'ascending' | 'descending' = activeSort.field === key
+            ? activeSort.direction === 'ascend' ? 'ascending' : 'descending'
+            : 'none'
           return {
             ...headerCell,
+            'aria-sort': ariaSort,
             className: isProjectName ? 'pms-project-name-cell' : undefined,
             style: { ...headerCell.style, ...lockedWidth },
             projectListColumnUnit: unitKey,
@@ -776,7 +809,7 @@ export default function ProjectSummaryTable({
         },
       }] as const
     })),
-    [collapsedGroups, columnWidths, fieldDefinitions, fixedColumnKeys, getProjectListCellDragClass, groupBy, handleProjectListResize, machineHierarchy],
+    [activeSort.direction, activeSort.field, collapsedGroups, columnWidths, fieldDefinitions, fixedColumnKeys, getProjectListCellDragClass, groupBy, handleProjectListResize, machineHierarchy],
   )
   const columns = useMemo<ColumnsType<ProjectSummaryRow>>(() => {
     const result: ColumnsType<ProjectSummaryRow> = []
@@ -1102,6 +1135,16 @@ export default function ProjectSummaryTable({
           tableLayout="fixed"
           rowKey="key"
           columns={columns}
+          onChange={(_pagination, _filters, sorter, extra) => {
+            if (extra.action !== 'sort') return
+            const activeSorter = Array.isArray(sorter) ? sorter[0] : sorter
+            setSort({
+              field: activeSorter?.order ? String(activeSorter.columnKey ?? '') : null,
+              direction: activeSorter?.order ?? null,
+              variant: matrixVariant,
+            })
+            setTablePage(1)
+          }}
           components={{
             header: { cell: SortableProjectListHeader },
           }}

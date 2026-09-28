@@ -100,8 +100,8 @@ check('roadmap stays listed with absent dates; completed sample no longer create
  const roadmap=load('src/stores/roadmap.ts').useRoadmapStore.getState()
  const rows=adapter.mergeRoadmapProjects(registry.getState().projects,roadmap.plannedProjects,roadmap.tosVersions)
  const partial=rows.find(p=>p.id==='mock-roadmap-incomplete')
- assert.ok(partial);assert.equal(adapter.canPositionRoadmapRow(partial),false)
- assert.ok(rows.some(row=>row.projectCode==='DEMOR001'&&adapter.canPositionRoadmapRow(row)))
+ assert.ok(partial);assert.equal(partial.str5Date,'');assert.equal(partial.launchDate,'')
+ assert.ok(rows.some(row=>row.projectCode==='DEMOR001'))
  assert.equal(adapter.deriveRoadmapPlanningConflicts(rows.filter(r=>r.source==='normal'),rows.filter(r=>r.source==='planned')).length,0)
 })
 check('bound incomplete source rejects annual creation; unbound incomplete requires its own metadata',()=>{

@@ -14,6 +14,7 @@ import {
   Progress,
 } from 'antd'
 import { CalendarOutlined, UserOutlined } from '@ant-design/icons'
+import { formatMarketName } from '@/lib/marketNameDisplay'
 import {
   PROJECT_TYPE_COLORS,
   isMachineProjectType,
@@ -111,6 +112,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
 }) => {
   const statusConf = PROJECT_STATUS_CONFIG[project.status] || { color: '#8c8c8c', tagColor: 'default' }
   const isWholeMachine = isMachineProjectType(project.type)
+  const displayMarketName = formatMarketName(project.marketName, project.brand)
   const classification = resolveProjectClassification(project.type, project.secondaryCategory)
   const isCapability = classification.projectCategory === '能力建设项目'
   const classificationLabel = classification.secondaryCategory
@@ -164,7 +166,7 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
         >{project.status}</Tag>
       </div>
       {isWholeMachine && project.marketName && (
-        <div className="pms-project-card-market" title={project.marketName}>市场名: {project.marketName}</div>
+        <div className="pms-project-card-market" title={displayMarketName}>市场名: {displayMarketName}</div>
       )}
       <div className="pms-project-card-classification">
         <Tag className="pms-project-card-type" title={classificationLabel}>

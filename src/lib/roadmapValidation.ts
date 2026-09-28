@@ -70,22 +70,11 @@ export const PRODUCT_LINES_BY_BRAND = {
   其他品牌: ['其他系列'],
 } as const satisfies Record<RoadmapBrand, readonly string[]>
 
-const REQUIRED_PLANNED_FIELDS: readonly (Exclude<keyof PlannedRoadmapProjectInput, 'remark' | 'str5Estimated' | 'launchEstimated'>)[] = [
+const REQUIRED_PLANNED_FIELDS: readonly (keyof PlannedRoadmapProjectInput)[] = [
   'machineProjectType',
-  'projectCode',
   'androidVersion',
   'firstSaleTosVersionId',
-  'brand',
-  'productLine',
-  'productSeries',
-  'marketName',
   'productType',
-  'chipCode',
-  'startRam',
-  'versionType',
-  'str5Date',
-  'launchDate',
-  'developMode',
 ]
 
 const ISO_DATE_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])$/
@@ -305,7 +294,7 @@ export function validatePlannedProject(
   }
   if (values.brand && !isRoadmapBrand(values.brand)) {
     errors.brand = '品牌无效'
-  } else if (isRoadmapBrand(values.brand) && typeof values.productLine === 'string') {
+  } else if (isRoadmapBrand(values.brand) && typeof values.productLine === 'string' && values.productLine.trim()) {
     const options = getProductLineOptions(values.brand)
     if (!options.some(option => option === values.productLine)) errors.productLine = '产品线不属于所选品牌'
   }

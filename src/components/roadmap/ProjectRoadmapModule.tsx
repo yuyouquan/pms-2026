@@ -16,7 +16,6 @@ import {
   adaptNormalProject,
   projectRegistryToPlanned,
   adaptRegistryRoadmapProject,
-  canPositionRoadmapRow,
   deriveRoadmapPlanningConflicts,
   resolveNormalProjectChipCode,
 } from '@/lib/roadmapProjectAdapter'
@@ -277,7 +276,7 @@ export default function ProjectRoadmapModule({
     [projects, versions],
   )
   const plannedRows = useMemo(
-    () => projects.map(adaptRegistryRoadmapProject).filter(isPresent),
+    () => projects.map(project => adaptRegistryRoadmapProject(project)).filter(isPresent),
     [projects],
   )
   const conflicts = useMemo(
@@ -572,11 +571,10 @@ export default function ProjectRoadmapModule({
   }
   const evolutionRenderContext: RoadmapViewRenderContext = {
     ...renderContext,
-    rows: filteredRows.filter(canPositionRoadmapRow),
+    rows: filteredRows,
     versions: maintainedVersions,
   }
 
-  const undatedRoadmapCount = filteredRows.filter(row => !canPositionRoadmapRow(row)).length
   const content = viewMode === 'table'
     ? renderTableView?.(renderContext) ?? <RoadmapTableView {...renderContext} />
     : renderEvolutionView?.(evolutionRenderContext) ?? <RoadmapEvolutionView {...evolutionRenderContext} />
@@ -662,7 +660,6 @@ export default function ProjectRoadmapModule({
         </Flex>
       ) : null}
 
-      {viewMode === 'evolution' && undatedRoadmapCount > 0 && <Alert type="info" showIcon message={`${undatedRoadmapCount} 个路标项目尚未补充日期，可在表格中进入项目空间补充后查看演进位置`} />}
       {content ?? (
         <div style={{ padding: '48px 16px' }}>
           <Empty

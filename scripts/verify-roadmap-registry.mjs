@@ -66,13 +66,13 @@ check('ID collision is surfaced without overwriting or marking the retained lega
   store.setState({ projects: [], migratedRoadmapIds: [] })
 })
 let manualId
-check('minimal roadmap create appears immediately with canonical name and no invented timeline values', () => {
+check('minimal roadmap create remains in management but stays out of roadmap until four required attributes are filled', () => {
   manualId = create('roadmap', '整机产品项目', '最小路标项目')
   const row = adapter.adaptRegistryRoadmapProject(record(manualId))
-  assert.equal(row.id, manualId); assert.equal(row.displayName, '最小路标项目')
-  for (const key of ['projectCode','androidVersion','firstSaleTosVersionId','str5Date','launchDate','brand','productType']) assert.equal(row[key], '')
+  assert.equal(row, null)
+  assert.equal(record(manualId).name, '最小路标项目')
+  for (const key of ['projectCode','androidVersion','firstSaleTosVersionId','str5Date','launchDate','brand','productType']) assert.equal(adapter.projectRegistryToPlanned(record(manualId))[key], '')
   assert.equal(adapter.adaptNormalProject(record(manualId), []), null)
-  assert.equal(adapter.canPositionRoadmapRow(row), false)
 })
 check('space partial completion preserves identity and permissions, and projects saved form fields immediately', () => {
   const before = record(manualId)
@@ -81,16 +81,23 @@ check('space partial completion preserves identity and permissions, and projects
   const source = record(manualId)
   const values = getProjectInfoModalSubmitValues(source.type, { productType: '老品', androidVersion: 'Android 17', firstSaleTosVersion: '17.2.0', chipCode: 'DEMOCHIP001', startingRam: '8GB', versionType: 'Full', developmentMode: 'ODC' })
   const merged = mergeProjectInfoValues(source, values)
-  const update = { ...merged, androidVersion: values.androidVersion, startRam: values.startingRam,
+  const update = { ...merged, secondaryCategory: '整机-手机', androidVersion: values.androidVersion, startRam: values.startingRam,
     developMode: values.developmentMode, firstSaleTosVersionId: values.firstSaleTosVersion,
     brand: '示例品牌A', str5Date: '2027-01-01', launchDate: '2027-02-01', str5Estimated: true, launchEstimated: true }
   assert.equal(get('src/lib/manualProjectCompletion.ts').validateManualProjectCompletion(update, source, enums.getState().rowsByType), null)
   assert.ok(store.getState().updateProject(manualId, update, owner), 'partial manual old product must not require a formal new-product family')
   const row = adapter.adaptRegistryRoadmapProject(record(manualId))
-  assert.equal(row.androidVersion, 'Android 17'); assert.equal(row.chipCode, 'DEMOCHIP001'); assert.equal(row.startRam, '8GB'); assert.equal(row.str5Date, '2027-01-01'); assert.equal(row.str5Estimated, true); assert.equal(adapter.canPositionRoadmapRow(row), true)
+  assert.equal(row.androidVersion, 'Android 17'); assert.equal(row.chipCode, 'DEMOCHIP001'); assert.equal(row.startRam, '8GB'); assert.equal(row.str5Date, '2027-01-01'); assert.equal(row.str5Estimated, true)
   for (const key of ['name','type','projectCode','sourceBid','projectAttribute','boundFormalProjectId','createdAt','createdBy']) assert.equal(record(manualId)[key], before[key])
   assert.ok(store.getState().registryHistory.some(h => h.projectId === manualId && h.actor === owner && h.action === 'update'))
   assert.ok(roadmap.getState().changeLogs.some(h => h.projectId === manualId && h.source === 'planned' && h.actor === owner && h.action === 'update'))
+  const auditCount = roadmap.getState().changeLogs.filter(h => h.projectId === manualId && h.action === 'update').length
+  assert.ok(store.getState().updateProject(manualId, { status: '已暂停', remark: '暂停时保留备注' }, owner))
+  assert.equal(adapter.adaptRegistryRoadmapProject(record(manualId)), null)
+  assert.ok(store.getState().updateProject(manualId, { status: '待立项', remark: '恢复后保留备注' }, owner))
+  assert.equal(adapter.adaptRegistryRoadmapProject(record(manualId))?.id, manualId)
+  assert.equal(roadmap.getState().changeLogs.filter(h => h.projectId === manualId && h.action === 'update').length, auditCount + 2,
+    'visibility transitions retain update history')
   for (const patch of [{name:'绕过配置'}, {projectCode:'HACK'}, {type:'技术项目'}, {sourceBid:'EXT-001'}, {str5Date:'2027-02-30'}, {productType:'未知'}, {fieldValues:{chipCode:'UNKNOWN'}}]) assert.equal(store.getState().updateProject(manualId, patch, owner), null)
 })
 check('budget projects of all types accept partial space edits and never leak to roadmap projections', () => {

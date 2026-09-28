@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   BulbOutlined,
   ClockCircleOutlined,
@@ -12,9 +12,14 @@ import {
   WarningOutlined,
 } from '@ant-design/icons'
 import { Button, Empty, Flex, Table, Tooltip, Typography, type TableProps } from 'antd'
-import { orderVisibleDefinitions } from '@/lib/columnSettings'
+import { moveColumnSetting, orderVisibleDefinitions } from '@/lib/columnSettings'
+import { getProjectListColumnWidth } from '@/lib/projectListColumnWidth'
+import { useRoadmapStore } from '@/stores/roadmap'
+import { SortableProjectListHeader, SortableProjectListHeaderContext, type ProjectListColumnDragState, type ProjectListColumnResizeEvent } from '@/components/project-summary/SortableProjectListHeader'
+import type { DragEndEvent } from '@dnd-kit/core'
 import { getRoadmapSortableColumnDefinitions } from '@/lib/roadmapFilters'
 import { compareRoadmapValues } from '@/lib/roadmapSorting'
+import { formatMarketName } from '@/lib/marketNameDisplay'
 import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
 import {
   ROADMAP_COLUMNS,
@@ -81,6 +86,7 @@ export function formatRoadmapTableValue(
   row: RoadmapProjectRow,
   versions: readonly TosVersionConfig[],
 ): string {
+  if (field === 'marketName') return formatMarketName(row.marketName, row.brand) || '—'
   if (field === 'firstSaleTosVersionId') {
     const version = versions.find(candidate => candidate.id === row.firstSaleTosVersionId)
     return version ? formatTosVersionDisplay(version) : '—'
@@ -110,6 +116,37 @@ export default function RoadmapTableView({
   collapsedTargetVersionIds,
   onToggleTarget,
 }: RoadmapTableViewProps) {
+  const columnWidths = useRoadmapStore(state => state.columnWidths)
+  const setColumnWidth = useRoadmapStore(state => state.setColumnWidth)
+  const setColumnSettings = useRoadmapStore(state => state.setColumnSettings)
+  const tableShellRef = useRef<HTMLDivElement>(null)
+  const [dragState, setDragState] = useState<ProjectListColumnDragState | null>(null)
+  const columnDefinitions = getRoadmapSortableColumnDefinitions('table')
+  const canDrop = (active: string, over: string) => active !== over
+    && columnDefinitions.some(column => column.key === active && !column.fixed)
+    && columnDefinitions.some(column => column.key === over && !column.fixed)
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    const activeKey = active.data.current?.unitKey as RoadmapColumnKey
+    const overKey = over?.data.current?.unitKey as RoadmapColumnKey
+    if (!canDrop(activeKey, overKey)) return
+    setColumnSettings({
+      order: moveColumnSetting(columnDefinitions, columnOrder, activeKey, overKey),
+      visible: [...visibleColumns],
+    })
+  }
+  const handleResize = ({ leafKey, width, clientX, phase }: ProjectListColumnResizeEvent) => {
+    setColumnWidth(leafKey as RoadmapColumnKey, width)
+    const shell = tableShellRef.current
+    if (!shell) return
+    if (phase === 'end') {
+      shell.removeAttribute('data-column-resize-active')
+      shell.style.removeProperty('--pms-project-list-resize-x')
+    } else {
+      shell.dataset.columnResizeActive = 'true'
+      const bounds = shell.getBoundingClientRect()
+      shell.style.setProperty('--pms-project-list-resize-x', `${Math.max(0, Math.min(bounds.width, clientX - bounds.left))}px`)
+    }
+  }
   const version = useMemo(
     () => resolveRoadmapTableVersion(versions, selectedTosVersionId),
     [selectedTosVersionId, versions],
@@ -142,15 +179,41 @@ export default function RoadmapTableView({
       title: column.title,
       dataIndex: column.key,
       key: column.key,
-      width: COLUMN_WIDTHS[column.key],
+      width: getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths),
       fixed: column.key === 'firstSaleTosVersionId' ? 'left' as const : undefined,
-      ellipsis: column.key === 'remark' || column.key === 'productSeries',
+      ellipsis: true,
       sorter: (left: RoadmapProjectRow, right: RoadmapProjectRow) => (
-        compareRoadmapValues(column.key, left, right, versions)
+        column.key === 'marketName'
+          ? compareRoadmapValues(column.key, formatMarketName(left.marketName, left.brand), formatMarketName(right.marketName, right.brand))
+          : compareRoadmapValues(column.key, left, right, versions)
       ),
       sortOrder: sort.field === column.key ? sort.direction : null,
       onHeaderCell: () => ({
         'aria-sort': getRoadmapAriaSort(sort, column.key),
+        projectListColumnUnit: column.key,
+        projectListColumnLabel: String(column.title),
+        projectListHeaderId: `roadmap::${column.key}`,
+        projectListColumnLocked: column.fixed === 'left',
+        projectListLeafKey: column.key,
+        projectListResizable: true,
+        projectListColumnWidth: getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths),
+        onProjectListResize: handleResize,
+        style: {
+          width: getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths),
+          minWidth: getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths),
+          maxWidth: getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths),
+        },
+      }),
+      onCell: () => ({
+        className: [
+          dragState?.activeUnitKey === column.key ? 'pms-project-list-column-drag-source' : '',
+          dragState?.overUnitKey === column.key && dragState.dropEdge ? `pms-project-list-column-drop-${dragState.dropEdge}` : '',
+        ].filter(Boolean).join(' '),
+        style: {
+          width: getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths),
+          minWidth: getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths),
+          maxWidth: getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths),
+        },
       }),
       render: (_value: unknown, row: RoadmapProjectRow) => {
         const formattedValue = formatRoadmapTableValue(column.key, row, versions)
@@ -163,7 +226,7 @@ export default function RoadmapTableView({
         if (column.key === 'str5Date' && row.str5Estimated) {
           return (
             <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
-              <span>{formattedValue}</span>
+              <span title={formattedValue}>{formattedValue}</span>
               <Tooltip title="预估时间">
                 <ClockCircleOutlined
                   aria-label="预估时间"
@@ -176,7 +239,7 @@ export default function RoadmapTableView({
         if (column.key === 'launchDate' && row.launchEstimated) {
           return (
             <Flex align="center" gap={6} wrap={false} style={{ whiteSpace: 'nowrap' }}>
-              <span>{formattedValue}</span>
+              <span title={formattedValue}>{formattedValue}</span>
               <Tooltip title="预估时间">
                 <ClockCircleOutlined
                   aria-label="预估时间"
@@ -327,6 +390,14 @@ export default function RoadmapTableView({
         </section>
       ) : null}
 
+      <div ref={tableShellRef} className="pms-project-summary-table-shell">
+      <SortableProjectListHeaderContext
+        items={orderedDefinitions.map(column => `roadmap::${column.key}`)}
+        unitOrder={[...columnOrder]}
+        canDrop={canDrop}
+        onDragEnd={handleDragEnd}
+        onDragStateChange={setDragState}
+      >
       <Table<RoadmapProjectRow>
         className="pms-table roadmap-table pms-solid-surface"
         aria-label={`${version ? formatTosVersionDisplay(version) : '全部 tOS'} 项目表`}
@@ -334,6 +405,8 @@ export default function RoadmapTableView({
         columns={columns}
         dataSource={versionRows}
         onChange={handleTableChange}
+        components={{ header: { cell: SortableProjectListHeader } }}
+        tableLayout="fixed"
         rowClassName={row => {
           const classNames = []
           if (row.source === 'planned') classNames.push('roadmap-planned-row')
@@ -351,9 +424,11 @@ export default function RoadmapTableView({
             />
           ),
         }}
-        scroll={{ x: 'max-content' }}
+        scroll={{ x: orderedDefinitions.reduce((total, column) => total + getProjectListColumnWidth(column.key, COLUMN_WIDTHS[column.key], columnWidths), 136) }}
         size="middle"
       />
+      </SortableProjectListHeaderContext>
+      </div>
 
       <style jsx global>{`
         .roadmap-table-shell .roadmap-table-project-name-row {

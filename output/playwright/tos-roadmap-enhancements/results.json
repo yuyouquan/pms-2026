@@ -1,0 +1,15 @@
+{
+  "baseUrl": "http://127.0.0.1:3034",
+  "mode": "production",
+  "verifiedAt": "2026-09-28T02:48:50.841Z",
+  "results": [
+    "roadmap click/keyboard sort, header and settings drag, resize, refresh persistence",
+    "status and required-field eligibility, undated/unbranded card, market label, filtered empty-version columns",
+    "real roadmap editor saves with only four required fields and no optional dates, brand or chip",
+    "clearing existing optional brand, market name, chip and both dates persists",
+    "project view three-state sort and market label",
+    "hiding a sorted project column clears invisible sorting"
+  ],
+  "errors": [],
+  "consoleErrors": []
+}

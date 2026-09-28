@@ -16,9 +16,10 @@ import type {
 import RoadmapProjectCard from './RoadmapProjectCard'
 
 export const EVOLUTION_BRAND_ORDER = ['示例品牌A', '示例品牌B', '示例品牌C'] as const
+const EVOLUTION_GROUP_ORDER = [...EVOLUTION_BRAND_ORDER, '待定', '其他品牌', '未填写品牌'] as const
 
 export interface EvolutionBrandGroup {
-  brand: (typeof EVOLUTION_BRAND_ORDER)[number]
+  brand: (typeof EVOLUTION_GROUP_ORDER)[number]
   rows: RoadmapProjectRow[]
 }
 
@@ -30,8 +31,10 @@ const EVOLUTION_BRAND_CLASS_NAMES: Record<EvolutionBrand, string> = {
   示例品牌C: 'brand-demo-c',
 }
 
-function isEvolutionBrand(brand: RoadmapBrand): brand is EvolutionBrand {
-  return EVOLUTION_BRAND_ORDER.some(candidate => candidate === brand)
+function evolutionBrand(brand: RoadmapBrand): EvolutionBrandGroup['brand'] {
+  return EVOLUTION_GROUP_ORDER.includes(brand as EvolutionBrandGroup['brand']) && brand
+    ? brand as EvolutionBrandGroup['brand']
+    : '未填写品牌'
 }
 
 export interface RoadmapEvolutionViewProps {
@@ -71,12 +74,12 @@ export function groupEvolutionRows(
   versionId: string,
   productType: RoadmapProductType,
 ): EvolutionBrandGroup[] {
-  return EVOLUTION_BRAND_ORDER.map(brand => ({
+  return EVOLUTION_GROUP_ORDER.map(brand => ({
     brand,
     rows: rows.filter(row => (
       row.firstSaleTosVersionId === versionId
       && row.productType === productType
-      && row.brand === brand
+      && evolutionBrand(row.brand) === brand
     )),
   })).filter(group => group.rows.length > 0)
 }
@@ -89,7 +92,6 @@ export function countEvolutionRows(
   return rows.filter(row => (
     row.firstSaleTosVersionId === versionId
     && (!productType || row.productType === productType)
-    && isEvolutionBrand(row.brand)
   )).length
 }
 
@@ -134,7 +136,7 @@ function EvolutionProductCell({
       ) : null}
 
       {groups.length ? groups.map(group => {
-        const brandClassName = EVOLUTION_BRAND_CLASS_NAMES[group.brand]
+        const brandClassName = EVOLUTION_BRAND_CLASS_NAMES[group.brand as EvolutionBrand] || 'brand-other'
         return (
           <section key={`${version.id}:${productType}:${group.brand}`} className="pms-roadmap-evolution-brand-section">
             <div className="pms-roadmap-evolution-brand-heading">
@@ -173,9 +175,13 @@ export default function RoadmapEvolutionView({
   onDeletePlannedProject,
 }: RoadmapEvolutionViewProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
-  const orderedVersions = useMemo(
+  const selectedVersions = useMemo(
     () => selectEvolutionVersions(versions, selectedTosVersionIds),
     [selectedTosVersionIds, versions],
+  )
+  const orderedVersions = useMemo(
+    () => selectedVersions.filter(version => countEvolutionRows(rows, version.id) > 0),
+    [rows, selectedVersions],
   )
   const conflictKeyByIdentity = useMemo(() => buildEvolutionConflictMap(conflicts), [conflicts])
   const scrollSignature = `evolution:${orderedVersions.map(version => version.id).join('|')}`
@@ -213,7 +219,7 @@ export default function RoadmapEvolutionView({
   if (!orderedVersions.length) {
     return (
       <div className="pms-roadmap-evolution-empty-state">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 tOS 版本，请先维护版本" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={selectedVersions.length ? '当前筛选条件下暂无路标项目' : '暂无 tOS 版本，请先维护版本'} />
       </div>
     )
   }

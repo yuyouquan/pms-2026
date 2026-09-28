@@ -331,7 +331,7 @@ function isValidMachineProjectMutation(
   options?: ProjectMutationOptions,
   previousProject?: Project,
 ): boolean {
-  if (!adaptNormalProject(project as unknown as ProjectItem, [])) return false
+  if (!adaptNormalProject(project as unknown as ProjectItem, [], { includeHidden: true })) return false
   const tosValue = resolveMachineTosValue(project)
   if (!tosValue) return false
   const previousTosValue = previousProject ? resolveMachineTosValue(previousProject) : ''
@@ -537,8 +537,18 @@ function recordNormalProjectAudit(
   actor: string,
 ): void {
   const roadmapState = useRoadmapStore.getState()
-  const beforeRow = before ? adaptNormalProject(before as unknown as ProjectItem, []) ?? adaptRegistryRoadmapProject(before) : null
-  const afterRow = after ? adaptNormalProject(after as unknown as ProjectItem, []) ?? adaptRegistryRoadmapProject(after) : null
+  const toAuditRow = (project: Project | null): RoadmapProjectRow | null => {
+    if (!project || !isMachineProjectType(project.type)) return null
+    const attribute = getProjectAttribute(project)
+    if (attribute !== 'formal' && attribute !== 'roadmap') return null
+    // Display eligibility cannot erase either side of an update audit.
+    const options = { includeHidden: true, includeIncomplete: true }
+    return attribute === 'formal'
+      ? adaptNormalProject(project as unknown as ProjectItem, [], options)
+      : adaptRegistryRoadmapProject(project, options)
+  }
+  const beforeRow = toAuditRow(before)
+  const afterRow = toAuditRow(after)
 
   let auditRow: RoadmapProjectRow | null = null
   if (action === 'create') auditRow = afterRow

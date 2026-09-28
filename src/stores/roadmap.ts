@@ -21,6 +21,7 @@ import {
   setRoadmapTosVersionFilter,
 } from '@/lib/roadmapFilters'
 import { compareSemanticTos } from '@/lib/roadmapSorting'
+import { clampProjectListColumnWidth, normalizeProjectListColumnWidths } from '@/lib/projectListColumnWidth'
 import type { SortableColumnSettingsValue } from '@/lib/columnSettings'
 import { normalizeMachineSecondaryCategory } from '@/constants/projectTypes'
 import {
@@ -85,6 +86,7 @@ type PersistedRoadmapState = Pick<
   | 'filters'
   | 'columnOrder'
   | 'columnOrderByView'
+  | 'columnWidths'
   | 'visibleColumns'
   | 'visibleColumnsByView'
   | 'sort'
@@ -344,6 +346,7 @@ export function createInitialRoadmapState(): RoadmapStoreState {
     productTypeFilter: 'all',
     filters: [],
     columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    columnWidths: {},
     columnOrderByView: {
       table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
       evolution: [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER],
@@ -372,6 +375,7 @@ export function createInitialRoadmapMockState(
     productTypeFilter: 'all',
     filters: [],
     columnOrder: [...DEFAULT_ROADMAP_COLUMN_ORDER],
+    columnWidths: {},
     columnOrderByView: {
       table: [...DEFAULT_ROADMAP_COLUMN_ORDER],
       evolution: [...DEFAULT_ROADMAP_EVOLUTION_COLUMN_ORDER],
@@ -783,6 +787,7 @@ function normalizeRoadmapState(persistedState: unknown, fromVersion: number | nu
       : 'all',
     filters,
     columnOrder: columnOrderByView[viewMode],
+    columnWidths: normalizeProjectListColumnWidths(ROADMAP_COLUMNS, persistedState.columnWidths),
     columnOrderByView,
     visibleColumns: visibleColumnsByView[viewMode],
     visibleColumnsByView,
@@ -810,6 +815,7 @@ export function partializeRoadmapState(state: RoadmapStore): PersistedRoadmapSta
     productTypeFilter: state.productTypeFilter,
     filters: state.filters,
     columnOrder: state.columnOrder,
+    columnWidths: state.columnWidths,
     columnOrderByView: state.columnOrderByView,
     visibleColumns: state.visibleColumns,
     visibleColumnsByView: state.visibleColumnsByView,
@@ -1009,6 +1015,10 @@ export const useRoadmapStore = create<RoadmapStore>()(
           },
         }
       }),
+      setColumnWidth: (key, width) => {
+        if (!KNOWN_COLUMN_KEYS.has(key) || !Number.isFinite(width)) return
+        set(state => ({ columnWidths: { ...state.columnWidths, [key]: clampProjectListColumnWidth(width) } }))
+      },
       setSort: sort => set({ sort: sanitizeSort(sort) }),
       setSelectedConflictKey: selectedConflictKey => set({ selectedConflictKey }),
       // Retired write boundary retained for old callers, never a second project registry.
