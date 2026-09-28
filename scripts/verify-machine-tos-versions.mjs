@@ -515,14 +515,14 @@ assert.deepEqual(
   'an unrelated update saves unchanged retired snapshots without a membership gate',
 )
 assert.equal(
-  roadmapAdapter.adaptNormalProject({ ...configurableSnapshotProject, versionType: '   ' }, []),
-  null,
-  'widening version snapshots does not loosen the nonempty requirement',
+  roadmapAdapter.adaptNormalProject({ ...configurableSnapshotProject, versionType: '   ' }, [])?.versionType,
+  '',
+  'blank optional version type remains visible as an empty value',
 )
 assert.equal(
-  roadmapAdapter.adaptNormalProject({ ...configurableSnapshotProject, developMode: '' }, []),
-  null,
-  'widening development snapshots does not loosen the nonempty requirement',
+  roadmapAdapter.adaptNormalProject({ ...configurableSnapshotProject, developMode: '' }, [])?.developMode,
+  '',
+  'blank optional development mode remains visible as an empty value',
 )
 for (const [index, configuredDevelopMode] of ['联合开发', '外研'].entries()) {
   const exactDevelopModeProject = {

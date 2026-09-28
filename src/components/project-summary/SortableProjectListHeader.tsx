@@ -276,6 +276,17 @@ export function SortableProjectListHeader({
       {...(!locked && unitKey ? sortable.attributes : {})}
       aria-label={!locked && unitKey ? `拖动${unitLabel}调整列顺序` : cellProps['aria-label']}
       {...(!locked && unitKey ? sortable.listeners : {})}
+      onKeyDown={event => {
+        // The active sensor owns navigation/drop keys until the drag finishes.
+        if (activeUnitKey) return
+        // AntD uses Enter to sort; reserve Space for keyboard column dragging.
+        if (event.key === 'Enter' || locked || !unitKey) {
+          cellProps.onKeyDown?.(event)
+          return
+        }
+        sortable.listeners?.onKeyDown?.(event)
+        if (!event.defaultPrevented) cellProps.onKeyDown?.(event)
+      }}
     >
       <span className="pms-project-list-sortable-header-content">{children}</span>
       {resizable && leafKey ? (

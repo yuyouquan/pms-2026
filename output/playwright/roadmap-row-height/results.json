@@ -1,0 +1,979 @@
+{
+  "baseUrl": "http://127.0.0.1:3034",
+  "measurements": [
+    {
+      "key": "brand",
+      "width": 80,
+      "before": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 39.999969482421875
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40.000030517578125
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "during": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "after": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      }
+    },
+    {
+      "key": "marketName",
+      "width": 80,
+      "before": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "during": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "after": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      }
+    },
+    {
+      "key": "displayName",
+      "width": 80,
+      "before": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "during": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "after": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      }
+    },
+    {
+      "key": "chipCode",
+      "width": 80,
+      "before": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "during": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "after": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      }
+    },
+    {
+      "key": "str5Date",
+      "width": 80,
+      "before": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "during": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "after": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      }
+    },
+    {
+      "key": "launchDate",
+      "width": 80,
+      "before": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "during": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "after": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      }
+    },
+    {
+      "key": "remark",
+      "width": 80,
+      "before": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "during": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      },
+      "after": {
+        "headerHeight": 49.40625,
+        "rows": [
+          {
+            "key": "normal:1",
+            "height": 40
+          },
+          {
+            "key": "normal:7",
+            "height": 40
+          },
+          {
+            "key": "normal:12",
+            "height": 40
+          },
+          {
+            "key": "normal:13",
+            "height": 40
+          },
+          {
+            "key": "normal:14",
+            "height": 40
+          },
+          {
+            "key": "normal:15",
+            "height": 40
+          },
+          {
+            "key": "normal:16",
+            "height": 40
+          },
+          {
+            "key": "normal:17",
+            "height": 40
+          },
+          {
+            "key": "normal:18",
+            "height": 40
+          },
+          {
+            "key": "normal:mock-machine-1-1",
+            "height": 40
+          }
+        ]
+      }
+    }
+  ],
+  "errors": []
+}

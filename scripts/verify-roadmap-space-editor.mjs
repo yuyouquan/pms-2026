@@ -34,4 +34,7 @@ const chipChange = buildRoadmapSpaceEditPayload(project, { ...form, chipCode: 'N
 assert.equal(chipChange.infoValues.chipModel, 'NEW-MODEL')
 assert.equal(chipChange.infoValues.chipPlatform, 'NEW-PLATFORM')
 assert.deepEqual(buildRoadmapSpaceEditPayload(project, form, chipMappings).infoValues, {}, 'unchanged historical chip keeps its stored model and platform')
+const clearedChip = buildRoadmapSpaceEditPayload(project, { ...form, chipCode: '' }, chipMappings)
+assert.equal(clearedChip.infoValues.chipCode, '', 'clearing an optional chip is submitted as an explicit empty change')
+assert.equal(buildManualProjectSpaceUpdate(project, clearedChip).fieldValues.chipCode, '', 'empty chip survives the manual project merge')
 console.log('PASS chip changes update read-only model/platform; historical chips remain intact')

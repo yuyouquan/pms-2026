@@ -1,5 +1,7 @@
 'use client'
 
+import { formatMarketName } from '@/lib/marketNameDisplay'
+
 import { useId, useState } from 'react'
 import {
   ClockCircleOutlined,
@@ -48,6 +50,7 @@ export function formatRoadmapCardValue(
   row: RoadmapProjectRow,
   versions: readonly TosVersionConfig[],
 ): string {
+  if (field === 'marketName') return formatMarketName(row.marketName, row.brand) || '—'
   if (field === 'firstSaleTosVersionId') {
     const version = versions.find(candidate => candidate.id === row.firstSaleTosVersionId)
     return version ? formatTosVersionDisplay(version) : '—'
@@ -57,7 +60,7 @@ export function formatRoadmapCardValue(
 }
 
 export function formatEvolutionCardTitle(row: RoadmapProjectRow): string {
-  const marketName = row.marketName?.trim() || '—'
+  const marketName = formatMarketName(row.marketName, row.brand) || '—'
   const projectName = row.source === 'planned' ? row.displayName : buildRoadmapDisplayName(row.projectCode, row.androidVersion, row.productType)
   return `${marketName}（${projectName || '—'}）`
 }
@@ -110,9 +113,9 @@ export default function RoadmapProjectCard({
         </Typography.Text>
         <Flex className="pms-roadmap-card-header-actions" align="center" gap={4} wrap={false}>
           <Flex className="pms-roadmap-card-header-tags" align="center" gap={4} wrap={false}>
-            <Tag color={VERSION_TYPE_TAG_COLORS[row.versionType as keyof typeof VERSION_TYPE_TAG_COLORS] ?? 'default'}>
+            {row.versionType && <Tag color={VERSION_TYPE_TAG_COLORS[row.versionType as keyof typeof VERSION_TYPE_TAG_COLORS] ?? 'default'}>
               {row.versionType}
-            </Tag>
+            </Tag>}
             <Tag color={row.productType === '新品' ? 'volcano' : 'default'}>
               {row.productType === '新品' ? 'New' : 'Old'}
             </Tag>

@@ -29,9 +29,17 @@ const { getProjectInfoModalSubmitValues, validateProjectInfoValues } = loadTypeS
 assert.deepEqual(getProjectInfoModalSubmitValues(base.type, { ...valid, fanTrialEnabled: '否' }).fanTrialCountries, valid.fanTrialCountries, 'turning off preserves configuration')
 const { getMissingProjectInfoFields } = loadTypeScriptModule(root, 'src/lib/projectInfoCompletion.ts')
 assert.ok(!getMissingProjectInfoFields(base).some(field => field.key.startsWith('fanTrial')))
-for (const projectAttribute of ['formal', 'budget', 'roadmap']) {
+for (const projectAttribute of ['formal', 'budget']) {
   assert.ok(getMissingProjectInfoFields({ ...base, projectAttribute, fieldValues: { fanTrialEnabled: '是' } }).some(field => field.key === 'fanTrialCountries'))
 }
+const roadmap = { ...base, projectAttribute: 'roadmap', fieldValues: { fanTrialEnabled: '是' } }
+assert.deepEqual(getMissingProjectInfoFields(roadmap).map(field => field.key),
+  ['secondaryCategory', 'androidVersion', 'productType', 'firstSaleTosVersion'],
+  'roadmap completion requires only the four roadmap fields')
+assert.deepEqual(getMissingProjectInfoFields({ ...roadmap, fieldValues: {
+  ...roadmap.fieldValues, secondaryCategory: '新产品研发', androidVersion: 'Android 16',
+  productType: '手机', firstSaleTosVersion: 'tOS 16.0',
+} }), [], 'optional fan-trial details do not add a roadmap completion task')
 const { createInitialEnumRows } = loadTypeScriptModule(root, 'src/lib/enumValues.ts')
 const { migrateEnumState, ENUM_STORE_VERSION } = loadTypeScriptModule(root, 'src/stores/enums.ts')
 assert.ok(migrateEnumState({ rowsByType: {} }, 4).rowsByType['fan-trial-country'].length > 0)

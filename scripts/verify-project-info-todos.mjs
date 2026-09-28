@@ -20,8 +20,9 @@ const machine = { ...base, id: 'machine', type: '整机产品项目', fieldValue
 assert.ok(!getMissingProjectInfoFields(machine).some(field => field.key === 'isTwoStage'))
 assert.ok(getMissingProjectInfoFields({ ...machine, fieldValues: { ...machine.fieldValues, developmentMode: 'ODC' } }).some(field => field.key === 'isTwoStage'))
 const roadmap = { ...machine, projectAttribute: 'roadmap' }
-for (const key of ['brand', 'marketName', 'productLine', 'str5Date', 'launchDate', 'androidVersion', 'startingRam']) assert.ok(getMissingProjectInfoFields(roadmap).some(field => field.key === key), key)
-assert.ok(!getMissingProjectInfoFields(roadmap).some(field => field.key === 'softwareProjectLevel'), 'roadmaps use their original form contract')
+assert.deepEqual(getMissingProjectInfoFields(roadmap).map(field => field.key),
+  ['secondaryCategory', 'androidVersion', 'productType', 'firstSaleTosVersion'])
+assert.ok(!getMissingProjectInfoFields(roadmap).some(field => field.key === 'softwareProjectLevel'), 'roadmaps use the four-field contract')
 const legacy = { ...complete }; delete legacy.projectAttribute
 assert.deepEqual(getMissingProjectInfoFields(legacy), [])
 console.log('PASS roadmap, conditional and legacy project rules')
@@ -62,18 +63,25 @@ assert.deepEqual(getMissingProjectInfoFields(pendingSample).map(field => field.k
 assert.deepEqual(getMissingProjectInfoFields(completedSample), [])
 assert.equal(build([pendingSample, completedSample]).length, 0, 'both incomplete and complete budget mocks are excluded')
 const roadmapSample = RESOURCE_REGISTRY_PROJECTS.find(project => project.id === 'mock-roadmap-incomplete')
-assert.deepEqual(getMissingProjectInfoFields(roadmapSample).map(field => field.key), ['str5Date', 'launchDate'])
+assert.deepEqual(getMissingProjectInfoFields(roadmapSample).map(field => field.key), [], 'optional dates do not block roadmap completion')
 const { buildManualProjectSpaceUpdate } = loadTypeScriptModule(root, 'src/lib/manualProjectCompletion.ts')
 const saved = buildManualProjectSpaceUpdate(roadmapSample, {
   infoValues: { str5Date: '2026-10-01', launchDate: '2026-11-01' }, responsiblePersons: roadmapSample.responsiblePersons,
   healthStatus: roadmapSample.healthStatus, projectStatus: roadmapSample.status, projectSecondaryCategory: roadmapSample.secondaryCategory,
 })
-assert.equal(build([saved]).length, 0, 'the actual manual save payload completes the task')
-const partial = buildManualProjectSpaceUpdate(roadmapSample, {
+assert.equal(build([saved]).length, 0, 'saving optional dates keeps the roadmap project complete')
+const missingAndroid = { ...roadmapSample, androidVersion: '', fieldValues: { ...roadmapSample.fieldValues, androidVersion: '' } }
+assert.deepEqual(getMissingProjectInfoFields(missingAndroid).map(field => field.key), ['androidVersion'])
+const partial = buildManualProjectSpaceUpdate(missingAndroid, {
   infoValues: { str5Date: '2026-10-01' }, responsiblePersons: roadmapSample.responsiblePersons,
   healthStatus: roadmapSample.healthStatus, projectStatus: roadmapSample.status, projectSecondaryCategory: roadmapSample.secondaryCategory,
 })
-assert.equal(build([partial]).length, 1, 'saving another field cannot complete missing information')
+assert.equal(build([partial]).length, 1, 'saving an optional date cannot complete a missing required field')
+const completed = buildManualProjectSpaceUpdate(missingAndroid, {
+  infoValues: { androidVersion: 'Android 17' }, responsiblePersons: roadmapSample.responsiblePersons,
+  healthStatus: roadmapSample.healthStatus, projectStatus: roadmapSample.status, projectSecondaryCategory: roadmapSample.secondaryCategory,
+})
+assert.equal(build([completed]).length, 0, 'saving the fourth required field completes the task')
 assert.ok(getMissingProjectInfoFields({ ...base, type: 'tOS版本项目', projectAttribute: 'budget', fieldValues: {} }).some(field => field.key === 'firstLaunchProjects'))
 assert.deepEqual(getMissingProjectInfoFields({ ...base, type: '能力建设项目' }), [], 'capability projects have no additional required schema fields')
 console.log('PASS fresh mocks, real save payload, partial completion and all project types')

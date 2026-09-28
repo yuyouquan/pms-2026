@@ -1,0 +1,32 @@
+{
+  "results": [
+    {
+      "name": "verify-machine-tos-versions.mjs",
+      "code": 0
+    },
+    {
+      "name": "verify-project-resource-fixtures.mjs",
+      "code": 0
+    },
+    {
+      "name": "verify-roadmap-registry.mjs",
+      "code": 0
+    },
+    {
+      "name": "verify-roadmap-space-editor.mjs",
+      "code": 0
+    },
+    {
+      "name": "verify-project-roadmap.mjs",
+      "code": 0
+    },
+    {
+      "name": "verify-roadmap-mock-seeds.mjs",
+      "code": 0
+    },
+    {
+      "name": "verify-project-info-todos.mjs",
+      "code": 0
+    }
+  ]
+}

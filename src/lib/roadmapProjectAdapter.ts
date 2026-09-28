@@ -3,17 +3,16 @@ import {
   isMachineProjectType,
   MACHINE_PROJECT_TYPES,
   normalizeMachineSecondaryCategory,
-  resolveProjectClassification,
   type MachineProjectType,
 } from '@/constants/projectTypes'
 import {
-  isExactIsoDate,
   buildRoadmapDisplayName,
   buildRoadmapDuplicateKey,
   normalizeLegacyRoadmapProductType,
   normalizeRoadmapTosReference,
 } from '@/lib/roadmapValidation'
 import { formatPrimaryChipCode } from '@/lib/enumConsumers'
+import { getProjectInfoValue, type ProjectInfoProject } from '@/lib/projectInfoValues'
 import type { ProjectItem } from '@/types/app'
 import type {
   PlannedRoadmapProject,
@@ -41,14 +40,25 @@ function firstNonBlank(...values: unknown[]): string {
   return ''
 }
 
+function infoString(project: ProjectItem, key: string, ...fallbacks: unknown[]): string {
+  const value = getProjectInfoValue(project as unknown as ProjectInfoProject, key)
+  return typeof value === 'string' ? value.trim() : firstNonBlank(...fallbacks)
+}
+
+export function isVisibleRoadmapStatus(status: string): boolean {
+  return status !== '已取消' && status !== '已暂停'
+}
+
 function extractNamedChipCode(value: unknown): string {
   if (typeof value !== 'string') return ''
   return value.trim().match(/-([^_\s]+)_(?:[^_\s]+)$/)?.[1]?.trim() ?? ''
 }
 
 export function resolveNormalProjectChipCode(project: ProjectItem): string {
+  if (project.fieldValues && Object.prototype.hasOwnProperty.call(project.fieldValues, 'chipCode')) {
+    return formatPrimaryChipCode(project.fieldValues?.chipCode)
+  }
   return firstNonBlank(
-    formatPrimaryChipCode(project.fieldValues?.chipCode),
     extractNamedChipCode(project.projectCode),
     extractNamedChipCode(project.name),
   )
@@ -106,13 +116,14 @@ function resolveTosVersionId(
   productType: RoadmapProductType,
   versions: readonly TosVersionConfig[],
 ): string | null {
+  const infoKey = productType === '新品' ? 'firstSaleTosVersion' : 'currentTosVersion'
+  if (project.fieldValues && Object.prototype.hasOwnProperty.call(project.fieldValues, infoKey)) {
+    return findTosVersionId(project.fieldValues[infoKey], versions)
+  }
   const preferredCandidates = productType === '新品'
-    ? [project.firstSaleTosVersionId, project.firstSaleTosVersion]
-    : [project.currentTosVersionId, project.currentTosVersion]
-  const explicitCandidate = preferredCandidates.find(candidate => (
-    typeof candidate === 'string' && candidate.trim()
-  ))
-  if (explicitCandidate) return findTosVersionId(explicitCandidate, versions)
+    ? project.firstSaleTosVersionId ?? project.firstSaleTosVersion
+    : project.currentTosVersionId ?? project.currentTosVersion
+  if (typeof preferredCandidates === 'string') return findTosVersionId(preferredCandidates, versions)
 
   for (const candidate of [project.tosVersionName, project.tosVersion]) {
     const resolved = findTosVersionId(candidate, versions)
@@ -142,32 +153,30 @@ function uniqueRowsBySourceAndId(
 export function adaptNormalProject(
   project: ProjectItem,
   versions: TosVersionConfig[],
+  options: { includeHidden?: boolean; includeIncomplete?: boolean } = {},
 ): RoadmapProjectRow | null {
-  if (!isFormalProject(project) || !isMachineProjectType(project.type)) return null
+  if (!isFormalProject(project) || !isMachineProjectType(project.type)
+    || (!options.includeHidden && !isVisibleRoadmapStatus(project.status))) return null
 
-  const projectCode = firstNonBlank(project.projectCode, project.model)
-  const androidVersion = normalizeAndroidVersion(project.androidVersion, project.operatingSystem)
-  const productType = normalizeNormalProductType(project.productType)
+  const projectCode = firstNonBlank(project.projectCode, project.model, project.name)
+  const androidVersion = normalizeAndroidVersion(infoString(project, 'androidVersion', project.androidVersion), project.operatingSystem)
+  const productType = normalizeNormalProductType(infoString(project, 'productType', project.productType))
   const firstSaleTosVersionId = productType ? resolveTosVersionId(project, productType, versions) : null
-  const brand = normalizeBrand(project.brand)
+  const brand = normalizeBrand(infoString(project, 'brand', project.brand))
   const startRam = normalizeRam(project.startRam, project.memory)
   const versionType = normalizeVersionType(project.versionType)
   const developMode = normalizeNormalDevelopMode(project.developMode)
   const machineProjectType = firstNonBlank(project.secondaryCategory)
     ? normalizeMachineSecondaryCategory(project.secondaryCategory)
-    : resolveProjectClassification(project.type).secondaryCategory
-  if (
+    : ''
+  if (!options.includeIncomplete && (
     !machineProjectType
     || !MACHINE_PROJECT_TYPES.includes(machineProjectType as MachineProjectType)
     || !projectCode
     || !androidVersion
     || !productType
     || !firstSaleTosVersionId
-    || !brand
-    || !startRam
-    || !versionType
-    || !developMode
-  ) {
+  )) {
     return null
   }
   const remark = typeof project.remark !== 'string'
@@ -181,22 +190,22 @@ export function adaptNormalProject(
     readOnly: true,
     machineProjectType: machineProjectType as MachineProjectType,
     projectCode,
-    displayName: buildRoadmapDisplayName(projectCode, androidVersion, productType),
-    androidVersion,
-    firstSaleTosVersionId,
-    brand,
-    productLine: firstNonBlank(project.productLine),
-    productSeries: firstNonBlank(project.productSeries),
-    marketName: firstNonBlank(project.marketName),
-    productType,
+    displayName: buildRoadmapDisplayName(projectCode, (androidVersion || '') as RoadmapAndroidVersion, (productType || '') as RoadmapProductType),
+    androidVersion: (androidVersion || '') as RoadmapAndroidVersion,
+    firstSaleTosVersionId: firstSaleTosVersionId || '',
+    brand: (brand || '') as RoadmapBrand,
+    productLine: infoString(project, 'productLine', project.productLine),
+    productSeries: infoString(project, 'productSeries', project.productSeries),
+    marketName: infoString(project, 'marketName', project.marketName),
+    productType: (productType || '') as RoadmapProductType,
     chipCode: resolveNormalProjectChipCode(project),
-    startRam,
-    versionType,
-    str5Date: firstNonBlank(project.str5Date),
+    startRam: startRam || '',
+    versionType: versionType || '',
+    str5Date: infoString(project, 'str5Date', project.str5Date),
     str5Estimated: false,
-    launchDate: firstNonBlank(project.launchDate),
+    launchDate: infoString(project, 'launchDate', project.launchDate),
     launchEstimated: false,
-    developMode,
+    developMode: developMode || '',
     remark,
   }
 }
@@ -220,26 +229,33 @@ export function projectRegistryToPlanned(project: ProjectItem): PlannedRoadmapPr
   return {
     id: project.id, status: '待规划', displayName: project.name,
     machineProjectType: (project.secondaryCategory || '') as PlannedRoadmapProject['machineProjectType'],
-    projectCode: project.projectCode || '', androidVersion: (project.androidVersion || '') as PlannedRoadmapProject['androidVersion'],
-    firstSaleTosVersionId: normalizeRoadmapTosReference(project.firstSaleTosVersionId || project.firstSaleTosVersion || ''),
-    brand: (project.brand || '') as PlannedRoadmapProject['brand'], productLine: project.productLine || '',
-    productSeries: project.productSeries || '', marketName: project.marketName || '',
-    productType: (project.productType || '') as PlannedRoadmapProject['productType'],
+    projectCode: project.projectCode || '', androidVersion: infoString(project, 'androidVersion', project.androidVersion) as PlannedRoadmapProject['androidVersion'],
+    firstSaleTosVersionId: normalizeRoadmapTosReference(infoString(project, 'firstSaleTosVersion', project.firstSaleTosVersionId, project.firstSaleTosVersion)),
+    brand: infoString(project, 'brand', project.brand) as PlannedRoadmapProject['brand'], productLine: infoString(project, 'productLine', project.productLine),
+    productSeries: infoString(project, 'productSeries', project.productSeries), marketName: infoString(project, 'marketName', project.marketName),
+    productType: infoString(project, 'productType', project.productType) as PlannedRoadmapProject['productType'],
     chipCode: formatPrimaryChipCode(project.fieldValues?.chipCode), startRam: project.startRam || '',
-    versionType: project.versionType || '', str5Date: project.str5Date || '', launchDate: project.launchDate || '',
+    versionType: infoString(project, 'versionType', project.versionType), str5Date: infoString(project, 'str5Date', project.str5Date), launchDate: infoString(project, 'launchDate', project.launchDate),
     str5Estimated: project.str5Estimated ?? false, launchEstimated: project.launchEstimated ?? false,
-    developMode: project.developMode || '', remark: project.remark || '',
+    developMode: infoString(project, 'developmentMode', project.developMode), remark: infoString(project, 'remark', project.remark),
     createdAt: project.createdAt || '', createdBy: project.createdBy || '', updatedAt: project.updatedAt || '',
     updatedBy: project.createdBy || '',
   }
 }
 
-export function adaptRegistryRoadmapProject(project: ProjectItem): RoadmapProjectRow | null {
-  if (getProjectAttribute(project) !== 'roadmap') return null
-  return { ...projectRegistryToPlanned(project), source: 'planned', readOnly: true }
+export function adaptRegistryRoadmapProject(
+  project: ProjectItem,
+  options: { includeHidden?: boolean; includeIncomplete?: boolean } = {},
+): RoadmapProjectRow | null {
+  if (getProjectAttribute(project) !== 'roadmap'
+    || (!options.includeHidden && !isVisibleRoadmapStatus(project.status))) return null
+  const row = projectRegistryToPlanned(project)
+  if (!options.includeIncomplete && (!MACHINE_PROJECT_TYPES.includes(row.machineProjectType)
+    || !ROADMAP_ANDROID_VERSIONS.has(row.androidVersion)
+    || (row.productType !== '新品' && row.productType !== '老品')
+    || !row.firstSaleTosVersionId)) return null
+  return { ...row, status: project.status, source: 'planned', readOnly: true }
 }
-
-export const canPositionRoadmapRow = (row: RoadmapProjectRow): boolean => row.source === 'normal' || isExactIsoDate(row.str5Date) || isExactIsoDate(row.launchDate)
 
 export function mergeRoadmapProjects(
   projects: ProjectItem[],
