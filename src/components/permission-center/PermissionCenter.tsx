@@ -20,7 +20,7 @@ import { buildPermissionMenuTree, CONFIGURABLE_PERMISSION_MENUS, getMenuGroupKey
 import styles from '@/components/permission-center/PermissionCenter.module.css'
 
 type ViewMode = 'role' | 'person'
-type ContentTab = 'functional' | 'data'
+type ContentTab = 'assignees' | 'functional' | 'data'
 const dataMenus = () => CONFIGURABLE_PERMISSION_MENUS.filter(menu => getPermissionFields(menu.id).length > 0)
 const filterDataNodes = (nodes: PermissionMenuNode[]): PermissionMenuNode[] => nodes.flatMap(node => {
   if (node.isLeaf) return dataMenus().some(menu => menu.id === node.key) ? [node] : []
@@ -33,7 +33,7 @@ export default function PermissionCenter() {
   const actor = useProjectStore(state => state.currentLoginUser)
   const permission = useMenuPermission(actor, 'permission.center')
   const [viewMode, setViewMode] = useState<ViewMode>('role')
-  const [contentTab, setContentTab] = useState<ContentTab>('functional')
+  const [contentTab, setContentTab] = useState<ContentTab>('assignees')
   const [roleId, setRoleId] = useState(SUPER_ADMIN_ROLE_ID)
   const [personName, setPersonName] = useState('')
   const [menuId, setMenuId] = useState<PermissionMenuId>('project.view')
@@ -46,14 +46,19 @@ export default function PermissionCenter() {
   const [menuExpanded, setMenuExpanded] = useState<Key[]>(() => getMenuGroupKeys(filterDataNodes(buildPermissionMenuTree())))
   const [formRole, setFormRole] = useState<PermissionCenterRole | 'new' | null>(null)
   const [conditionDirty, setConditionDirty] = useState(false)
+  const [assigneeDirty, setAssigneeDirty] = useState(false)
   const [formDirty, setFormDirty] = useState(false)
   const [editorEpoch, setEditorEpoch] = useState(0)
   const setDraft = useUiStore(state => state.setPermissionCenterHasDraft)
   const onConditionDirty = useCallback((dirty: boolean) => {
     setConditionDirty(dirty)
-    setDraft(dirty || formDirty)
-  }, [formDirty, setDraft])
-  useEffect(() => { setDraft(conditionDirty || formDirty) }, [conditionDirty, formDirty, setDraft])
+    setDraft(dirty || formDirty || assigneeDirty)
+  }, [formDirty, assigneeDirty, setDraft])
+  const onAssigneeDirty = useCallback((dirty: boolean) => {
+    setAssigneeDirty(dirty)
+    setDraft(dirty || formDirty || conditionDirty)
+  }, [formDirty, conditionDirty, setDraft])
+  useEffect(() => { setDraft(conditionDirty || formDirty || assigneeDirty) }, [conditionDirty, formDirty, assigneeDirty, setDraft])
   useEffect(() => () => setDraft(false), [setDraft])
   useEffect(() => {
     const media = window.matchMedia('(max-width: 760px)')
@@ -66,7 +71,7 @@ export default function PermissionCenter() {
   const person = assignedUsers.includes(personName) ? personName : assignedUsers[0]
   const menu = dataMenus().find(item => item.id === menuId)
   const navigate = (action: () => void) => useUiStore.getState().navigateWithEditGuard(() => {
-    setConditionDirty(false); setFormDirty(false); setDraft(false); setEditorEpoch(value => value + 1); action()
+    setConditionDirty(false); setFormDirty(false); setAssigneeDirty(false); setDraft(false); setEditorEpoch(value => value + 1); action()
   }, false)
   if (!model || !permission.can('manage')) return <Empty description="没有权限中心管理权限" />
   const title = (label: string) => <Tooltip title={label} placement="right"><span className={styles.node}>{label}</span></Tooltip>
@@ -91,6 +96,7 @@ export default function PermissionCenter() {
       },
     }))
   }
+  const activeTab = viewMode === 'person' && contentTab === 'assignees' ? 'functional' : contentTab
   const personRoles = person ? model.roles.filter(item => isRoleAssignedToUser(item, person)) : []
   return <section className={styles.page} aria-label="权限中心">
     <div className="pms-project-management__view-mode"><Segmented<ViewMode> aria-label="权限中心视图" value={viewMode}
@@ -122,16 +128,16 @@ export default function PermissionCenter() {
             <div className={styles.muted}>{model.groups.find(group => group.id === role.groupId)?.name}</div>
             {role.description && <div className={`${styles.muted} ${styles.description}`}>{role.description}</div>}
           </div>{role.id !== SUPER_ADMIN_ROLE_ID && <Space><Button icon={<EditOutlined />} onClick={() => navigate(() => setFormRole(role))}>编辑</Button><Button danger icon={<DeleteOutlined />} onClick={deleteRole}>删除</Button></Space>}</div>
-          <RoleAssignees key={role.id} actor={actor} model={model} role={role} conditionDirty={conditionDirty} />
         </> : <Empty description="暂无角色，请先添加角色" /> : person ? <div className={styles.personHeader}>
           <div className={styles.roleTitle}>{person}</div>
           <div className={styles.muted}>只读有效权限 · {personRoles.length} 个来源角色</div>
           <div className={styles.personSources}>{personRoles.map(source => <Tag key={source.id}>{source.name} · {source.members.includes(person) ? '直接授权' : '部门授权：' + (source.departments ?? []).filter(department => PERMISSION_USER_DEPARTMENTS[person]?.includes(department)).join('、')}</Tag>)}</div>
         </div> : <Empty description="暂无已授权人员" />}
         {((viewMode === 'role' && role) || (viewMode === 'person' && person)) && <>
-          <Tabs className={styles.contentTabs} activeKey={contentTab} onChange={key => navigate(() => setContentTab(key as ContentTab))}
-            items={[{ key: 'functional', label: '功能权限' }, { key: 'data', label: '数据权限' }]} />
-          {contentTab === 'functional'
+          <Tabs className={styles.contentTabs} activeKey={activeTab} onChange={key => navigate(() => setContentTab(key as ContentTab))}
+            items={[...(viewMode === 'role' ? [{ key: 'assignees', label: '人员配置' }] : []), { key: 'functional', label: '功能权限' }, { key: 'data', label: '数据权限' }]} />
+          {activeTab === 'assignees' && role ? <RoleAssignees key={`${role.id}:${editorEpoch}`} actor={actor} model={model} role={role} conditionDirty={conditionDirty} onDirtyChange={onAssigneeDirty} />
+            : activeTab === 'functional'
             ? <FunctionalMatrix key={viewMode === 'role' ? role!.id : person} model={model} actor={actor}
                 role={viewMode === 'role' ? role : undefined} person={viewMode === 'person' ? person : undefined} conditionDirty={conditionDirty} />
             : <div className={styles.configurationBody}>

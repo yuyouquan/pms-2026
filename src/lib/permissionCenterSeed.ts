@@ -9,7 +9,7 @@ export function createPermissionCenterSeed(): PermissionCenterModel {
     version: 2,
     groups: [{ id: 'group-admin', name: '管理组' }, { id: 'group-roadmap', name: 'tOS路标组' }, { id: 'group-project', name: '项目组' }],
     roles: [
-      { id: SUPER_ADMIN_ROLE_ID, groupId: 'group-admin', name: '系统超级管理员', description: '内置全系统超级管理员', members: ['演示用户01', '演示用户07'], departments: [], builtin: 'superadmin' },
+      { id: SUPER_ADMIN_ROLE_ID, groupId: 'group-admin', name: '系统超级管理员', description: '内置全系统超级管理员', members: ['演示用户01', '演示用户07', 'SnoopyYu'], departments: [], builtin: 'superadmin' },
       { id: 'admin', groupId: 'group-admin', name: '管理员', description: '管理配置中心及角色授权，按明确菜单授权生效', members: ['演示用户03'], departments: [] },
       { id: 'roadmap-manager', groupId: 'group-roadmap', name: 'tOS路标管理组', description: '维护路标表单与版本演进图', members: ['演示用户02'], departments: [] },
       { id: 'roadmap-reader-all', groupId: 'group-roadmap', name: 'tOS路标查看组-全量查看', description: '查看全部品牌路标', members: [], departments: ['示例质量组'] },

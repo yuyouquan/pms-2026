@@ -96,7 +96,7 @@ export const resolvePermissionProjectId = (projectId: string, parentProjectId?: 
 )
 
 export const PERMISSION_STORAGE_KEY = 'pms-project-permissions'
-export const PERMISSION_STORAGE_VERSION = 4
+export const PERMISSION_STORAGE_VERSION = 5
 
 // ─── Defaults shared by every project's initial role-permission slot ─
 
@@ -391,14 +391,23 @@ export function migratePermissionState(persistedState: unknown, version: number)
   if (version < 2 && rolesByProject['1']) {
     rolesByProject['1'] = withProjectSpecificMockMembers('1', rolesByProject['1'])
   }
+  let center = persistedState.permissionCenterError ? emptyPermissionCenter()
+    : Object.prototype.hasOwnProperty.call(persistedState, 'permissionCenter')
+      ? isRecord(persistedState.permissionCenter) && persistedState.permissionCenter.version === 1
+        ? createPermissionCenterSeed() : parsePermissionCenter(persistedState.permissionCenter)
+      : Array.isArray(persistedState.globalRoles) ? createPermissionCenterSeed() : undefined
+  // One-time, additive mock update. Never restore a missing/invalid administrator,
+  // or re-add this user after an explicit removal from an upgraded snapshot.
+  if (center && version < 5 && !persistedState.permissionCenterError) {
+    const admin = center.roles.find(role => role.id === SUPER_ADMIN_ROLE_ID && role.builtin === 'superadmin')
+    if (admin?.members.some(user => isPermissionCenterAdmin(center, user)) && !admin.members.includes('SnoopyYu')) {
+      center = { ...center, roles: center.roles.map(role => role === admin ? { ...role, members: [...role.members, 'SnoopyYu'] } : role) }
+    }
+  }
   return {
     ...(!Object.prototype.hasOwnProperty.call(persistedState, 'permissionCenter') && !Object.prototype.hasOwnProperty.call(persistedState, 'globalRoles') ? { [LEGACY_PROJECT_ONLY_MIGRATION]: true as const } : {}),
     ...(persistedState.permissionCenterError ? { permissionCenterError: PERMISSION_CORRUPTION_ERROR } : {}),
-    ...(persistedState.permissionCenterError ? { permissionCenter: emptyPermissionCenter() }
-      : Object.prototype.hasOwnProperty.call(persistedState, 'permissionCenter') ? {
-        permissionCenter: isRecord(persistedState.permissionCenter) && persistedState.permissionCenter.version === 1
-          ? createPermissionCenterSeed() : parsePermissionCenter(persistedState.permissionCenter),
-      } : Array.isArray(persistedState.globalRoles) ? { permissionCenter: createPermissionCenterSeed() } : {}),
+    ...(center ? { permissionCenter: center } : {}),
     ...(isRecord(persistedState.projectTypesByProject) ? { projectTypesByProject: Object.fromEntries(Object.entries(persistedState.projectTypesByProject).filter(([id, type]) => id.trim() && typeof type === 'string' && type.trim())) as Record<string, string> } : {}),
     ...(Array.isArray(persistedState.globalRoles) ? { globalRoles: sanitizeRolesByProject({ global: persistedState.globalRoles }).global ?? [] } : {}),
     ...(isRecord(persistedState.globalRolePerms) ? { globalRolePerms: sanitizeGlobalPermissions(persistedState.globalRolePerms) } : {}),
@@ -572,7 +581,7 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
 
   // Global roles
   globalRoles: [
-    { name: '管理组', members: ['演示用户01', '演示用户07'], isFixed: true },
+    { name: '管理组', members: ['演示用户01', '演示用户07', 'SnoopyYu'], isFixed: true },
     { name: '编辑组', members: ['演示用户02', '演示用户04', '演示用户03'], isFixed: true },
     { name: '查看组', members: ['演示用户05', '演示用户06', '演示用户08'], isFixed: true },
   ],

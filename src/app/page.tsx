@@ -186,7 +186,7 @@ export default function Home() {
         width={420}
       >
         <div style={{ padding: '12px 0', fontSize: 14, color: '#4b5563' }}>
-          {permissionDraft ? '筛选条件或角色表单尚未完成，离开将丢弃未生效的输入。是否继续？' : '您还未提交现有编辑内容，是否要离开该界面？'}
+          {permissionDraft ? '权限配置尚未确认，离开将丢弃未生效的输入。是否继续？' : '您还未提交现有编辑内容，是否要离开该界面？'}
         </div>
       </Modal>
     </>

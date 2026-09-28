@@ -438,6 +438,7 @@ export function sortTeamMembers(members: TMTeamMember[]): TMTeamMember[] {
 export const NOTIFY_DIFF_FIELDS = ['taskName', 'planStartDate', 'planEndDate', 'responsible', 'predecessor'] as const
 
 export const MOCK_USER_MAP: Record<string, FeishuRecipient> = {
+  'SnoopyYu': { openId: 'ou_mock_demo_snoopy_yu', email: 'snoopy_yu@example.com', name: 'SnoopyYu' },
   '演示用户01': { openId: 'ou_mock_demo_user_01', email: 'demo_user_01@example.com', name: '演示用户01' },
   '演示用户02': { openId: 'ou_mock_demo_user_02',     email: 'demo_user_02@example.com',     name: '演示用户02' },
   '演示用户03': { openId: 'ou_mock_demo_user_03',   email: 'demo_user_03@example.com',   name: '演示用户03' },

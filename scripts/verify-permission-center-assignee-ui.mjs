@@ -22,17 +22,26 @@ const react = {
 }
 const element = (type, props, key) => ({ type, props: props ?? {}, key })
 let mutationCalls = 0
+let failWrite = false
+let lastAssignment
+let liveRole
+const dirtyChanges = []
 const store = { usePermissionStore: { getState: () => ({
-  setCenterRoleAssignees: () => {
+  permissionCenter: { roles: [liveRole] },
+  setCenterRoleAssignees: (actor, id, assignment) => {
     mutationCalls++
-    return mutationCalls === 1 ? { ok: false, error: '模拟存储失败' } : { ok: true }
+    lastAssignment = assignment
+    if (failWrite) return { ok: false, error: '模拟存储失败' }
+    liveRole = { ...liveRole, members: assignment.users, departments: assignment.departments }
+    return { ok: true }
   },
   setSuperAdminMembers: () => { throw new Error('unexpected superadmin mutation') },
 }) } }
 const modules = {
   react,
   'react/jsx-runtime': { jsx: element, jsxs: element },
-  antd: { Alert: 'Alert', Button: 'Button', Select: 'Select' },
+  antd: { Alert: 'Alert', Button: 'Button', Tag: 'Tag', Select: 'Select' },
+  '@/components/permission-center/AssigneePickerModal': { default: 'AssigneePickerModal', __esModule: true },
   '@ant-design/icons': { CheckCircleOutlined: 'CheckCircleOutlined' },
   '@/constants/permissionCenter': {
     PERMISSION_DEPARTMENTS: ['部门A'], PERMISSION_USERS: ['人员A', '人员B'],
@@ -49,10 +58,11 @@ new Function('require', 'module', 'exports', compiled)((name) => {
 }, loaded, loaded.exports)
 const RoleAssignees = loaded.exports.default
 const role = { id: 'custom:role', name: '测试角色', members: ['人员A'], departments: [], groupId: 'group', description: '' }
-const props = { actor: '人员A', model: { roles: [role] }, role, conditionDirty: false }
+liveRole = role
+const props = { actor: '人员A', model: { roles: [role] }, conditionDirty: false, onDirtyChange: dirty => dirtyChanges.push(dirty) }
 function render(dirty) {
   cursor = 0
-  return RoleAssignees({ ...props, conditionDirty: dirty })
+  return RoleAssignees({ ...props, role: liveRole, conditionDirty: dirty })
 }
 function find(node, predicate) {
   if (!node || typeof node !== 'object') return undefined
@@ -64,25 +74,47 @@ function find(node, predicate) {
   }
 }
 
+const config = (tree, name) => find(tree, node => node.type === 'Button' && node.props['aria-label'] === name)
+const modal = tree => find(tree, node => node.type === 'AssigneePickerModal')
 let tree = render(false)
-const userSelector = find(tree, node => node.type === 'Select' && node.props['aria-label'] === '授权人员')
-assert(userSelector, 'actual personnel selector must render')
-userSelector.props.onChange(['人员A', '人员B'])
-assert.equal(mutationCalls, 1, 'initial assignment write attempted once')
+assert.equal(find(tree, node => node.type === 'Select'), undefined, 'Main view must have no editable assignment selectors')
+assert(config(tree, '配置授权人员'), 'People are configured through an explicit button')
+config(tree, '配置授权人员').props.onClick()
+assert.deepEqual(modal(render(false)).props.values, ['人员A'])
+modal(render(false)).props.onChange(['人员A', '人员B'])
+assert.equal(mutationCalls, 0, 'Selecting people only changes modal draft')
+assert.equal(dirtyChanges.at(-1), true)
+modal(render(false)).props.onCancel()
+assert.equal(modal(render(false)), undefined)
+assert.equal(mutationCalls, 0, 'Cancel must not mutate authorization')
+assert.equal(dirtyChanges.at(-1), false)
+config(render(false), '配置授权人员').props.onClick()
+assert.deepEqual(modal(render(false)).props.values, ['人员A'], 'Cancelled draft is discarded on reopen')
+modal(render(false)).props.onChange(['人员B'])
+liveRole = { ...liveRole, departments: ['部门A'] }
+modal(render(false)).props.onConfirm()
+assert.equal(mutationCalls, 1)
+assert.deepEqual(lastAssignment, { users: ['人员B'], departments: ['部门A'] }, 'Confirm preserves latest opposite field')
+assert.equal(modal(render(false)), undefined, 'Success closes the modal')
+assert.equal(dirtyChanges.at(-1), false)
+assert.equal(find(render(false), node => node.type === 'Tag' && node.props.closable), undefined, 'Confirmed tags are read-only')
 
-tree = render(false)
-assert(find(tree, node => node.type === 'Alert')?.props.message.includes('模拟存储失败'), 'storage error must remain visible')
-tree = render(true)
-const retryDuringDraft = find(tree, node => node.type === 'Alert').props.action
-assert.equal(retryDuringDraft.props.disabled, true, 'retry affordance is disabled while condition is incomplete')
-retryDuringDraft.props.onClick()
-assert.equal(mutationCalls, 1, 'even a retained retry callback cannot write during incomplete condition')
-assert(find(render(true), node => node.type === 'Alert')?.props.message.includes('请先完成筛选条件'), 'guard explains why retry was rejected')
-
-tree = render(false)
-const retryAfterDraft = find(tree, node => node.type === 'Alert').props.action
-assert.equal(retryAfterDraft.props.disabled, false)
-retryAfterDraft.props.onClick()
-assert.equal(mutationCalls, 2, 'retry writes once after condition is resolved or discarded')
-assert.equal(find(render(false), node => node.type === 'Alert'), undefined, 'successful retry clears the error')
-console.log('PASS assignment retry honors current condition draft and resumes after resolution')
+config(render(false), '配置授权部门').props.onClick()
+assert.deepEqual(modal(render(false)).props.values, ['部门A'])
+modal(render(false)).props.onChange([])
+failWrite = true
+modal(render(false)).props.onConfirm()
+assert.equal(mutationCalls, 2)
+assert(modal(render(false)).props.error.includes('模拟存储失败'))
+assert.deepEqual(modal(render(false)).props.values, [], 'Failed confirm preserves draft for retry')
+const retainedConfirm = modal(render(false)).props.onConfirm
+render(true)
+retainedConfirm()
+assert.equal(mutationCalls, 2, 'Retained confirm cannot bypass a new incomplete data condition')
+assert(modal(render(true)).props.error.includes('请先完成筛选条件'))
+failWrite = false
+modal(render(false)).props.onConfirm()
+assert.equal(mutationCalls, 3)
+assert.deepEqual(lastAssignment, { users: ['人员B'], departments: [] })
+assert.equal(modal(render(false)), undefined)
+console.log('PASS modal-only assignment drafts, cancellation, atomic confirm, latest field preservation, error retry, draft guard and read-only result')

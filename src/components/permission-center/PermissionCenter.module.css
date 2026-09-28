@@ -15,8 +15,7 @@
 .node { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .content { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--pms-surface-solid, #fff); border-radius: 16px; padding: 12px; border-top: 2px solid var(--pms-brand); box-shadow: 0 0 20px rgba(211,208,255,.5); }
 .roleHeader { display: flex; flex-shrink: 0; gap: 12px; justify-content: space-between; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,.08); }
-.assignees { flex-shrink: 0; padding-bottom: 10px; border-bottom: 1px solid rgba(0,0,0,.08); }
-.assigneeHeading { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; font-size: 13px; }
+.assignees { flex: 1; min-height: 0; overflow-y: auto; }
 .alert { margin-bottom: 10px; }
 .contentTabs { flex: 0 0 auto; }
 .contentTabs :global(.ant-tabs-nav) { margin-bottom: 10px; }
@@ -63,10 +62,30 @@
 .section { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,.06); }
 .section:last-child { border-bottom: 0; margin-bottom: 0; }
 .sectionTitle { font-weight: 600; font-size: 14px; margin: 0 0 8px; }
-.memberFields { display: grid; gap: 8px; max-width: 720px; }
-.memberField { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: start; }
+.memberFields { display: grid; gap: 8px; max-width: 860px; margin-bottom: 12px; }
+.memberField { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid #edf0f2; }
 .memberLabel { font-size: 12px; line-height: 32px; white-space: nowrap; }
-.memberSelect { width: 100%; min-width: 0; }
+.memberValues { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; min-height: 32px; align-items: center; }
+.memberValues :global(.ant-tag) { margin: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.pickerHint { color: #717680; font-size: 12px; margin-bottom: 12px; }
+.pickerGrid { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #eaebf0; border-radius: 8px; overflow: hidden; }
+.pickerPane { display: flex; flex-direction: column; min-width: 0; padding: 12px; height: min(410px, 57dvh); }
+.pickerPane + .pickerPane { border-left: 1px solid #eaebf0; background: #fcfbff; }
+.pickerPaneTitle { display: flex; gap: 8px; font-size: 12px; color: #717680; padding: 10px 2px 6px; }
+.pickerList { flex: 1; min-height: 0; overflow-y: auto; }
+.pickerSelectedHeading { display: flex; justify-content: space-between; align-items: center; min-height: 32px; padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid #eaebf0; font-size: 13px; }
+.pickerSelectedHeading strong { font-weight: 500; }
+.pickerSelectedHeading strong span { color: var(--pms-brand); margin-left: 4px; }
+.pickerCandidate { display: flex; width: 100%; align-items: center; margin: 0 !important; padding: 7px 6px; border-radius: 6px; }
+.pickerCandidate:hover { background: #f5f2fd; }
+.pickerCandidate > span:last-child { min-width: 0; flex: 1; }
+.pickerIdentity { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.pickerPerson { display: flex; flex-direction: column; min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
+.pickerPerson small { color: #8a8d96; font-size: 11px; }
+.pickerAvatar { background: #ede8fa !important; color: #6b4bb2 !important; flex-shrink: 0; font-size: 12px !important; }
+.pickerSelectedRow { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 7px 2px; }
+.pickerSelectedRow > button { flex-shrink: 0; }
+.pickerDepartmentIcon { color: #8062bd; font-size: 17px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .dataRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -97,6 +116,11 @@
   .roleHeader { gap: 8px; flex-wrap: wrap; }
   .matrixPane { flex: none; min-height: 300px; }
   .matrixScroll { max-height: 65dvh; }
-  .memberField { grid-template-columns: 1fr; gap: 2px; }
+  .memberField { grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .memberLabel { grid-column: 1 / -1; }
+  .assignees { flex: none; overflow: visible; }
+  .pickerGrid { grid-template-columns: 1fr; }
+  .pickerPane { height: min(235px, 28dvh); padding: 10px; }
+  .pickerPane + .pickerPane { border-left: 0; border-top: 1px solid #eaebf0; height: min(185px, 22dvh); }
   .memberLabel { line-height: 20px; }
 }

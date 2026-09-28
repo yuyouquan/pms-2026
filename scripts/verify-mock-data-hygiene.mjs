@@ -45,7 +45,9 @@ function walk(value, visit, location = '') {
 }
 const splitPeople = value => Array.isArray(value) ? value.flatMap(splitPeople)
   : typeof value === 'string' ? value.split(/[,，、;；]/).map(item => item.trim()).filter(Boolean) : []
-const isDemoPerson = value => /^演示(?:用户|成员|外协)\d{2}$/.test(value)
+// Explicit user-requested mock administrator; arbitrary real identities remain rejected.
+const requestedMockUsers = new Set(['SnoopyYu'])
+const isDemoPerson = value => /^演示(?:用户|成员|外协)\d{2}$/.test(value) || requestedMockUsers.has(value)
 const systemActors = new Set(['系统', '系统管理员', '一级计划同步'])
 const genericActorPlaceholders = new Set(['当前用户'])
 const roleOwners = new Set([...directory.FIXED_ROLES, ...permission.TECHNICAL_FIXED_ROLES, ...permission.TOS_FIXED_ROLES, 'SPM', 'TPM'])
@@ -84,7 +86,7 @@ const samples = {
   sharedTodos: sharedSeeds.initialTodos,
 }
 
-check('all sample people use a fictional namespace, including generated records', () => {
+check('all sample people use a fictional namespace or the requested mock admin identity', () => {
   const invalid = []
   walk(samples, (key, value, at) => {
     if (peopleFields.has(key) && !validPersonField(key, value)) invalid.push(at)
@@ -94,7 +96,7 @@ check('all sample people use a fictional namespace, including generated records'
 
 check('login, permission, and transfer identities remain linked after renaming', () => {
   unique(directory.ALL_USERS.map(name => ({ name })), 'name', 'login directory')
-  assert.ok(directory.ALL_USERS.every(name => /^演示用户\d{2}$/.test(name)))
+  assert.ok(directory.ALL_USERS.every(name => /^演示用户\d{2}$/.test(name) || requestedMockUsers.has(name)))
   assert.ok(directoryUsers.has(project.DEFAULT_LOGIN_USER))
   for (const [projectId, members] of Object.entries(project.INITIAL_PROJECT_MEMBER_MAP)) {
     assert.ok(projectById.has(projectId), `member map references project ${projectId}`)
