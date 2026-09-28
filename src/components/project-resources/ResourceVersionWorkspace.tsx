@@ -30,7 +30,7 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
     ? state.projects.find(item => item.id === project.boundFormalProjectId && getProjectAttribute(item) === 'formal') : undefined)
   usePermissionStore()
   const [createSource, setCreateSource] = useState<string | null>(null)
-  const [logFilter, setLogFilter] = useState<string | null>(null)
+  const [logsOpen, setLogsOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | undefined>(initialVersionId)
   useEffect(() => { resourceStore(category).getState().refreshFormalProjects() }, [category, project.id])
   const own = store.projects.find(item => item.pmsProjectId === project.id)
@@ -60,7 +60,7 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
       message.warning('当前项目资源查看权限已变化')
       return
     }
-    setLogFilter('all')
+    setLogsOpen(true)
   })
   const act = (action: ResourcePermissionAction, callback: (state: ResourceStoreView, currentOwner: ResourceProject, currentVersion: ResourceVersion) => void) => guard(() => {
     try {
@@ -92,10 +92,9 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
           <span>创建人 {version.createdBy || '-'}</span><span>创建时间 {dayjs(version.createdAt).isValid() ? dayjs(version.createdAt).format('YYYY-MM-DD HH:mm') : '-'}</span>
           {boundFormalProject && <div className="pms-resource-bound-project"><span>绑定正式项目</span><HrSourceLink project={{ pmsProjectId: boundFormalProject.id }} name={boundFormalProject.name} /></div>}
           {version.copiedFromVersionNumber && <span>复制自 {version.copiedFromVersionNumber}</span>}
-        </div><Space key={`${version.id}-${version.lockState}-${version.isActive}`} size={4} wrap>
+        </div><Space className="pms-resource-version-actions" key={`${version.id}-${version.lockState}-${version.isActive}`} size={4} wrap>
           {canLock && <Tooltip title={version.lockState === 'locked' ? '解锁' : '锁定'}><Button type="text" aria-label={version.lockState === 'locked' ? '解锁' : '锁定'} icon={version.lockState === 'locked' ? <UnlockOutlined /> : <LockOutlined />} onClick={() => act('lockVersion', (state, currentOwner, currentVersion) => state.setVersionLocked(currentOwner.id, currentVersion.id, currentVersion.lockState !== 'locked'))} /></Tooltip>}
           {canSetOfficial && <Tooltip title={version.isActive ? '取消设置为正式版本' : '设置为正式版本'}><Button type="text" aria-label={version.isActive ? '取消设置为正式版本' : '设置为正式版本'} icon={version.isActive ? <FlagFilled /> : <FlagOutlined />} onClick={() => act('setOfficialVersion', (state, currentOwner, currentVersion) => state.setVersionActive(currentOwner.id, currentVersion.id, !currentVersion.isActive))} /></Tooltip>}
-          <Tooltip title="版本操作日志"><Button type="text" aria-label="版本操作日志" icon={<HistoryOutlined />} onClick={() => act('view', (_state, _owner, currentVersion) => setLogFilter(currentVersion.id))} /></Tooltip>
           {canExport && <Tooltip title="导出版本"><Button type="text" aria-label="导出版本" icon={<DownloadOutlined />} onClick={() => act('export', (state, currentOwner, currentVersion) => exportResourceVersion(resourceProjectName(currentOwner), currentVersion, state.monthlyInvestments, '元'))} /></Tooltip>}
           {canDelete && <Popconfirm title={`删除 ${version.versionNumber}？`} description="删除后无法恢复该版本及其月度投入。" okText="删除" cancelText="取消" onConfirm={() => act('deleteVersion', (state, currentOwner, currentVersion) => state.deleteVersion(currentOwner.id, currentVersion.id))}><Tooltip title="删除"><Button type="text" danger aria-label="删除" icon={<DeleteOutlined />} /></Tooltip></Popconfirm>}
         </Space></div>
@@ -110,6 +109,6 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
       const id = resourceStore(category).getState().createResourceVersion(own.id, budgetType, project.id, { ...options, sourceVersionId: options.sourceVersionId || undefined })
       setSelectedId(id); setCreateSource(null); message.success('版本已创建，可直接填写')
     }} />}
-    {logFilter !== null && <ResourceOperationLogDialog logs={logs} budgetLabel={label} versionId={logFilter === 'all' ? undefined : logFilter} onCancel={() => setLogFilter(null)} />}
+    {logsOpen && <ResourceOperationLogDialog logs={logs} budgetLabel={label} onCancel={() => setLogsOpen(false)} />}
   </div>
 }
