@@ -140,5 +140,23 @@ for (const kind of ['Machine','Tos','Technical','Capability']) {
  assert.ok(read().resourceOperationLogs.every(log=>log.changes.every(change=>!change.field.includes('new-dept')&&!change.field.includes('monthlyAmounts'))),'audit exposes business paths rather than technical field keys')
  await store.persist.rehydrate()
  assert.ok(read().resourceOperationLogs.some(log=>log.versionId===id && /删除/.test(log.action)))
+ const audit = read().resourceOperationLogs.filter(log=>log.versionId===id)
+ assert.equal(audit.filter(log=>log.action==='创建版本').length,1,'one durable creation record per version')
+ assert.ok(audit.some(log=>log.action==='修改版本'),'version changes survive deletion')
+ assert.equal(audit.filter(log=>log.action==='删除版本').length,1)
+ // Existing versions may predate durable audit storage. Their known creation
+ // metadata must survive deletion, including deletion as their first new action.
+ const legacy = read().versions[0]
+ // Hydrate the shape of an older saved version without durable audit history.
+ store.setState({projects:store.getState().projects.map(project=>project.id===p.id?{
+   ...project, versions:project.versions.map(v=>v.id===legacy.id?{...v,lockState:'unlocked'}:v),
+   resourceOperationLogs:project.resourceOperationLogs.filter(log=>log.versionId!==legacy.id),
+ }:project)})
+ store.getState().deleteVersion(p.id,legacy.id)
+ await store.persist.rehydrate()
+ const legacyAudit=read().resourceOperationLogs.filter(log=>log.versionId===legacy.id)
+ assert.equal(legacyAudit.filter(log=>log.action==='创建版本').length,1,'legacy creation is retained once')
+ assert.equal(legacyAudit.find(log=>log.action==='创建版本').timestamp,legacy.createdAt)
+ assert.ok(legacyAudit.some(log=>log.action==='删除版本'))
  console.log(`PASS ${kind}: named blank/copy, rehydrate, ratios, guards, no-op and durable deletion audit`)
 }
