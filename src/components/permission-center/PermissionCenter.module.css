@@ -28,7 +28,10 @@
 .section { padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,.06); }
 .section:last-child { border-bottom: 0; margin-bottom: 0; }
 .sectionTitle { font-weight: 600; font-size: 14px; margin: 0 0 8px; }
-.memberSelect { width: 100%; max-width: 720px; }
+.memberFields { display: grid; gap: 8px; max-width: 720px; }
+.memberField { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: start; }
+.memberLabel { font-size: 12px; line-height: 32px; white-space: nowrap; }
+.memberSelect { width: 100%; min-width: 0; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px 20px; }
 .dataRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
