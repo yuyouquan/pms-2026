@@ -1,4 +1,5 @@
 import { roleAppliesToUser } from '@/lib/projectRoleMembership'
+import { isProjectTeamMember } from '@/lib/projectTeam'
 
 export type AggregateProjectStatus = 'all' | 'inProgress' | 'completed'
 
@@ -24,7 +25,7 @@ export function matchesAboutMine(
 ) {
   const user = currentLoginUser.trim()
   if (!user) return false
-  return (rolesByProject[projectId] || []).some(role => roleAppliesToUser(role, user))
+  return isProjectTeamMember(user, projectId) || (rolesByProject[projectId] || []).some(role => roleAppliesToUser(role, user))
 }
 
 export function canEnterProjectSpace(

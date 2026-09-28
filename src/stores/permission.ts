@@ -1,4 +1,5 @@
 import { roleAppliesToUser, normalizeProjectRoleDepartments } from '@/lib/projectRoleMembership'
+import { isProjectTeamMember, useIsProjectTeamMember } from '@/lib/projectTeam'
 import { createPermissionCenterSeed } from '@/lib/permissionCenterSeed'
 import { PERMISSION_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
 import { createEmptyMenuPolicy, evaluateMenuPermission, getAuthorizedColumns, isPermissionCenterAdmin, legacyPermissionTargets, isValidLegacyPermissionCenter, normalizePermissionName, normalizePolicyActions, parsePermissionCenter, projectAuthorizedRows, validateMenuPolicy } from '@/lib/permissionCenter'
@@ -502,6 +503,7 @@ export function hasProjectRoleManagementAccess(
   const user = actor.trim()
   if (!user || !projectId) return false
   if (state.permissionCenter ? isPermissionCenterAdmin(state.permissionCenter, user) : state.globalRoles.some(role => role.name === '管理组' && role.members.includes(user))) return true
+  if (isProjectTeamMember(user, projectId)) return false
   const roleNames = (state.rolesByProject[projectId] || [])
     .filter(role => roleAppliesToUser(role, user))
     .map(role => role.name)
@@ -838,6 +840,25 @@ export function isGlobalAdmin(userName: string): boolean {
   return !!admin?.members.includes(userName)
 }
 
+export function isProjectTeamReadOnly(userName: string, projectId: string | undefined): boolean {
+  return isProjectTeamMember(userName, projectId) && !isGlobalAdmin(userName)
+}
+
+export function useIsProjectTeamReadOnly(userName: string, projectId: string | undefined): boolean {
+  const member = useIsProjectTeamMember(userName, projectId)
+  const permissionCenter = usePermissionStore(state => state.permissionCenter)
+  const globalRoles = usePermissionStore(state => state.globalRoles)
+  const admin = permissionCenter
+    ? isPermissionCenterAdmin(permissionCenter, userName)
+    : globalRoles.some(role => role.name === '管理组' && role.members.includes(userName))
+  return member && !admin
+}
+
+const TEAM_VIEW_PERMISSIONS = new Set([
+  'basicInfo:查看', 'basicInfo:transferView', 'basicInfo:planConfigView',
+  'plan:一级计划-查看', 'plan:二级计划-查看', 'resource:view',
+])
+
 // Global permission check used by cross-project modules such as Project Roadmap.
 // A user may belong to several global roles; permissions are the union of all roles.
 export function hasGlobalPermission(userName: string, permKey: string): boolean {
@@ -869,6 +890,7 @@ export function hasPermission(userName: string, projectId: string | undefined, p
   if (!userName) return false
   if (isGlobalAdmin(userName)) return true
   if (!projectId) return false
+  if (isProjectTeamMember(userName, projectId)) return TEAM_VIEW_PERMISSIONS.has(permKey)
   const s = usePermissionStore.getState()
   const projectRoles = s.rolesByProject[projectId] ?? []
   const projectPerms = s.rolePermissionsByProject[projectId] ?? {}
@@ -878,6 +900,7 @@ export function hasPermission(userName: string, projectId: string | undefined, p
 
 // React hook variant — subscribes to per-project slot so UI re-renders on change.
 export function useHasPermission(userName: string, projectId: string | undefined): (permKey: string) => boolean {
+  const teamMember = useIsProjectTeamMember(userName, projectId)
   const permissionCenter = usePermissionStore(s => s.permissionCenter)
   const globalRoles = usePermissionStore(s => s.globalRoles)
   const projectRoles = usePermissionStore(s => (projectId ? s.rolesByProject[projectId] : undefined))
@@ -886,6 +909,7 @@ export function useHasPermission(userName: string, projectId: string | undefined
     if (!userName) return false
     const admin = globalRoles.find(r => r.name === '管理组')
     if (permissionCenter ? isPermissionCenterAdmin(permissionCenter, userName) : admin?.members.includes(userName)) return true
+    if (teamMember) return TEAM_VIEW_PERMISSIONS.has(permKey)
     if (!projectId || !projectRoles || !projectPerms) return false
     const userRoles = projectRoles.filter(r => roleAppliesToUser(r, userName)).map(r => r.name)
     return userRoles.some(role => projectPerms[role]?.[permKey] === true)

@@ -92,6 +92,7 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
           <div className={shared.muted}>{groupName(role)}</div>
           {role.description && <div className={`${shared.muted} ${shared.description}`}>{role.description}</div>}
         </div>{!role.isFixed && <Space><Button icon={<EditOutlined />} onClick={() => navigate(() => setFormRole(role))}>编辑</Button><Button danger icon={<DeleteOutlined />} onClick={deleteRole}>删除</Button></Space>}</div>
+        <p className={shared.muted}>IPM Mock 团队成员固定只读；额外角色、部门授权和计划／转维职责不会提升其操作权限，系统超级管理员除外。</p>
         <Tabs className={shared.contentTabs} activeKey={tab} onChange={key => navigate(() => setTab(key))} items={[{ key: 'assignees', label: '人员配置' }, { key: 'functional', label: '功能权限' }]} />
         {tab === 'assignees' ? <ProjectRoleAssignees key={`${role.name}:${epoch}`} role={role} memberSource={memberSource} onDirtyChange={onDirty} onCommit={(kind, values) => {
           const error = sessionError(); if (error) return error

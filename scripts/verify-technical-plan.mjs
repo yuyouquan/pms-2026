@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import vm from 'node:vm'
 import ts from 'typescript'
 import { loadTypeScriptModule, projectRoot, readSource } from './lib/source-contract.mjs'
 
@@ -552,7 +553,31 @@ assert.match(technicalModuleSource, /scrollIntoView/, 'publish validation moves 
 assert.match(technicalModuleSource, /firstInvalidTaskId[\s\S]{0,320}setCollapsed\(scope, \[\]\)[\s\S]{0,320}requestAnimationFrame/, 'publish validation exposes the first invalid flat row')
 assert.match(technicalModuleSource, /const publishedVersions = useMemo\([\s\S]{0,160}canViewTechnicalPlan/, 'published versions remain inaccessible without technical-plan view permission')
 assert.match(technicalModuleSource, /canShareTechnicalPlan/, 'technical plan sharing accepts its dedicated L1 share capability')
-assert.match(technicalModuleSource, /const handleShare = \(\) => \{\s*if \(!canViewTechnicalPlan \|\| !canShareTechnicalPlan\) return/, 'sharing has strict view and share permission guards')
+// Exercise the production callback: adding an earlier live guard must not make
+// a positional source regex reject the stronger permission contract.
+let shareHandler
+const findShareHandler = node => {
+  if (ts.isVariableDeclaration(node) && node.name.getText(technicalSourceFile) === 'handleShare') shareHandler = node.initializer
+  ts.forEachChild(node, findShareHandler)
+}
+findShareHandler(technicalSourceFile)
+assert.ok(shareHandler, 'technical sharing has a production callback')
+const shareScript = ts.transpileModule(`const share = ${shareHandler.getText(technicalSourceFile)}; share();`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText
+for (const [live, view, share, published, expected] of [
+  [false, true, true, true, 0], [true, false, true, true, 0],
+  [true, true, false, true, 0], [true, true, true, false, 0], [true, true, true, true, 1],
+]) {
+  const copied = []
+  vm.runInNewContext(shareScript, {
+    canMutateCurrentProject: () => live, canViewTechnicalPlan: view, canShareTechnicalPlan: share,
+    publishedVersions: published ? [{ id: 'published' }] : [], scope: { kind: 'tdt', parentProjectId: '9' },
+    URLSearchParams, window: { location: { origin: 'https://example.com' } },
+    navigator: { clipboard: { writeText: value => { copied.push(value); return Promise.resolve() } } },
+    message: { warning() {}, success() {}, error() {} },
+  })
+  assert.equal(copied.length, expected, `production sharing enforces live=${live}, view=${view}, share=${share}, published=${published}`)
+  if (expected) assert.match(copied[0], /share\/plan\?technical=1&kind=tdt&projectId=9$/)
+}
 assert.match(technicalModuleSource, /编辑模式[\s\S]{0,180}自动保存/, 'technical drafts expose the same edit-mode guidance as whole-machine plans')
 assert.match(technicalModuleSource, /const canEditActualDates = canMaintain\b/, 'only a maintainable draft exposes actual-date editing')
 assert.match(technicalModuleSource, /canEditActualEnd=\{canEditActualDates\}/, 'horizontal actual-date editing uses the same draft-only guard')

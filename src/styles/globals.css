@@ -10040,3 +10040,14 @@ input.ant-input,
   color: var(--danger) !important;
   background: #fff1f0;
 }
+
+/* The project selector yields width before the fixed back/user controls. */
+.pms-project-space-header__selector { max-width: 100%; min-width: 0; }
+.pms-project-space-header__trigger { max-width: 100%; min-width: 0; }
+.pms-project-space-header__trigger > .anticon,
+.pms-project-space-header__trigger > .ant-tag { flex-shrink: 0; }
+.pms-project-space-header__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 800px) {
+  .pms-project-space-header { padding-inline: 12px !important; }
+  .pms-project-space-header .pms-demo-data-tag { display: none; }
+}

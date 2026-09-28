@@ -1,4 +1,5 @@
 'use client'
+import { canExecuteProjectTeamWrite } from '@/lib/projectTeamMutationGuard'
 import { getTechnicalLevel1MaintainerUsers } from '@/lib/projectSpaceLevel1Rules'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
@@ -472,7 +473,10 @@ export default function TechnicalPlanModule({
     user: currentLoginUser || '',
   })
 
+  const canMutateCurrentProject = () => canExecuteProjectTeamWrite(currentLoginUser || '', projectId, useProjectStore.getState())
+
   const resolveLatestSubprojectActionContext = (opening: TechnicalSubprojectTransferScopeToken) => {
+    if (!canMutateCurrentProject()) return null
     const latestProject = useProjectStore.getState().selectedProject
     if (!latestProject || latestProject.id !== opening.projectId) return null
     const latestPermissionState = usePermissionStore.getState()
@@ -533,6 +537,7 @@ export default function TechnicalPlanModule({
   }, [activeKey])
 
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
+    if (!canMutateCurrentProject()) return
     if (!tab || !canEditTechnicalPlan) return
     const result = createRevision({ scope: tab.scope, templateKind: tab.templateKind, maxDepth, templateTasks, revisionKind, subproject: tab.subproject })
     if (!result.ok) {
@@ -547,6 +552,7 @@ export default function TechnicalPlanModule({
   }
 
   const handlePublish = () => {
+    if (!canMutateCurrentProject()) return
     if (!canPublish || !canMaintain) return
     const invalidByTaskId = tab?.templateKind === 'subproject'
       ? subprojectValidation.byTaskId
@@ -576,6 +582,7 @@ export default function TechnicalPlanModule({
   }
 
   const updateTask = (id: string, patch: Partial<TechnicalTemplateTask>) => {
+    if (!canMutateCurrentProject()) return
     const fields = Object.keys(patch)
     const task = tasks.find(item => item.id === id)
     if (!task || fields.some(field => !['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'].includes(field))) return
@@ -696,6 +703,7 @@ export default function TechnicalPlanModule({
   ), 0)
 
   const exportHorizontalPlan = () => {
+    if (!canMutateCurrentProject()) return
     const groups = buildPlanHorizontalStageGroups(
       horizontalHeaderTasks.map(task => ({ ...task })),
     )
@@ -729,6 +737,7 @@ export default function TechnicalPlanModule({
   }
 
   const exportPlan = (mode: 'current' | 'all') => {
+    if (!canMutateCurrentProject()) return
     if (!canExport) { message.error('无计划导出权限'); return }
     if (mode === 'current' && viewMode === 'horizontal') {
       exportHorizontalPlan()
@@ -742,6 +751,7 @@ export default function TechnicalPlanModule({
     if (!canImport || !canMaintain) { message.error(!canImport ? '无计划导入权限' : '仅修订中版本可导入'); return false }
     try {
       const data = await file.arrayBuffer()
+      if (!canMutateCurrentProject()) return false
       const workbook = XLSX.read(data)
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[workbook.SheetNames[0]])
       const imported = parseTechnicalPlanImportRows(rows, tasks.length ? tasks : templateTasks)
@@ -781,6 +791,7 @@ export default function TechnicalPlanModule({
   }
 
   const handleShare = () => {
+    if (!canMutateCurrentProject()) return
     if (!canViewTechnicalPlan || !canShareTechnicalPlan) return
     if (!publishedVersions.length) { message.warning('暂无已发布版本可分享'); return }
     const query = new URLSearchParams({ technical: '1', kind: scope.kind, projectId: scope.parentProjectId })
@@ -875,7 +886,7 @@ export default function TechnicalPlanModule({
                 <Tooltip title={!canPublish ? '无计划发布权限' : !canMaintain ? readOnlyReason : '发布'}>
                   <Button type="primary" size="small" icon={<SaveOutlined />} disabled={!canPublish || !canMaintain} onClick={handlePublish} aria-label="发布" />
                 </Tooltip>
-                <Popconfirm title="确认取消当前修订？" onConfirm={() => { if (cancelRevision(scope).ok) message.success('已取消修订') }}>
+                <Popconfirm title="确认取消当前修订？" onConfirm={() => { if (!canMutateCurrentProject()) return; if (cancelRevision(scope).ok) message.success('已取消修订') }}>
                   <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : '取消修订'}>
                     <Button danger size="small" icon={<StopOutlined />} disabled={!canMaintain} aria-label="取消修订" />
                   </Tooltip>
@@ -1059,6 +1070,7 @@ export default function TechnicalPlanModule({
                 ? validateTechnicalSubprojectDates(next).valid
                 : validateTechnicalTdtMilestoneDates(next).valid
               if (!valid) { message.error('拖动后的日期不符合计划规则'); return false }
+              if (!canMutateCurrentProject()) return false
               return updateCurrentTasks(scope, next, maxDepth).ok
             }}
           />

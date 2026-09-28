@@ -1,5 +1,8 @@
 'use client'
 
+import { canExecuteProjectTeamWrite } from '@/lib/projectTeamMutationGuard'
+import ProjectTeam from '@/components/project-team/ProjectTeam'
+import { useIsProjectTeamReadOnly } from '@/stores/permission'
 import { applyLevel1BusinessTasks, captureLevel1BusinessTasks, getLevel1BusinessScopeKey, selectLevel1BusinessSeedTasks } from '@/lib/level1SharedBusinessTasks'
 
 import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachineBudget, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
@@ -934,6 +937,8 @@ export default function ProjectSpaceContainer() {
     selectedProject?.id ?? '',
     typeof selectedProject?.parentProjectId === 'string' ? selectedProject.parentProjectId : undefined,
   )
+  const teamReadOnly = useIsProjectTeamReadOnly(currentLoginUser, _permProjectId)
+  const canMutateCurrentProject = () => canExecuteProjectTeamWrite(currentLoginUser, selectedProject?.id, useProjectStore.getState(), _permProjectId)
   const canDo = useHasPermission(currentLoginUser, _permProjectId)
   const canManageRoles = canDo('projectPermission:manageRoles')
   const roles = useMemo(() => perm.rolesByProject[_permProjectId] ?? [], [perm.rolesByProject, _permProjectId])
@@ -951,15 +956,29 @@ export default function ProjectSpaceContainer() {
   const canViewBasicInfo = canDo('basicInfo:查看')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
+  type Level2MutationOpening = { actor: string; projectId: string; permissionProjectId: string; market: string; tosType: string; planId?: string }
+  const level2CreateOpening = useRef<Level2MutationOpening | null>(null)
+  const level2DeleteOpening = useRef<Level2MutationOpening | null>(null)
+  const captureLevel2Opening = (planId?: string): Level2MutationOpening => ({
+    actor: currentLoginUser, projectId: selectedProject?.id || '', permissionProjectId: _permProjectId,
+    market: selectedMarketTab, tosType: selectedTosTypeTab, planId,
+  })
+  const canMutateLevel2Plan = (opening: Level2MutationOpening | null) => {
+    const live = useProjectStore.getState()
+    return Boolean(opening && canExecuteProjectTeamWrite(opening.actor, opening.projectId, live, opening.permissionProjectId)
+      && opening.market === live.selectedMarketTab && opening.tosType === live.selectedTosTypeTab
+      && hasPermission(opening.actor, opening.permissionProjectId, 'plan:二级计划-编辑'))
+  }
+
   const canViewLevel1Plan = canDo('plan:一级计划-查看')
   const canViewLevel2Plan = canDo('plan:二级计划-查看')
   const canShareTechnicalPlan = canDo('plan:一级计划-分享')
   const canImportTechnicalPlan = canDo('plan:导入')
   const canExportTechnicalPlan = canDo('plan:导出')
-  const level1GlobalAdmins = perm.globalRoles.find(role => role.name === '管理组')?.members || []
+  const level1GlobalAdmins = isGlobalAdmin(currentLoginUser) ? [currentLoginUser] : []
   const level1SpmUsers = getLevel1MaintainerUsers(selectedProject?.spm, roles)
   const level1TechnicalLead = getTechnicalLevel1MaintainerUsers(selectedProject, roles)
-  const canGovernLevel1Plan = selectedProject ? canMaintainLevel1Plan({
+  const canGovernLevel1Plan = !teamReadOnly && selectedProject ? canMaintainLevel1Plan({
     projectType: selectedProject.type,
     currentUser: currentLoginUser,
     spmUsers: level1SpmUsers,
@@ -1502,11 +1521,13 @@ export default function ProjectSpaceContainer() {
       ? applyLevel1BusinessTasks(PROJECT_TYPE_TOS_VERSION, baseEffectiveTasks, ownHistoricalBusiness(level1SurfaceCurrentVersion))
       : baseEffectiveTasks
   const saveSharedBusinessTasks = (nextTasks: Level1PlanTask[]) => {
+    if (!canMutateCurrentProject()) return
     if (businessScopeKey && selectedProject) {
       setLevel1BusinessTasks(businessScopeKey, selectedProject.type, nextTasks, businessLatestSnapshotKey)
     }
   }
   const setLevel1SurfaceTasks = (newTasks: any[] | ((previous: any[]) => any[])) => {
+    if (!canMutateCurrentProject()) return
     if (level1SurfaceFollowReadOnly) return
     const canonicalTasks = applyLevel1BusinessTasks(selectedProject?.type || '', level1SurfaceLiveTasks, sharedBusinessTasks)
     const resolvedTasks = typeof newTasks === 'function' ? newTasks(canonicalTasks) : newTasks
@@ -1589,7 +1610,7 @@ export default function ProjectSpaceContainer() {
     }))
   }, [isMarketScopedLevel1, projectLinkedLevel1MockTasks, selectedMarketTab, selectedProject?.id, setPublishedSnapshots, versions])
 
-  const setEffectiveTasks = currentTosLevel1Data
+  const writeEffectiveTasks = currentTosLevel1Data
     ? (newTasks: any[] | ((prev: any[]) => any[])) => {
         if (currentTosTypeIsFollow) {
           void message.warning(tosLevel1FollowSourceText)
@@ -1617,6 +1638,11 @@ export default function ProjectSpaceContainer() {
           const resolvedTasks = typeof newTasks === 'function' ? newTasks(effectiveTasks) : newTasks
           setTasks(resolvedTasks)
         }
+
+  const setEffectiveTasks = (value: any[] | ((previous: any[]) => any[])) => {
+    if (!canMutateCurrentProject()) return
+    writeEffectiveTasks(value)
+  }
 
   const effectiveLevel2PlanTasks = currentTosTypeData
     ? (tosLevel2PublishedSnapshot ?? currentTosTypeData.level2PlanTasks)
@@ -2478,6 +2504,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleAddSubTask = (parentId: string) => {
+    if (!canMutateCurrentProject()) return
     if (followedTosLevel1ReadOnly) {
       void message.warning(tosLevel1FollowSourceText)
       return
@@ -2511,6 +2538,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleProgressChange = (taskId: string, newProgress: number) => {
+    if (!canMutateCurrentProject()) return
     if (followedTosLevel1ReadOnly) {
       void message.warning(tosLevel1FollowSourceText)
       return
@@ -2562,6 +2590,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleGanttTimeChange = (taskId: string, field: 'planStartDate' | 'planEndDate', date: string) => {
+    if (!canMutateCurrentProject()) return
     if (!canMaintainCurrentPlan) {
       void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : currentPlanMaintenanceDisabledReason)
       return
@@ -2572,6 +2601,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const confirmPredecessorChange = () => {
+    if (!canMutateCurrentProject()) return
     if (!canMaintainCurrentPlan) {
       void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : currentPlanMaintenanceDisabledReason)
       return
@@ -2582,6 +2612,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
+    if (!canMutateCurrentProject()) return
     if (!canCreateCurrentRevision) {
       if (followedTosLevel1ReadOnly) void message.warning(tosLevel1FollowSourceText)
       else if (isMarketScopedLevel1 && currentMarketIsFollow) void message.warning(`当前市场跟随 ${primaryMarket}，不能创建一级计划修订`)
@@ -2736,6 +2767,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handlePublish = () => {
+    if (!canMutateCurrentProject()) return
     if (!canMaintainCurrentPlan) {
       void message.warning(followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`)
       return
@@ -2864,6 +2896,7 @@ export default function ProjectSpaceContainer() {
     useLevel1SurfaceScope = false,
     options: { targetPublishedVersionId?: string } = {},
   ) => {
+    if (!canMutateCurrentProject()) return
     const activeScopeUnavailable = useLevel1SurfaceScope
       ? level1SurfaceScopeUnavailable
       : machineMarketPlanUnavailable
@@ -3025,6 +3058,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleCancelRevision = () => {
+    if (!canMutateCurrentProject()) return
     if (!canMaintainCurrentPlan) {
       void message.warning(followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`)
       return
@@ -3037,6 +3071,7 @@ export default function ProjectSpaceContainer() {
       okType: 'danger',
       cancelText: '保留修订',
       onOk: () => {
+        if (!canMutateCurrentProject()) return
         const result = cancelDraftRevision(versions, currentVersion)
         setVersions(result.versions as typeof versions)
         setCurrentVersion(result.currentVersion)
@@ -3289,7 +3324,7 @@ export default function ProjectSpaceContainer() {
 
   // Export functions
   const handleExportVerticalPlan = (scope: 'current' | 'all') => {
-    if (!canExportTechnicalPlan) return
+    if (!canMutateCurrentProject() || !hasPermission(currentLoginUser, _permProjectId, 'plan:导出')) return
     const isGovernedLevel1Export = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
     const exportCols: ExportColumn[] = isGovernedLevel1Export
@@ -3313,7 +3348,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
-    if (!canExportTechnicalPlan) return
+    if (!canMutateCurrentProject() || !hasPermission(currentLoginUser, _permProjectId, 'plan:导出')) return
     const displayVersions = selectLevel1HorizontalVersions(level1SurfaceVersions, {
       surface: 'project-plan',
       includeDraft: level1SurfaceCanMaintain,
@@ -3414,7 +3449,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const isLevel1SuperAdmin = level1GlobalAdmins.includes(currentLoginUser)
-  const isLevel1Spm = level1SpmUsers.includes(currentLoginUser)
+  const isLevel1Spm = !teamReadOnly && level1SpmUsers.includes(currentLoginUser)
 
   const createLevel1StructureToken = (parentStableId = ''): Level1StructureScopeToken | null => {
     if (!selectedProject) return null
@@ -3431,6 +3466,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const getLatestLevel1MutationContext = (token: Level1StructureScopeToken) => {
+    if (!canMutateCurrentProject()) return null
     const latestPlan = usePlanStore.getState()
     const latestProjectState = useProjectStore.getState()
     const latestPermissionState = usePermissionStore.getState()
@@ -3470,7 +3506,7 @@ export default function ProjectSpaceContainer() {
     if (sourceType !== scopeValue && !isBusinessStage(project.type, parent)) return null
     const permissionProjectId = resolvePermissionProjectId(project.id, typeof project.parentProjectId === 'string' ? project.parentProjectId : undefined)
     const roles = latestPermissionState.rolesByProject[permissionProjectId] || []
-    const admins = latestPermissionState.globalRoles.find(role => role.name === '管理组')?.members || []
+    const admins = isGlobalAdmin(token.currentUser) ? [token.currentUser] : []
     return {
       project, tasks: currentTasks, isDraft, isLatestPublished,
       isSuperAdmin: admins.includes(token.currentUser),
@@ -3776,6 +3812,7 @@ export default function ProjectSpaceContainer() {
       }
     } : setEffectiveTasks
     const currentSetTasks = (newTasks: any[]) => {
+      if (!canMutateCurrentProject()) return
       if (isFollowReadOnlyTable) {
         void message.warning(tosLevel1FollowSourceText)
         return
@@ -4169,7 +4206,7 @@ export default function ProjectSpaceContainer() {
     //   isRowEditable — 编辑模式下用户有编辑权 OR 是该行责任人 → 只能改自己负责的行的单元格
     const editPerm = isLevel2Custom ? canEditLevel2Plan : projectPlanLevel === 'level1' ? canGovernLevel1Plan : canEditLevel1Plan
     const canFullyEdit = isEditMode && editPerm && !isFollowReadOnlyTable
-    const isRowEditable = (record: any) => isEditMode && !isFollowReadOnlyTable && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
+    const isRowEditable = (record: any) => !teamReadOnly && isEditMode && !isFollowReadOnlyTable && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
     const isGovernedDraft = isGovernedLevel1Table && isCurrentDraft && canMaintainCurrentPlan && !isFollowReadOnlyTable
     const parentForGovernedTask = (record: any) => record.parentId
       ? tableTasks.find((task: any) => task.id === record.parentId)
@@ -4378,11 +4415,11 @@ export default function ProjectSpaceContainer() {
       } })
       if (visibleColumns.includes('estimatedDays')) cols.push({ title: '预估工期', dataIndex: 'estimatedDays', key: 'estimatedDays', width: 90, render: (val: number, record: any) => isRowEditable(record) ? <Input className="pms-edit-input" value={val} size="small" type="number" style={{ width: 70 }} onChange={(e) => { const updated = tableTasks.map((t: any) => t.id === record.id ? { ...t, estimatedDays: parseInt(e.target.value) || 0 } : t); currentSetTasks(updated) }} /> : <span style={{ fontSize: 12, color: '#4b5563' }}>{val}天</span> })
       if (visibleColumns.includes('actualStartDate')) cols.push({ title: '实际开始', dataIndex: 'actualStartDate', key: 'actualStartDate', width: 130, render: (val: string, record: any) => {
-        if (isLatestPublished && !isEditMode && !isFollowReadOnlyTable) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualStartDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
+        if (!teamReadOnly && isLatestPublished && !isEditMode && !isFollowReadOnlyTable) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualStartDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualEndDate ? current.isAfter(dayjs(record.actualEndDate), 'day') : false} />
         return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       } })
       if (visibleColumns.includes('actualEndDate')) cols.push({ title: '实际完成', dataIndex: 'actualEndDate', key: 'actualEndDate', width: 130, render: (val: string, record: any) => {
-        if (isLatestPublished && !isEditMode && !isFollowReadOnlyTable) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualEndDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualStartDate ? current.isBefore(dayjs(record.actualStartDate), 'day') : false} />
+        if (!teamReadOnly && isLatestPublished && !isEditMode && !isFollowReadOnlyTable) return <ClickToEditDate value={val} onChange={(newVal) => updateActualDateForTask(tableTasks, currentSetTasks, record, 'actualEndDate', newVal, isLevel2Custom)} disabledDate={(current) => record.actualStartDate ? current.isBefore(dayjs(record.actualStartDate), 'day') : false} />
         return <span style={{ fontSize: 12, color: '#4b5563' }}>{val || '-'}</span>
       } })
       if (visibleColumns.includes('actualDays')) cols.push({ title: '实际工期', dataIndex: 'actualDays', key: 'actualDays', width: 90, render: (val: number) => <span style={{ fontSize: 12, color: '#4b5563' }}>{val > 0 ? `${val}天` : '-'}</span> })
@@ -4618,7 +4655,7 @@ export default function ProjectSpaceContainer() {
                 <td style={{ ...cycleTdStyle, background: '#fffbe6' }}><Tooltip title="所有一级阶段的预估工期总和"><span>{sumLevel1StageEstimatedDays(actualRows) ?? '-'}</span></Tooltip></td>
                 {actualMilestones.map((actualTask: any, mi: number) => (
                   <td key={mi} style={{ ...tdStyle, color: '#d48806' }}>
-                    {actualTask?.nodeKind !== 'business-period' && canEditLevel1HorizontalDateCell(actualTask) && actualProjectionAccess.canEdit
+                    {!teamReadOnly && actualTask?.nodeKind !== 'business-period' && canEditLevel1HorizontalDateCell(actualTask) && actualProjectionAccess.canEdit
                       ? <ClickToEditDate align="center" value={actualTask.actualEndDate || ''} onChange={(nextValue) => updateActualDateForTask(actualRows, setLevel1SurfaceTasks, actualTask, 'actualEndDate', nextValue, false, true, { targetPublishedVersionId: actualProjectionAccess.targetPublishedVersionId! })} />
                       : actualTask?.actualEndDate || '-'}
                   </td>
@@ -4858,7 +4895,7 @@ export default function ProjectSpaceContainer() {
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description="尚未配置市场"
             >
-              <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>市场编辑</Button>
+              <Button type="primary" icon={<PlusOutlined />} disabled={!canEditBasicInfo} onClick={openMarketEditor}>市场编辑</Button>
             </Empty>
           </Card>
         )
@@ -4869,7 +4906,7 @@ export default function ProjectSpaceContainer() {
             tabBarExtraContent={{
               right: (
                 <Tooltip title="编辑市场">
-                  <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} onClick={openMarketEditor}>市场编辑</Button>
+                  <Button size="small" icon={<EditOutlined />} style={{ borderRadius: 6, marginLeft: 8 }} disabled={!canEditBasicInfo} onClick={openMarketEditor}>市场编辑</Button>
                 </Tooltip>
               ),
             }}
@@ -4934,7 +4971,7 @@ export default function ProjectSpaceContainer() {
         {/* Header card */}
         <Card id="section-header" className="pms-glass-surface" style={{ marginBottom: 20, borderRadius: 8, overflow: 'hidden' }} styles={{ header: { background: 'var(--pms-gradient-brand)', borderBottom: 'none', padding: '16px 24px' }, body: { padding: 0 } }}
           title={<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div style={{ width: 36, height: 36, borderRadius: 10, background: 'color-mix(in srgb, var(--pms-surface-solid) 26%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 16px color-mix(in srgb, var(--pms-brand) 30%, transparent)' }}><ProjectOutlined style={{ color: '#fff', fontSize: 18 }} /></div><div><div style={{ color: '#fff', fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>{headerExtra}</div></div></div>}
-          extra={<Space size={8}><Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag><Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>{isTech && canEditBasicInfo && <Button ghost icon={<EditOutlined />} onClick={() => setShowProjectInfoEditor(true)}>编辑项目信息</Button>}{isWholeMachine && <Button type="primary" icon={<SendOutlined />} style={{ background: 'var(--pms-brand-strong)', borderColor: 'var(--pms-brand-strong)' }} onClick={() => transfer.setTransferView('apply')}>申请转维</Button>}</Space>}
+          extra={<Space size={8}><Tag color={statusConf.tagColor} style={{ margin: 0, borderRadius: 4, fontWeight: 500 }}>{p.status}</Tag><Tag style={{ margin: 0, borderRadius: 4, background: hConf.color, border: 'none', color: '#fff' }}>{hConf.label}</Tag>{isTech && canEditBasicInfo && <Button ghost icon={<EditOutlined />} onClick={() => setShowProjectInfoEditor(true)}>编辑项目信息</Button>}{isWholeMachine && canDo('basicInfo:applyTransfer') && <Button type="primary" icon={<SendOutlined />} style={{ background: 'var(--pms-brand-strong)', borderColor: 'var(--pms-brand-strong)' }} onClick={() => transfer.setTransferView('apply')}>申请转维</Button>}</Space>}
         >
           <div style={{ display: 'flex', background: 'linear-gradient(180deg, var(--pms-surface-solid) 0%, var(--pms-brand-surface) 100%)', borderBottom: '1px solid var(--pms-brand-border)' }}>
             {[
@@ -5261,7 +5298,7 @@ export default function ProjectSpaceContainer() {
         items={planTabItems}
         tabBarExtraContent={isWholeMachineProject ? (
           <Tooltip title="编辑市场">
-            <Button data-plan-shared-market-editor size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} onClick={openMarketEditor}>市场编辑</Button>
+            <Button data-plan-shared-market-editor size="small" icon={<EditOutlined />} style={{ borderRadius: 6 }} disabled={!canEditBasicInfo} onClick={openMarketEditor}>市场编辑</Button>
           </Tooltip>
         ) : (
           <Tag color={projectPlanLevel === 'mr-version-plan' ? 'blue' : 'default'} style={{ fontSize: 11 }}>
@@ -5335,9 +5372,10 @@ export default function ProjectSpaceContainer() {
                     label: (
                       <span style={{ fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         {plan2.name}
-                        {!plan2.fixed && (
+                        {!plan2.fixed && canEditLevel2Plan && (
                           <Popconfirm title={`确认删除"${plan2.name}"？`}
-                            onConfirm={(event) => { event?.stopPropagation(); const newPlans = createdLevel2Plans.filter(item => item.id !== plan2.id); setCreatedLevel2Plans(newPlans); if (activeLevel2Plan === plan2.id) setActiveLevel2Plan(newPlans[0]?.id || 'plan0'); message.success(`已删除${plan2.name}`) }}
+                            onOpenChange={open => { level2DeleteOpening.current = open ? captureLevel2Opening(plan2.id) : null }}
+                            onConfirm={(event) => { event?.stopPropagation(); if (!canMutateLevel2Plan(level2DeleteOpening.current) || level2DeleteOpening.current?.planId !== plan2.id) return; const newPlans = createdLevel2Plans.filter(item => item.id !== plan2.id); setCreatedLevel2Plans(newPlans); if (activeLevel2Plan === plan2.id) setActiveLevel2Plan(newPlans[0]?.id || 'plan0'); message.success(`已删除${plan2.name}`) }}
                             onCancel={(event) => event?.stopPropagation()} okText="确认" cancelText="取消"
                           >
                             <DeleteOutlined style={{ fontSize: 12, color: '#bfbfbf', marginLeft: 2 }} onClick={(event) => event.stopPropagation()} onMouseEnter={(event) => (event.currentTarget.style.color = '#ff4d4f')} onMouseLeave={(event) => (event.currentTarget.style.color = '#bfbfbf')} />
@@ -5350,7 +5388,7 @@ export default function ProjectSpaceContainer() {
               </Col>
               <Col>
                 {canEditLevel2Plan
-                  ? <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } setCreateFormValues({}); setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
+                  ? <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} onClick={() => { if (!hasPublishedLevel1Plan) { message.warning('请先发布一级计划后再创建二级计划'); return; } level2CreateOpening.current = captureLevel2Opening(); setCreateFormValues({}); setShowCreateLevel2Plan(true) }}>创建二级计划</Button>
                   : <Tooltip title="无二级计划编辑权限"><Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled>创建二级计划</Button></Tooltip>}
               </Col>
             </Row>
@@ -5422,7 +5460,7 @@ export default function ProjectSpaceContainer() {
               {isTosVersionProject ? (
                 <Button type="primary" icon={<PlusOutlined />} onClick={openTosTypeEditor}>类型编辑</Button>
               ) : (
-                <Button type="primary" icon={<PlusOutlined />} onClick={openMarketEditor}>
+                <Button type="primary" icon={<PlusOutlined />} disabled={!canEditBasicInfo} onClick={openMarketEditor}>
                   {marketConfigRows.length === 0 ? '添加市场' : '市场编辑'}
                 </Button>
               )}
@@ -5770,6 +5808,7 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}
           {transfer.transferView === 'review' && <TransferReview {...transferProps} />}
           {transfer.transferView === 'maintenance-spm-review' && <TransferMaintenanceSpmReview {...transferProps} />}
+          {transfer.transferView === null && projectSpaceModule === 'team' && selectedProject && <ProjectTeam key={selectedProject.id} projectId={_permProjectId} />}
           {transfer.transferView === null && projectSpaceModule === 'resources' && selectedProject && <ProjectResources project={selectedProject} />}
           {(transfer.transferView === null || transfer.transferView === 'apply') && projectSpaceModule === 'basic' && (
             !canViewBasicInfo ? <Empty description="无基础信息查看权限" /> : isTechnicalProject && selectedProject
@@ -5812,7 +5851,7 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === null && projectSpaceModule === 'permission' && (canManageRoles ? (
             <PermissionConfig key={`${selectedProject!.id}:${currentLoginUser}`} project={selectedProject!} projectId={_permProjectId} actor={currentLoginUser} />
           ) : <Empty description="无项目权限配置权限" />)}
-          {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission', 'resources'].includes(projectSpaceModule) && (
+          {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission', 'resources', 'team'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
               <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
             </Card>
@@ -5881,7 +5920,8 @@ export default function ProjectSpaceContainer() {
         width={600}
         footer={[
           <Button key="cancel" onClick={() => setShowCreateLevel2Plan(false)}>取消</Button>,
-          <Button key="create" type="primary" onClick={() => {
+          <Button key="create" type="primary" disabled={!canEditLevel2Plan} onClick={() => {
+            if (!canMutateLevel2Plan(level2CreateOpening.current)) return
             setLevel2PlanMilestones(selectedMilestones)
             const planName = selectedLevel2PlanType === '1+N MR版本火车计划' ? `${selectedMRVersion}版本火车计划` : selectedLevel2PlanType === '无' ? (createFormValues.customPlanName || '自定义计划') : selectedLevel2PlanType
             const newPlan = { id: `plan_${Date.now()}`, name: planName, type: selectedLevel2PlanType }

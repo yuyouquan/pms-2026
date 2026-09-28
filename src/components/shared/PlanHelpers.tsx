@@ -448,6 +448,8 @@ export const MOCK_USER_MAP: Record<string, FeishuRecipient> = {
   '演示用户07': { openId: 'ou_mock_demo_user_07', email: 'demo_user_07@example.com', name: '演示用户07' },
   '演示用户08': { openId: 'ou_mock_demo_user_08', email: 'demo_user_08@example.com', name: '演示用户08' },
   '演示用户09': { openId: 'ou_mock_demo_user_09', email: 'demo_user_09@example.com', name: '演示用户09' },
+  '演示用户10': { openId: 'ou_mock_demo_user_10', email: 'demo_user_10@example.com', name: '演示用户10' },
+  '演示用户11': { openId: 'ou_mock_demo_user_11', email: 'demo_user_11@example.com', name: '演示用户11' },
   '演示成员03': { openId: 'ou_mock_demo_member_03',    email: 'demo_member_03@example.com',    name: '演示成员03' },
 }
 

@@ -208,7 +208,7 @@ export interface VersionDiffItem {
 // 兼容旧代码 — TeamMember alias
 export type TeamMember = TMTeamMember
 
-// ========== 用户列表（9个唯一可登录身份） ==========
+// ========== 用户列表（唯一可登录身份） ==========
 
 export const MOCK_TM_USERS: TMTeamMember[] = [
   { id: 'u001', name: '演示用户01', role: 'SPM', department: '示例项目组' },
@@ -220,6 +220,8 @@ export const MOCK_TM_USERS: TMTeamMember[] = [
   { id: 'u007', name: '演示用户07', role: 'SQA', department: '示例质量组' },
   { id: 'u008', name: '演示用户08', role: '底软', department: '示例底软组' },
   { id: 'login-演示用户09', name: '演示用户09', role: '底软', department: '示例底软组' },
+  { id: 'login-演示用户10', name: '演示用户10', role: '研发代表', department: '示例研发部' },
+  { id: 'login-演示用户11', name: '演示用户11', role: '测试代表', department: '示例测试部' },
 ]
 
 // ========== 项目团队 ==========

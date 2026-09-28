@@ -4,7 +4,8 @@ import { useEffect, type ReactNode } from 'react'
 import { Button, Card, Empty } from 'antd'
 import { MainHeader } from '@/containers/AppShell'
 import { useProjectStore } from '@/stores/project'
-import { usePermissionStore, resolvePermissionProjectId } from '@/stores/permission'
+import { usePermissionStore, resolvePermissionProjectId, isGlobalAdmin } from '@/stores/permission'
+import { useProjectTeamStore } from '@/stores/projectTeam'
 import { useUiStore } from '@/stores/ui'
 import { useTransferStore } from '@/stores/transfer'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
@@ -12,7 +13,8 @@ import { canEnterProjectSpace } from '@/lib/projectListFilters'
 /** Re-check the live role scope on every entry and identity/permission change. */
 export default function ProjectSpaceAccessBoundary({ children }: { children: ReactNode }) {
   const { selectedProject, currentLoginUser } = useProjectStore()
-  const { rolesByProject, globalRoles } = usePermissionStore()
+  const { rolesByProject } = usePermissionStore()
+  useProjectTeamStore(state => state.teamsByProjectId)
   const permissionProjectId = resolvePermissionProjectId(
     selectedProject?.id || '',
     typeof selectedProject?.parentProjectId === 'string' ? selectedProject.parentProjectId : undefined,
@@ -21,7 +23,7 @@ export default function ProjectSpaceAccessBoundary({ children }: { children: Rea
     permissionProjectId,
     currentLoginUser,
     rolesByProject,
-    globalRoles.some(role => role.name === '管理组' && role.members.includes(currentLoginUser)),
+    isGlobalAdmin(currentLoginUser),
   )
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export default function ProjectSpaceAccessBoundary({ children }: { children: Rea
     <MainHeader />
     <div className="pms-main-content">
       <Card>
-        <Empty description="当前用户未配置该项目空间角色，无法查看项目内容">
+        <Empty description="当前用户不在该项目团队中，且未配置项目空间角色，无法查看项目内容">
           <Button type="primary" onClick={() => {
             useUiStore.getState().returnFromProjectSpace()
             useProjectStore.getState().setSelectedProject(null)

@@ -1,5 +1,7 @@
 'use client'
 
+import { isProjectTeamReadOnly } from '@/stores/permission'
+import { useProjectTeamStore } from '@/stores/projectTeam'
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import {
@@ -188,6 +190,7 @@ function resolveCurrentMachineAccess(row: MrJointMachineRow): { actor: string; p
 }
 
 export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlanProps) {
+  const teamSnapshot = useProjectTeamStore(state => state.teamsByProjectId)
   const [messageApi, messageContextHolder] = message.useMessage()
   const [modalApi, modalContextHolder] = Modal.useModal()
   const [hydrated, setHydrated] = useState(jointMrHydrated)
@@ -398,7 +401,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
       locked: Boolean(machineRowLocks[lockKey]),
     }),
   ] as const]
-  })), [currentLoginUser, globalAdminUsers, machineRowLocks, projection.rows, sources.machineProjects, sources.tosManagerUsersByProjectId])
+  })), [teamSnapshot, currentLoginUser, globalAdminUsers, machineRowLocks, projection.rows, sources.machineProjects, sources.tosManagerUsersByProjectId])
   const isGlobalAdmin = globalAdminUsers.some(user => user.trim() === currentLoginUser.trim())
   const managedTosProjectIds = useMemo(() => sources.tosProjects
     .filter(project => (sources.tosManagerUsersByProjectId[project.projectId] ?? []).some(user => user.trim() === currentLoginUser.trim()))
@@ -406,10 +409,10 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   const canBatchManage = canEditJoint && (isGlobalAdmin || managedTosProjectIds.length > 0)
   useEffect(() => {
     const selectableKeys = new Set(filteredRows.flatMap(row => (
-      row.kind === 'machine' && canEditJoint && (isGlobalAdmin || managedTosProjectIds.includes(row.tosProjectId)) ? [row.key] : []
+      row.kind === 'machine' && !isProjectTeamReadOnly(currentLoginUser, row.projectId) && canEditJoint && (isGlobalAdmin || managedTosProjectIds.includes(row.tosProjectId)) ? [row.key] : []
     )))
     setSelectedRowKeys(previous => previous.filter(key => selectableKeys.has(key)))
-  }, [filteredRows, isGlobalAdmin, managedTosProjectIds, canEditJoint])
+  }, [filteredRows, isGlobalAdmin, managedTosProjectIds, canEditJoint, currentLoginUser, teamSnapshot])
   const handleTransferType = (row: MrJointMachineRow, value: MrTransferType) => {
     const access = resolveCurrentMachineAccess(row)
     const updated = updateMachineTransferType(row.key, value, access.actor, access.permission)
@@ -631,7 +634,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
           fixed: 'left',
           onChange: keys => setSelectedRowKeys(keys.map(String)),
           getCheckboxProps: row => ({
-            disabled: row.kind === 'tos-reference' || (!isGlobalAdmin && !managedTosProjectIds.includes(row.tosProjectId)),
+            disabled: row.kind === 'tos-reference' || isProjectTeamReadOnly(currentLoginUser, row.projectId) || (!isGlobalAdmin && !managedTosProjectIds.includes(row.tosProjectId)),
             'aria-label': row.kind === 'tos-reference'
               ? `tOS基准行-${row.tosVersion}-不可选`
               : `选择-${row.tosVersion}-${sources.machineMetadataByProjectId[row.projectId]?.projectName ?? row.projectId}`,

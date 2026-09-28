@@ -1,3 +1,4 @@
+import { isProjectTeamReadOnly } from '@/stores/permission'
 import { reconcileTosMrInstances } from '@/lib/tosMrLevel1Sync'
 import { getPmsLocalStorage, isPmsHydrationWriteSuppressed } from '@/lib/mockDatasetStorage'
 import { create } from 'zustand'
@@ -821,6 +822,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
     addTosVersionInstance: (input, permission) => {
       const projectId = text(input.projectId)
       const tosVersion = canonicalizeTosMrVersion(text(input.tosVersion))
+      if (isProjectTeamReadOnly(input.actor, projectId)) return false
       if (!projectId || !tosVersion || !canAccessProject(permission, permission.canEditTos, projectId, 'tos')) return false
       if ((get().tosInstancesByProjectId[projectId] ?? []).some(instance => canonicalizeTosMrVersion(instance.tosVersion) === tosVersion)) return false
       const templateVersion = latestPublishedTemplate(get().templateVersions)
@@ -843,6 +845,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       const tosVersion = canonicalizeTosMrVersion(text(tosVersionInput))
       const activityId = text(activityIdInput)
       const normalizedActor = text(actor)
+      if (isProjectTeamReadOnly(actor, projectId)) return false
       if (!projectId || !tosVersion || !activityId || !normalizedActor || !canAccessProject(permission, permission.canEditTos, projectId, 'tos')) return false
       if (value !== '' && canonicalDate(value) !== value) return false
       const instances = get().tosInstancesByProjectId[projectId] ?? []
@@ -890,6 +893,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       const key = text(keyInput)
       const plan = get().machinePlansByKey[key]
       const normalizedActor = text(actor)
+      if (plan && isProjectTeamReadOnly(actor, plan.projectId)) return false
       if (!plan || !TRANSFER_TYPES.has(value) || !normalizedActor || !canEditMachinePlan(get(), plan, permission)) return false
       const now = clock()
       set(state => ({ machinePlansByKey: {
@@ -903,6 +907,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       const activityId = text(activityIdInput)
       const plan = get().machinePlansByKey[key]
       const normalizedActor = text(actor)
+      if (plan && isProjectTeamReadOnly(actor, plan.projectId)) return false
       if (!plan || plan.transferType === 'N/A' || !activityId || !normalizedActor || !canEditMachinePlan(get(), plan, permission)) return false
       if (!hasChildActivity(get(), plan, activityId)) return false
       if (value !== '' && canonicalDate(value) !== value) return false
@@ -927,7 +932,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
           const tosVersion = canonicalizeTosMrVersion(text(row.tosVersion))
           const plan = state.machinePlansByKey[`${projectId}::${tosVersion}`]
           const key = makeMrMachineRowLockKey({ projectId, tosProjectId, tosVersion: tosVersion ?? '' })
-          if (!key || !plan || plan.tosProjectId !== tosProjectId || !canManageLock(permission, tosProjectId)) {
+          if (isProjectTeamReadOnly(actor, projectId) || !key || !plan || plan.tosProjectId !== tosProjectId || !canManageLock(permission, tosProjectId)) {
             skipped += 1
             return
           }
@@ -951,7 +956,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
           const tosVersion = canonicalizeTosMrVersion(text(row.tosVersion))
           const plan = state.machinePlansByKey[`${projectId}::${tosVersion}`]
           const key = makeMrMachineRowLockKey({ projectId, tosProjectId, tosVersion: tosVersion ?? '' })
-          if (!key || !plan || plan.tosProjectId !== tosProjectId || !canManageLock(permission, tosProjectId)) {
+          if (isProjectTeamReadOnly(actor, projectId) || !key || !plan || plan.tosProjectId !== tosProjectId || !canManageLock(permission, tosProjectId)) {
             skipped += 1
             return
           }
@@ -964,6 +969,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
     },
     stopRelease: (input, permission) => {
       const projectId = text(input.projectId)
+      if (isProjectTeamReadOnly(input.operator, projectId)) return false
       if (!projectId || !canAccessProject(permission, permission.canStopRelease, projectId, 'machine')) return false
       const state = get()
       if (state.stopReleaseRecords.some(record => record.projectId === projectId)) return false
@@ -994,6 +1000,7 @@ function createStoreCreator(options: StoreFactoryOptions = {}) {
       const activityId = text(input.activityId)
       const normalizedActor = text(actor)
       if (!projectId || !tosVersion || !market || !mainMarket || market === mainMarket || !activityId || !normalizedActor) return false
+      if (isProjectTeamReadOnly(actor, projectId)) return false
       if (!canAccessProject(permission, permission.canEditMarket, projectId, 'machine')) return false
       if (input.value !== '' && canonicalDate(input.value) !== input.value) return false
       const planKey = `${projectId}::${tosVersion}`

@@ -7,6 +7,8 @@ import {
   AppstoreOutlined, LeftOutlined, ProjectOutlined, DownOutlined,
   SearchOutlined, SwapOutlined, CheckCircleOutlined,
 } from '@ant-design/icons'
+import { useProjectTeamStore } from '@/stores/projectTeam'
+import { isProjectTeamMember } from '@/lib/projectTeam'
 import { useUiStore, type MainModule } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
@@ -23,6 +25,7 @@ import { useRef, useEffect, useMemo } from 'react'
 // ─── Shared user switcher (head avatar + dropdown) ──────────────────
 
 function UserSwitcher() {
+  useProjectTeamStore(state => state.teamsByProjectId)
   const { projects, currentLoginUser, setCurrentLoginUser, setProjectCardPage, projectMemberMap } = useProjectStore()
   const { permissionCenter, rolesByProject } = usePermissionStore()
 
@@ -125,6 +128,9 @@ function UserSwitcher() {
 // ─── Main mode header ───────────────────────────────────────────────
 
 export function MainHeader() {
+  const projects = useProjectStore(state => state.projects)
+  useProjectTeamStore(state => state.teamsByProjectId)
+  const activateProject = useActivateProject()
   const {
     activeModule, setActiveModule, setConfigTab,
     setIsEditMode, navigateWithEditGuard,
@@ -134,6 +140,8 @@ export function MainHeader() {
   const currentLoginUser = useProjectStore(state => state.currentLoginUser)
   const permissionCenter = usePermissionStore(state => state.permissionCenter)
   const isCurrentDraft = activeModule === 'projectSpace' && versions.find(version => version.id === currentVersion)?.status === '修订中'
+
+  const teamProjects = projects.filter(project => isProjectTeamMember(currentLoginUser, project.id))
 
   return (
     <div className="pms-main-header pms-topbar" style={{ padding: '0 32px', position: 'sticky', top: 0, zIndex: 100 }}>
@@ -169,7 +177,13 @@ export function MainHeader() {
           </Space>
         </Col>
         <Col className="pms-main-header__user">
-          <Space size={8}><Tag className="pms-demo-data-tag">虚构演示数据</Tag><UserSwitcher /></Space>
+          <Space size={8}>{teamProjects.length > 0 && <Dropdown trigger={['click']} menu={{ items: teamProjects.map(project => ({ key: project.id, label: project.name, onClick: () => navigateWithEditGuard(() => {
+            const latest = useProjectStore.getState()
+            const target = latest.projects.find(row => row.id === project.id)
+            if (!target || !isProjectTeamMember(latest.currentLoginUser, target.id)) return
+            activateProject(target)
+            useUiStore.getState().enterProjectSpace({ module: activeModule === 'projectSpace' ? 'projectManagement' : activeModule })
+          }, isCurrentDraft) })) }}><Button className="pms-user-switcher" type="text" style={{ color: '#fff' }}>我的团队项目 <DownOutlined /></Button></Dropdown>}<Tag className="pms-demo-data-tag">虚构演示数据</Tag><UserSwitcher /></Space>
         </Col>
       </Row>
     </div>
@@ -183,6 +197,7 @@ interface ProjectSpaceHeaderProps {
 }
 
 export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeaderProps) {
+  const teamSnapshot = useProjectTeamStore(state => state.teamsByProjectId)
   const {
     showProjectSearch, setShowProjectSearch,
     projectSearchText, setProjectSearchText, setProjectSpaceModule,
@@ -208,7 +223,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
       resolvePermissionProjectId(p.id, typeof p.parentProjectId === 'string' ? p.parentProjectId : undefined),
       currentLoginUser, rolesByProject, isAdminUser,
     ))
-  }, [projects, isAdminUser, currentLoginUser, rolesByProject])
+  }, [projects, isAdminUser, currentLoginUser, rolesByProject, teamSnapshot])
 
   const filteredProjects = visibleProjects.filter(p => {
     if (!projectSearchText) return true
@@ -240,7 +255,7 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
 
   return (
     <div className="pms-project-space-header pms-topbar" style={{ padding: '0 32px', position: 'sticky', top: 0, zIndex: 100 }}>
-      <Row align="middle" style={{ height: 'var(--pms-header-height)' }}>
+      <Row wrap={false} align="middle" style={{ height: 'var(--pms-header-height)' }}>
         <Col flex="none">
           <Button
             type="text"
@@ -255,14 +270,15 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
             {returnLabel}
           </Button>
         </Col>
-        <Col flex="auto" style={{ textAlign: 'center' }}>
-          <div ref={projectSearchRef} style={{ display: 'inline-block', position: 'relative' }}>
+        <Col flex="1 1 0" style={{ minWidth: 0, textAlign: 'center' }}>
+          <div ref={projectSearchRef} className="pms-project-space-header__selector" style={{ display: 'inline-block', position: 'relative' }}>
             <div
+              className="pms-project-space-header__trigger"
               style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, padding: '4px 12px', borderRadius: 6, transition: 'background 0.2s', background: showProjectSearch ? 'rgba(255,255,255,0.15)' : 'transparent' }}
               onClick={() => setShowProjectSearch(!showProjectSearch)}
             >
               <ProjectOutlined style={{ color: '#fff', fontSize: 16 }} />
-              <span style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>{selectedProject?.name}</span>
+              <span className="pms-project-space-header__title" title={selectedProject?.name} style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>{selectedProject?.name}</span>
               <DownOutlined style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', transition: 'transform 0.2s', transform: showProjectSearch ? 'rotate(180deg)' : 'rotate(0deg)' }} />
               {selectedProject && <Tag aria-label="项目属性" style={{ marginLeft: 4, fontSize: 11, background: 'rgba(255,255,255,0.2)', border: 'none', color: '#fff' }}>{PROJECT_ATTRIBUTE_LABELS[getProjectAttribute(selectedProject)]}</Tag>}
             </div>

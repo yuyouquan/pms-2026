@@ -1,3 +1,4 @@
+import { isProjectTeamReadOnly } from '@/stores/permission'
 import { normalizeMrTemplateActivities, numberMrTemplateActivities } from '@/lib/mrTemplateRules'
 import type {
   CreateTosMrVersionInput,
@@ -219,6 +220,8 @@ export function resolveMrPermissions(input: MrPermissionInput): MrPermissionResu
   const currentUser = trim(input.currentUser)
   if (!currentUser) return result
   result.canView = true
+  const targetProjectId = input.context === 'tos' ? input.tosProjectId : input.machineProjectId
+  if (isProjectTeamReadOnly(currentUser, targetProjectId)) return result
   if (input.globalAdminUsers.some(user => trim(user) === currentUser)) {
     return {
       canView: true, canEditTemplate: true, canEditTos: true, canEditMachine: true,

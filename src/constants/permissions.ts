@@ -1,6 +1,6 @@
 export const FIXED_ROLES = ['系统管理员', '项目经理', '产品经理', '软件SE', '开发代表', '设计师', '测试TPM', 'SQA', '开发工程师', '测试工程师', '管理层', '其他']
 
-export const ALL_USERS = ['演示用户01', '演示用户02', '演示用户03', '演示用户04', '演示用户05', '演示用户06', '演示用户07', '演示用户08', '演示用户09', 'SnoopyYu']
+export const ALL_USERS = ['演示用户01', '演示用户02', '演示用户03', '演示用户04', '演示用户05', '演示用户06', '演示用户07', '演示用户08', '演示用户09', '演示用户10', '演示用户11', 'SnoopyYu']
 
 export interface ProjectPermissionItem {
   key: string

@@ -30,9 +30,13 @@ export type ProjectInfoValues = Record<string, ProjectInfoValue>
 
 /** Project record - matches initialProjects structure in page.tsx */
 export interface ProjectItem extends ProjectRegistryMetadata {
+  /** Mock-only external team source. Explicit null records a removed legacy binding. */
+  mockTeamSourceId?: string | null;
   responsiblePersons?: string[];
   id: string;
   sourceBid?: string;
+  /** Name-inferred registry display association; never an external team grant. */
+  nameInferredSourceBid?: string;
   name: string;
   type: ProjectCategory;
   secondaryCategory?: string;

@@ -4,7 +4,7 @@ import { MACHINE_BUDGET_METADATA_KEYS, hasBoundMachineBudgetMetadataOverride, is
 import { validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
 import { getProjectAttribute, isFormalProject, type ProjectRegistryHistoryEntry } from '@/types/projectRegistry'
 import { createRegistryHistoryEntry, validateRegistryCreation, validateRegistryProject } from '@/lib/projectRegistryRules'
-import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
+import { getPmsLocalStorage, isPmsHydrationWriteSuppressed } from '@/lib/mockDatasetStorage'
 import { canUseProjectRegistry, canChangeRegistryFields } from '@/lib/projectRegistryAuthorization'
 import { buildProjectCreationNotification } from '@/lib/projectCreationNotification'
 import { create } from 'zustand'
@@ -33,6 +33,7 @@ import {
 import { currentTosSnapshotValues, normalizeTosSnapshot } from '@/lib/enumConsumers'
 import { useEnumStore } from '@/stores/enums'
 import { useRoadmapStore } from '@/stores/roadmap'
+import { useProjectTeamStore } from '@/stores/projectTeam'
 import type { ProjectItem } from '@/types/app'
 import type {
   RoadmapChangeAction,
@@ -95,7 +96,7 @@ type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 export type ProjectListViewMode = 'list' | 'card' | 'calendar'
 type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode; registryHistory: ProjectRegistryHistoryEntry[]; migratedRoadmapIds: string[] }
 
-export const PROJECT_STORE_VERSION = 10
+export const PROJECT_STORE_VERSION = 11
 
 const withEosTransitionTime = (project: Project, previous?: Project, now = new Date().toISOString()): Project => {
   if (project.status !== 'EOS') return project
@@ -206,10 +207,11 @@ function migrateProjectSourceIdentity(project: Project): Project {
   if (!isFormalProject(project)) return project
   const existingBid = typeof project.sourceBid === 'string' ? project.sourceBid.trim() : ''
   if (existingBid) return existingBid === project.sourceBid ? project : { ...project, sourceBid: existingBid }
+  if (project.mockTeamSourceId === null) return project
   const projectName = project.name.trim()
   const matchingEntries = EXTERNAL_PROJECT_POOL.filter(entry => entry.name.trim() === projectName)
   return matchingEntries.length === 1
-    ? { ...project, sourceBid: matchingEntries[0].bid }
+    ? { ...project, sourceBid: matchingEntries[0].bid, nameInferredSourceBid: matchingEntries[0].bid }
     : project
 }
 
@@ -222,6 +224,18 @@ const migrateProjectHistory = (project: Project): Project => (
 )
 
 const initialProjectState = (initialProjects as Project[]).map(migrateProjectHistory)
+
+const LEGACY_MOCK_TEAM_SOURCE_IDS = new Set(['1', '2', '9'])
+
+function keepMockTeamSourceLifecycle(previous: Project | undefined, next: Project): Project {
+  if (!previous) return next.mockTeamSourceId === undefined ? next : { ...next, mockTeamSourceId: null }
+  if ((previous.sourceBid || '') !== (next.sourceBid || '')) {
+    const rebound = { ...next, mockTeamSourceId: null }
+    if (rebound.nameInferredSourceBid !== rebound.sourceBid) delete rebound.nameInferredSourceBid
+    return rebound
+  }
+  return previous.mockTeamSourceId === undefined ? next : { ...next, mockTeamSourceId: previous.mockTeamSourceId }
+}
 
 const initialMarketConfigsByProjectId = initialProjects.reduce((acc, project) => {
   if (isMachineProjectType(project.type) && project.markets?.length) {
@@ -467,13 +481,19 @@ export function migrateProjectState(persistedState: unknown, version: number): P
     const type = classification.projectCategory
     if (!id || !name || !type || seenIds.has(id)) return []
     seenIds.add(id)
-    return [migrateProjectHistory({
+    const migrated = migrateProjectHistory({
       ...value,
       id,
       name,
       type,
       secondaryCategory: value.projectAttribute === 'budget' || value.projectAttribute === 'roadmap' ? value.secondaryCategory : classification.secondaryCategory,
-    } as Project)]
+    } as Project)
+    // Pre-v11 records had no team-source lifecycle field. Only the named seed
+    // fixtures may receive a one-time legacy binding; current records fail closed.
+    if (version < 11 && !Object.prototype.hasOwnProperty.call(value, 'mockTeamSourceId')
+      && (!migrated.sourceBid || migrated.nameInferredSourceBid === migrated.sourceBid) && migrated.projectAttribute === 'formal'
+      && LEGACY_MOCK_TEAM_SOURCE_IDS.has(id)) migrated.mockTeamSourceId = `legacy:${id}`
+    return [migrated]
   })
 
   if (persistedState.projects.length > 0 && projects.length === 0) {
@@ -513,7 +533,7 @@ const safeProjectStorage: StateStorage = {
     }
   },
   setItem(name, value) {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || isPmsHydrationWriteSuppressed()) return
     try {
       getPmsLocalStorage().setItem(name, value)
     } catch (error) {
@@ -626,7 +646,11 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     todoCollapsed: false,
     projectMemberMap: { ...INITIAL_PROJECT_MEMBER_MAP },
 
-    setProjects: (v) => set(state => ({ projects: typeof v === 'function' ? v(state.projects) : v })),
+    setProjects: (v) => set(state => {
+      const incoming = typeof v === 'function' ? v(state.projects) : v
+      const before = new Map(state.projects.map(project => [project.id, project]))
+      return { projects: incoming.map(project => keepMockTeamSourceLifecycle(before.get(project.id), project)) }
+    }),
     setSelectedProject: (v) => set({ selectedProject: v }),
     setCurrentLoginUser: (v) => set({ currentLoginUser: v }),
     setProjectSearchText2: (v) => set({ projectSearchText2: v }),
@@ -666,6 +690,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       let projectToAdd = sourceBid && newProject.sourceBid !== sourceBid
         ? { ...newProject, sourceBid }
         : newProject
+      projectToAdd = keepMockTeamSourceLifecycle(undefined, projectToAdd)
       if (isMachineProjectType(projectToAdd.type) && validateFanTrial(projectToAdd.fieldValues || {}, useEnumStore.getState().rowsByType['fan-trial-country'].filter(row => row.enabled !== false).map(row => row.value))) return false
       projectToAdd = withEosTransitionTime(projectToAdd)
       if (hasDuplicateProjectSourceBid(get().projects, projectToAdd)) return false
@@ -746,6 +771,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       let projectToSave = sourceBid && updated.sourceBid !== sourceBid
         ? { ...updated, sourceBid }
         : updated
+      projectToSave = keepMockTeamSourceLifecycle(existing, projectToSave)
       if (isBoundMachineBudget(existing) && !projectToSave.boundFormalProjectId) {
         const retained = retainBoundMachineBudgetMetadata(existing, previousProjects)
         projectToSave = { ...projectToSave, brand: retained.brand, productLine: retained.productLine, marketName: retained.marketName, machineBudgetMetadataAuthority: retained.machineBudgetMetadataAuthority, fieldValues: { ...projectToSave.fieldValues, brand: retained.brand || '', productLine: retained.productLine || '', marketName: retained.marketName || '' } }
@@ -896,7 +922,16 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
       }
     },
     onRehydrateStorage: () => (state) => {
-      if (state) usePermissionStore.getState().ensureProjectPermissions(state.projects)
+      if (state) {
+        usePermissionStore.getState().ensureProjectPermissions(state.projects)
+        useProjectTeamStore.getState().syncProjects(state.projects)
+      }
     },
   },
 ))
+
+// External-team snapshots follow the source project list, never editable role membership.
+useProjectTeamStore.getState().syncProjects(useProjectStore.getState().projects)
+useProjectStore.subscribe((state, previous) => {
+  if (state.projects !== previous.projects) useProjectTeamStore.getState().syncProjects(state.projects)
+})
