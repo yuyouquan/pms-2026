@@ -1,0 +1,28 @@
+.workspace { display: flex; gap: 12px; position: relative; height: 100%; min-height: 420px; }
+.workspace .content { box-shadow: none; border: 1px solid #eeeaf6; border-top: 2px solid var(--pms-brand); }
+.permissions { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.permissions th, .permissions td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eeedf2; vertical-align: top; }
+.permissions thead th { position: sticky; top: 0; background: #f7f5fb; color: #535a66; z-index: 2; }
+.permissions th:first-child { width: 164px; }
+.permissions tbody th { font-weight: 500; }
+.permissions tbody tr:not(.groupRow) th { padding-left: 30px; }
+.permissions .groupRow th { padding: 0; background: #faf9fc; }
+.groupRow button { padding: 9px 12px; display: flex; align-items: center; gap: 8px; width: 100%; color: #4b435e; background: transparent; border: 0; text-align: left; font-weight: 600; cursor: pointer; }
+.groupRow button:disabled { cursor: default; }
+.groupRow button:focus-visible { outline: 2px solid var(--pms-brand); outline-offset: -2px; }
+.groupRow button > span { font-size: 10px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px 20px; min-height: 20px; }
+.actions :global(.ant-checkbox-wrapper) { margin-inline-start: 0; white-space: nowrap; }
+.permissions .hint { font-size: 12px; color: #717680; padding: 6px 12px 10px 30px; }
+.mobileRoleToggle { display: none; }
+@media (max-width: 760px) {
+  .workspace { height: auto; min-height: calc(100dvh - 130px); padding-top: 40px; gap: 0; }
+  .mobileRoleToggle { display: block; position: absolute; left: 0; top: 0; }
+  .permissions th, .permissions td { padding: 9px 8px; }
+  .permissions thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .permissions, .permissions tbody, .permissions tbody tr, .permissions tbody th, .permissions tbody td { display: block; width: 100%; }
+  .permissions tbody th:first-child { width: 100%; }
+  .permissions tbody tr:not(.groupRow) th { padding: 9px 8px 3px; border-bottom: 0; }
+  .permissions .hint { padding: 6px 8px 10px; }
+  .actions { gap: 8px 12px; }
+}

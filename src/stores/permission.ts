@@ -1,3 +1,4 @@
+import { roleAppliesToUser, normalizeProjectRoleDepartments } from '@/lib/projectRoleMembership'
 import { createPermissionCenterSeed } from '@/lib/permissionCenterSeed'
 import { PERMISSION_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
 import { createEmptyMenuPolicy, evaluateMenuPermission, getAuthorizedColumns, isPermissionCenterAdmin, legacyPermissionTargets, isValidLegacyPermissionCenter, normalizePermissionName, normalizePolicyActions, parsePermissionCenter, projectAuthorizedRows, validateMenuPolicy } from '@/lib/permissionCenter'
@@ -197,6 +198,9 @@ const DEFAULT_ROLE_MEMBERS: Record<string, string[]> = {
 }
 
 export interface Role {
+  departments?: string[]
+  groupName?: string
+  description?: string
   name: string
   members: string[]
   isFixed: boolean
@@ -276,7 +280,7 @@ function buildPermissionsForRoles(roles: readonly Role[], projectType?: string):
 }
 
 function mergeProjectRoles(project: RoleProject, existing: readonly Role[] = []): Role[] {
-  const fixed = getFixedProjectRoles(project)
+  const fixed = getFixedProjectRoles(project).map(role => ({ ...existing.find(item => item.name === role.name && item.isFixed), ...role }))
   if (hasDerivedMachineResponsibilityRoles(project)) {
     const derived = new Set(['SPM', '系统管理员'])
     const expectedNames = new Set(fixed.map(role => role.name))
@@ -321,6 +325,9 @@ const sanitizeRolesByProject = (value: unknown): Record<string, Role[]> => {
         name,
         members: normalizeRoleMembers(rawRole.members),
         isFixed: rawRole.isFixed === true,
+        ...(rawRole.departments !== undefined ? { departments: normalizeProjectRoleDepartments(rawRole.departments) } : {}),
+        ...(typeof rawRole.groupName === 'string' ? { groupName: rawRole.groupName.trim() } : {}),
+        ...(typeof rawRole.description === 'string' ? { description: rawRole.description.trim() } : {}),
       }]
     })
     return [[projectId, roles]]
@@ -487,7 +494,7 @@ function buildInitialPerProject(): {
 
 const __INITIAL = buildInitialPerProject()
 
-function hasProjectRoleManagementAccess(
+export function hasProjectRoleManagementAccess(
   state: Pick<PermissionState, 'globalRoles' | 'permissionCenter' | 'rolesByProject' | 'rolePermissionsByProject'>,
   actor: string,
   projectId: string,
@@ -496,7 +503,7 @@ function hasProjectRoleManagementAccess(
   if (!user || !projectId) return false
   if (state.permissionCenter ? isPermissionCenterAdmin(state.permissionCenter, user) : state.globalRoles.some(role => role.name === '管理组' && role.members.includes(user))) return true
   const roleNames = (state.rolesByProject[projectId] || [])
-    .filter(role => role.members.includes(user))
+    .filter(role => roleAppliesToUser(role, user))
     .map(role => role.name)
   return roleNames.some(roleName => state.rolePermissionsByProject[projectId]?.[roleName]?.['projectPermission:manageRoles'] === true)
 }
@@ -540,6 +547,10 @@ export interface PermissionActions {
   setSuperAdminMembers: (actor: string, members: string[]) => PermissionMutationResult
 
   // Per-project actions
+  createProjectRole: (actor: string, projectId: string, input: CenterRoleInput) => PermissionMutationResult
+  updateProjectRole: (actor: string, projectId: string, roleName: string, input: CenterRoleInput) => PermissionMutationResult
+  deleteProjectRole: (actor: string, projectId: string, roleName: string) => PermissionMutationResult
+  setProjectRoleDepartments: (actor: string, projectId: string, roleName: string, departments: string[]) => PermissionMutationResult
   setRolesForProject: (projectId: string, v: Role[] | ((prev: Role[]) => Role[])) => void
   setRolePermissionsForProject: (projectId: string, v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
   setRolesForProjectGuarded: (projectId: string, actor: string, v: Role[] | ((prev: Role[]) => Role[])) => boolean
@@ -655,6 +666,41 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
   }),
   setSuperAdminMembers: (actor, members) => get().setCenterRoleAssignees(actor, SUPER_ADMIN_ROLE_ID, { users: members, departments: [] }),
 
+  // Each role mutation authorizes once, persists the complete next slot, then applies it.
+  createProjectRole: (actor, projectId, input) => mutateProjectRoles(get, set, actor, projectId, (roles, grants) => {
+    const error = validateProjectRoleInput(roles, input)
+    if (error) return { ok: false, error }
+    const name = input.name.trim()
+    roles.push({ name, groupName: input.groupName.trim(), description: input.description?.trim() ?? '', members: [], departments: [], isFixed: false })
+    grants[name] = initializeResourcePermissions([roles[roles.length - 1]], {}, get().projectTypesByProject[projectId])[name]
+    return { ok: true, roleId: name }
+  }),
+  updateProjectRole: (actor, projectId, roleName, input) => mutateProjectRoles(get, set, actor, projectId, (roles, grants) => {
+    const role = roles.find(role => role.name === roleName)
+    if (!role) return { ok: false, error: '角色不存在' }
+    if (role.isFixed) return { ok: false, error: '固定角色不能修改' }
+    const error = validateProjectRoleInput(roles, input, roleName)
+    if (error) return { ok: false, error }
+    const name = input.name.trim()
+    if (name !== roleName) { grants[name] = grants[roleName] ?? {}; delete grants[roleName] }
+    Object.assign(role, { name, groupName: input.groupName.trim(), description: input.description?.trim() ?? '' })
+    return { ok: true, roleId: name }
+  }),
+  deleteProjectRole: (actor, projectId, roleName) => mutateProjectRoles(get, set, actor, projectId, (roles, grants) => {
+    const index = roles.findIndex(role => role.name === roleName)
+    if (index < 0) return { ok: false, error: '角色不存在' }
+    if (roles[index].isFixed) return { ok: false, error: '固定角色不能删除' }
+    roles.splice(index, 1); delete grants[roleName]
+    return { ok: true }
+  }),
+  setProjectRoleDepartments: (actor, projectId, roleName, departments) => mutateProjectRoles(get, set, actor, projectId, roles => {
+    const role = roles.find(role => role.name === roleName)
+    if (!role) return { ok: false, error: '角色不存在' }
+    if (!Array.isArray(departments) || departments.some(department => typeof department !== 'string' || !PERMISSION_DEPARTMENTS.includes(department.trim()))) return { ok: false, error: '请选择有效的系统部门' }
+    role.departments = normalizeProjectRoleDepartments(departments)
+    return { ok: true }
+  }),
+
   // Per-project setters
   setRolesForProject: (projectId, v) => set((s) => {
     const prev = s.rolesByProject[projectId] ?? buildDefaultRoles()
@@ -716,7 +762,7 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
       const existingByName = new Map(existing.map(role => [role.name, role]))
       const fixed = expectedFixed.map(role => {
         const configured = existingByName.get(role.name)
-        if (project.type === PROJECT_CATEGORY_MACHINE && role.name === 'SPM') return role
+        if (project.type === PROJECT_CATEGORY_MACHINE && role.name === 'SPM') return { ...configured, ...role }
         return configured?.isFixed ? configured : role
       })
       const custom = existing.filter(role => !expectedNames.has(role.name) && !role.isFixed)
@@ -826,7 +872,7 @@ export function hasPermission(userName: string, projectId: string | undefined, p
   const s = usePermissionStore.getState()
   const projectRoles = s.rolesByProject[projectId] ?? []
   const projectPerms = s.rolePermissionsByProject[projectId] ?? {}
-  const userRoles = projectRoles.filter(r => r.members.includes(userName)).map(r => r.name)
+  const userRoles = projectRoles.filter(r => roleAppliesToUser(r, userName)).map(r => r.name)
   return userRoles.some(role => projectPerms[role]?.[permKey] === true)
 }
 
@@ -841,7 +887,7 @@ export function useHasPermission(userName: string, projectId: string | undefined
     const admin = globalRoles.find(r => r.name === '管理组')
     if (permissionCenter ? isPermissionCenterAdmin(permissionCenter, userName) : admin?.members.includes(userName)) return true
     if (!projectId || !projectRoles || !projectPerms) return false
-    const userRoles = projectRoles.filter(r => r.members.includes(userName)).map(r => r.name)
+    const userRoles = projectRoles.filter(r => roleAppliesToUser(r, userName)).map(r => r.name)
     return userRoles.some(role => projectPerms[role]?.[permKey] === true)
   }
 }
@@ -893,4 +939,41 @@ export function useMenuPermission(user: string, menuId: PermissionMenuId) {
     columns: (action: PermissionAction = 'view', row?: Record<string, unknown>) => getAuthorizedColumns(model, user, menuId, action, row),
     project: <T extends object>(rows: readonly T[], action: PermissionAction = 'view') => projectAuthorizedRows(model, user, menuId, action, rows),
   }
+}
+
+function validateProjectRoleInput(roles: readonly Role[], input: CenterRoleInput, originalName?: string): string | undefined {
+  if (!input || typeof input.name !== 'string' || !input.name.trim()) return '角色名称必填'
+  if (typeof input.groupName !== 'string' || !input.groupName.trim()) return '分组必填'
+  if (input.description !== undefined && typeof input.description !== 'string') return '角色描述格式无效'
+  // Role names become own keys in persisted grant records; reject prototype-sensitive names.
+  if (['__proto__', 'constructor', 'prototype'].includes(normalizePermissionName(input.name))) return '角色名称不能使用系统保留名称'
+  if (roles.some(role => role.name !== originalName && normalizePermissionName(role.name) === normalizePermissionName(input.name))) return '角色名称不能重复'
+}
+function mutateProjectRoles(
+  get: () => PermissionState & PermissionActions,
+  set: (state: Partial<PermissionState>) => void,
+  actor: string,
+  projectId: string,
+  mutate: (roles: Role[], grants: Record<string, Record<string, boolean>>) => PermissionMutationResult,
+): PermissionMutationResult {
+  const state = get()
+  if (!hasProjectRoleManagementAccess(state, actor, projectId)) return { ok: false, error: '没有项目角色管理权限' }
+  const roles = structuredClone(state.rolesByProject[projectId] ?? [])
+  const grants = structuredClone(state.rolePermissionsByProject[projectId] ?? {})
+  const result = mutate(roles, grants)
+  if (!result.ok) return result
+  const update = {
+    rolesByProject: { ...state.rolesByProject, [projectId]: roles },
+    rolePermissionsByProject: { ...state.rolePermissionsByProject, [projectId]: grants },
+  }
+  try {
+    if (typeof window !== 'undefined') {
+      if (isPmsHydrationWriteSuppressed()) return { ok: false, error: '数据正在恢复，请稍后重试' }
+      getPmsLocalStorage().setItem(PERMISSION_STORAGE_KEY, JSON.stringify({ state: partializePermissionState({ ...state, ...update }), version: PERMISSION_STORAGE_VERSION }))
+    }
+  } catch {
+    return { ok: false, error: '自动保存失败，请检查浏览器存储后重试；原权限保持不变' }
+  }
+  set(update)
+  return result
 }

@@ -12,9 +12,10 @@ interface Props {
   onSubmit: (input: CenterRoleInput) => PermissionMutationResult
   onClose: () => void
   onDirty: () => void
+  hint?: string
 }
 
-export default function RoleForm({ model, role, onSubmit, onClose, onDirty }: Props) {
+export default function RoleForm({ model, role, onSubmit, onClose, onDirty, hint }: Props) {
   const [form] = Form.useForm<CenterRoleInput>()
   const [groupSearch, setGroupSearch] = useState('')
   const [localGroups, setLocalGroups] = useState<string[]>([])
@@ -40,6 +41,7 @@ export default function RoleForm({ model, role, onSubmit, onClose, onDirty }: Pr
         <Input placeholder="请输入角色名称" maxLength={100} />
       </Form.Item>
       <Form.Item label="角色定位/范围" name="description"><Input.TextArea placeholder="选填，说明角色职责或适用范围" rows={3} maxLength={500} /></Form.Item>
+      {hint && <div style={{ color: '#717680', fontSize: 12, marginBottom: 8 }}>{hint}</div>}
       {error && <Alert type="error" showIcon message={error} />}
     </Form>
   </Modal>

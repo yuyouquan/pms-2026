@@ -1,3 +1,5 @@
+import { roleAppliesToUser } from '@/lib/projectRoleMembership'
+
 export type AggregateProjectStatus = 'all' | 'inProgress' | 'completed'
 
 export const IN_PROGRESS_PROJECT_STATUSES = new Set([
@@ -9,6 +11,7 @@ export const COMPLETED_PROJECT_STATUSES = new Set([
 ])
 
 export interface ProjectPermissionRole {
+  departments?: readonly string[]
   members: readonly string[]
 }
 
@@ -21,7 +24,7 @@ export function matchesAboutMine(
 ) {
   const user = currentLoginUser.trim()
   if (!user) return false
-  return (rolesByProject[projectId] || []).some(role => role.members.includes(user))
+  return (rolesByProject[projectId] || []).some(role => roleAppliesToUser(role, user))
 }
 
 export function canEnterProjectSpace(

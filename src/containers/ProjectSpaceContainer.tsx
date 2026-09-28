@@ -168,7 +168,7 @@ import { buildProjectListMockPlanTasks, getProjectLevel1MockSnapshotKey } from '
 import { useTransferStore } from '@/stores/transfer'
 import { matchesTransferProject } from '@/lib/transferWorkflow'
 import { selectTechnicalProjectStage, useTechnicalPlanStore } from '@/stores/technicalPlan'
-import { isGlobalAdmin, resolvePermissionProjectId, usePermissionStore, useHasPermission } from '@/stores/permission'
+import { hasPermission, isGlobalAdmin, resolvePermissionProjectId, usePermissionStore, useHasPermission } from '@/stores/permission'
 import { PermissionConfig } from '@/components/permission/PermissionModule'
 import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
 import { TransferApply, TransferDetail, TransferEntry, TransferReview, TransferMaintenanceSpmReview, TransferWorkbench } from '@/components/transfer/TransferModule'
@@ -930,16 +930,6 @@ export default function ProjectSpaceContainer() {
     planLevel, selectedPlanType,
   } = plan
 
-  const {
-    showAddRoleModal, setShowAddRoleModal, newRoleName, setNewRoleName,
-    editingRoleName, setEditingRoleName, editRoleNameValue, setEditRoleNameValue,
-    permissionActiveRole, setPermissionActiveRole, permConfigTab, setPermConfigTab,
-  } = perm
-
-  // Per-project roles/permissions are looked up by selectedProject.id and
-  // proxied through setRolesForProject/setRolePermissionsForProject so the
-  // existing PermissionConfig signature (which takes roles/setRoles/etc.) is
-  // unchanged.
   const _permProjectId = resolvePermissionProjectId(
     selectedProject?.id ?? '',
     typeof selectedProject?.parentProjectId === 'string' ? selectedProject.parentProjectId : undefined,
@@ -952,23 +942,6 @@ export default function ProjectSpaceContainer() {
     if (!perm.setRolesForProjectGuarded(_permProjectId, currentLoginUser, v)) {
       message.error('无权限修改项目角色')
     }
-  }
-  const rolePermissions = perm.rolePermissionsByProject[_permProjectId] ?? {}
-  const setRolePermissions = (v: Parameters<typeof perm.setRolePermissionsForProject>[1]) => {
-    if (!_permProjectId) return
-    if (!perm.setRolePermissionsForProjectGuarded(_permProjectId, currentLoginUser, v)) {
-      message.error('无权限修改项目角色')
-    }
-  }
-  const handleProjectRoleMembersChange = (roleName: string, members: string[]) => {
-    const role = roles.find(item => item.name === roleName)
-    if (selectedProject?.type === PROJECT_TYPE_TOS_VERSION && role?.isFixed) {
-      if (!syncTosTeamPermissionMembersGuarded(_permProjectId, currentLoginUser, roleName, members)) {
-        message.error('角色成员同步失败')
-      }
-      return
-    }
-    setRoles(previous => previous.map(item => item.name === roleName ? { ...item, members } : item))
   }
   const isTechnicalProject = selectedProject?.type === '技术项目'
 
@@ -2236,7 +2209,7 @@ export default function ProjectSpaceContainer() {
   const navigateWithEditGuard = (action: () => void) => {
     // Resource blur/outside handlers save before navigation; read their synchronous draft state.
     const hasUnsavedEdits = projectSpaceModule === 'resources' ? useUiStore.getState().isEditMode : isEditMode && !isCurrentDraft
-    if (basicInfoEditMode || hasUnsavedEdits) {
+    if (basicInfoEditMode || hasUnsavedEdits || useUiStore.getState().permissionCenterHasDraft) {
       setPendingNavigation(() => {
         setBasicInfoEditMode(false)
         setEditingProjectFields({})
@@ -5499,6 +5472,12 @@ export default function ProjectSpaceContainer() {
             data={versionTrainRecordsForCurrentVersion}
             onDataChange={setVersionTrainRecords}
             canEdit={canEditLevel2Plan && isCurrentDraft}
+            canExport={canExportTechnicalPlan}
+            canExportNow={() => {
+              const session = useProjectStore.getState()
+              return session.currentLoginUser === currentLoginUser && session.selectedProject?.id === selectedProject?.id
+                && hasPermission(currentLoginUser, _permProjectId, 'plan:导出')
+            }}
           />
         )}
         {/* Version management + table/gantt for L1 and non-fixed L2 */}
@@ -5831,7 +5810,7 @@ export default function ProjectSpaceContainer() {
             </Card>
           )}
           {transfer.transferView === null && projectSpaceModule === 'permission' && (canManageRoles ? (
-            <PermissionConfig roles={roles} setRoles={setRoles} rolePermissions={rolePermissions} setRolePermissions={setRolePermissions} permConfigTab={permConfigTab} setPermConfigTab={setPermConfigTab} permissionActiveRole={permissionActiveRole} setPermissionActiveRole={setPermissionActiveRole} showAddRoleModal={showAddRoleModal} setShowAddRoleModal={setShowAddRoleModal} newRoleName={newRoleName} setNewRoleName={setNewRoleName} editingRoleName={editingRoleName} setEditingRoleName={setEditingRoleName} editRoleNameValue={editRoleNameValue} setEditRoleNameValue={setEditRoleNameValue} projectType={selectedProject?.type} onRoleMembersChange={handleProjectRoleMembersChange} syncTosTeamPermissionMembers={handleProjectRoleMembersChange} canManageRoles={canManageRoles} />
+            <PermissionConfig key={`${selectedProject!.id}:${currentLoginUser}`} project={selectedProject!} projectId={_permProjectId} actor={currentLoginUser} />
           ) : <Empty description="无项目权限配置权限" />)}
           {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission', 'resources'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
