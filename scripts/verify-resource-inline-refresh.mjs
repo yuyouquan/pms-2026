@@ -13,7 +13,7 @@ const load = graph()
 const access = load('src/lib/hrProjectRegistry.ts')
 const config = load('src/stores/hrConfig.ts').useHrConfigStore.getState().data
 const expense = load('src/lib/nonLaborInvestment.ts')
-const pair = expense.nonLaborDepartmentPairs(config.techModuleDept)[0]
+const pair = expense.nonLaborDepartmentPairs(Object.values(config).flat()).find(item => item.primaryDepartment)
 const subject = config.nonLaborSubject.find(item => item.enabled !== false)
 assert.ok(pair && subject, 'configured expense choices exist')
 const cases = []
@@ -32,7 +32,7 @@ for (const [category, kind] of Object.entries({ machine: 'Machine', tos: 'Tos', 
     edit({ type: 'milestone', key: 'projectStartTime', value: '2027-02-10' })
   }
   edit({ type: 'nonLabor', value: { ...current().nonLaborInvestment, items: [{
-    id: `refresh-${category}`, secondaryDepartment: pair.secondaryDepartment, tertiaryDepartment: '',
+    id: `refresh-${category}`, primaryDepartment: pair.primaryDepartment, secondaryDepartment: pair.secondaryDepartment, tertiaryDepartment: '',
     secondarySubject: '', tertiarySubject: '', subjectId: '', monthlyAmounts: {},
   }] } })
   cases.push({ category, kind, projectId: project.id, scopeId: project.pmsProjectId, versionId: id, expected: structuredClone(current()) })
@@ -51,6 +51,7 @@ for (const scenario of cases) {
   store.getState().refreshFormalProjects()
   await store.persist.rehydrate()
   assert.deepEqual(current(), expected, `${category}: partial fields survive fresh graph + source sync + rehydrate`)
+  assert.equal(current().nonLaborInvestment.items[0].primaryDepartment, pair.primaryDepartment, `${category}: selected parent department survives rehydrate`)
   if (category === 'capability') {
     assert.equal(current().projectStartTime, '2027-02-10')
     assert.equal(current().projectEndTime, '')
