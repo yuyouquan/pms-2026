@@ -59,4 +59,4 @@
 - [x] `npm run verify:full-regression`、`npx tsc --noEmit`、`npm run build`、`git diff --check` 全部通过。
 - [x] 浏览器检查团队角色树、搜索、刷新、只读成员进入空间、角色与部门叠加、超级管理员、其他项目、全局权限中心和现有项目关键流程，记录错误日志与截图。
 - [x] 独立全分支审查、修复发现的问题并重测受影响项。
-- [ ] 更新 QA 实际结果，提交并推送 feature，核对本地和远端 SHA 一致，保持 localhost:3017 可预览。
+- [x] 更新 QA 实际结果，提交并推送 feature，核对本地和远端 SHA 一致，保持 localhost:3017 可预览。
