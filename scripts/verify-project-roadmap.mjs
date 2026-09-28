@@ -407,12 +407,17 @@ registerAssertion('workspace links category and supported secondary-category fil
   const {
     matchesProjectSecondaryCategoryFilter,
   } = loadTypeScriptModule(path.join(root, 'src/constants/projectTypes.ts'))
+  const { registerProjectPermissionFields, matchesAuthorizedProjectClassification } = loadTypeScriptModule(path.join(root, 'src/lib/projectMenuPermissions.ts'))
+  const { createEmptyMenuPolicy } = loadTypeScriptModule(path.join(root, 'src/lib/permissionCenter.ts'))
 
   for (const fragment of [
     'projectSecondaryCategoryFilter, setProjectSecondaryCategoryFilter',
     'PROJECT_SECONDARY_CATEGORIES[projectTypeFilter',
-    'matchesProjectTypeFilter(project.type, projectTypeFilter, project.secondaryCategory)',
-    'matchesProjectSecondaryCategoryFilter(',
+    'matchesAuthorizedProjectClassification(permissionCenter, currentLoginUser, permissionSources.get(project.id) ?? {}, category, secondary)',
+    'matchesCategory: project => matchesVisibleClassification(project, projectTypeFilter)',
+    'matchesSecondaryCategory: project => matchesVisibleClassification(project, projectTypeFilter, projectSecondaryCategoryFilter)',
+    '(project, category) => matchesVisibleClassification(project, category)',
+    'categoryBaseProjects.some(project => matchesVisibleClassification(project, projectTypeFilter, value))',
     'setProjectSecondaryCategoryFilter(\'all\')',
     'setProjectStatusFilter(\'all\')',
     'const categoryCounts = useMemo(() => {',
@@ -441,6 +446,36 @@ registerAssertion('workspace links category and supported secondary-category fil
   }
   if (matchesProjectSecondaryCategoryFilter('整机产品项目', '整机-手机', '整机-平板')) {
     throw new Error('secondary category filter must reject a different classification')
+  }
+  registerProjectPermissionFields()
+  const role = id => ({ id, groupId: 'classification-tests', name: id, description: '', members: [] })
+  const policy = (id, name, fields) => ({
+    ...createEmptyMenuPolicy(id, 'project.view'), users: ['classification-reader'], actions: ['view'],
+    data: { mode: 'conditions', conjunction: 'all', conditions: [{ id: 'name', field: 'name', operator: 'eq', value: name }] },
+    columns: { mode: 'selected', fields: ['name', ...fields] },
+  })
+  const model = {
+    version: 1, groups: [{ id: 'classification-tests', name: 'Classification tests' }],
+    roles: [role('read-category'), role('hidden-category'), role('read-parent-only')],
+    policies: [
+      policy('read-category', 'Visible classification', ['type', 'secondaryCategory']),
+      policy('hidden-category', 'Hidden classification', []),
+      policy('read-parent-only', 'Visible parent', ['type']),
+    ],
+  }
+  const row = name => ({ name, type: '整机产品项目', secondaryCategory: '整机-手机' })
+  const matches = (name, category, secondary = 'all') => matchesAuthorizedProjectClassification(model, 'classification-reader', row(name), category, secondary)
+  if (!matches('Visible classification', '整机产品项目', '整机-手机')
+    || matches('Visible classification', '技术项目')
+    || matches('Visible classification', '整机产品项目', '整机-平板')) {
+    throw new Error('authorized classification predicate changed exact category or secondary-category behavior')
+  }
+  if (!matches('Hidden classification', 'all') || matches('Hidden classification', '整机产品项目')
+    || matches('Hidden classification', '整机产品项目', '整机-手机')) {
+    throw new Error('a different row grant exposes hidden classification through category filtering or counts')
+  }
+  if (!matches('Visible parent', '整机产品项目') || matches('Visible parent', '整机产品项目', '整机-手机')) {
+    throw new Error('secondary-category filtering must require its own visible-field grant')
   }
 })
 
@@ -2370,8 +2405,36 @@ registerAssertion('tOS-version maintenance stays in the roadmap and uses the sha
   if (!/import TosVersionMaintenanceModal from ['"]\.\/TosVersionMaintenanceModal['"]/.test(moduleSource)) {
     throw new Error('roadmap module does not import the maintenance modal')
   }
-  if (!/onOpenTosMaintenance=\{\(\) => setTosMaintenanceOpen\(true\)\}/.test(moduleSource)) {
-    throw new Error('normal tOS maintenance action does not open the roadmap modal')
+  const moduleAst = ts.createSourceFile('ProjectRoadmapModule.tsx', moduleSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const callbacks = new Map()
+  const visit = node => {
+    if (ts.isJsxAttribute(node) && ['onOpenTosMaintenance', 'canMutate'].includes(node.name.getText(moduleAst))
+      && node.initializer && ts.isJsxExpression(node.initializer) && node.initializer.expression) {
+      callbacks.set(node.name.getText(moduleAst), node.initializer.expression.getText(moduleAst))
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(moduleAst)
+  let granted = false
+  const opened = []
+  const checkedActions = []
+  const callbackContext = {
+    canActOnCollection: action => { checkedActions.push(action); return granted },
+    setTosMaintenanceOpen: value => opened.push(value),
+  }
+  if (!callbacks.has('onOpenTosMaintenance') || !callbacks.has('canMutate')) throw new Error('maintenance entry and execution permission callbacks are missing')
+  const openMaintenance = vm.runInNewContext(`(${callbacks.get('onOpenTosMaintenance')})`, callbackContext)
+  const canMutate = vm.runInNewContext(`(${callbacks.get('canMutate')})`, callbackContext)
+  openMaintenance()
+  if (opened.length || canMutate()) throw new Error('denied maintenance edit permission opened or allowed the modal')
+  granted = true
+  openMaintenance()
+  if (opened.join(',') !== 'true' || !canMutate()) throw new Error('authorized tOS maintenance action does not open its local modal')
+  granted = false
+  if (canMutate() || checkedActions.some(action => action !== 'edit')) throw new Error('maintenance callbacks do not recheck the edit action after revocation')
+  if (!moduleSource.includes('evaluateWholeMenuPermission(usePermissionStore.getState().permissionCenter, useProjectStore.getState().currentLoginUser, menuId, action)')
+    || !moduleSource.includes('open={tosMaintenanceOpen && canMaintainVersions}')) {
+    throw new Error('maintenance must use current identity and whole-menu grants, including while already open')
   }
   if (!moduleSource.includes('<TosVersionMaintenanceModal')) {
     throw new Error('roadmap module does not render the maintenance modal')
@@ -2798,9 +2861,13 @@ registerAssertion('roadmap module composes controls and overlays without standal
   }
   const moduleSource = fs.readFileSync(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx'), 'utf8')
   for (const contract of [
-    'useHasGlobalPermission',
-    "hasPermission('roadmap:view')",
-    "hasPermission('roadmap:edit')",
+    "const menuId = viewMode === 'table' ? 'roadmap.table' : 'roadmap.evolution'",
+    'useMenuPermission(currentLoginUser, menuId)',
+    "useMenuPermission(currentLoginUser, 'roadmap.table')",
+    "useMenuPermission(currentLoginUser, 'roadmap.evolution')",
+    "permission.can('view')",
+    "permission.can('edit')",
+    'projectRoadmapRows',
     'adaptNormalProject',
     'adaptRegistryRoadmapProject',
     'deriveRoadmapPlanningConflicts',
@@ -2813,10 +2880,21 @@ registerAssertion('roadmap module composes controls and overlays without standal
   ]) {
     if (!moduleSource.includes(contract)) throw new Error(`ProjectRoadmapModule is missing ${contract}`)
   }
-  const conflictIndex = moduleSource.indexOf('deriveRoadmapPlanningConflicts')
-  const filterIndex = moduleSource.indexOf('applyRoadmapFilters', conflictIndex)
+  if (moduleSource.includes('useHasGlobalPermission') || /hasPermission\(['"]roadmap:(view|edit)['"]\)/.test(moduleSource)) {
+    throw new Error('roadmap modes must not combine grants through the legacy global permission alias')
+  }
+  if (!moduleSource.includes('if (!canView)') || !moduleSource.includes('allowedModes={allowedModes}')) {
+    throw new Error('roadmap must enforce view permission on both its mode switch and page body')
+  }
+  const conflictIndex = moduleSource.indexOf('const conflicts = useMemo(')
+  const filterIndex = moduleSource.indexOf('const filteredRows = useMemo(')
   if (conflictIndex < 0 || filterIndex < conflictIndex) {
-    throw new Error('conflicts must be derived from the full row sets before filtering')
+    throw new Error('conflicts must be derived from authorized row sets before personal filtering')
+  }
+  const conflictSource = moduleSource.slice(conflictIndex, moduleSource.indexOf('const scopedChangeLogs', conflictIndex))
+  if (!conflictSource.includes('normalRows.filter(') || !conflictSource.includes('plannedRows.filter(')
+    || conflictSource.includes('sourceNormalRows') || conflictSource.includes('sourcePlannedRows')) {
+    throw new Error('conflict derivation must consume the projected normal and planned rows')
   }
   const filterDomainSource = fs.readFileSync(path.join(root, 'src/lib/roadmapFilters.ts'), 'utf8')
   if (!filterDomainSource.includes('ROADMAP_FILTER_DEBOUNCE_MS = 150')
@@ -4002,9 +4080,21 @@ registerAssertion('tOS roadmap UI uses searchable chip-code selection and chip-c
   if (moduleSource.includes('project.platform') || moduleSource.includes('project.cpu')) {
     throw new Error('roadmap chip-code filter history still falls back to platform/cpu')
   }
-  if (!details.includes("['芯片编码', row.chipCode]") || details.includes("['芯片平台', row.platform]")) {
+  if (!details.includes("['chipCode', '芯片编码', row.chipCode]") || details.includes('row.platform')) {
     throw new Error('project details do not display chip code exclusively')
   }
+  const DetailsModal = loadTypeScriptModule(path.join(root, 'src/components/roadmap/RoadmapProjectDetailsModal.tsx')).default
+  const collectDetailText = node => {
+    if (Array.isArray(node)) return node.flatMap(collectDetailText)
+    if (!node || typeof node !== 'object') return []
+    if (node.type === 'dt' || node.type === 'dd') return [node.props.children]
+    return collectDetailText(node.props?.children)
+  }
+  const detailProps = { open: true, row: { displayName: 'Visible project', marketName: 'Market', chipCode: 'AUTHORIZED-CHIP' }, versions: [], onClose: () => {} }
+  const chipDetails = collectDetailText(DetailsModal({ ...detailProps, allowedColumns: ['chipCode'] }))
+  if (!chipDetails.includes('芯片编码') || !chipDetails.includes('AUTHORIZED-CHIP')) throw new Error('authorized chip code is missing from actual detail content')
+  const hiddenChipDetails = collectDetailText(DetailsModal({ ...detailProps, allowedColumns: ['displayName'] }))
+  if (hiddenChipDetails.includes('芯片编码') || hiddenChipDetails.includes('AUTHORIZED-CHIP')) throw new Error('chip detail label or value bypasses visible-field authorization')
   if (!card.includes("column.key === 'chipCode'")) {
     throw new Error('evolution cards do not render the chip-code field label')
   }

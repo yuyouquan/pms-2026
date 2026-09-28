@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Card, Empty, Tooltip } from 'antd'
 import type { CSSProperties, ReactNode } from 'react'
 import {
@@ -26,6 +26,10 @@ import MachineProjectContent from '@/components/hr-machine/MachineProjectContent
 import TosProjectContent from '@/components/hr-tos/TosProjectContent'
 import TechnicalProjectContent from '@/components/hr-technical/TechnicalProjectContent'
 import CapabilityProjectContent from '@/components/hr-capability/CapabilityProjectContent'
+import { useProjectStore } from '@/stores/project'
+import { usePermissionStore } from '@/stores/permission'
+import { canRunGlobalMenuAction, getAccessibleHrGroups } from '@/lib/globalMenuPermissions'
+import type { HrSidebarGroup } from '@/constants/hrPipeline'
 import ConfigContent from '@/components/hr-config/ConfigContent'
 
 /* ── Icon resolver ─────────────────────────────────────────────────── */
@@ -41,16 +45,18 @@ const ICON_MAP: Record<string, ReactNode> = {
 
 interface SidebarTreeProps {
   collapsed: boolean
+  groups: HrSidebarGroup[]
+  actor: string
 }
 
-function HrSidebarTree({ collapsed }: SidebarTreeProps) {
+function HrSidebarTree({ collapsed, groups, actor }: SidebarTreeProps) {
   const { activeLeaf, expandedGroups, setActiveLeaf, toggleGroup } = useHrPipelineStore()
 
   if (collapsed) {
     // Collapsed mode: show only parent group icons
     return (
       <nav className="pms-hr-sidebar-tree pms-hr-sidebar-tree--collapsed" role="navigation" aria-label="人力资源管道导航">
-        {HR_SIDEBAR_NAV.map(group => {
+        {groups.map(group => {
           const isActive = resolveGroupOfLeaf(activeLeaf) === group.key
           return (
             <Tooltip key={group.key} title={group.label} placement="right">
@@ -59,7 +65,7 @@ function HrSidebarTree({ collapsed }: SidebarTreeProps) {
                 onClick={() => {
                   // When collapsed, clicking a group icon activates its first child
                   const firstChild = group.children[0]
-                  if (firstChild) setActiveLeaf(firstChild.key)
+                  if (firstChild && canRunGlobalMenuAction(actor, `hr.${firstChild.key}`, 'view')) setActiveLeaf(firstChild.key)
                 }}
                 aria-label={group.label}
               >
@@ -75,7 +81,7 @@ function HrSidebarTree({ collapsed }: SidebarTreeProps) {
   // Expanded mode: full tree with expandable groups
   return (
     <nav className="pms-hr-sidebar-tree" role="navigation" aria-label="人力资源管道导航">
-      {HR_SIDEBAR_NAV.map(group => {
+      {groups.map(group => {
         const isExpanded = expandedGroups.has(group.key)
         const hasActiveChild = group.children.some(c => c.key === activeLeaf)
         return (
@@ -102,7 +108,7 @@ function HrSidebarTree({ collapsed }: SidebarTreeProps) {
                     <button
                       key={child.key}
                       className={`pms-hr-sidebar-leaf${isActive ? ' is-active' : ''}`}
-                      onClick={() => setActiveLeaf(child.key)}
+                      onClick={() => { if (canRunGlobalMenuAction(actor, `hr.${child.key}`, 'view')) setActiveLeaf(child.key) }}
                       title={child.description ?? child.label}
                     >
                       <span className="pms-hr-sidebar-leaf-dot" />
@@ -174,7 +180,14 @@ function HrContentRouter({ leafKey }: { leafKey: string }) {
 
 export default function HrPipelineContainer() {
   const { hrSidebarCollapsed, setHrSidebarCollapsed } = useUiStore()
-  const { activeLeaf } = useHrPipelineStore()
+  const { activeLeaf, setActiveLeaf } = useHrPipelineStore()
+  const actor = useProjectStore(state => state.currentLoginUser)
+  const model = usePermissionStore(state => state.permissionCenter)
+  const groups = useMemo(() => getAccessibleHrGroups(model, actor), [model, actor])
+  const selectedAccessible = groups.some(group => group.children.some(leaf => leaf.key === activeLeaf))
+  useEffect(() => {
+    if (!selectedAccessible && groups[0]?.children[0]) setActiveLeaf(groups[0].children[0].key)
+  }, [selectedAccessible, groups, setActiveLeaf])
 
   const sidebarWidth = hrSidebarCollapsed ? 64 : 240
 
@@ -202,10 +215,10 @@ export default function HrPipelineContainer() {
             collapsedWidth={64}
             className="pms-hr-sidebar"
           >
-            <HrSidebarTree collapsed={hrSidebarCollapsed} />
+            <HrSidebarTree collapsed={hrSidebarCollapsed} groups={groups} actor={actor} />
           </CollapsibleSidebarShell>
           <div className="pms-hr-workspace__content">
-            <HrContentRouter leafKey={activeLeaf} />
+            {selectedAccessible ? <HrContentRouter key={`${actor}:${activeLeaf}`} leafKey={activeLeaf} /> : <Empty description="暂无可访问的人力资源菜单" />}
           </div>
         </section>
       </div>

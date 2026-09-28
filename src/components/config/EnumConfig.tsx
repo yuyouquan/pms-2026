@@ -28,7 +28,8 @@ import {
   getEnumRowSummary,
 } from '@/lib/enumValues'
 import { useEnumStore } from '@/stores/enums'
-import { useHasGlobalPermission } from '@/stores/permission'
+import { canRunGlobalMenuAction, useGlobalMenuPermission } from '@/lib/globalMenuPermissions'
+import { CONFIG_MENU_GROUPS } from '@/lib/configNavigation'
 import type {
   EnumActionResult,
   EnumFieldErrors,
@@ -86,10 +87,9 @@ export default function EnumConfig({
   const hydrationError = useEnumStore(state => state.hydrationError)
   const hydrateEnumStore = useEnumStore(state => state.hydrateEnumStore)
   const resetLocalConfig = useEnumStore(state => state.resetLocalConfig)
-  const hasGlobalPermission = useHasGlobalPermission(currentLoginUser)
-  const canEditEnums = hasGlobalPermission('configCenter:enumEdit')
-  const canEditRef = useRef(canEditEnums)
-  canEditRef.current = canEditEnums
+  const can = useGlobalMenuPermission(currentLoginUser, `config.enum:${selectedType}`)
+  const canEditEnums = can('edit')
+  const canEditType = (type: EnumTypeKey) => canRunGlobalMenuAction(currentLoginUser, `config.enum:${type}`, 'edit')
   const editorTriggerRef = useRef<HTMLElement | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editorType, setEditorType] = useState<EnumTypeKey | null>(null)
@@ -169,7 +169,6 @@ export default function EnumConfig({
   }
 
   useEffect(() => {
-    canEditRef.current = canEditEnums
     if (!canEditEnums && modalOpen) {
       message.warning('当前用户无权限编辑枚举值')
       setModalOpen(false)
@@ -184,7 +183,7 @@ export default function EnumConfig({
   }, [canEditEnums, modalOpen, releaseSubmission, selectedType])
 
   const openAddModal = (trigger: HTMLElement) => {
-    if (!canEditEnums) return
+    if (!canEditType(selectedType)) return
     captureTrigger(trigger)
     editorTriggerRef.current = trigger
     setEditorType(selectedType)
@@ -196,7 +195,7 @@ export default function EnumConfig({
   }
 
   const openEditModal = (row: EnumRow, trigger: HTMLElement) => {
-    if (!canEditEnums) return
+    if (!canEditType(selectedType)) return
     captureTrigger(trigger)
     editorTriggerRef.current = trigger
     setEditorType(selectedType)
@@ -219,7 +218,7 @@ export default function EnumConfig({
     const storeDraft = Object.fromEntries(
       editorDefinition.columns.map(column => [column.key, draft[column.key] ?? '']),
     ) as EnumRowDraft
-    if (!canEditRef.current) {
+    if (!canEditType(editorType)) {
       message.warning('当前用户无权限编辑枚举值')
       clearModal()
       releaseSubmission()
@@ -255,7 +254,7 @@ export default function EnumConfig({
   }
 
   const confirmDelete = (row: EnumRow, trigger: HTMLElement) => {
-    if (!canEditEnums) return
+    if (!canEditType(selectedType)) return
     captureTrigger(trigger)
     const deleteType = selectedType
     const summary = getEnumRowSummary(deleteType, row)
@@ -267,7 +266,7 @@ export default function EnumConfig({
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: () => {
-        if (!canEditRef.current) {
+        if (!canEditType(deleteType)) {
           message.warning('当前用户无权限编辑枚举值')
           restoreTriggerFocus(() => (
             trigger.isConnected ? trigger : safeFocusFallback(deleteType)
@@ -300,7 +299,7 @@ export default function EnumConfig({
   }
 
   const confirmToggleRowEnabled = (row: EnumRow, trigger: HTMLElement) => {
-    if (!canEditRef.current) return
+    if (!canEditType(selectedType)) return
     captureTrigger(trigger)
     const toggleType = selectedType
     const enabled = row.enabled === false
@@ -316,7 +315,7 @@ export default function EnumConfig({
       okButtonProps: { danger: !enabled },
       cancelText: '取消',
       onOk: () => {
-        if (!canEditRef.current) {
+        if (!canEditType(toggleType)) {
           message.warning('当前用户无权限编辑枚举值')
           return
         }
@@ -349,9 +348,14 @@ export default function EnumConfig({
     setRecoveryAction(null)
   }
 
+  const canResetAllEnums = () => CONFIG_MENU_GROUPS.find(group => group.key === 'enum')!.children.every(leaf => canRunGlobalMenuAction(currentLoginUser, `config.${leaf.key}`, 'edit'))
   const handleReset = async () => {
+    if (!canResetAllEnums()) {
+      message.warning('重置全部枚举需要全部枚举配置的编辑权限')
+      return
+    }
     setRecoveryAction('reset')
-    const reset = await resetLocalConfig()
+    const reset = await resetLocalConfig(canResetAllEnums)
     if (reset) {
       setStorageWriteContext(false)
       setSaveError(null)
@@ -372,7 +376,7 @@ export default function EnumConfig({
           <Button size="small" loading={recoveryAction === 'retry'} onClick={handleRetry}>
             重试存储
           </Button>
-          <Button size="small" danger loading={recoveryAction === 'reset'} onClick={handleReset}>
+          <Button disabled={!canResetAllEnums()} size="small" danger loading={recoveryAction === 'reset'} onClick={handleReset}>
             重置本地配置
           </Button>
         </Space>
@@ -589,7 +593,7 @@ export default function EnumConfig({
       title={editorDefinition
         ? `${modalMode === 'add' ? '新增' : '编辑'}${editorDefinition.label}`
         : ''}
-      open={modalOpen}
+      open={modalOpen && canEditEnums}
       okText={modalMode === 'add' ? '新增' : '保存'}
       cancelText="取消"
       confirmLoading={submitting}
@@ -630,7 +634,7 @@ export default function EnumConfig({
                 <Button size="small" loading={recoveryAction === 'retry'} onClick={handleRetry}>
                   重试
                 </Button>
-                <Button size="small" danger loading={recoveryAction === 'reset'} onClick={handleReset}>
+                <Button disabled={!canResetAllEnums()} size="small" danger loading={recoveryAction === 'reset'} onClick={handleReset}>
                   重置本地配置
                 </Button>
               </Space>

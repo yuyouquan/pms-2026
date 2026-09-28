@@ -994,8 +994,35 @@ registerAssertion('roadmap conflict actions open the selected project conflict i
   assert.equal(fs.existsSync(alertPath), false, 'full-width roadmap conflict Alert still exists')
   assert.ok(!moduleSource.includes('RoadmapConflictAlert'))
   assert.ok(!moduleSource.includes('个待规划项目已存在对应正常项目'))
+  const moduleAst = parseTypeScript(path.join(root, 'src/components/roadmap/ProjectRoadmapModule.tsx')).sourceFile
+  const initializers = collectVariableInitializers(moduleAst)
+  const findCall = (node, name) => {
+    if (!node) return undefined
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name) return node
+    return ts.forEachChild(node, child => findCall(child, name))
+  }
+  for (const [projected, raw] of [['normalRows', 'sourceNormalRows'], ['plannedRows', 'sourcePlannedRows']]) {
+    const projection = findCall(initializers.get(projected), 'projectRoadmapRows')
+    assert.ok(projection, `${projected} must be produced by the permission projection`)
+    assert.deepEqual(
+      projection.arguments.map(argument => argument.getText(moduleAst)),
+      ['permissionModel', 'currentLoginUser', 'menuId', "'view'", raw],
+      `${projected} must retain the current identity, exact view menu, action, and source association`,
+    )
+  }
+  const deriveConflicts = findCall(initializers.get('conflicts'), 'deriveRoadmapPlanningConflicts')
+  assert.ok(deriveConflicts, 'roadmap still derives cross-source planning conflicts')
+  assert.equal(deriveConflicts.arguments.length, 2, 'conflicts require both source categories')
+  for (const [index, projected] of ['normalRows', 'plannedRows'].entries()) {
+    const argument = deriveConflicts.arguments[index]
+    assert.ok(ts.isCallExpression(argument) && ts.isPropertyAccessExpression(argument.expression)
+      && argument.expression.name.text === 'filter'
+      && ts.isIdentifier(argument.expression.expression) && argument.expression.expression.text === projected,
+    `conflicts must filter complete identities from authorized ${projected}, without recovering raw rows`)
+    assert.match(argument.arguments[0]?.getText(moduleAst) ?? '', /row\.projectCode\s*&&\s*row\.androidVersion\s*&&\s*row\.productType/,
+      'hidden or incomplete duplicate-key fields must not manufacture conflicts')
+  }
   for (const contract of [
-    'deriveRoadmapPlanningConflicts(normalRows, plannedRows)',
     'onOpenConflict: openConflictDrawer',
     'conflicts.filter(conflict => conflict.key === selectedConflictKey)',
     'groups={scopedConflicts}',

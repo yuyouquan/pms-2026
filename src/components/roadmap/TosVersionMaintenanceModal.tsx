@@ -43,6 +43,7 @@ interface TosVersionMaintenanceModalProps {
   normalProjects: readonly ProjectItem[]
   plannedProjects: readonly PlannedRoadmapProject[]
   canEdit: boolean
+  canMutate?: () => boolean
   onChanged?: () => void
 }
 
@@ -76,9 +77,11 @@ export default function TosVersionMaintenanceModal({
   normalProjects,
   plannedProjects,
   canEdit,
+  canMutate = () => canEdit,
   onChanged,
 }: TosVersionMaintenanceModalProps) {
   const [form] = Form.useForm<TosVersionFormValues>()
+  const pendingConfirmRef = useRef<ReturnType<typeof Modal.confirm> | null>(null)
   const submitLockRef = useRef(false)
   const dirtyRef = useRef(false)
   const [editingVersionId, setEditingVersionId] = useState<string | null>(null)
@@ -119,6 +122,11 @@ export default function TosVersionMaintenanceModal({
     form.resetFields()
   }, [form, open])
 
+  useEffect(() => {
+    if (!open || !canEdit) pendingConfirmRef.current?.destroy()
+    return () => pendingConfirmRef.current?.destroy()
+  }, [open, canEdit])
+
   const resetInlineForm = () => {
     dirtyRef.current = false
     setEditingVersionId(null)
@@ -129,7 +137,7 @@ export default function TosVersionMaintenanceModal({
       next()
       return
     }
-    Modal.confirm({
+    pendingConfirmRef.current = Modal.confirm({
       centered: true,
       title: '放弃未保存的修改？',
       content: '当前输入尚未保存。',
@@ -143,6 +151,7 @@ export default function TosVersionMaintenanceModal({
     onCancel()
   })
   const beginEdit = (version: TosVersionConfig | null) => {
+    if (!canMutate()) return
     setEditingVersionId(version?.id ?? CREATE_VERSION_ID)
     form.resetFields()
     form.setFieldsValue(version ? {
@@ -176,7 +185,7 @@ export default function TosVersionMaintenanceModal({
     submitLockRef.current = true
     try {
       const enumState = useEnumStore.getState()
-      if (!canEdit || !enumState.hasHydrated || enumState.hydrationError) {
+      if (!canMutate() || !enumState.hasHydrated || enumState.hydrationError) {
         message.error(enumState.hydrationError || '枚举配置正在加载，请稍后重试')
         return
       }
@@ -191,6 +200,7 @@ export default function TosVersionMaintenanceModal({
       const periodEndDate = values.period?.[1]?.format('YYYY-MM-DD') ?? ''
       const targetText = values.targetText?.trim() ?? ''
       setSubmitting(true)
+      if (!canMutate()) return
       const result = setTosVersionDetails(
         editingVersionId === CREATE_VERSION_ID ? null : editingVersionId,
         {
@@ -223,8 +233,8 @@ export default function TosVersionMaintenanceModal({
 
   const handleDelete = (version: TosVersionConfig) => {
     const count = referenceCounts.get(version.id)?.total ?? 0
-    if (!canEdit || count > 0) return
-    Modal.confirm({
+    if (!canMutate() || count > 0) return
+    pendingConfirmRef.current = Modal.confirm({
       centered: true,
       title: `删除 ${formatTosSnapshot(version.id)} 的路标维护信息？`,
       content: '仅删除路标中的周期和版本目标，不会删除配置中心的枚举值。',
@@ -232,6 +242,7 @@ export default function TosVersionMaintenanceModal({
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: () => {
+        if (!canMutate()) return Promise.reject(new Error('roadmap-permission-revoked'))
         const result = deleteTosVersionDetails(version.id)
         if (!result.ok) {
           message.error('版本维护记录不存在，请刷新后重试')

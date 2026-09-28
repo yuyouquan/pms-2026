@@ -13,6 +13,8 @@ interface CollapsibleSidebarShellProps {
   className?: string
   expandedWidth?: number
   collapsedWidth?: number
+  expandLabel?: string
+  collapseLabel?: string
 }
 
 interface ConfigWorkspaceShellProps extends CollapsibleSidebarShellProps {
@@ -28,6 +30,8 @@ export function CollapsibleSidebarShell({
   className = '',
   expandedWidth = 250,
   collapsedWidth = 64,
+  expandLabel = '展开侧栏',
+  collapseLabel = '收起侧栏',
 }: CollapsibleSidebarShellProps) {
   const style = {
     '--pms-sidebar-expanded-width': `${expandedWidth}px`,
@@ -42,12 +46,12 @@ export function CollapsibleSidebarShell({
     >
       {!collapsed && title && <div className="pms-collapsible-sidebar__title">{title}</div>}
       <div className="pms-collapsible-sidebar__content">{children}</div>
-      <Tooltip title={collapsed ? '展开侧栏' : '收起侧栏'} placement="right">
+      <Tooltip title={collapsed ? expandLabel : collapseLabel} placement="right">
         <Button
           className="pms-collapsible-sidebar__toggle"
           type="text"
           icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
+          aria-label={collapsed ? expandLabel : collapseLabel}
           aria-expanded={!collapsed}
           onClick={() => onCollapsedChange(!collapsed)}
         />

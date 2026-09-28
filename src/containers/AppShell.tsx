@@ -11,6 +11,8 @@ import { useUiStore, type MainModule } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore, resolvePermissionProjectId } from '@/stores/permission'
+import { isPermissionCenterAdmin } from '@/lib/permissionCenter'
+import { canAccessMainModule, PERMISSION_MAIN_NAV } from '@/components/permission-center/navigation'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import { getProjectAttribute, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import { useTransferStore } from '@/stores/transfer'
@@ -22,11 +24,11 @@ import { useRef, useEffect, useMemo } from 'react'
 
 function UserSwitcher() {
   const { projects, currentLoginUser, setCurrentLoginUser, setProjectCardPage, projectMemberMap } = useProjectStore()
-  const { globalRoles, rolesByProject } = usePermissionStore()
+  const { permissionCenter, rolesByProject } = usePermissionStore()
 
   const countVisibleProjects = (user: string) => projects.filter(project => canEnterProjectSpace(
     resolvePermissionProjectId(project.id, typeof project.parentProjectId === 'string' ? project.parentProjectId : undefined),
-    user, rolesByProject, globalRoles.some(role => role.name === '管理组' && role.members.includes(user)),
+    user, rolesByProject, isPermissionCenterAdmin(permissionCenter, user),
   )).length
 
   const switchUser = (user: string) => {
@@ -48,16 +50,13 @@ function UserSwitcher() {
     }
     const autoSavedDraft = ui.activeModule === 'projectSpace' && ui.projectSpaceModule === 'plan'
       && plan.versions.find(version => version.id === plan.currentVersion)?.status === '修订中'
-    if (project.basicInfoEditMode || (ui.isEditMode && !autoSavedDraft)) {
+    if (ui.permissionCenterHasDraft || project.basicInfoEditMode || (ui.isEditMode && !autoSavedDraft)) {
       ui.setPendingNavigation(apply)
       ui.setShowLeaveConfirm(true)
     } else apply()
   }
 
-  const isAdminUser = useMemo(() => {
-    const adminGroup = globalRoles.find(r => r.name === '管理组')
-    return adminGroup ? adminGroup.members.includes(currentLoginUser) : false
-  }, [globalRoles, currentLoginUser])
+  const isAdminUser = isPermissionCenterAdmin(permissionCenter, currentLoginUser)
 
   return (
     <Dropdown
@@ -67,8 +66,7 @@ function UserSwitcher() {
             <span style={{ color: '#999', fontSize: 11 }}>当前登录用户</span>
             <div className="pms-user-menu__current" style={{ fontWeight: 600, marginTop: 2 }}>{currentLoginUser}
               {(() => {
-                const adminGroup = globalRoles.find(r => r.name === '管理组')
-                const isAdmin = adminGroup?.members.includes(currentLoginUser)
+                const isAdmin = isPermissionCenterAdmin(permissionCenter, currentLoginUser)
                 const projectCount = countVisibleProjects(currentLoginUser)
                 return <>
                   {isAdmin && <Tag color="red" style={{ fontSize: 10, marginLeft: 6 }}>管理组</Tag>}
@@ -81,8 +79,7 @@ function UserSwitcher() {
           { key: 'switch-label', label: <span style={{ color: '#999', fontSize: 11 }}><SwapOutlined style={{ marginRight: 4 }} />切换用户（测试权限）</span>, disabled: true },
           ...PROJECT_USER_CHOICES.map(u => {
             const isActive = currentLoginUser === u
-            const adminGroup = globalRoles.find(r => r.name === '管理组')
-            const isAdmin = adminGroup?.members.includes(u)
+            const isAdmin = isPermissionCenterAdmin(permissionCenter, u)
             const projectCount = countVisibleProjects(u)
             return {
               key: u,
@@ -134,7 +131,9 @@ export function MainHeader() {
   } = useUiStore()
   const { versions, currentVersion } = usePlanStore()
   const { setTransferView } = useTransferStore()
-  const isCurrentDraft = versions.find(version => version.id === currentVersion)?.status === '修订中'
+  const currentLoginUser = useProjectStore(state => state.currentLoginUser)
+  const permissionCenter = usePermissionStore(state => state.permissionCenter)
+  const isCurrentDraft = activeModule === 'projectSpace' && versions.find(version => version.id === currentVersion)?.status === '修订中'
 
   return (
     <div className="pms-main-header pms-topbar" style={{ padding: '0 32px', position: 'sticky', top: 0, zIndex: 100 }}>
@@ -155,6 +154,7 @@ export function MainHeader() {
                 selectedKeys={[activeModule]}
                 onClick={({ key }) => navigateWithEditGuard(
                   () => {
+                    if (!canAccessMainModule(usePermissionStore.getState().permissionCenter, useProjectStore.getState().currentLoginUser, key as MainModule)) return
                     setTransferView(null)
                     setIsEditMode(false)
                     setActiveModule(key as MainModule)
@@ -163,14 +163,7 @@ export function MainHeader() {
                   isCurrentDraft,
                 )}
                 style={{ background: 'transparent', borderBottom: 'none', fontSize: 14 }}
-                items={[
-                  { key: 'workbench', label: '工作台' },
-                  { key: 'projectManagement', label: '项目管理' },
-                  { key: 'jointProjectSpace', label: '项目组合管理' },
-                  { key: 'roadmap', label: 'tOS路标' },
-                  { key: 'hrPipeline', label: '人力资源管道' },
-                  { key: 'config', label: '配置中心' },
-                ]}
+                items={PERMISSION_MAIN_NAV.filter(item => canAccessMainModule(permissionCenter, currentLoginUser, item.key))}
               />
             </div>
           </Space>
@@ -201,16 +194,13 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
     currentLoginUser, projectMemberMap,
   } = useProjectStore()
 
-  const { globalRoles, rolesByProject } = usePermissionStore()
+  const { permissionCenter, rolesByProject } = usePermissionStore()
   const { setTransferView } = useTransferStore()
   const activateProject = useActivateProject()
 
   const projectSearchRef = useRef<HTMLDivElement>(null)
 
-  const isAdminUser = useMemo(() => {
-    const adminGroup = globalRoles.find(r => r.name === '管理组')
-    return adminGroup ? adminGroup.members.includes(currentLoginUser) : false
-  }, [globalRoles, currentLoginUser])
+  const isAdminUser = isPermissionCenterAdmin(permissionCenter, currentLoginUser)
 
   const visibleProjects = useMemo(() => {
     if (isAdminUser) return projects

@@ -8,6 +8,7 @@ import { CONFIG_MENU_GROUPS, filterConfigMenu, type ConfigMenuTarget } from '@/l
 interface ConfigNavigationProps {
   collapsed: boolean
   selectedKey: string
+  allowedKeys: readonly string[]
   onSelect: (target: ConfigMenuTarget, key: string) => void
 }
 
@@ -18,12 +19,19 @@ const GROUP_ICONS = {
   hrPipeline: <TeamOutlined />,
 }
 
-export default function ConfigNavigation({ collapsed, selectedKey, onSelect }: ConfigNavigationProps) {
+export default function ConfigNavigation({ collapsed, selectedKey, allowedKeys, onSelect }: ConfigNavigationProps) {
   const [query, setQuery] = useState('')
   const selectedGroup = selectedKey.split(':')[0]
   const selectedParent = selectedKey.split(':').slice(0, -1).join(':')
   const [openKeys, setOpenKeys] = useState<string[]>([selectedGroup, selectedParent])
-  const filteredGroups = useMemo(() => filterConfigMenu(query), [query])
+  const accessibleGroups = useMemo(() => CONFIG_MENU_GROUPS.flatMap(group => {
+    const children = group.children.filter(leaf => allowedKeys.includes(leaf.key))
+    return children.length ? [{ ...group, children }] : []
+  }), [allowedKeys])
+  const filteredGroups = useMemo(() => filterConfigMenu(query).flatMap(group => {
+    const children = group.children.filter(leaf => allowedKeys.includes(leaf.key))
+    return children.length ? [{ ...group, children }] : []
+  }), [query, allowedKeys])
   const searching = Boolean(query.trim())
 
   useEffect(() => {
@@ -52,7 +60,7 @@ export default function ConfigNavigation({ collapsed, selectedKey, onSelect }: C
         selectedKeys={[selectedKey]}
         openKeys={collapsed ? undefined : searching ? [...filteredGroups.map(group => group.key), 'transfer:整机产品项目', 'transfer:tOS版本项目'] : openKeys}
         onOpenChange={keys => { if (!collapsed && !searching) setOpenKeys(keys) }}
-        items={(collapsed ? CONFIG_MENU_GROUPS : filteredGroups).map(group => ({
+        items={(collapsed ? accessibleGroups : filteredGroups).map(group => ({
           key: group.key,
           icon: GROUP_ICONS[group.key],
           label: group.label,
@@ -60,7 +68,7 @@ export default function ConfigNavigation({ collapsed, selectedKey, onSelect }: C
         }))}
         onClick={({ key }) => {
           const leaf = CONFIG_MENU_GROUPS.flatMap(group => group.children).find(item => item.key === key)
-          if (leaf) {
+          if (leaf && allowedKeys.includes(leaf.key)) {
             // The collapsed menu shows all categories, so discard its hidden filter on selection.
             if (collapsed) setQuery('')
             onSelect(leaf.target, leaf.key)

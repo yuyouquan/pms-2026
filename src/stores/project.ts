@@ -5,7 +5,7 @@ import { validateManualProjectCompletion } from '@/lib/manualProjectCompletion'
 import { getProjectAttribute, isFormalProject, type ProjectRegistryHistoryEntry } from '@/types/projectRegistry'
 import { createRegistryHistoryEntry, validateRegistryCreation, validateRegistryProject } from '@/lib/projectRegistryRules'
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
-import { canEditProjectRegistry } from '@/lib/projectRegistryPermissions'
+import { canUseProjectRegistry, canChangeRegistryFields } from '@/lib/projectRegistryAuthorization'
 import { buildProjectCreationNotification } from '@/lib/projectCreationNotification'
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
@@ -655,7 +655,7 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     })),
     addProject: (newProject, actor, options) => {
       const actingUser = actor?.trim() || get().currentLoginUser.trim()
-      if (!canEditProjectRegistry(actingUser, newProject, isGlobalAdmin(actingUser))) return false
+      if (!canUseProjectRegistry(actingUser, 'create', newProject)) return false
       if (get().projects.some(project => project.id === newProject.id)) return false
       const previousProjects = get().projects
       if (validateRegistryProject(previousProjects, newProject)) return false
@@ -720,11 +720,12 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
         } else if (resourceMetadata.kind !== 'create' || resourceMetadata.budgetType !== 'annual' || context.action !== 'addVersion') return null
         if (registryUpdate || getProjectAttribute(existing) !== 'budget' || !isMachineProjectType(existing.type) || existing.boundFormalProjectId
           || !hasPermission(actingUser, projectId, 'resource:view') || !hasPermission(actingUser, projectId, 'resource:createVersion')) return null
-      } else if (registryUpdate ? !canEditProjectRegistry(actingUser, existing, isGlobalAdmin(actingUser)) : !hasPermission(actingUser, projectId, 'basicInfo:编辑')) return null
+      } else if (registryUpdate ? !canUseProjectRegistry(actingUser, 'edit', existing) : !hasPermission(actingUser, projectId, 'basicInfo:编辑')) return null
       const previousProjects = get().projects
       const updated = typeof update === 'function'
         ? update(cloneProjectSeed(existing))
         : { ...existing, ...update } as Project
+      if (registryUpdate && !canChangeRegistryFields(actingUser, existing, updated)) return null
       if (resourceMetadata && (
         Object.keys({ ...existing, ...updated }).some(key => !['brand', 'productLine', 'marketName', 'fieldValues'].includes(key) && JSON.stringify(existing[key]) !== JSON.stringify(updated[key]))
         || Object.keys({ ...existing.fieldValues, ...updated.fieldValues }).some(key => !['brand', 'productLine', 'marketName'].includes(key) && JSON.stringify(existing.fieldValues?.[key]) !== JSON.stringify(updated.fieldValues?.[key]))
@@ -795,10 +796,11 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
     },
     deleteProject: (projectId, actor) => {
       const actingUser = actor?.trim() || get().currentLoginUser.trim()
-      if (!isGlobalAdmin(actingUser)) return false
       const currentProjects = get().projects
       const existing = currentProjects.find(project => project.id === projectId)
-      if (!existing) return false
+      if (!existing || !canUseProjectRegistry(actingUser, 'delete', existing)) return false
+      // Deleting a formal project also unbinds linked rows; require authority over those effects.
+      if (currentProjects.some(project => project.boundFormalProjectId === projectId && !canChangeRegistryFields(actingUser, project, { ...project, boundFormalProjectId: null }))) return false
       let projects = currentProjects.filter(project => project.id !== projectId).map(project => (
         project.boundFormalProjectId === projectId ? retainBoundMachineBudgetMetadata(project, currentProjects) : project
       ))
@@ -824,6 +826,10 @@ export const useProjectStore = create<ProjectState & ProjectActions>()(persist(
           ))
         }
       }
+      if (projects.some(project => {
+        const previous = currentProjects.find(item => item.id === project.id)
+        return previous && JSON.stringify(previous) !== JSON.stringify(project) && !canChangeRegistryFields(actingUser, previous, project)
+      })) return false
       set(state => ({
         projects,
         selectedProject: state.selectedProject?.id === projectId

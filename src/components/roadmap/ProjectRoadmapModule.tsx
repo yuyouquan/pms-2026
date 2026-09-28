@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Alert, Button, Card, Empty, Flex, Modal, Result, Skeleton, Space, Typography, message } from 'antd'
 import {
   applyRoadmapFilters,
-  buildRoadmapFilterFieldDefinitions,
   createRoadmapTextFilterDebouncer,
   getRoadmapQuickFilterValue,
   getRoadmapSelectedTosVersionIds,
@@ -17,10 +16,12 @@ import {
   projectRegistryToPlanned,
   adaptRegistryRoadmapProject,
   deriveRoadmapPlanningConflicts,
-  resolveNormalProjectChipCode,
 } from '@/lib/roadmapProjectAdapter'
 import ActiveFilterConditions from '@/components/project-list/ActiveFilterConditions'
-import { useHasGlobalPermission } from '@/stores/permission'
+import { hasMenuPermission, useMenuPermission, usePermissionStore } from '@/stores/permission'
+import { evaluateWholeMenuPermission, getAuthorizedColumns } from '@/lib/permissionCenter'
+import { buildAuthorizedRoadmapFilterDefinitions, buildRoadmapPermissionExport, projectRoadmapRows, scopeRoadmapVersions } from '@/lib/roadmapPermission'
+import type { PermissionAction } from '@/types/permissionCenter'
 import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
 import { useEnumStore } from '@/stores/enums'
@@ -35,7 +36,6 @@ import {
 } from '@/lib/roadmapValidation'
 import type { ProjectItem } from '@/types/app'
 import type {
-  PlannedRoadmapProject,
   RoadmapColumnKey,
   RoadmapFilterCondition,
   RoadmapPlanningConflictGroup,
@@ -44,7 +44,8 @@ import type {
   RoadmapViewMode,
   TosVersionConfig,
 } from '@/types/roadmap'
-import { canManageProjectRegistry, deleteConfiguredProject } from '@/lib/projectRegistry'
+import { deleteConfiguredProject } from '@/lib/projectRegistry'
+import { canUseProjectRegistry } from '@/lib/projectRegistryAuthorization'
 import { getProjectAttribute, isFormalProject } from '@/types/projectRegistry'
 import RoadmapColumnSettingsDrawer from './RoadmapColumnSettingsDrawer'
 import RoadmapChangeLogDrawer from './RoadmapChangeLogDrawer'
@@ -87,6 +88,9 @@ export interface RoadmapViewRenderContext {
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
   canEdit: boolean
+  canEditRow: (row: RoadmapProjectRow) => boolean
+  canDeleteRow: (row: RoadmapProjectRow) => boolean
+  canViewHistory: boolean
   onViewProject: (projectId: string, market?: string) => void
   onSelectedTosVersionChange: (id: string | null) => void
   onSortChange: (sort: RoadmapSortState) => void
@@ -114,9 +118,18 @@ export default function ProjectRoadmapModule({
 }: ProjectRoadmapModuleProps) {
   const projects = useMemo(() => allProjects.filter(project => getProjectAttribute(project) !== 'budget'), [allProjects])
   const currentLoginUser = useProjectStore(state => state.currentLoginUser)
-  const hasPermission = useHasGlobalPermission(currentLoginUser)
-  const canView = hasPermission('roadmap:view')
-  const canEdit = hasPermission('roadmap:edit')
+  const permissionModel = usePermissionStore(state => state.permissionCenter)
+  const viewMode = useRoadmapStore(state => state.viewMode)
+  const menuId = viewMode === 'table' ? 'roadmap.table' : 'roadmap.evolution'
+  const permission = useMenuPermission(currentLoginUser, menuId)
+  const tablePermission = useMenuPermission(currentLoginUser, 'roadmap.table')
+  const evolutionPermission = useMenuPermission(currentLoginUser, 'roadmap.evolution')
+  const allowedModes: RoadmapViewMode[] = [...(tablePermission.can('view') ? ['table' as const] : []), ...(evolutionPermission.can('view') ? ['evolution' as const] : [])]
+  const canView = permission.can('view')
+  const canEdit = permission.can('edit')
+  const canMaintainVersions = evaluateWholeMenuPermission(permissionModel, currentLoginUser, menuId, 'edit')
+  const canViewHistory = evaluateWholeMenuPermission(permissionModel, currentLoginUser, menuId, 'view')
+  const permittedColumns = permission.columns()
 
   const plannedProjects = useMemo(() => projects.filter(project => getProjectAttribute(project) === 'roadmap').map(projectRegistryToPlanned), [projects])
   const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
@@ -126,42 +139,16 @@ export default function ProjectRoadmapModule({
     hydrationError: enumHydrationError,
     retryHydration,
   } = useEnumHydration()
-  const configurableHistory = useMemo(() => ({
-    chipCode: [
-      ...plannedProjects.map(project => project.chipCode),
-      ...projects.map(resolveNormalProjectChipCode),
-    ].filter(value => Boolean(value.trim())),
-    startRam: [...plannedProjects.map(project => project.startRam), ...projects.map(project => project.startRam)]
-      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
-    versionType: [...plannedProjects.map(project => project.versionType), ...projects.map(project => project.versionType)]
-      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
-    developMode: [...plannedProjects.map(project => project.developMode), ...projects.map(project => project.developMode)]
-      .filter((value): value is string => typeof value === 'string' && Boolean(value.trim())),
-  }), [plannedProjects, projects])
-  const filterRamOptions = useSingleEnumOptions('memory-size', configurableHistory.startRam, true, 'filter')
-  const filterVersionTypeOptions = useSingleEnumOptions('version-type', configurableHistory.versionType, true, 'filter')
-  const filterDevelopModeOptions = useSingleEnumOptions('machine-development-mode', configurableHistory.developMode, true, 'filter')
   const setSelectedType = useEnumStore(state => state.setSelectedType)
-  const rowsByType = useEnumStore(state => state.rowsByType)
-  const filterChipCodeOptions = useMemo(() => {
-    const activeValues = [...new Set(rowsByType['chip-mapping'].map(row => row.chipCode.trim()).filter(Boolean))]
-    const activeValueSet = new Set(activeValues)
-    const historicalValues = [...new Set(configurableHistory.chipCode.map(value => value.trim()).filter(Boolean))]
-      .filter(value => !activeValueSet.has(value))
-    return [
-      ...activeValues.map(value => ({ label: value, value })),
-      ...historicalValues.map(value => ({ label: value, value })),
-    ]
-  }, [configurableHistory.chipCode, rowsByType])
   const setActiveModule = useUiStore(state => state.setActiveModule)
   const setConfigTab = useUiStore(state => state.setConfigTab)
   const navigateWithEditGuard = useUiStore(state => state.navigateWithEditGuard)
   const changeLogs = useRoadmapStore(state => state.changeLogs)
-  const viewMode = useRoadmapStore(state => state.viewMode)
   const selectedTosVersionId = useRoadmapStore(state => state.selectedTosVersionId)
   const filters = useRoadmapStore(state => state.filters)
   const columnOrder = useRoadmapStore(state => state.columnOrder)
-  const visibleColumns = useRoadmapStore(state => state.visibleColumns)
+  const personalVisibleColumns = useRoadmapStore(state => state.visibleColumns)
+  const visibleColumns = personalVisibleColumns.filter(key => permittedColumns.includes(key))
   const sort = useRoadmapStore(state => state.sort)
   const selectedConflictKey = useRoadmapStore(state => state.selectedConflictKey)
   const setViewMode = useRoadmapStore(state => state.setViewMode)
@@ -178,7 +165,7 @@ export default function ProjectRoadmapModule({
     void useRoadmapStore.persist.rehydrate()
   }, [enumHasHydrated, enumHydrationError])
 
-  const versions = useMemo<TosVersionConfig[]>(() => {
+  const sourceVersions = useMemo<TosVersionConfig[]>(() => {
     const currentValues = enumTosOptions.map(option => normalizeRoadmapTosValue(option.value)).filter(Boolean)
     const historicalReferences = [
       ...plannedProjects.map(project => project.firstSaleTosVersionId),
@@ -217,26 +204,32 @@ export default function ProjectRoadmapModule({
         : left.name.localeCompare(right.name, 'zh-CN')
     ))
   }, [enumTosOptions, filters, plannedProjects, projects, selectedTosVersionId, storedVersionDetails])
-  const selectableVersions = useMemo(
-    () => versions.filter(version => version.selectable !== false),
-    [versions],
+  const sourceNormalRows = useMemo(
+    () => projects.map(project => adaptNormalProject(project, sourceVersions)).filter(isPresent),
+    [projects, sourceVersions],
   )
+  const sourcePlannedRows = useMemo(
+    () => projects.map(project => adaptRegistryRoadmapProject(project)).filter(isPresent),
+    [projects],
+  )
+  const sourceRows = useMemo(() => [...sourceNormalRows, ...sourcePlannedRows], [sourceNormalRows, sourcePlannedRows])
+  const normalRows = useMemo(() => projectRoadmapRows(permissionModel, currentLoginUser, menuId, 'view', sourceNormalRows), [permissionModel, currentLoginUser, menuId, sourceNormalRows])
+  const plannedRows = useMemo(() => projectRoadmapRows(permissionModel, currentLoginUser, menuId, 'view', sourcePlannedRows), [permissionModel, currentLoginUser, menuId, sourcePlannedRows])
+  const allRows = useMemo(() => [...normalRows, ...plannedRows], [normalRows, plannedRows])
+  const versions = useMemo(() => canViewHistory ? sourceVersions : scopeRoadmapVersions(sourceVersions, allRows), [canViewHistory, sourceVersions, allRows])
   const maintainedVersions = useMemo(() => {
     const maintainedIds = new Set(storedVersionDetails.map(version => normalizeRoadmapTosValue(version.id)))
     return versions.filter(version => maintainedIds.has(version.id))
   }, [storedVersionDetails, versions])
   const normalizedFilters = useMemo(
-    () => sanitizeRoadmapFilterConditions(filters, versions),
-    [filters, versions],
-  )
-  const savedTosFilterValues = useMemo(
-    () => getRoadmapSelectedTosVersionIds(normalizedFilters),
-    [normalizedFilters],
+    () => sanitizeRoadmapFilterConditions(filters, versions).filter(condition => permittedColumns.includes(condition.field)),
+    [filters, versions, permittedColumns.join('|')],
   )
 
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [columnDrawerOpen, setColumnDrawerOpen] = useState(false)
   const [changeLogOpen, setChangeLogOpen] = useState(false)
+  const pendingDeleteConfirmRef = useRef<ReturnType<typeof Modal.confirm> | null>(null)
   const [detailsProject, setDetailsProject] = useState<RoadmapProjectRow | null>(null)
   const [activeProjectLogId, setActiveProjectLogId] = useState<string | null>(null)
   const [tosMaintenanceOpen, setTosMaintenanceOpen] = useState(false)
@@ -258,40 +251,25 @@ export default function ProjectRoadmapModule({
   }, [])
 
   const filterFieldDefinitions = useMemo(
-    () => buildRoadmapFilterFieldDefinitions(versions, savedTosFilterValues, {
-      chipCode: filterChipCodeOptions,
-      startRam: filterRamOptions,
-      versionType: filterVersionTypeOptions,
-      developMode: filterDevelopModeOptions,
-    }),
-    [filterChipCodeOptions, filterDevelopModeOptions, filterRamOptions, filterVersionTypeOptions, savedTosFilterValues, versions],
+    () => buildAuthorizedRoadmapFilterDefinitions(allRows, versions, permittedColumns),
+    [allRows, versions, permittedColumns.join('|')],
   )
   const filterDefinitionsByKey = useMemo(
     () => new Map(filterFieldDefinitions.map(definition => [definition.key, definition])),
     [filterFieldDefinitions],
   )
-
-  const normalRows = useMemo(
-    () => projects.map(project => adaptNormalProject(project, versions)).filter(isPresent),
-    [projects, versions],
-  )
-  const plannedRows = useMemo(
-    () => projects.map(project => adaptRegistryRoadmapProject(project)).filter(isPresent),
-    [projects],
-  )
   const conflicts = useMemo(
-    () => deriveRoadmapPlanningConflicts(normalRows, plannedRows),
-    [normalRows, plannedRows],
-  )
-  const allRows = useMemo(
-    () => [...normalRows, ...plannedRows],
+    () => deriveRoadmapPlanningConflicts(
+      normalRows.filter(row => row.projectCode && row.androidVersion && row.productType),
+      plannedRows.filter(row => row.projectCode && row.androidVersion && row.productType),
+    ),
     [normalRows, plannedRows],
   )
   const scopedChangeLogs = useMemo(
-    () => activeProjectLogId
+    () => canViewHistory && activeProjectLogId && allRows.some(row => row.id === activeProjectLogId)
       ? changeLogs.filter(log => log.projectId === activeProjectLogId)
       : [],
-    [activeProjectLogId, changeLogs],
+    [activeProjectLogId, allRows, canViewHistory, changeLogs],
   )
   const activeProjectLogLabel = useMemo(
     () => allRows.find(row => row.id === activeProjectLogId)?.displayName ?? '',
@@ -303,6 +281,23 @@ export default function ProjectRoadmapModule({
       : [],
     [conflicts, selectedConflictKey],
   )
+
+  const authorizedDetails = detailsProject ? allRows.find(row => row.id === detailsProject.id) ?? null : null
+  const detailsColumns = detailsProject
+    ? getAuthorizedColumns(permissionModel, currentLoginUser, menuId, 'view', sourceRows.find(row => row.id === detailsProject.id) as unknown as Record<string, unknown> | undefined)
+    : []
+  useEffect(() => {
+    if (!canView && allowedModes.length) setViewMode(allowedModes[0])
+    pendingDeleteConfirmRef.current?.destroy()
+    pendingDeleteConfirmRef.current = null
+    setDetailsProject(null)
+    setChangeLogOpen(false)
+    setActiveProjectLogId(null)
+    setConflictDrawerOpen(false)
+    setTosMaintenanceOpen(false)
+    setFilterDrawerOpen(false)
+    setColumnDrawerOpen(false)
+  }, [currentLoginUser, permissionModel, menuId, canView, allowedModes.join('|'), setViewMode])
 
   const brandFilter = getRoadmapQuickFilterValue(normalizedFilters, 'brand')
   const productTypeFilter = getRoadmapQuickFilterValue(normalizedFilters, 'productType')
@@ -413,8 +408,39 @@ export default function ProjectRoadmapModule({
     }
   }
 
-  const openCreatePlannedProject = () => navigateWithEditGuard(() => useUiStore.getState().openProjectConfiguration(), false)
-  const openPlannedProjectEditor = (projectId: string) => onViewProject(projectId)
+  const currentRow = (projectId: string) => {
+    const project = useProjectStore.getState().projects.find(candidate => candidate.id === projectId)
+    return project ? adaptRegistryRoadmapProject(project) ?? adaptNormalProject(project, sourceVersions) : null
+  }
+  const canActOnRow = (projectId: string, action: PermissionAction) => {
+    const row = currentRow(projectId)
+    return !!row && useRoadmapStore.getState().viewMode === viewMode
+      && hasMenuPermission(useProjectStore.getState().currentLoginUser, menuId, action, row as unknown as Record<string, unknown>)
+  }
+  const canUseRegistryRow = (projectId: string, action: PermissionAction) => {
+    const project = useProjectStore.getState().projects.find(candidate => candidate.id === projectId)
+    return !!project && canUseProjectRegistry(useProjectStore.getState().currentLoginUser, action, project)
+  }
+  const canEditRow = (row: RoadmapProjectRow) => sourcePlannedRows.some(source => source.id === row.id)
+    && canUseRegistryRow(row.id, 'edit') && permission.can('edit', sourceRows.find(source => source.id === row.id) as unknown as Record<string, unknown>)
+  const canDeleteRow = (row: RoadmapProjectRow) => sourcePlannedRows.some(source => source.id === row.id)
+    && canUseRegistryRow(row.id, 'delete') && permission.can('delete', sourceRows.find(source => source.id === row.id) as unknown as Record<string, unknown>)
+  const canActOnCollection = (action: PermissionAction) => useRoadmapStore.getState().viewMode === viewMode
+    && evaluateWholeMenuPermission(usePermissionStore.getState().permissionCenter, useProjectStore.getState().currentLoginUser, menuId, action)
+  const openCreatePlannedProject = () => {
+    const actor = useProjectStore.getState().currentLoginUser
+    if (!hasMenuPermission(actor, menuId, 'create') || !canUseProjectRegistry(actor, 'create')) return
+    navigateWithEditGuard(() => useUiStore.getState().openProjectConfiguration(), false)
+  }
+  const guardedViewProject = (projectId: string, market?: string) => {
+    if (canActOnRow(projectId, 'view')) onViewProject(projectId, market)
+  }
+  const openPlannedProjectEditor = (projectId: string) => {
+    if (canActOnRow(projectId, 'edit') && canUseRegistryRow(projectId, 'edit')) onViewProject(projectId)
+  }
+  const openProjectDetails = (row: RoadmapProjectRow) => {
+    if (canActOnRow(row.id, 'view')) setDetailsProject(row)
+  }
   const toggleTarget = (versionId: string) => {
     setCollapsedTargetVersionIds(current => {
       const next = new Set(current)
@@ -433,6 +459,7 @@ export default function ProjectRoadmapModule({
     setFilters(setRoadmapQuickFilter(normalizedFilters, field, value))
   }
   const handleViewModeChange = (nextViewMode: RoadmapViewMode) => {
+    if (!hasMenuPermission(useProjectStore.getState().currentLoginUser, nextViewMode === 'table' ? 'roadmap.table' : 'roadmap.evolution', 'view')) return
     if (viewMode === 'table' && nextViewMode === 'evolution') {
       setFilters(normalizedFilters.filter(condition => condition.field !== 'firstSaleTosVersionId'))
       setSelectedTosVersionId(null)
@@ -440,11 +467,12 @@ export default function ProjectRoadmapModule({
     setViewMode(nextViewMode)
   }
   const openProjectHistory = (projectId: string) => {
-    if (!canView) return
+    if (!canActOnCollection('view') || !canActOnRow(projectId, 'view')) return
     setActiveProjectLogId(projectId)
     setChangeLogOpen(true)
   }
   const openSharedTosEnumConfig = () => {
+    if (!hasMenuPermission(useProjectStore.getState().currentLoginUser, 'config.enum:roadmap-tos', 'view')) return
     navigateWithEditGuard(() => {
       setSelectedType('roadmap-tos')
       setConfigTab('enum')
@@ -457,13 +485,13 @@ export default function ProjectRoadmapModule({
     setConflictDrawerOpen(true)
   }
   const requestDeletePlannedProject = (projectId: string, onDeleted?: () => void) => {
-    if (!canManageProjectRegistry(currentLoginUser)) return
-    const project = plannedProjects.find(candidate => candidate.id === projectId)
+    if (!canActOnRow(projectId, 'delete') || !canUseRegistryRow(projectId, 'delete')) return
+    const project = plannedRows.find(candidate => candidate.id === projectId)
     if (!project) {
       message.error('待规划项目不存在，请刷新后重试')
       return
     }
-    Modal.confirm({
+    pendingDeleteConfirmRef.current = Modal.confirm({
       centered: true,
       title: '删除待规划项目？',
       content: (
@@ -476,7 +504,8 @@ export default function ProjectRoadmapModule({
       cancelText: '取消',
       okButtonProps: { danger: true },
       onOk: () => {
-        const result = deleteConfiguredProject(project.id, currentLoginUser)
+        if (!canActOnRow(project.id, 'delete') || !canUseRegistryRow(projectId, 'delete')) return Promise.reject(new Error('roadmap-permission-revoked'))
+        const result = deleteConfiguredProject(project.id, useProjectStore.getState().currentLoginUser)
         if (!result.ok) {
           message.error(result.message)
           return Promise.reject(new Error('planned-project-delete-failed'))
@@ -487,21 +516,20 @@ export default function ProjectRoadmapModule({
     })
   }
   const handleExport = () => {
-    const visibleSet = new Set(visibleColumns)
-    const exportColumns = columnOrder
-      .filter(key => visibleSet.has(key))
-      .map(key => ROADMAP_EXPORT_COLUMNS[key])
-    const exportRows = filteredRows.map(row => ({
+    const user = useProjectStore.getState().currentLoginUser
+    const model = usePermissionStore.getState().permissionCenter
+    if (useRoadmapStore.getState().viewMode !== viewMode || !hasMenuPermission(user, menuId, 'export')) return
+    const liveRows = useProjectStore.getState().projects.flatMap(project => {
+      const row = adaptRegistryRoadmapProject(project) ?? adaptNormalProject(project, sourceVersions)
+      return row ? [row] : []
+    })
+    const result = buildRoadmapPermissionExport(model, user, menuId, liveRows, sourceVersions, appliedFilters, columnOrder, personalVisibleColumns, viewMode === 'table' ? selectedTosVersionId : null)
+    if (!result.columns.length) return
+    const exportRows = result.rows.map(row => ({
       ...row,
-      firstSaleTosVersionId: versions.find(version => version.id === row.firstSaleTosVersionId)?.name
-        ?? formatRoadmapTosValue(row.firstSaleTosVersionId),
+      firstSaleTosVersionId: row.firstSaleTosVersionId ? formatRoadmapTosValue(row.firstSaleTosVersionId) : '',
     }))
-    exportSheet(
-      exportRows,
-      exportColumns,
-      `tOS路标_${exportTimestamp()}.xlsx`,
-      'tOS路标',
-    )
+    exportSheet(exportRows, result.columns.map(key => ROADMAP_EXPORT_COLUMNS[key]), `tOS路标_${exportTimestamp()}.xlsx`, 'tOS路标')
   }
 
   if (!canView) {
@@ -557,12 +585,15 @@ export default function ProjectRoadmapModule({
     columnOrder,
     visibleColumns,
     sort,
-    canEdit: canManageProjectRegistry(currentLoginUser),
-    onViewProject,
+    canEdit,
+    canEditRow,
+    canDeleteRow,
+    canViewHistory,
+    onViewProject: guardedViewProject,
     onSelectedTosVersionChange: setSelectedTosVersionId,
     onSortChange: setSort,
     onOpenProjectHistory: openProjectHistory,
-    onOpenProjectDetails: setDetailsProject,
+    onOpenProjectDetails: openProjectDetails,
     onOpenConflict: openConflictDrawer,
     onEditPlannedProject: openPlannedProjectEditor,
     onDeletePlannedProject: requestDeletePlannedProject,
@@ -587,11 +618,15 @@ export default function ProjectRoadmapModule({
       aria-label="tOS 路标视图"
       style={{ width: '100%', minWidth: 0 }}
     >
-      <RoadmapViewModeSwitch value={viewMode} onChange={handleViewModeChange} />
+      <RoadmapViewModeSwitch value={viewMode} allowedModes={allowedModes} onChange={handleViewModeChange} />
       <div className="pms-roadmap-content-panel pms-solid-surface">
       <RoadmapToolbar
         canView={canView}
-        canEdit={canEdit}
+        canEdit={canMaintainVersions}
+        canCreate={permission.can('create') && canUseProjectRegistry(currentLoginUser, 'create')}
+        canExport={permission.can('export')}
+        allowedBrands={allRows.map(row => row.brand).filter(Boolean)}
+        allowedProductTypes={allRows.map(row => row.productType).filter(Boolean)}
         viewMode={viewMode}
         versions={maintainedVersions}
         selectedTosVersionId={selectedTosVersionId}
@@ -606,7 +641,7 @@ export default function ProjectRoadmapModule({
         onToggleAllTargets={toggleAllTargets}
         isFullscreen={isFullscreen}
         onToggleFullscreen={() => void toggleFullscreen()}
-        onOpenTosMaintenance={() => setTosMaintenanceOpen(true)}
+        onOpenTosMaintenance={() => { if (canActOnCollection('edit')) setTosMaintenanceOpen(true) }}
         onCreatePlannedProject={openCreatePlannedProject}
         onExport={handleExport}
         onOpenFilters={() => {
@@ -623,7 +658,7 @@ export default function ProjectRoadmapModule({
             trigger={trigger}
             getPopupContainer={getRoadmapPopupContainer}
             onClose={() => setFilterDrawerOpen(false)}
-            conditions={filters}
+            conditions={normalizedFilters}
             fieldDefinitions={filterFieldDefinitions}
             onApply={setFilters}
           />
@@ -635,6 +670,7 @@ export default function ProjectRoadmapModule({
             getPopupContainer={getRoadmapPopupContainer}
             onClose={() => setColumnDrawerOpen(false)}
             viewMode={viewMode}
+            allowedColumns={permittedColumns}
             value={{ order: [...columnOrder], visible: [...visibleColumns] }}
             onChange={setColumnSettings}
           />
@@ -671,11 +707,12 @@ export default function ProjectRoadmapModule({
       </div>
 
       <TosVersionMaintenanceModal
-        open={tosMaintenanceOpen}
+        open={tosMaintenanceOpen && canMaintainVersions}
         onCancel={() => setTosMaintenanceOpen(false)}
         normalProjects={projects.filter(isFormalProject)}
         plannedProjects={plannedProjects}
-        canEdit={canEdit}
+        canEdit={canMaintainVersions}
+        canMutate={() => canActOnCollection('edit')}
       />
       <RoadmapConflictDrawer
         open={conflictDrawerOpen}
@@ -683,16 +720,17 @@ export default function ProjectRoadmapModule({
         tosVersions={versions}
         selectedConflictKey={selectedConflictKey}
         canEdit={canEdit}
+        canDeleteRow={canDeleteRow}
         onClose={() => {
           setConflictDrawerOpen(false)
           setSelectedConflictKey(null)
         }}
         onSelectedConflictKeyChange={setSelectedConflictKey}
-        onViewProject={projectId => onViewProject(projectId)}
+        onViewProject={projectId => guardedViewProject(projectId)}
         onDeletePlannedProject={project => requestDeletePlannedProject(project.id)}
       />
       <RoadmapChangeLogDrawer
-        open={changeLogOpen}
+        open={changeLogOpen && canViewHistory}
         onClose={() => {
           setChangeLogOpen(false)
           setActiveProjectLogId(null)
@@ -702,8 +740,9 @@ export default function ProjectRoadmapModule({
         tosVersions={versions}
       />
       <RoadmapProjectDetailsModal
-        open={detailsProject !== null}
-        row={detailsProject}
+        open={authorizedDetails !== null}
+        row={authorizedDetails}
+        allowedColumns={detailsColumns}
         versions={versions}
         onClose={() => setDetailsProject(null)}
       />

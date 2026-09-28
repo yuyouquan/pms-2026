@@ -9,7 +9,7 @@ globalThis.window = { localStorage }
 const loader = createTypeScriptModuleLoader()
 const load = file => loader(path.resolve(file))
 const constants = load('src/constants/permissions.ts')
-const { usePermissionStore: store, resourcePermissionDefaults, hasPermission, PERMISSION_STORAGE_KEY, PERMISSION_STORAGE_VERSION } = load('src/stores/permission.ts')
+const { usePermissionStore: store, resourcePermissionDefaults, hasPermission, PERMISSION_STORAGE_KEY } = load('src/stores/permission.ts')
 const { initialProjects, ESTABLISHED_FORMAL_PROJECT_IDS } = load('src/data/projects.ts')
 const keys = ['resource:view', 'resource:createVersion', 'resource:lockVersion', 'resource:setOfficialVersion', 'resource:deleteVersion', 'resource:export', 'resource:laborEdit', 'resource:nonLaborEdit']
 const basic = ['resource:view', 'resource:laborEdit', 'resource:nonLaborEdit']
@@ -108,7 +108,8 @@ await check('Missing resource defaults are filled while explicit denial and unre
 
 await check('Legacy storage upgrades at real hydration and preserves denials across a fresh module load', async () => {
   const project = projects[1]
-  localStorage.setItem(PERMISSION_STORAGE_KEY, JSON.stringify({ version: PERMISSION_STORAGE_VERSION, state: {
+  // Version 2 is the historical project-only format, before global permissions were persisted.
+  localStorage.setItem(PERMISSION_STORAGE_KEY, JSON.stringify({ version: 2, state: {
     projectTypesByProject: { [project.id]: project.type },
     rolesByProject: { [project.id]: [{ name: '版本项目经理', members: ['stored-owner'], isFixed: true }, { name: '自定义成员', members: ['stored-member'], isFixed: false }] },
     rolePermissionsByProject: { [project.id]: { 版本项目经理: { 'resource:export': false, 'plan:导出': false }, 自定义成员: { 'resource:view': false } } },

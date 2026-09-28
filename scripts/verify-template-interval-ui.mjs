@@ -13,9 +13,31 @@ const noop=()=>{}, ui={configTab:'plan',selectedProjectType:'整机产品项目'
 let allowed=true
 const useUiStore=()=>ui; useUiStore.getState=()=>ui
 const useProjectStore=()=>({currentLoginUser:'演示用户01'})
+useProjectStore.getState=useProjectStore
+const permissionModel={fixture:'template-interval-exact-menu'}
+const usePermissionStore=selector=>selector({permissionCenter:permissionModel})
+usePermissionStore.getState=()=>({permissionCenter:permissionModel})
+const permissionQueries=[]
+const canTemplateAction=(user,menuId,action='view')=>{
+ assert.equal(user,'演示用户01','template permission checks use the current identity')
+ assert.equal(menuId,`config.plan:${ui.selectedProjectType}`,'template checks are scoped to the selected project-type leaf')
+ permissionQueries.push({menuId,action,allowed})
+ return action==='view'||(allowed&&['edit','publish'].includes(action))
+}
+const configGroups=load(path.resolve('src/lib/configNavigation.ts')).CONFIG_MENU_GROUPS
+const globalMenuPermissions={
+ useGlobalMenuPermission:(user,menuId)=>action=>canTemplateAction(user,menuId,action),
+ canRunGlobalMenuAction:canTemplateAction,
+ getAccessibleConfigGroups:(model,user)=>{
+  assert.equal(model,permissionModel,'container subscribes to the permission-center model')
+  assert.equal(user,'演示用户01')
+  const group=configGroups.find(group=>group.key==='plan')
+  return [{...group,children:group.children.filter(leaf=>leaf.key===`plan:${ui.selectedProjectType}`)}]
+ },
+}
 const React={useState:v=>[v,noop],useMemo:fn=>fn(),useEffect:noop}
 const Antd=new Proxy({Form:Object.assign(function Form(){},{Item:'FormItem'}),Select:Object.assign(function Select(){},{Option:'Option'}),message:{success:noop,error:noop}}, {get:(t,k)=>t[k]??String(k)})
-const mocks={react:React,antd:Antd,'@ant-design/icons':new Proxy({}, {get:(_,k)=>String(k)}),'@dnd-kit/core':{DndContext:'DndContext',useSensors:noop,useSensor:noop},'@dnd-kit/sortable':{SortableContext:'SortableContext'},'@/stores/ui':{useUiStore},'@/stores/plan':{...plan,usePlanStore:()=>store.getState()},'@/stores/project':{useProjectStore},'@/stores/permission':{useHasGlobalPermission:()=>()=>allowed},'@/stores/transfer':{useTransferStore:()=>({})},'@/stores/enums':{useEnumStore:fn=>fn({selectedType:'',setSelectedType:noop})},'@/components/shared/PlanHelpers':{DragHandle:'DragHandle',getTaskDepth:t=>t.parentId?1:0,hasChildren:(id,tasks)=>tasks.some(t=>t.parentId===id),filterByCollapsed:(tasks,collapsed)=>tasks.filter(t=>!collapsed.has(t.parentId)),NOTIFY_DIFF_FIELDS:[],MOCK_USER_MAP:{}}}
+const mocks={react:React,antd:Antd,'@ant-design/icons':new Proxy({}, {get:(_,k)=>String(k)}),'@dnd-kit/core':{DndContext:'DndContext',useSensors:noop,useSensor:noop},'@dnd-kit/sortable':{SortableContext:'SortableContext'},'@/stores/ui':{useUiStore},'@/stores/plan':{...plan,usePlanStore:()=>store.getState()},'@/stores/project':{useProjectStore},'@/stores/permission':{usePermissionStore},'@/lib/globalMenuPermissions':globalMenuPermissions,'@/stores/transfer':{useTransferStore:()=>({})},'@/stores/enums':{useEnumStore:fn=>fn({selectedType:'',setSelectedType:noop})},'@/components/shared/PlanHelpers':{DragHandle:'DragHandle',getTaskDepth:t=>t.parentId?1:0,hasChildren:(id,tasks)=>tasks.some(t=>t.parentId===id),filterByCollapsed:(tasks,collapsed)=>tasks.filter(t=>!collapsed.has(t.parentId)),NOTIFY_DIFF_FIELDS:[],MOCK_USER_MAP:{}}}
 const source=fs.readFileSync('src/containers/ConfigContainer.tsx','utf8')
 const module={exports:{}}
 const output=ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText
@@ -30,7 +52,7 @@ const render=()=>walk(module.exports.default())
 const table=all=>all.find(n=>n.type==='Table' && n.props.className?.includes('pms-table'))
 const initial=[{id:'1',taskName:'阶段A'},{id:'1.1',parentId:'1',taskName:'里程碑A',intervalDays:10},{id:'2',taskName:'阶段B'},{id:'2.1',parentId:'2',taskName:'里程碑B',intervalDays:30}]
 for(const [type,level,key] of [['整机产品项目','level1','整机产品项目'],['技术项目','tdt',rules.TECHNICAL_TEMPLATE_STORAGE_KEYS.tdt]]) {
- ui.selectedProjectType=type; ui.isEditMode=true
+ ui.selectedProjectType=type; ui.isEditMode=true; permissionQueries.length=0
  const scope=rules.getTemplateConfigScopeKey(type,level)
  store.setState({planLevel:level,viewMode:'table',searchText:'',configTemplateTasksByType:{...store.getState().configTemplateTasksByType,[key]:structuredClone(initial)},configTemplateVersionScopes:{...store.getState().configTemplateVersionScopes,[scope]:{versions:[{id:'pub',versionNo:'V1',status:'已发布'},{id:'draft',versionNo:'V2',status:'修订中'}],currentVersion:'draft'}}})
  store.getState().setPublishedSnapshots(prev=>({...prev,[plan.getTemplateSnapshotKey(type,'pub',level)]:initial.map(t=>({...t,intervalDays:t.parentId?5:undefined}))}))
@@ -65,5 +87,8 @@ for(const [type,level,key] of [['整机产品项目','level1','整机产品项�
  assert.equal(table(all).props.dataSource.length,0,'missing published snapshots cannot display another version')
  all.find(n=>n.type==='Dropdown'&&n.props.menu?.onClick).props.menu.onClick({key:'formal'})
  assert.equal(store.getState().configTemplateTasksByType[key].length,0,'empty template revisions stay empty rather than receiving unrelated defaults')
+ assert.ok(permissionQueries.some(query=>query.menuId===`config.plan:${type}`&&query.action==='edit'&&query.allowed),'selected leaf checks edit grants')
+ assert.ok(permissionQueries.some(query=>query.menuId===`config.plan:${type}`&&query.action==='edit'&&!query.allowed),'dynamic edit revocation reaches the selected leaf')
+ assert.ok(permissionQueries.some(query=>query.menuId===`config.plan:${type}`&&query.action==='publish'),'selected leaf retains distinct publish checks')
  console.log(`PASS actual ${level} UI handlers: editable children, totals, search, snapshot, revision inheritance, permission`)
 }

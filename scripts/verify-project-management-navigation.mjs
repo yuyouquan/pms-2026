@@ -67,9 +67,19 @@ const joint = read('src/components/joint/JointMrVersionPlan.tsx')
 
 assert.match(page, /activeModule === 'projectManagement' && <ProjectManagementContainer/)
 assert.doesNotMatch(page, /activeModule === 'projectList'/, 'obsolete standalone project-list route is removed')
-const expectedHeaderOrder = /key:\s*['"]workbench['"],\s*label:\s*['"]工作台['"][\s\S]*?key:\s*['"]projectManagement['"],\s*label:\s*['"]项目管理['"][\s\S]*?key:\s*['"]jointProjectSpace['"],\s*label:\s*['"]项目组合管理['"][\s\S]*?key:\s*['"]roadmap['"],\s*label:\s*['"]tOS路标['"][\s\S]*?key:\s*['"]hrPipeline['"],\s*label:\s*['"]人力资源管道['"][\s\S]*?key:\s*['"]config['"],\s*label:\s*['"]配置中心['"]/
-assert.match(header, expectedHeaderOrder)
-assert.doesNotMatch(header, /key:\s*['"]projectList['"]/, 'standalone project-list nav item is removed')
+const { PERMISSION_MAIN_NAV } = loadTypeScriptModule(root, 'src/components/permission-center/navigation.ts')
+assert.deepEqual(PERMISSION_MAIN_NAV, [
+  { key: 'workbench', label: '工作台' },
+  { key: 'projectManagement', label: '项目管理' },
+  { key: 'jointProjectSpace', label: '项目组合管理' },
+  { key: 'roadmap', label: 'tOS路标' },
+  { key: 'hrPipeline', label: '人力资源管道' },
+  { key: 'config', label: '配置中心' },
+  { key: 'globalPermission', label: '权限中心' },
+], 'shared header directory preserves business menu order and appends permission center after configuration')
+assert.match(header, /items=\{PERMISSION_MAIN_NAV\.filter\(item => canAccessMainModule\(permissionCenter, currentLoginUser, item\.key\)\)\}/,
+  'header renders the ordered shared directory with current-user access filtering')
+assert.equal(PERMISSION_MAIN_NAV.some(item => item.key === 'projectList'), false, 'standalone project-list nav item is removed')
 assert.match(header, /返回项目管理/)
 
 assert.match(management, /key:\s*['"]configuration['"],\s*label:\s*['"]项目配置['"]/)
@@ -84,11 +94,13 @@ assert.match(configuration, /updateConfiguredProject/)
 assert.match(configuration, /deleteConfiguredProject/)
 assert.match(configuration, /getBindableFormalProjects/)
 assert.match(configuration, /getLinkedRegistryProjects/)
-assert.match(configuration, /canManageProjectRegistry/)
+assert.match(configuration, /canUseProjectRegistry/, 'configuration actions use live scoped menu grants')
 assert.match(configuration, /confirmingRef/)
 assert.match(configuration, /shouldConfirmConfigurationChange/)
 assert.equal((configuration.match(/pms-project-config__editable-value/g) ?? []).length, 2, 'code and binding values are direct edit affordances')
-assert.match(configuration, /navigateWithEditGuard\(\(\) => \{[\s\S]*?activateProject\(project\)[\s\S]*?enterProjectSpace\(/, 'configuration entry uses the shared edit guard')
+assert.match(configuration, /navigateWithEditGuard\(\(\) => \{[\s\S]*?activateProject\(source\)[\s\S]*?enterProjectSpace\(/, 'configuration entry uses the shared edit guard')
+assert.match(configuration, /canUseProjectRegistry\(currentLoginUser, 'view', source\)/, 'configuration entry rechecks source authorization')
+assert.match(configuration, /if \(!canEnter\(project\)\)/, 'configuration entry retains project-space membership guard')
 assert.match(configuration, /enterProjectSpace\(\{\s*module:\s*['"]projectManagement['"],\s*projectManagementTab:\s*['"]configuration['"]\s*\}\)/)
 
 for (const label of ['项目属性', '项目名称', '项目类型', '责任人']) {
