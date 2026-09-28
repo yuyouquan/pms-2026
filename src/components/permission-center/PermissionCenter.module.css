@@ -4,15 +4,20 @@
 .sidebar :global(.pms-collapsible-sidebar__content) { padding: 8px; scrollbar-gutter: auto; }
 .sidebar :global(.pms-collapsible-sidebar__toggle) { width: 32px !important; min-width: 32px !important; height: 32px !important; right: 4px; bottom: 8px; border-radius: 6px !important; }
 .sidebar:global(.is-collapsed) :global(.pms-collapsible-sidebar__content) { visibility: hidden; padding: 0; }
-.sidebar :global(.ant-tree-indent-unit) { width: 12px; }
-.sidebar :global(.ant-tree-node-content-wrapper) { min-width: 0; flex: 1; overflow: hidden; }
-.sidebar :global(.ant-tree-title) { display: block; min-width: 0; }
-.sidebar :global(.ant-tree-switcher) { width: 18px; flex: 0 0 18px; }
+.sidebar :global(.ant-tree-indent-unit), .menuNavigation :global(.ant-tree-indent-unit) { width: 12px; }
+.sidebar :global(.ant-tree-node-content-wrapper), .menuNavigation :global(.ant-tree-node-content-wrapper) { min-width: 0; flex: 1; overflow: hidden; }
+.sidebar :global(.ant-tree-title), .menuNavigation :global(.ant-tree-title) { display: block; min-width: 0; }
+.sidebar :global(.ant-tree-switcher), .menuNavigation :global(.ant-tree-switcher) { width: 18px; flex: 0 0 18px; }
 .search { margin-bottom: 8px; }
 .addRole { width: 100%; margin-bottom: 8px; }
 .node { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.content { flex: 1; min-width: 0; min-height: 0; overflow-y: auto; background: var(--pms-surface-solid, #fff); border-radius: 16px; padding: 12px; border-top: 2px solid var(--pms-brand); box-shadow: 0 0 20px rgba(211,208,255,.5); }
-.roleHeader { display: flex; gap: 12px; justify-content: space-between; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,.08); }
+.content { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; overflow: hidden; background: var(--pms-surface-solid, #fff); border-radius: 16px; padding: 12px; border-top: 2px solid var(--pms-brand); box-shadow: 0 0 20px rgba(211,208,255,.5); }
+.roleHeader { display: flex; flex-shrink: 0; gap: 12px; justify-content: space-between; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,.08); }
+.configurationBody { display: grid; grid-template-columns: 176px minmax(0, 1fr); flex: 1; min-height: 0; }
+.menuNavigation { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding-right: 12px; border-right: 1px solid rgba(0,0,0,.08); }
+.menuNavigationTitle { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.menuTree { flex: 1; min-height: 0; overflow-y: auto; }
+.policyPane { min-width: 0; min-height: 0; overflow-y: auto; padding-left: 12px; }
 .roleCopy { min-width: 0; }
 .roleTitle { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .muted { color: #717680; font-size: 12px; line-height: 20px; }
@@ -46,6 +51,9 @@
   .mobileSelectors { position: absolute; top: 0; left: 0; display: flex; gap: 8px; max-width: 100%; }
   .sidebar { position: absolute; top: 40px; bottom: 0; left: 0; z-index: 5; height: auto; width: min(280px, 80vw) !important; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
   .sidebar:global(.is-collapsed) { display: none; }
-  .content { width: 100%; }
+  .content { width: 100%; overflow-y: auto; }
+  .configurationBody { display: flex; flex-direction: column; flex: none; }
+  .menuNavigation { height: 200px; flex-shrink: 0; padding-right: 0; padding-bottom: 12px; margin-bottom: 12px; border-right: 0; border-bottom: 1px solid rgba(0,0,0,.08); }
+  .policyPane { overflow: visible; padding-left: 0; }
   .roleHeader { gap: 8px; flex-wrap: wrap; }
 }

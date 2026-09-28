@@ -23,7 +23,6 @@ export default function PermissionCenter() {
   const [roleSearch, setRoleSearch] = useState('')
   const [menuSearch, setMenuSearch] = useState('')
   const [roleCollapsed, setRoleCollapsed] = useState(false)
-  const [menuCollapsed, setMenuCollapsed] = useState(false)
   const [narrow, setNarrow] = useState(false)
   const [roleExpanded, setRoleExpanded] = useState<Key[]>(() => model?.groups.map(group => group.id) ?? [])
   const [menuExpanded, setMenuExpanded] = useState<Key[]>(() => [...new Set(PERMISSION_MENUS.map(menu => menu.category))])
@@ -37,7 +36,7 @@ export default function PermissionCenter() {
   useEffect(() => () => setDraft(false), [setDraft])
   useEffect(() => {
     const media = window.matchMedia('(max-width: 760px)')
-    const adapt = () => { setNarrow(media.matches); if (media.matches) { setRoleCollapsed(true); setMenuCollapsed(true) } }
+    const adapt = () => { setNarrow(media.matches); if (media.matches) setRoleCollapsed(true) }
     adapt(); media.addEventListener('change', adapt)
     return () => media.removeEventListener('change', adapt)
   }, [])
@@ -71,8 +70,7 @@ export default function PermissionCenter() {
   }
   return <section className={styles.workspace} aria-label="权限中心">
     <div className={styles.mobileSelectors}>
-      <Button aria-expanded={!roleCollapsed} onClick={() => { setRoleCollapsed(value => !value); setMenuCollapsed(true) }}>选择角色</Button>
-      <Button aria-expanded={!menuCollapsed} onClick={() => { setMenuCollapsed(value => !value); setRoleCollapsed(true) }}>选择菜单</Button>
+      <Button aria-expanded={!roleCollapsed} onClick={() => setRoleCollapsed(value => !value)}>选择角色</Button>
     </div>
     <CollapsibleSidebarShell className={styles.sidebar} collapsed={roleCollapsed} onCollapsedChange={setRoleCollapsed} title="角色分组" ariaLabel="角色侧栏"
       expandedWidth={180} collapsedWidth={40} expandLabel="展开角色侧栏" collapseLabel="收起角色侧栏">
@@ -82,19 +80,25 @@ export default function PermissionCenter() {
         onClick={(_, node) => { if (!node.isLeaf) setRoleExpanded(previous => previous.includes(node.key) ? previous.filter(key => key !== node.key) : [...previous, node.key]) }}
         onExpand={setRoleExpanded} onSelect={keys => { const selected = model.roles.find(role => role.id === keys[0]); if (selected) navigate(() => { setRoleId(selected.id); if (narrow) setRoleCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}
     </CollapsibleSidebarShell>
-    <CollapsibleSidebarShell className={styles.sidebar} collapsed={menuCollapsed} onCollapsedChange={setMenuCollapsed} title="功能菜单" ariaLabel="菜单侧栏"
-      expandedWidth={176} collapsedWidth={40} expandLabel="展开菜单侧栏" collapseLabel="收起菜单侧栏">
-      <Input className={styles.search} prefix={<SearchOutlined />} placeholder="搜索菜单" aria-label="搜索菜单" value={menuSearch} onChange={event => setMenuSearch(event.target.value)} allowClear />
-      {menuTree.length ? <Tree blockNode treeData={menuTree} selectedKeys={[menuId]} expandedKeys={menuSearch ? menuTree.map(node => node.key) : menuExpanded}
-        onClick={(_, node) => { if (!node.isLeaf) setMenuExpanded(previous => previous.includes(node.key) ? previous.filter(key => key !== node.key) : [...previous, node.key]) }}
-        onExpand={setMenuExpanded} onSelect={keys => { const selected = PERMISSION_MENUS.find(menu => menu.id === keys[0]); if (selected) navigate(() => { setMenuId(selected.id); if (narrow) setMenuCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到菜单" />}
-    </CollapsibleSidebarShell>
     <div className={styles.content}>
       {role ? <><div className={styles.roleHeader}><div className={styles.roleCopy}><div className={styles.roleTitle}>{role.name}</div>
         <div className={styles.muted}>{model.groups.find(group => group.id === role.groupId)?.name}</div>
         {role.description && <div className={`${styles.muted} ${styles.description}`}>{role.description}</div>}
       </div>{role.id !== SUPER_ADMIN_ROLE_ID && <Space><Button icon={<EditOutlined />} onClick={() => navigate(() => setFormRole(role))}>编辑</Button><Button danger icon={<DeleteOutlined />} onClick={deleteRole}>删除</Button></Space>}</div>
-        {menu ? <PolicyEditor key={`${actor}:${role.id}:${menu.id}:${editorEpoch}`} actor={actor} model={model} role={role} menu={menu} onDirtyChange={onConditionDirty} /> : <Empty description="请选择功能菜单" />}
+        <div className={styles.configurationBody}>
+          <nav className={styles.menuNavigation} aria-label="功能菜单">
+            <div className={styles.menuNavigationTitle}>功能菜单</div>
+            <Input className={styles.search} prefix={<SearchOutlined />} placeholder="搜索菜单" aria-label="搜索菜单" value={menuSearch} onChange={event => setMenuSearch(event.target.value)} allowClear />
+            <div className={styles.menuTree}>
+              {menuTree.length ? <Tree blockNode treeData={menuTree} selectedKeys={[menuId]} expandedKeys={menuSearch ? menuTree.map(node => node.key) : menuExpanded}
+                onClick={(_, node) => { if (!node.isLeaf) setMenuExpanded(previous => previous.includes(node.key) ? previous.filter(key => key !== node.key) : [...previous, node.key]) }}
+                onExpand={setMenuExpanded} onSelect={keys => { const selected = PERMISSION_MENUS.find(menu => menu.id === keys[0]); if (selected) navigate(() => setMenuId(selected.id)) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到菜单" />}
+            </div>
+          </nav>
+          <div className={styles.policyPane}>
+            {menu ? <PolicyEditor key={`${actor}:${role.id}:${menu.id}:${editorEpoch}`} actor={actor} model={model} role={role} menu={menu} onDirtyChange={onConditionDirty} /> : <Empty description="请选择功能菜单" />}
+          </div>
+        </div>
       </> : <Empty description="暂无角色，请先添加角色" />}
     </div>
     {formRole && <RoleForm model={model} role={formRole === 'new' ? undefined : formRole} onDirty={() => setFormDirty(true)} onClose={closeForm}
