@@ -58,11 +58,12 @@ assert(!dirty)
 assert(nodes(render()).filter(node => node.type === 'Tag').every(node => !node.props.closable), 'Confirmed values read only')
 assert.equal(find(render({ memberSource: '团队同步' }), 'Button', '配置授权人员').props.disabled, true)
 assert.equal(find(render({ memberSource: '团队同步' }), 'Button', '配置授权部门').props.disabled, false)
+assert.equal(find(render({ disabled: true }), 'Button', '配置授权部门').props.disabled, true)
 
 hooks = []; cursor = 0
 const Functional = load('src/components/permission/ProjectFunctionalPermissions.tsx')
 const changes = []
-const functional = extra => { cursor = 0; return Functional({ project: { type: '整机产品项目', projectAttribute: 'formal' }, grants: { 'basicInfo:查看': true }, disabled: false, onChange: (...args) => changes.push(args), ...extra }) }
+const functional = extra => { cursor = 0; return Functional({ project: { type: '整机产品项目', projectAttribute: 'formal' }, grants: { 'basicInfo:查看': true }, disabled: false, onChange: (...args) => changes.push(args), onBulkChange: (...args) => changes.push(['bulk', ...args]), ...extra }) }
 let tree = functional()
 assert.equal(nodes(tree).filter(node => node.type === 'th' && node.props.scope === 'col').length, 2)
 assert.equal(find(tree, 'Checkbox', '基本信息：查看').props.checked, true)
@@ -70,7 +71,13 @@ find(tree, 'Checkbox', '基本信息：查看').props.onChange({ target: { check
 assert.deepEqual(changes, [['basicInfo:查看', false]], 'Checkbox emits actual permission key immediately')
 find(tree, 'button', '收起基础信息功能').props.onClick()
 assert.equal(find(functional(), 'Checkbox', '基本信息：查看'), undefined)
-find(functional(), 'Input', '搜索项目功能').props.onChange({ target: { value: '基础信息' } })
+find(functional(), 'Input', '搜索项目功能').props.onChange({ target: { value: '基本信息' } })
 assert(find(functional(), 'Checkbox', '基本信息：查看'), 'Search expands matching collapsed module')
 assert.equal(find(functional(), 'Checkbox', '二级计划：查看'), undefined)
+assert.equal(find(functional(), 'Checkbox', '转维信息：查看'), undefined, 'search hides unrelated descendants')
+find(functional(), 'Button', '全选基础信息').props.onClick()
+assert.equal(changes.at(-1)[0], 'bulk')
+assert(changes.at(-1)[1].includes('basicInfo:applyTransfer'), 'parent bulk includes descendants hidden by search')
+find(functional(), 'Button', '全选基本信息').props.onClick()
+assert.deepEqual(changes.at(-1), ['bulk', ['basicInfo:查看', 'basicInfo:编辑'], true], 'leaf bulk affects only its own keys')
 console.log('PASS project role UI: confirmation/cancel/retry/read-only/source locks and compact functional interaction')

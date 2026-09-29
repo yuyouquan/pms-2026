@@ -35,7 +35,7 @@ export function getProjectPermissionCatalog(project: Pick<ProjectItem, 'type' | 
       { id: 'resource-versions', label: '资源版本', hint: '基础信息、里程碑和模型维护随“新建版本”权限生效。', actions: RESOURCE_PERMISSION_ITEMS.filter(item => !['resource:laborEdit', 'resource:nonLaborEdit'].includes(item.key)).map(item => ({ key: item.key, label: item.name })) },
       { id: 'resource-investment', label: '投入配置', actions: RESOURCE_PERMISSION_ITEMS.filter(item => ['resource:laborEdit', 'resource:nonLaborEdit'].includes(item.key)).map(item => ({ key: item.key, label: item.name })) },
     ] },
-    { id: 'permission', label: '权限配置', rows: [{ id: 'permission-roles', label: '角色管理', actions: [{ key: 'projectPermission:manageRoles', label: '管理角色与授权' }] }] },
+    { id: 'permission', label: '团队&权限', rows: [{ id: 'permission-roles', label: '角色管理', actions: [{ key: 'projectPermission:manageRoles', label: '管理角色与授权' }] }] },
   ]
   const allowed = getProjectSpaceModules(project)
   return groups.filter(group => !allowed || allowed.includes(group.id))

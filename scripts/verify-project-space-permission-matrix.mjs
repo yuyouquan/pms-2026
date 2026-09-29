@@ -116,7 +116,7 @@ for (const { key, label } of expectedPermissions) {
 }
 
 const roleViewSource = readRequiredFile(path.join(root, 'src/components/permission/ProjectPermissionConfig.tsx'))
-for (const text of ['ProjectRoleAssignees', 'ProjectFunctionalPermissions', 'CollapsibleSidebarShell', "label: '人员配置'", "label: '功能权限'"]) {
+for (const text of ['ProjectRoleAssignees', 'ProjectFunctionalPermissions', 'ProjectTeamMembers', 'CollapsibleSidebarShell', "'人员列表' : '人员配置'", "label: '功能权限'"]) {
   assertIncludes(roleViewSource, text, 'project permission role view')
 }
 if (roleViewSource.includes("label: '数据权限'")) fail('Project role view must not expose data permissions')

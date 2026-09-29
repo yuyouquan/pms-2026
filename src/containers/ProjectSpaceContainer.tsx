@@ -1,7 +1,6 @@
 'use client'
 
 import { canExecuteProjectTeamWrite, projectTeamScopeToken } from '@/lib/projectTeamMutationGuard'
-import ProjectTeam from '@/components/project-team/ProjectTeam'
 import { useIsProjectTeamReadOnly } from '@/stores/permission'
 import { applyLevel1BusinessTasks, captureLevel1BusinessTasks, getLevel1BusinessScopeKey, selectLevel1BusinessSeedTasks } from '@/lib/level1SharedBusinessTasks'
 
@@ -5688,9 +5687,8 @@ export default function ProjectSpaceContainer() {
     { key: 'tasks', icon: <CheckSquareOutlined />, label: '任务' },
     { key: 'risks', icon: <WarningOutlined />, label: '风险' },
     { key: 'bugs', icon: <BugOutlined />, label: '缺陷' },
-    { key: 'team', icon: <TeamOutlined />, label: '团队' },
     { key: 'docs', icon: <FolderOutlined />, label: '项目文档' },
-    { key: 'permission', icon: <SafetyCertificateOutlined />, label: '权限配置', disabled: !canManageRoles },
+    { key: 'permission', icon: <SafetyCertificateOutlined />, label: '团队&权限' },
   ]
 
   const handleComparePlanVersions = () => {
@@ -5805,7 +5803,6 @@ export default function ProjectSpaceContainer() {
           {transfer.transferView === 'entry' && <TransferEntry {...transferProps} />}
           {transfer.transferView === 'review' && <TransferReview {...transferProps} />}
           {transfer.transferView === 'maintenance-spm-review' && <TransferMaintenanceSpmReview {...transferProps} />}
-          {transfer.transferView === null && projectSpaceModule === 'team' && selectedProject && <ProjectTeam key={selectedProject.id} projectId={_permProjectId} />}
           {transfer.transferView === null && projectSpaceModule === 'resources' && selectedProject && <ProjectResources project={selectedProject} />}
           {(transfer.transferView === null || transfer.transferView === 'apply') && projectSpaceModule === 'basic' && (
             !canViewBasicInfo ? <Empty description="无基础信息查看权限" /> : isTechnicalProject && selectedProject
@@ -5845,10 +5842,10 @@ export default function ProjectSpaceContainer() {
               <Empty description={<span style={{ color: '#9ca3af' }}>需求模块开发中...</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} />
             </Card>
           )}
-          {transfer.transferView === null && projectSpaceModule === 'permission' && (canManageRoles ? (
+          {transfer.transferView === null && projectSpaceModule === 'permission' && (
             <PermissionConfig key={`${selectedProject!.id}:${currentLoginUser}`} project={selectedProject!} projectId={_permProjectId} actor={currentLoginUser} />
-          ) : <Empty description="无项目权限配置权限" />)}
-          {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission', 'resources', 'team'].includes(projectSpaceModule) && (
+          )}
+          {transfer.transferView === null && !['basic', 'plan', 'overview', 'requirements', 'permission', 'resources'].includes(projectSpaceModule) && (
             <Card style={{ borderRadius: 8, textAlign: 'center', padding: '40px 0' }}>
               <Empty description={<span style={{ color: '#9ca3af' }}>{`${menuItems.find(m => m.key === projectSpaceModule)?.label}模块开发中...`}</span>} />
             </Card>

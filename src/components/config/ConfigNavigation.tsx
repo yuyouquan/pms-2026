@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Empty, Input, Menu } from 'antd'
-import { AppstoreOutlined, CalendarOutlined, FileTextOutlined, SearchOutlined, TeamOutlined } from '@ant-design/icons'
+import { AppstoreOutlined, CalendarOutlined, FileTextOutlined, SearchOutlined, TeamOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { CONFIG_MENU_GROUPS, filterConfigMenu, type ConfigMenuTarget } from '@/lib/configNavigation'
 
 interface ConfigNavigationProps {
@@ -13,6 +13,7 @@ interface ConfigNavigationProps {
 }
 
 const GROUP_ICONS = {
+  rolePermission: <SafetyCertificateOutlined />,
   plan: <CalendarOutlined />,
   transfer: <FileTextOutlined />,
   enum: <AppstoreOutlined />,

@@ -46,6 +46,8 @@ import { notifyPublishChanges } from '@/lib/feishu-notify'
 import { cancelDraftRevision } from '@/lib/marketRules'
 import { comparePlanVersions, getNextPlanRevisionVersionNo, getPlanVersionId, type PlanRevisionKind } from '@/lib/planVersioning'
 import EnumConfig from '@/components/config/EnumConfig'
+import RolePermissionTemplateConfig from '@/components/permission/RolePermissionTemplateConfig'
+import { ROLE_TEMPLATE_TYPES, type RoleTemplateProjectType } from '@/types/rolePermissionTemplate'
 import {
   getTemplateSnapshotForProjectType,
   getTemplateTasksForProjectType,
@@ -223,6 +225,7 @@ export default function ConfigContainer() {
   const selectedEnumType = useEnumStore(state => state.selectedType)
   const setSelectedEnumType = useEnumStore(state => state.setSelectedType)
   const selectedHrConfigModule = HR_CONFIG_CENTER_MODULES.includes(hrConfigModule) ? hrConfigModule : 'hrModel'
+  const [selectedRoleTemplateType, setSelectedRoleTemplateType] = useState<RoleTemplateProjectType>(ROLE_TEMPLATE_TYPES[0])
 
   const {
     planLevel, setPlanLevel, selectedPlanType, setSelectedPlanType,
@@ -733,6 +736,7 @@ export default function ConfigContainer() {
   const selectedConfigMenuKey = configTab === 'enum' ? `enum:${selectedEnumType}`
     : configTab === 'transfer' ? `transfer:${transferStore.transferProjectType}:${transferConfigView === 'home' ? 'checklist' : transferConfigView}`
       : configTab === 'hrPipeline' ? `hrPipeline:${selectedHrConfigModule}`
+        : configTab === 'rolePermission' ? `rolePermission:${selectedRoleTemplateType}`
         : `plan:${selectedTemplateType}`
 
   const handleConfigMenuSelect = (target: ConfigMenuTarget, key: string) => {
@@ -751,7 +755,9 @@ export default function ConfigContainer() {
       } else if (target.module === 'transfer') {
         transferStore.setTransferProjectType(target.projectType)
         setTransferConfigView(target.view)
-      } else {
+      } else if (target.module === 'rolePermission') {
+        setSelectedRoleTemplateType(target.projectType)
+      } else if (target.module === 'hrPipeline') {
         setHrConfigModule(target.moduleKey)
       }
       setIsEditMode(false)
@@ -863,6 +869,7 @@ export default function ConfigContainer() {
             {configTab === 'hrPipeline' && <HrConfigContent key={selectedHrConfigModule} moduleKey={selectedHrConfigModule} />}
             {configTab === 'transfer' && <TransferConfig />}
             {configTab === 'enum' && <EnumConfig key={`${currentLoginUser}:${selectedEnumType}`} currentLoginUser={currentLoginUser} />}
+            {configTab === 'rolePermission' && <RolePermissionTemplateConfig key={`${currentLoginUser}:${selectedRoleTemplateType}`} actor={currentLoginUser} projectType={selectedRoleTemplateType} />}
             {configTab === 'plan' && (
             <div className="pms-config-workspace-card">
             {/* Config header */}

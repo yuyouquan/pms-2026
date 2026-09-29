@@ -9,6 +9,7 @@ export function getProjectSpaceModules(project: Pick<ProjectItem, 'projectAttrib
 }
 
 export function resolveProjectSpaceModule(project: Pick<ProjectItem, 'projectAttribute'> & Partial<Pick<ProjectItem, 'type'>> | null, requested: string) {
+  if (requested === 'team') requested = 'permission'
   const allowed = getProjectSpaceModules(project)
   return allowed && !allowed.includes(requested) ? allowed[0] : requested
 }
