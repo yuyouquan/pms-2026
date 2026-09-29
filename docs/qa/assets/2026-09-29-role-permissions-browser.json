@@ -1,0 +1,19 @@
+{
+  "url": "http://localhost:3017/",
+  "finalProductCommit": "bfcbfe2",
+  "consoleErrors": 0,
+  "consoleWarnings": 0,
+  "desktop": {
+    "clientWidth": 1600,
+    "scrollWidth": 1600
+  },
+  "narrow": {
+    "clientWidth": 700,
+    "scrollWidth": 700
+  },
+  "sourceGrantEditEnabled": true,
+  "revokedEditEnabledWithAdditionalLocalRole": false,
+  "templateEditSaved": true,
+  "existingProjectCopyEditAfterTemplateChange": false,
+  "testDataRestored": true
+}

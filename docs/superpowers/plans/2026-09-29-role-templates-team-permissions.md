@@ -43,7 +43,7 @@
 - Expose read-only synced role selectors scoped to the effective project and mutation APIs accepting stable source role identity; expose an atomic project multi-key toggle and an atomic global multi-menu action update. Report exact exported signatures for Task 2.
 - Preserve `hasPermission(user, projectId, key)` / `useHasPermission` call signatures, local direct/department inheritance, and source membership hooks. IPM users resolve only their source role union except builtin superadmin.
 
-- [ ] Write failing behavior tests using the existing TypeScript module loader and real stores. Pin type isolation, code uniqueness, same-name identity isolation, exact once initialization and explicit empty grants:
+- [x] Write failing behavior tests using the existing TypeScript module loader and real stores. Pin type isolation, code uniqueness, same-name identity isolation, exact once initialization and explicit empty grants:
   ```js
   assert.equal(hasPermission(teamUser, projectId, 'basicInfo:编辑'), false);
   grantSyncedRole('basicInfo:编辑');
@@ -53,13 +53,13 @@
   grantLocalRoleOrDepartment('basicInfo:编辑');
   assert.equal(hasPermission(teamUser, projectId, 'basicInfo:编辑'), false);
   ```
-- [ ] Run the new scripts and record expected RED before implementation.
-- [ ] Implement source identities using source binding plus IPM role code. Keep source role definitions separate from mutable local names. Add four mock template sets, all-view defaults, multi-role and empty/unmapped roles, employee ID dedup and same-name/different-ID examples. Reuse existing demo identities where possible.
-- [ ] Persist templates and project copies with schema validation and atomic storage failure handling; normalize permitted catalog keys by project type/attribute. Local legacy fixed roles become editable local roles without resetting their saved users/departments/grants or allowing old fixed-role sync to recreate deleted roles.
-- [ ] Implement authority ordering and operation-key guards. Revalidate current actor/project at mutation time. A basic-info edit grant never releases L1 maintenance, MR, resource or transfer writes; existing responsibility conditions remain in force. Test source removal/rebind, parent scope, stale callbacks, multi-role union, superadmin and denied mutations.
-- [ ] Add atomic bulk mutation APIs and prove no partial store/storage update when any target is invalid or storage fails. Verify readonly/self-revoke cases. Keep global menu view dependencies normalized.
-- [ ] Run focused affected scripts and `npx tsc --noEmit`; full regression once before commit. Record integration failures owned by Task 2 explicitly rather than weakening assertions.
-- [ ] Self-review, commit domain work and write report including exact APIs and RED/GREEN evidence.
+- [x] Run the new scripts and record expected RED before implementation.
+- [x] Implement source identities using source binding plus IPM role code. Keep source role definitions separate from mutable local names. Add four mock template sets, all-view defaults, multi-role and empty/unmapped roles, employee ID dedup and same-name/different-ID examples. Reuse existing demo identities where possible.
+- [x] Persist templates and project copies with schema validation and atomic storage failure handling; normalize permitted catalog keys by project type/attribute. Local legacy fixed roles become editable local roles without resetting their saved users/departments/grants or allowing old fixed-role sync to recreate deleted roles.
+- [x] Implement authority ordering and operation-key guards. Revalidate current actor/project at mutation time. A basic-info edit grant never releases L1 maintenance, MR, resource or transfer writes; existing responsibility conditions remain in force. Test source removal/rebind, parent scope, stale callbacks, multi-role union, superadmin and denied mutations.
+- [x] Add atomic bulk mutation APIs and prove no partial store/storage update when any target is invalid or storage fails. Verify readonly/self-revoke cases. Keep global menu view dependencies normalized.
+- [x] Run focused affected scripts and `npx tsc --noEmit`; full regression once before commit. Record integration failures owned by Task 2 explicitly rather than weakening assertions.
+- [x] Self-review, commit domain work and write report including exact APIs and RED/GREEN evidence.
 
 ### Task 2: Configuration and unified permission UI
 
@@ -75,23 +75,27 @@
 - Extend `ProjectFunctionalPermissions` with `onBulkChange(keys: string[], enabled: boolean)` alongside `onChange(key, enabled)`. Deduplicate full catalog subtree keys, independent of search.
 - All table/modal mutations use the atomic result and render a retryable error on failure; actor/project changes invalidate old callbacks.
 
-- [ ] Write failing UI behavior tests for four nav entries, source/local role identity, first functional tab, source readonly people, parent/leaf bulk scope under search, denied/stale callbacks, and template modal reuse. Run and capture RED.
-- [ ] Add template navigation and mapping CRUD table in order 角色名称 / PMS角色编码 / IPM角色编码 / 操作. Three fields required/trimmed, codes unique per type; first name already means PMS role name. 配置权限 opens a PMS-styled modal with the shared permission component and immediate saving. Gate view and edit separately.
-- [ ] Merge team navigation, resolve old `team` state to `permission`, and let members read the unified page. Prefer source roles in the narrow tree, tag source identity, protect source deletion. Local same-name roles remain separate/selectable/editable/deletable. Default functional tab on entry/role changes/new role.
-- [ ] Render source members with the exact columns `No. / 成员名称 / 工号 / 角色 / 价值交付 / 直属部门 / 人员邮箱`; dedup by employee ID, preserve same-name different IDs, search, name filter, name/employee sorting, empty states. Preserve local personnel/departments modal behavior; give ProjectRoleAssignees a disabled state for readonly visitors so configuration controls and any open picker become unavailable when management is revoked.
-- [ ] Add parent and leaf 全选/取消权限 controls to project/template/global functional trees. Keep fold action separate, show full-subtree scope tooltip under search, disable readonly/superadmin/invalid targets. Use one atomic store operation per click:
+- [x] Write failing UI behavior tests for four nav entries, source/local role identity, first functional tab, source readonly people, parent/leaf bulk scope under search, denied/stale callbacks, and template modal reuse. Run and capture RED.
+- [x] Add template navigation and mapping CRUD table in order 角色名称 / PMS角色编码 / IPM角色编码 / 操作. Three fields required/trimmed, codes unique per type; first name already means PMS role name. 配置权限 opens a PMS-styled modal with the shared permission component and immediate saving. Gate view and edit separately.
+- [x] Merge team navigation, resolve old `team` state to `permission`, and let members read the unified page. Prefer source roles in the narrow tree, tag source identity, protect source deletion. Local same-name roles remain separate/selectable/editable/deletable. Default functional tab on entry/role changes/new role.
+- [x] Render source members with the exact columns `No. / 成员名称 / 工号 / 角色 / 价值交付 / 直属部门 / 人员邮箱`; dedup by employee ID, preserve same-name different IDs, search, name filter, name/employee sorting, empty states. Preserve local personnel/departments modal behavior; give ProjectRoleAssignees a disabled state for readonly visitors so configuration controls and any open picker become unavailable when management is revoked.
+- [x] Add parent and leaf 全选/取消权限 controls to project/template/global functional trees. Keep fold action separate, show full-subtree scope tooltip under search, disable readonly/superadmin/invalid targets. Use one atomic store operation per click:
   ```ts
   const keys = [...new Set(group.rows.flatMap(row => row.actions.map(action => action.key)))];
   onBulkChange(keys, enabled);
   ```
-- [ ] Run focused scripts and typecheck, fix actual behavior rather than relax tests, self-review and commit. Write report with screenshot-independent functional evidence; root performs live desktop/narrow browser checks after build.
+- [x] Run focused scripts and typecheck, fix actual behavior rather than relax tests, self-review and commit. Write report with screenshot-independent functional evidence; root performs live desktop/narrow browser checks after build.
 
 ### Task 3: End-to-end verification and feature handoff
 
 **Files:** `docs/qa/2026-09-29-role-templates-team-permissions.md` and related QA assets; product fixes go through their owning task implementer.
 
-- [ ] Run `npm run verify:full-regression`, `npx tsc --noEmit`, `npm run build`; fix failures and repeat only affected checks plus final required gate when code changes.
-- [ ] Restart the owned 3017 local preview on the new build. Use browser UI to configure templates, inspect all four types, verify initial source copies, switch source/local tabs, inspect members, configure people/departments, test parent/leaf bulk and search behavior, and read back after reload.
-- [ ] Switch demo users and exercise actual project view/edit/export operations, revoked permissions, source-only ceilings, readonly unified page and superadmin. Inspect runtime error/warn logs. Check desktop and narrow layouts, dialogs and long personnel fields.
-- [ ] Obtain broad final diff review; route findings to implementation owner, fix and rerun covering checks. Record exact test counts and limitations in QA doc.
-- [ ] Commit final QA evidence, push `codex/feature-permission-config`, and verify local HEAD equals remote ref. Keep local preview available; do not merge or deploy production.
+- [x] Run `npm run verify:full-regression`, `npx tsc --noEmit`, `npm run build`; fix failures and repeat only affected checks plus final required gate when code changes.
+- [x] Restart the owned 3017 local preview on the new build. Use browser UI to configure templates, inspect all four types, verify initial source copies, switch source/local tabs, inspect members, configure people/departments, test parent/leaf bulk and search behavior, and read back after reload.
+- [x] Switch demo users and exercise actual project view/edit/export operations, revoked permissions, source-only ceilings, readonly unified page and superadmin. Inspect runtime error/warn logs. Check desktop and narrow layouts, dialogs and long personnel fields.
+- [x] Obtain broad final diff review; route findings to implementation owner, fix and rerun covering checks. Record exact test counts and limitations in QA doc.
+- [x] Commit final QA evidence, push `codex/feature-permission-config`, and verify local HEAD equals remote ref. Keep local preview available; do not merge or deploy production.
+
+## Completion evidence
+
+Implementation and scoped fix review approved through bfcbfe2; final test harness correction 910bce2. See docs/qa/2026-09-29-role-templates-team-permissions.md for full-run counts, focused retests, live browser scope and limitations. User requested feature push only; no additional integration approval or production deployment is required.
