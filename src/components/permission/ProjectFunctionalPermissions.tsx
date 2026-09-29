@@ -5,7 +5,7 @@ import { Button, Checkbox, Empty, Input } from 'antd'
 import { DownOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons'
 import type { ProjectItem } from '@/types/app'
 import { getProjectPermissionCatalog } from '@/components/permission/projectPermissionCatalog'
-import styles from '@/components/permission/ProjectPermissionConfig.module.css'
+import styles from '@/components/permission-center/FunctionalPermissionsTable.module.css'
 import shared from '@/components/permission-center/PermissionCenter.module.css'
 
 interface Props {

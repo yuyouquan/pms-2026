@@ -23,15 +23,9 @@
 .matrixToolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .matrixToolbar :global(.ant-input-affix-wrapper) { max-width: 260px; }
 .matrixScroll { flex: 1; min-height: 0; overflow: auto; }
-.matrix { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; min-width: 660px; }
-.matrix th, .matrix td { border-bottom: 1px solid #edf0f2; padding: 9px 10px; text-align: left; vertical-align: top; }
-.matrix thead th { position: sticky; top: 0; z-index: 2; background: #f7f7fa; color: #535a66; font-weight: 600; white-space: nowrap; }
-.matrix tbody th { font-weight: 500; }
-.matrix .parentCell { background: #fafafe; border-right: 1px solid #edf0f2; min-width: 105px; }
-.matrix .leafCell { min-width: 120px; }
-.matrix .actions { gap: 6px 14px; }
-.matrix .actions :global(.ant-checkbox-wrapper) { margin-inline-start: 0; white-space: nowrap; }
-.sourceCell { min-width: 120px; color: #535a66; }
+.functionalTable { --permission-menu-width: 240px; }
+.functionalMenuLabel { display: block; }
+.functionalSources { margin-top: 5px; color: #717680; font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
 .invalidPolicy { margin-top: 5px; color: #b44520; font-size: 12px; }
 .personList { display: grid; gap: 2px; overflow-y: auto; }
 .personItem { width: 100%; border: 0; background: transparent; text-align: left; border-radius: 6px; padding: 7px 9px; color: inherit; cursor: pointer; }

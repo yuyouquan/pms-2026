@@ -17,7 +17,7 @@ function load(file) {
     '@ant-design/icons': { DownOutlined: 'DownOutlined', RightOutlined: 'RightOutlined', SearchOutlined: 'SearchOutlined' },
     '@/components/permission-center/AssigneePickerModal': { __esModule: true, default: 'Picker' },
     '@/components/permission-center/PermissionCenter.module.css': style,
-    '@/components/permission/ProjectPermissionConfig.module.css': style,
+    '@/components/permission-center/FunctionalPermissionsTable.module.css': style,
     '@/components/permission/projectPermissionCatalog': loadTypeScriptModule(process.cwd(), 'src/components/permission/projectPermissionCatalog.ts'),
   }
   const compiled = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText
