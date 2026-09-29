@@ -57,10 +57,8 @@ export default function ProjectFunctionalPermissions({ project, grants, disabled
               <th scope="row"><span className={styles.leafLabel}>{controls(row.label, row.actions.map(action => action.key))}<span>{row.label}</span></span></th>
               <td><div className={styles.actions}>{row.actions.map(action => <Checkbox key={action.key} checked={!!grants[action.key]} disabled={disabled}
                 aria-label={`${row.label}：${action.label}`} onChange={event => onChange(action.key, event.target.checked)}>{action.label}</Checkbox>)}</div>
-                {row.hint && <div className={shared.muted}>{row.hint}</div>}
               </td>
             </tr>)}
-            {expanded && group.hint && <tr><td colSpan={2} className={styles.hint}>{group.hint}</td></tr>}
           </Fragment>
         })}</tbody>
       </table> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到功能" />}
