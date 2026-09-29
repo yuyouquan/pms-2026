@@ -1,5 +1,5 @@
 import { validateNonLaborSubjects } from '@/lib/nonLaborInvestment'
-import { hasGlobalPermission } from '@/stores/permission'
+import { hasGlobalMenuPermission, HR_CONFIG_PERMISSION_MENUS } from '@/lib/globalMenuPermissions'
 import { useProjectStore } from '@/stores/project'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
@@ -21,7 +21,7 @@ function inheritModelVersionStatus(records: ConfigRecord[], record: ConfigRecord
   return { ...record, enabled: (group[0] ?? record).enabled !== false }
 }
 
-export const canEditHrConfig = (moduleKey: ConfigModuleKey) => !['hrModel', 'nonLaborSubject', 'feeRate'].includes(moduleKey) || hasGlobalPermission(useProjectStore.getState().currentLoginUser, moduleKey !== 'nonLaborSubject' ? 'configCenter:hrModelEdit' : 'configCenter:nonLaborSubjectEdit')
+export const canEditHrConfig = (moduleKey: ConfigModuleKey) => hasGlobalMenuPermission(useProjectStore.getState().currentLoginUser, HR_CONFIG_PERMISSION_MENUS[moduleKey], 'edit')
 
 /* ── State / Actions interfaces ────────────────────────────────────── */
 
@@ -141,7 +141,7 @@ export const useHrConfigStore = create<HrConfigState & HrConfigActions>()(
       }),
 
       importRecords: (moduleKey, records) => set((s) => {
-        if (!canEditHrConfig(moduleKey) || moduleKey === 'feeRate') return s
+        if (!hasGlobalMenuPermission(useProjectStore.getState().currentLoginUser, HR_CONFIG_PERMISSION_MENUS[moduleKey], 'import') || moduleKey === 'feeRate') return s
         const combined = [...(s.data[moduleKey] ?? [])]
         records.forEach(record => {
           const normalized = moduleKey === 'nonLaborSubject'

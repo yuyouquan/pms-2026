@@ -1,17 +1,18 @@
 'use client'
+import { canExecuteProjectTeamWrite, projectTeamScopeToken, canImportTechnicalDraft, canImportTechnicalRevision } from '@/lib/projectTeamMutationGuard'
 import { getTechnicalLevel1MaintainerUsers } from '@/lib/projectSpaceLevel1Rules'
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   Alert, App, Avatar, Badge, Button, Card, DatePicker, Dropdown, Empty, Input, Modal, Popconfirm, Progress,
-  Select, Space, Table, Tag, Tooltip, Typography,
+  Select, Space, Table, Tag, Tooltip, Typography, Upload,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import type { MenuProps } from 'antd'
 import {
   DeleteOutlined, DownloadOutlined, HistoryOutlined, PlusOutlined, SaveOutlined, ShareAltOutlined,
   EditOutlined, FilterOutlined, MinusSquareOutlined, PlusSquareOutlined, SettingOutlined,
-  StopOutlined,
+  StopOutlined, UploadOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import * as XLSX from 'xlsx'
@@ -383,7 +384,7 @@ export default function TechnicalPlanModule({
   const tab = tabs.find(item => item.key === activeKey) || tabs[0]
   const scope = tab?.scope || { kind: 'tdt' as const, parentProjectId: projectId }
   const instance = plansByKey[getTechnicalPlanKey(scope)]
-  const canViewTechnicalDraft = canViewTechnicalPlan && canEdit
+  const canViewTechnicalDraft = canViewTechnicalPlan && (canEdit || canImportTechnicalDraft(currentLoginUser || '', projectId))
   const visibleVersions = useMemo(
     () => canViewTechnicalPlan
       ? selectVisibleTechnicalPlanVersions(instance?.versions || [], canViewTechnicalDraft)
@@ -472,7 +473,12 @@ export default function TechnicalPlanModule({
     user: currentLoginUser || '',
   })
 
+  const sourceScopeToken = projectTeamScopeToken(projectId)
+  const canImportCurrentRevision = Boolean(currentVersion && canImportTechnicalRevision(currentLoginUser || '', projectId, scope, currentVersion.id, sourceScopeToken))
+  const canMutateCurrentProject = (operationKey?: string) => canExecuteProjectTeamWrite(currentLoginUser || '', projectId, useProjectStore.getState(), projectId, operationKey, sourceScopeToken)
+
   const resolveLatestSubprojectActionContext = (opening: TechnicalSubprojectTransferScopeToken) => {
+    if (!canMutateCurrentProject()) return null
     const latestProject = useProjectStore.getState().selectedProject
     if (!latestProject || latestProject.id !== opening.projectId) return null
     const latestPermissionState = usePermissionStore.getState()
@@ -533,6 +539,7 @@ export default function TechnicalPlanModule({
   }, [activeKey])
 
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
+    if (!canMutateCurrentProject()) return
     if (!tab || !canEditTechnicalPlan) return
     const result = createRevision({ scope: tab.scope, templateKind: tab.templateKind, maxDepth, templateTasks, revisionKind, subproject: tab.subproject })
     if (!result.ok) {
@@ -547,6 +554,7 @@ export default function TechnicalPlanModule({
   }
 
   const handlePublish = () => {
+    if (!canMutateCurrentProject()) return
     if (!canPublish || !canMaintain) return
     const invalidByTaskId = tab?.templateKind === 'subproject'
       ? subprojectValidation.byTaskId
@@ -576,6 +584,7 @@ export default function TechnicalPlanModule({
   }
 
   const updateTask = (id: string, patch: Partial<TechnicalTemplateTask>) => {
+    if (!canMutateCurrentProject()) return
     const fields = Object.keys(patch)
     const task = tasks.find(item => item.id === id)
     if (!task || fields.some(field => !['planStartDate', 'planEndDate', 'actualStartDate', 'actualEndDate'].includes(field))) return
@@ -696,6 +705,7 @@ export default function TechnicalPlanModule({
   ), 0)
 
   const exportHorizontalPlan = () => {
+    if (!canMutateCurrentProject('plan:导出')) return
     const groups = buildPlanHorizontalStageGroups(
       horizontalHeaderTasks.map(task => ({ ...task })),
     )
@@ -729,6 +739,7 @@ export default function TechnicalPlanModule({
   }
 
   const exportPlan = (mode: 'current' | 'all') => {
+    if (!canMutateCurrentProject('plan:导出')) return
     if (!canExport) { message.error('无计划导出权限'); return }
     if (mode === 'current' && viewMode === 'horizontal') {
       exportHorizontalPlan()
@@ -739,13 +750,18 @@ export default function TechnicalPlanModule({
     exportSheet(exportRows, exportColumns, `${tab?.label || '技术计划'}_${currentVersion?.versionNo || ''}_${exportTimestamp()}.xlsx`, '计划')
   }
   const importWorkbook = async (file: File) => {
-    if (!canImport || !canMaintain) { message.error(!canImport ? '无计划导入权限' : '仅修订中版本可导入'); return false }
+    const importVersionId = currentVersion?.id || ''
+    const importTabId = activeKey
+    const canCommitImport = () => activeKeyRef.current === importTabId && canImportTechnicalRevision(currentLoginUser || '', projectId, scope, importVersionId, sourceScopeToken)
+    if (!canImportCurrentRevision || !canCommitImport()) { message.error('无导入权限，或当前职责、修订版本已变更'); return false }
     try {
       const data = await file.arrayBuffer()
+      if (!canCommitImport()) return false
       const workbook = XLSX.read(data)
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[workbook.SheetNames[0]])
       const imported = parseTechnicalPlanImportRows(rows, tasks.length ? tasks : templateTasks)
       validateTechnicalTemplateDepth(tab?.templateKind || 'tdt', imported)
+      if (!canCommitImport()) return false
       const result = updateCurrentTasks(scope, imported, maxDepth)
       if (!result.ok) throw new Error('maxDepth')
       message.success('计划已导入')
@@ -781,6 +797,7 @@ export default function TechnicalPlanModule({
   }
 
   const handleShare = () => {
+    if (!canMutateCurrentProject('plan:一级计划-分享')) return
     if (!canViewTechnicalPlan || !canShareTechnicalPlan) return
     if (!publishedVersions.length) { message.warning('暂无已发布版本可分享'); return }
     const query = new URLSearchParams({ technical: '1', kind: scope.kind, projectId: scope.parentProjectId })
@@ -875,7 +892,7 @@ export default function TechnicalPlanModule({
                 <Tooltip title={!canPublish ? '无计划发布权限' : !canMaintain ? readOnlyReason : '发布'}>
                   <Button type="primary" size="small" icon={<SaveOutlined />} disabled={!canPublish || !canMaintain} onClick={handlePublish} aria-label="发布" />
                 </Tooltip>
-                <Popconfirm title="确认取消当前修订？" onConfirm={() => { if (cancelRevision(scope).ok) message.success('已取消修订') }}>
+                <Popconfirm title="确认取消当前修订？" onConfirm={() => { if (!canMutateCurrentProject()) return; if (cancelRevision(scope).ok) message.success('已取消修订') }}>
                   <Tooltip title={!canMaintain ? readOnlyReason || '无计划编辑权限' : '取消修订'}>
                     <Button danger size="small" icon={<StopOutlined />} disabled={!canMaintain} aria-label="取消修订" />
                   </Tooltip>
@@ -967,6 +984,11 @@ export default function TechnicalPlanModule({
                 })}
               </div>
               </FloatingFilterPanel>
+            <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={importWorkbook} disabled={!canImportCurrentRevision}>
+              <Tooltip title={canImportCurrentRevision ? '导入当前修订计划' : '导入需要功能权限、技术负责人职责和修订中版本'}>
+                <Button icon={<UploadOutlined />} disabled={!canImportCurrentRevision} aria-label="导入计划" />
+              </Tooltip>
+            </Upload>
             <Dropdown
               menu={{ items: [{ key: 'current', label: '导出当前视图' }, { key: 'all', label: '导出全部' }], onClick: ({ key }) => exportPlan(key as 'current' | 'all') }}
               disabled={!canExport || !tasks.length}
@@ -1059,6 +1081,7 @@ export default function TechnicalPlanModule({
                 ? validateTechnicalSubprojectDates(next).valid
                 : validateTechnicalTdtMilestoneDates(next).valid
               if (!valid) { message.error('拖动后的日期不符合计划规则'); return false }
+              if (!canMutateCurrentProject()) return false
               return updateCurrentTasks(scope, next, maxDepth).ok
             }}
           />

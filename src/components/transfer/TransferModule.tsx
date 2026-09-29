@@ -1,5 +1,6 @@
 'use client'
 
+import { canExecuteProjectTeamWrite } from '@/lib/projectTeamMutationGuard'
 import { useEffect, useState, type Key, type ReactNode } from 'react'
 import dayjs from 'dayjs'
 import { Alert, Anchor, Avatar, Badge, Button, Card, Col, Collapse, DatePicker, Descriptions, Empty, Form, Image, Input, Modal, Popconfirm, Popover, Progress, Row, Segmented, Select, Space, Table, Tabs, Tag, Timeline, Tooltip, message } from 'antd'
@@ -10,7 +11,7 @@ import { matchesTransferProject, matchesTransferActor, canEnterTransferItem, can
 import { getTransferProjectType, getTransferMember, getCurrentTransferTemplates } from '@/lib/transferConfig'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
-import { usePermissionStore } from '@/stores/permission'
+import { hasPermission, resolvePermissionProjectId, usePermissionStore } from '@/stores/permission'
 import { getTransferAiCheckResult } from '@/lib/transferAiCheck'
 import { getInitialTransferTeam } from '@/lib/transferProjectTeam'
 import type { ColumnsType } from 'antd/es/table'
@@ -25,6 +26,7 @@ export interface TransferModuleProps {
   // Project context
   selectedProject: { id: string; name: string; [key: string]: any } | null
   currentUser: { id: string; name: string; [key: string]: any }
+  sourceScopeToken?: string
   canApplyTransfer?: boolean
   canViewTransfer?: boolean
 
@@ -146,7 +148,13 @@ const history = (appId: string, actor: TransferModuleProps['currentUser'], actio
 const getApp = (props: TransferModuleProps) => props.transferApplications.find(app => app.id === props.selectedTransferAppId && matchesTransferProject(app, props.selectedProject))
 const freshApp = (props: TransferModuleProps, id = props.selectedTransferAppId) => useTransferStore.getState().transferApplications.find(app => app.id === id && matchesTransferProject(app, props.selectedProject))
 const scopeKey = (props: TransferModuleProps) => `${props.currentUser.id}:${props.currentUser.name}:${props.selectedProject?.id}:${props.selectedTransferAppId}:${props.canViewTransfer}:${props.canApplyTransfer}`
-const canView = (props: TransferModuleProps) => Boolean(props.canViewTransfer)
+const isLiveTransferContext = (props: TransferModuleProps) => {
+  const live = useProjectStore.getState()
+  return live.currentLoginUser === props.currentUser.name && live.selectedProject?.id === props.selectedProject?.id
+}
+const canWrite = (props: TransferModuleProps, operationKey?: string) => canExecuteProjectTeamWrite(props.currentUser.name, props.selectedProject?.id, useProjectStore.getState(), props.selectedProject?.id, operationKey, props.sourceScopeToken)
+const canView = (props: TransferModuleProps) => Boolean(props.canViewTransfer) && isLiveTransferContext(props)
+
 function LongText({ value, lines = 3 }: { value?: string; lines?: number }) {
   if (!value?.trim()) return <span>-</span>
   const content = <Space orientation="vertical" size={8} style={{ maxWidth: 560 }}><div style={{ maxHeight: '50vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: 1.7 }}>{value}</div><Button type="text" size="small" icon={<CopyOutlined />} aria-label="复制完整内容" onClick={async event => { event.stopPropagation(); try { await navigator.clipboard.writeText(value); message.success('已复制') } catch { message.error('复制失败，请手动选中文本复制') } }}>复制</Button></Space>
@@ -201,6 +209,7 @@ function materialColumns(kind: 'checklist' | 'review', options: { view?: 'entry'
   ]
 }
 function recordUpdate(props: TransferModuleProps, appId: string, ids: string[], update: (item: TransferItem) => TransferItem, action: string, detail: string) {
+  if (!canWrite(props) || !freshApp(props, appId)) return
   useTransferStore.setState(state => {
     const checklist = state.tmChecklistItems.map(item => item.applicationId === appId && ids.includes(item.id) ? update(item) as CheckListItem : item)
     const elements = state.tmReviewElements.map(item => item.applicationId === appId && ids.includes(item.id) ? update(item) as ReviewElement : item)
@@ -208,7 +217,7 @@ function recordUpdate(props: TransferModuleProps, appId: string, ids: string[], 
   })
 }
 function canOpenItems(props: TransferModuleProps, app: TransferApplication, side: 'entry' | 'review') {
-  if (!canView(props) || app.status !== 'in_progress' || app.pipeline.maintenanceSpmReview === 'success') return false
+  if (!canView(props) || !canWrite(props) || app.status !== 'in_progress' || app.pipeline.maintenanceSpmReview === 'success') return false
   const items = [...props.tmChecklistItems, ...props.tmReviewElements].filter(item => item.applicationId === app.id)
   if (side === 'review' && items.some(item => canAppendTransferRoleLegacy(app, item.responsibleRole, items, props.currentUser, props.selectedProject, canView(props)))) return true
   return items.some(item => {
@@ -284,7 +293,7 @@ export function TransferApply(props: TransferModuleProps) {
     const state = useTransferStore.getState()
     const currentConfig = state.tmTeamConfigs[projectType]
     const predecessor = state.tmReopenAppId ? state.transferApplications.find(app => app.id === state.tmReopenAppId) : undefined
-    if (!props.selectedProject || !props.canApplyTransfer || !canView(props)) { message.warning('暂无申请权限'); return }
+    if (!props.selectedProject || !props.canApplyTransfer || !canView(props) || !canWrite(props, 'basicInfo:applyTransfer') || !hasPermission(props.currentUser.name, resolvePermissionProjectId(props.selectedProject.id, props.selectedProject.parentProjectId), 'basicInfo:applyTransfer')) { message.warning('暂无申请权限'); return }
     if (predecessor && (!matchesTransferProject(predecessor, props.selectedProject) || predecessor.status !== 'failed' || predecessor.reopenedAsId || !canManageTransfer(predecessor, props.currentUser, props.selectedProject, Boolean(props.canApplyTransfer)))) { message.warning('当前不可重新发起该申请'); return }
     if (state.transferApplications.some(app => matchesTransferProject(app, props.selectedProject) && ['in_progress', 'completed'].includes(app.status))) { message.warning('当前项目已有进行中或已完成的转维申请'); return }
     if (!state.tmApplyDate) { message.warning('请选择计划评审日期'); return }
@@ -476,7 +485,7 @@ function TransferItems(props: TransferModuleProps & { side: 'entry' | 'review' }
   const pendingReviewCount = currentItems.filter(item => 'standard' in item && (item.entryStatus !== 'entered' || item.aiCheckStatus !== 'passed')).length
   const submitHint = canSubmit ? `「${effectiveRole}」角色所有录入项已通过AI检查，可以提交审核` : pendingChecklistCount + pendingReviewCount > 0 ? `还有未完成项：CheckList ${pendingChecklistCount} 项${isTos ? '' : `、评审要素 ${pendingReviewCount} 项`}（需录入并通过AI检查）` : '本角色当前已提交审核或已完成'
   const roleLegacyAllowed = side === 'review' && canAppendTransferRoleLegacy(app, effectiveRole, items, props.currentUser, props.selectedProject, canView(props))
-  const roleReviewAllowed = side === 'review' && ownsRole && app.pipeline.maintenanceReview === 'in_progress' && roleItems.every(item => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed' && ['reviewing', 'passed', 'rejected'].includes(item.reviewStatus)) && roleItems.some(item => item.reviewStatus !== 'passed')
+  const roleReviewAllowed = canWrite(props) && side === 'review' && ownsRole && app.pipeline.maintenanceReview === 'in_progress' && roleItems.every(item => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed' && ['reviewing', 'passed', 'rejected'].includes(item.reviewStatus)) && roleItems.some(item => item.reviewStatus !== 'passed')
   const open = (mode: PendingItemAction['mode'], records: TransferItem[], targetRole?: string) => {
     if (!records.length) return
     setPending({ scope: key, appId: app.id, ids: records.map(item => item.id), mode, role: targetRole })
@@ -486,7 +495,7 @@ function TransferItems(props: TransferModuleProps & { side: 'entry' | 'review' }
     const target = freshApp(props, pending?.appId)
     const state = useTransferStore.getState()
     const rows = [...state.tmChecklistItems, ...state.tmReviewElements].filter(item => item.applicationId === target?.id && pending?.ids.includes(item.id))
-    if (!canView(props) || !pending || pending.scope !== key || !target || target.status !== 'in_progress' || rows.length !== pending.ids.length) { setPending(null); message.warning('当前用户、任务或流程阶段已变更，请重新选择'); return null }
+    if (!canView(props) || !canWrite(props) || !pending || pending.scope !== key || !target || target.status !== 'in_progress' || rows.length !== pending.ids.length) { setPending(null); message.warning('当前用户、任务或流程阶段已变更，请重新选择'); return null }
     return { target, state, rows }
   }
   const saveEntry = (draft: boolean) => {
@@ -595,7 +604,7 @@ function TransferItems(props: TransferModuleProps & { side: 'entry' | 'review' }
     </div>}
     {side === 'entry' && (blockTasks.length > 0 || currentItems.some(item => item.reviewStatus === 'rejected' || item.reviewComment)) && <Collapse key={`rejection-${effectiveRole}`} className="pms-solid-surface" style={{ marginBottom: 16 }} defaultActiveKey={[]} items={[{ key: 'rejection', label: <Space wrap><span>「{effectiveRole}」角色维护审核不通过</span><Tag color="error">Block 未关闭 {blockTasks.length}</Tag><span style={{ color: 'var(--pms-text-secondary)' }}>请按评审意见修改资料后重新提交审核</span></Space>, children: <><div style={{ fontWeight: 500, marginBottom: 8 }}>评审意见</div>{!currentItems.some(item => item.reviewComment) && <div style={{ marginBottom: 12 }}>（未填写）</div>}<Space orientation="vertical" style={{ width: '100%', marginBottom: 12 }}>{Array.from(new Set(currentItems.map(item => item.reviewComment).filter(Boolean))).map(comment => <Alert key={comment} type="warning" message={comment} />)}</Space><Table rowKey="id" pagination={false} size="small" dataSource={blockTasks} columns={[{ title: '问题描述', dataIndex: 'description' }, { title: '解决方案', dataIndex: 'resolution' }, { title: '责任人', dataIndex: 'responsiblePerson' }, { title: '部门', dataIndex: 'department' }, { title: '截止日期', dataIndex: 'deadline' }]} /></> }]} />}
     {hasDelegated && <Collapse className="pms-solid-surface" style={{ marginBottom: 16 }} defaultActiveKey={['delegated-to-me']} items={[{ key: 'delegated-to-me', label: <span style={{ fontWeight: 600 }}>委派给我的 ({delegatedItems.length} 项)</span>, children: <>{(['checklist', ...(!isTos ? ['review'] : [])] as ('checklist' | 'review')[]).map(kind => { const rows = delegatedItems.filter(item => kind === 'checklist' ? 'checkItem' in item : 'standard' in item); return rows.length > 0 && <div key={kind} style={{ marginBottom: 16 }}><div style={{ fontWeight: 500, marginBottom: 8 }}>{kind === 'checklist' ? 'CheckList' : '评审要素'} ({rows.length})</div><Table<TransferItem> className="pms-table" rowKey="id" size="small" pagination={false} scroll={{ x: side === 'entry' ? 1820 : 1620 }} columns={columns(kind)} dataSource={rows} /></div> })}</> }]} />}
-    {effectiveRole && <Card className="pms-transfer-material-card"><Tabs tabBarExtraContent={side === 'entry' ? <Space wrap>{selectionActions}{ownsRole && <Tooltip title={submitHint}><Button type="primary" size="small" icon={<CheckCircleOutlined />} disabled={!canSubmit} onClick={() => open('submit', roleItems, effectiveRole)}>提交{effectiveRole}审核</Button></Tooltip>}<TransferEntryExchange key={`${key}:${effectiveRole}:${effectiveTab}`} items={displayed} title={`${app.projectName}_${effectiveRole}_${effectiveTab === 'checklist' ? 'CheckList' : '评审要素'}`} canEdit={eligible} onImport={changes => {
+    {effectiveRole && <Card className="pms-transfer-material-card"><Tabs tabBarExtraContent={side === 'entry' ? <Space wrap>{selectionActions}{ownsRole && <Tooltip title={submitHint}><Button type="primary" size="small" icon={<CheckCircleOutlined />} disabled={!canSubmit} onClick={() => open('submit', roleItems, effectiveRole)}>提交{effectiveRole}审核</Button></Tooltip>}<TransferEntryExchange key={`${key}:${effectiveRole}:${effectiveTab}`} items={displayed} title={`${app.projectName}_${effectiveRole}_${effectiveTab === 'checklist' ? 'CheckList' : '评审要素'}`} canEdit={eligible} canExport={() => canWrite(props)} onImport={changes => {
         const target = freshApp(props, app.id)
         const state = useTransferStore.getState()
         const current = [...state.tmChecklistItems, ...state.tmReviewElements].filter(item => item.applicationId === app.id && item.responsibleRole === effectiveRole)

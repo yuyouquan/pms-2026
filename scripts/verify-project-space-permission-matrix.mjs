@@ -115,15 +115,11 @@ for (const { key, label } of expectedPermissions) {
   assertIncludes(constantsSource, label, 'PROJECT_PERMISSION_GROUPS')
 }
 
-for (const text of [
-  '角色权限配置',
-  'activeKey={selectedPermissionRole}',
-  'items={roles.map(role => ({ key: role.name, label: role.name }))}',
-  'PROJECT_PERMISSION_GROUPS.map(group => (',
-  'colSpan={maxProjectPermissionColumns - group.permissions.length}',
-]) {
-  assertIncludes(moduleSource, text, 'project permission role-tab layout')
+const roleViewSource = readRequiredFile(path.join(root, 'src/components/permission/ProjectPermissionConfig.tsx'))
+for (const text of ['ProjectRoleAssignees', 'ProjectFunctionalPermissions', 'ProjectTeamMembers', 'CollapsibleSidebarShell', "'人员列表' : '人员配置'", "label: '功能权限'"]) {
+  assertIncludes(roleViewSource, text, 'project permission role view')
 }
+if (roleViewSource.includes("label: '数据权限'")) fail('Project role view must not expose data permissions')
 
 for (const [role, enabledKeys] of Object.entries(expectedByRole)) {
   const roleBlock = extractRoleBlock(storeSource, role)

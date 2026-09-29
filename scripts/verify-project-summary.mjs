@@ -329,12 +329,12 @@ registerAssertion('workbench summary keeps option projects and plan tasks indepe
 
   assert.match(
     workspaceSource,
-    /const visibleProjects\s*=\s*useMemo\(\(\) => filterFormalRegistryProjects\(projects\), \[projects\]\)/,
+    /const formalProjects\s*=\s*useMemo\(\(\) => filterFormalRegistryProjects\(projects\), \[projects\]\)/,
     'summary options start from formal registry projects before view filters',
   )
   assert.match(
     workspaceSource,
-    /const categoryBaseProjects[\s\S]{0,500}matchesProjectTypeFilter/,
+    /const categoryBaseProjects[\s\S]{0,500}matchesVisibleClassification/,
   )
   assert.match(
     workspaceSource,
@@ -346,7 +346,7 @@ registerAssertion('workbench summary keeps option projects and plan tasks indepe
   )
   assert.match(
     tableSource,
-    /getProjectSummaryQuickFilterDefinitions\(projectType,\s*optionProjects\)/,
+    /collectOptions\(optionRows, field.key\)/,
   )
   assert.match(
     tableSource,

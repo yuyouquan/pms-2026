@@ -6,7 +6,7 @@ import { App, Modal, Form, Input, InputNumber, Select, Row, Col } from 'antd'
 import type { ConfigModuleMeta, ConfigFormValues } from '@/types/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { useProjectStore } from '@/stores/project'
-import { useHasGlobalPermission } from '@/stores/permission'
+import { canRunGlobalMenuAction, useGlobalMenuPermission, HR_CONFIG_PERMISSION_MENUS } from '@/lib/globalMenuPermissions'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 interface ConfigEditModalProps {
@@ -23,8 +23,8 @@ export default function ConfigEditModal({
   onCancel,
 }: ConfigEditModalProps) {
   const actor = useProjectStore(state => state.currentLoginUser)
-  const hasGlobalPermission = useHasGlobalPermission(actor)
-  const canEdit = !['hrModel', 'nonLaborSubject'].includes(moduleMeta.key) || hasGlobalPermission(moduleMeta.key === 'hrModel' ? 'configCenter:hrModelEdit' : 'configCenter:nonLaborSubjectEdit')
+  const menuId = HR_CONFIG_PERMISSION_MENUS[moduleMeta.key]
+  const canEdit = useGlobalMenuPermission(actor, menuId)('edit')
   const [form] = Form.useForm<ConfigFormValues>()
   const { message } = App.useApp()
   const { data, addRecord, updateRecord } = useHrConfigStore()
@@ -58,10 +58,11 @@ export default function ConfigEditModal({
   }, [open, recordId, editingRecord, form, moduleMeta.key, moduleMeta.columns])
 
   const handleOk = async () => {
-    if (!canEdit) return
+    if (!canRunGlobalMenuAction(actor, menuId, 'edit')) return
     if (isEdit && !editingRecord) { message.warning('该配置已被移除，请关闭弹窗后刷新列表'); return }
     try {
       const values = await form.validateFields()
+      if (!canRunGlobalMenuAction(actor, menuId, 'edit')) { message.warning('配置编辑权限已变更'); return }
       if (isEdit && recordId) {
         updateRecord(moduleMeta.key, recordId, values as ConfigFormValues)
         message.success('配置已更新')

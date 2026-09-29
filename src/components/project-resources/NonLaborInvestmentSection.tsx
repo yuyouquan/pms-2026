@@ -79,7 +79,8 @@ export default function NonLaborInvestmentSection({ value, onChange, onItemTotal
     { sheetName: '科目选项', rows: active, columns: [{ key: 'secondarySubject', title: '二级科目' }, { key: 'tertiarySubject', title: '三级科目' }, { key: 'description', title: '科目说明' }] },
   ], `非人力投入模板${unitSuffix}.xlsx`)
   const handleImport = async (file: File) => {
-    const canApply = importSession.capture(() => currentValueRef.current === value && importPermission.current.unit === unit && !importPermission.current.readOnly && (importPermission.current.canImport?.() ?? true))
+    const openingCanImport = canImport
+    const canApply = importSession.capture(() => (openingCanImport?.() ?? true) && currentValueRef.current === value && importPermission.current.unit === unit && !importPermission.current.readOnly && (importPermission.current.canImport?.() ?? true))
     setImporting(true)
     try {
       const workbook = XLSX.read(await file.arrayBuffer())

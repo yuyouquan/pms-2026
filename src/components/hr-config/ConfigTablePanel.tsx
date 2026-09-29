@@ -30,7 +30,7 @@ import { getHrModelVersionGroup, useHrConfigStore } from '@/stores/hrConfig'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
 import HrModelStatisticsModal from '@/components/hr-config/HrModelStatisticsModal'
 import { useProjectStore } from '@/stores/project'
-import { useHasGlobalPermission } from '@/stores/permission'
+import { canRunGlobalMenuAction, useGlobalMenuPermission, HR_CONFIG_PERMISSION_MENUS } from '@/lib/globalMenuPermissions'
 import { useHrDepartmentOptions } from '@/hooks/useHrDepartmentOptions'
 
 interface ConfigTablePanelProps {
@@ -40,8 +40,11 @@ interface ConfigTablePanelProps {
 
 export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTablePanelProps) {
   const actor = useProjectStore(state => state.currentLoginUser)
-  const hasGlobalPermission = useHasGlobalPermission(actor)
-  const canEdit = !['hrModel', 'nonLaborSubject'].includes(moduleMeta.key) || hasGlobalPermission(moduleMeta.key === 'hrModel' ? 'configCenter:hrModelEdit' : 'configCenter:nonLaborSubjectEdit')
+  const menuId = HR_CONFIG_PERMISSION_MENUS[moduleMeta.key]
+  const can = useGlobalMenuPermission(actor, menuId)
+  const canEdit = can('edit')
+  const canImport = can('import')
+  const canExport = can('export')
   const { message, modal } = App.useApp()
   const { data, deleteRecord, toggleRecordStatus, importRecords, setShowEditModal, setEditingId } = useHrConfigStore()
   const { isValidPair } = useHrDepartmentOptions()
@@ -102,6 +105,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
                   icon={isDisabled ? <CheckCircleOutlined /> : <StopOutlined />}
                   style={isDisabled ? { color: 'var(--pms-brand-strong)' } : { color: 'var(--pms-text-tertiary)' }}
                   onClick={() => {
+                    if (!canRunGlobalMenuAction(actor, menuId, 'edit')) return
                     if (moduleMeta.key === 'hrModel') {
                       const action = isDisabled ? '启用' : '禁用'
                       const affectedRecords = getHrModelVersionGroup(records, record)
@@ -118,6 +122,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
                         cancelText: '取消',
                         okButtonProps: { danger: !isDisabled },
                         onOk: () => {
+                          if (!canRunGlobalMenuAction(actor, menuId, 'edit')) return
                           toggleRecordStatus(moduleMeta.key, record.id, isDisabled)
                           message.success(`模型版本已${action}`)
                         },
@@ -135,6 +140,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
                   size="small"
                   icon={<EditOutlined />}
                   onClick={() => {
+                    if (!canRunGlobalMenuAction(actor, menuId, 'edit')) return
                     setEditingId(record.id)
                     setShowEditModal(true)
                   }}
@@ -144,6 +150,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
                 title="确认删除"
                 description="确定要删除这条配置吗？"
                 onConfirm={() => {
+                  if (!canRunGlobalMenuAction(actor, menuId, 'edit')) return
                   deleteRecord(moduleMeta.key, record.id)
                   message.success('已删除')
                 }}
@@ -162,10 +169,11 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
     ]
 
     return [...dataColumns, ...(canEdit ? actionColumn : [])]
-  }, [canEdit, moduleMeta, records, deleteRecord, toggleRecordStatus, setEditingId, setShowEditModal, message, modal])
+  }, [canEdit, actor, menuId, moduleMeta, records, deleteRecord, toggleRecordStatus, setEditingId, setShowEditModal, message, modal])
 
   // ── 导出 ──────────────────────────────────────────────────
   const handleExport = () => {
+    if (!canRunGlobalMenuAction(actor, menuId, 'export')) return
     const exportColumns: ExportColumn[] = moduleMeta.columns.map(col => ({
       key: col.key,
       title: col.label,
@@ -184,10 +192,11 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
     accept: '.xlsx,.xls,.csv',
     showUploadList: false,
     beforeUpload: (file) => {
-      if (!canEdit) return false
+      if (!canRunGlobalMenuAction(actor, menuId, 'import')) return false
       const reader = new FileReader()
       reader.onload = (e) => {
         try {
+          if (!canRunGlobalMenuAction(actor, menuId, 'import')) { message.warning('配置导入权限已变更'); return }
           const data = new Uint8Array(e.target?.result as ArrayBuffer)
           const wb = XLSX.read(data, { type: 'array' })
           const ws = wb.Sheets[wb.SheetNames[0]]
@@ -246,6 +255,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
 
   // ── 下载导入模板 ──────────────────────────────────────────
   const handleDownloadTemplate = () => {
+    if (!canRunGlobalMenuAction(actor, menuId, 'export')) return
     const header = moduleMeta.columns.map(c => c.label)
     const aoa = [header]
     const ws = XLSX.utils.aoa_to_sheet(aoa)
@@ -280,6 +290,7 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
+                if (!canRunGlobalMenuAction(actor, menuId, 'edit')) return
                 setEditingId(null)
                 setShowEditModal(true)
               }}
@@ -291,14 +302,14 @@ export default function ConfigTablePanel({ moduleMeta, searchKeyword }: ConfigTa
                 模型版本统计
               </Button>
             )}
-            <Upload {...uploadProps} disabled={!canEdit}>
-              <Button disabled={!canEdit} icon={<UploadOutlined />}>导入</Button>
+            <Upload {...uploadProps} disabled={!canImport}>
+              <Button disabled={!canImport} icon={<UploadOutlined />}>导入</Button>
             </Upload>
-            <Button icon={<DownloadOutlined />} onClick={handleExport}>
+            <Button disabled={!canExport} icon={<DownloadOutlined />} onClick={handleExport}>
               导出
             </Button>
             <Tooltip title="下载导入模板">
-              <Button type="link" size="small" onClick={handleDownloadTemplate}>
+              <Button disabled={!canExport} type="link" size="small" onClick={handleDownloadTemplate}>
                 下载模板
               </Button>
             </Tooltip>

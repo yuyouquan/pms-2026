@@ -9,7 +9,7 @@ globalThis.window = { localStorage }
 const loader = createTypeScriptModuleLoader()
 const load = file => loader(path.resolve(file))
 const constants = load('src/constants/permissions.ts')
-const { usePermissionStore: store, resourcePermissionDefaults, hasPermission, PERMISSION_STORAGE_KEY, PERMISSION_STORAGE_VERSION } = load('src/stores/permission.ts')
+const { usePermissionStore: store, resourcePermissionDefaults, hasPermission, PERMISSION_STORAGE_KEY } = load('src/stores/permission.ts')
 const { initialProjects, ESTABLISHED_FORMAL_PROJECT_IDS } = load('src/data/projects.ts')
 const keys = ['resource:view', 'resource:createVersion', 'resource:lockVersion', 'resource:setOfficialVersion', 'resource:deleteVersion', 'resource:export', 'resource:laborEdit', 'resource:nonLaborEdit']
 const basic = ['resource:view', 'resource:laborEdit', 'resource:nonLaborEdit']
@@ -42,7 +42,7 @@ await check('Established machine SPM roles use real spm fields, splitting comma-
   assert.ok(machines.some(project => /[,，、]/.test(project.spm)))
   for (const project of machines) {
     const role = store.getState().rolesByProject[project.id].find(role => role.name === 'SPM')
-    assert.equal(role.isFixed, true)
+    assert.equal(role.isFixed, false, 'initialized PMS roles are independently editable local roles')
     assert.deepEqual(role.members, [...new Set(project.spm.split(/[,，、]/).map(name => name.trim()).filter(Boolean))])
   }
 })
@@ -52,7 +52,7 @@ const projects = types.map((type, index) => ({
   spm: 'unrelated-root-spm', technicalLead: ['owner-2'], fieldValues: { tosVersionProjectManager: ['owner-1'] },
 }))
 store.setState({
-  globalRoles: [{ name: '管理组', members: ['global-admin'] }, { name: '编辑组', members: ['global-editor'] }, { name: '查看组', members: ['global-viewer'] }],
+  globalRoles: [{ name: '管理组', members: ['演示用户01'] }, { name: '编辑组', members: ['演示用户02'] }, { name: '查看组', members: ['演示用户05'] }],
 })
 store.getState().ensureProjectPermissions(projects)
 
@@ -65,9 +65,9 @@ await check('New projects retain derived owners through initializer; ordinary me
     checkKeys(`owner-${index}`, project.id, keys)
     checkKeys(`member-${index}`, project.id, basic)
     checkKeys('nonmember', project.id, [])
-    checkKeys('global-editor', project.id, [])
-    checkKeys('global-viewer', project.id, [])
-    checkKeys('global-admin', project.id, keys)
+    checkKeys('演示用户02', project.id, [])
+    checkKeys('演示用户05', project.id, [])
+    checkKeys('演示用户01', project.id, keys)
     checkKeys(`owner-${(index + 1) % 4}`, project.id, [])
   }
 })
@@ -82,18 +82,18 @@ await check('Custom privileged-looking names cannot acquire manager defaults dur
   const established = initialProjects.find(project => project.type === types[0] && ESTABLISHED_FORMAL_PROJECT_IDS.has(project.id))
   store.getState().setRolesForProject(established.id, roles => [...roles.filter(role => role.name !== 'SPM'), { name: 'SPM', members: ['fake-spm'], isFixed: false }])
   store.getState().ensureProjectPermissions([{ ...established, spm: 'real-spm-a，real-spm-b' }])
-  assert.deepEqual(store.getState().rolesByProject[established.id].find(role => role.name === 'SPM').members, ['real-spm-a', 'real-spm-b'])
-  checkKeys('fake-spm', established.id, [])
+  assert.deepEqual(store.getState().rolesByProject[established.id].find(role => role.name === 'SPM').members, ['fake-spm'], 'same-name local role stays separate from project responsibility')
+  assert.equal(store.getState().rolesByProject[established.id].find(role => role.name === 'SPM').isFixed, false)
 })
 
-await check('Missing resource defaults are filled while explicit denial and unrelated permissions survive ensure, sync and reload', async () => {
+await check('Saved local grants and denials survive ensure, sync and reload without role-name elevation', async () => {
   const project = projects[2]
   // Seed an old role slot directly so ensure, rather than the setter, performs the upgrade.
   const old = { 'basicInfo:查看': false, 'plan:一级计划-编辑': false, 'resource:createVersion': false, 'resource:laborEdit': false }
   store.setState(state => ({ rolePermissionsByProject: { ...state.rolePermissionsByProject, [project.id]: { ...state.rolePermissionsByProject[project.id], 技术项目负责人: old } } }))
   store.getState().ensureProjectPermissions([project])
   store.getState().syncProjectTeamPermissionMembers(project)
-  const expected = { ...resourcePermissionDefaults({ name: owners[2], isFixed: true }, project.type), ...old }
+  const expected = old
   assert.deepEqual(store.getState().rolePermissionsByProject[project.id].技术项目负责人, expected)
   await store.persist.rehydrate()
   assert.deepEqual(store.getState().rolePermissionsByProject[project.id].技术项目负责人, expected)
@@ -103,12 +103,13 @@ await check('Missing resource defaults are filled while explicit denial and unre
   store.getState().setRolesForProject(project.id, roles => roles.map(role => role.name === '系统管理员' ? { ...role, members: [] } : role))
   assert.equal(hasPermission('owner-2', project.id, 'resource:createVersion'), false)
   assert.equal(hasPermission('owner-2', project.id, 'resource:laborEdit'), false)
-  management.filter(key => key !== 'resource:createVersion').forEach(key => assert.equal(hasPermission('owner-2', project.id, key), true))
+  management.filter(key => key !== 'resource:createVersion').forEach(key => assert.equal(hasPermission('owner-2', project.id, key), false, 'missing local grants cannot be restored by a privileged-looking role name'))
 })
 
 await check('Legacy storage upgrades at real hydration and preserves denials across a fresh module load', async () => {
   const project = projects[1]
-  localStorage.setItem(PERMISSION_STORAGE_KEY, JSON.stringify({ version: PERMISSION_STORAGE_VERSION, state: {
+  // Version 2 is the historical project-only format, before global permissions were persisted.
+  localStorage.setItem(PERMISSION_STORAGE_KEY, JSON.stringify({ version: 2, state: {
     projectTypesByProject: { [project.id]: project.type },
     rolesByProject: { [project.id]: [{ name: '版本项目经理', members: ['stored-owner'], isFixed: true }, { name: '自定义成员', members: ['stored-member'], isFixed: false }] },
     rolePermissionsByProject: { [project.id]: { 版本项目经理: { 'resource:export': false, 'plan:导出': false }, 自定义成员: { 'resource:view': false } } },
@@ -124,7 +125,7 @@ await check('Legacy storage upgrades at real hydration and preserves denials acr
   assert.equal(reloaded.hasPermission('stored-member', project.id, 'resource:view'), false)
 })
 
-await check('Legacy custom-project owners wait for the real project type before missing defaults are granted', async () => {
+await check('Unknown legacy project types fail closed and later type discovery never grants missing owner actions', async () => {
   const project = { id: 'legacy-no-type', type: types[2], technicalLead: ['legacy-owner'] }
   localStorage.setItem(PERMISSION_STORAGE_KEY, JSON.stringify({ version: 2, state: {
     rolesByProject: { [project.id]: [{ name: '技术项目负责人', members: ['legacy-owner'], isFixed: true }] },
@@ -133,19 +134,20 @@ await check('Legacy custom-project owners wait for the real project type before 
   await store.persist.rehydrate()
   assert.equal(hasPermission('legacy-owner', project.id, 'resource:createVersion'), false)
   store.getState().ensureProjectPermissions([project])
-  assert.equal(hasPermission('legacy-owner', project.id, 'resource:createVersion'), true)
+  assert.equal(hasPermission('legacy-owner', project.id, 'resource:createVersion'), false, 'type discovery never elevates a migrated local role by name')
   assert.equal(hasPermission('legacy-owner', project.id, 'resource:export'), false)
 })
 
-await check('Technical and tOS authoritative team synchronization changes members while retaining role grants', () => {
+await check('Technical and tOS source refresh retains independently configured local members and grants', () => {
   for (const index of [1, 2]) {
     const project = projects[index]
     store.getState().ensureProjectPermissions([project])
     store.getState().setRolePermissionsForProject(project.id, permissions => ({ ...permissions, [owners[index]]: { ...permissions[owners[index]], 'resource:export': false } }))
     const updated = index === 1 ? { ...project, fieldValues: { tosVersionProjectManager: ['new-tos-owner'] } }
       : { ...project, technicalLead: ['new-tech-owner'] }
+    const previousMembers = [...store.getState().rolesByProject[project.id].find(role => role.name === owners[index]).members]
     store.getState().syncProjectTeamPermissionMembers(updated)
-    assert.deepEqual(store.getState().rolesByProject[project.id].find(role => role.name === owners[index]).members, [index === 1 ? 'new-tos-owner' : 'new-tech-owner'])
+    assert.deepEqual(store.getState().rolesByProject[project.id].find(role => role.name === owners[index]).members, previousMembers)
     assert.equal(store.getState().rolePermissionsByProject[project.id][owners[index]]['resource:export'], false)
   }
 })

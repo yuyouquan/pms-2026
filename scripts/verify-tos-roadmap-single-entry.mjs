@@ -2,22 +2,22 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { loadTypeScriptModule } from './lib/source-contract.mjs'
 
 const root = process.cwd()
 const appShellSource = fs.readFileSync(path.join(root, 'src/containers/AppShell.tsx'), 'utf8')
 const roadmapViewSource = fs.readFileSync(path.join(root, 'src/components/roadmap/RoadmapView.tsx'), 'utf8')
 
-assert.match(
-  appShellSource,
-  /key:\s*'roadmap',\s*label:\s*'tOS路标'/,
-  'main header exposes one tOS roadmap destination',
-)
+const { PERMISSION_MAIN_NAV } = loadTypeScriptModule(root, 'src/components/permission-center/navigation.ts')
+assert.deepEqual(PERMISSION_MAIN_NAV.filter(item => item.key === 'roadmap'), [{ key: 'roadmap', label: 'tOS路标' }],
+  'shared header directory exposes exactly one correctly named tOS roadmap destination')
+assert.equal(PERMISSION_MAIN_NAV.filter(item => item.label === 'tOS路标').length, 1,
+  'another navigation key cannot duplicate the roadmap destination')
+assert.match(appShellSource, /items=\{PERMISSION_MAIN_NAV\.filter\(item => canAccessMainModule\(permissionCenter, currentLoginUser, item\.key\)\)\}/,
+  'main header consumes the shared ordered directory through access filtering')
 assert.match(appShellSource, /返回tOS路标/, 'project-space return copy uses the same destination name')
-assert.doesNotMatch(
-  appShellSource,
-  /key:\s*'roadmap',\s*label:\s*'项目视图'/,
-  'main header no longer calls the destination project view',
-)
+assert.equal(PERMISSION_MAIN_NAV.some(item => item.key === 'roadmap' && item.label === '项目视图'), false,
+  'main header no longer calls the destination project view')
 assert.match(roadmapViewSource, />\s*tOS路标\s*</, 'roadmap shell has a fixed tOS roadmap title')
 assert.match(
   roadmapViewSource,

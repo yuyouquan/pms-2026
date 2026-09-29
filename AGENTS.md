@@ -14,7 +14,7 @@ npm run db:generate  # `prisma generate`  — Prisma client (DB is not wired int
 npm run db:push      # `prisma db push`
 ```
 
-There is no test runner. "Verification" in this repo means `npx tsc --noEmit` + `npm run build` + manual exercise in the browser.
+There is no unit-test framework. Behavioral regression scripts run with `npm run verify:full-regression`; verification also includes `npx tsc --noEmit`, `npm run build`, and manual browser exercise.
 
 If port 3004 is held by a stale dev server: `lsof -ti:3004 -sTCP:LISTEN | xargs kill`.
 
@@ -47,7 +47,7 @@ Domain stores in `src/stores/` — components never `useState` for cross-cutting
 - **`project.ts`** — `projects`, `selectedProject`, `currentLoginUser`, workspace filters, `selectedMarketTab`, basic-info edit state. Also exports `PROJECT_MEMBER_MAP` (which users see which project) and `DEFAULT_LOGIN_USER`.
 - **`plan.ts`** — L1/L2 plan tasks, `versions`, `LEVEL2_PLAN_TYPES`, `FIXED_LEVEL2_PLANS`, market-specific plan data, column configs, share state. Largest store.
 - **`transfer.ts`** — transfer-maintenance ("转维") workflow: `transferView` (`null|apply|detail|entry|review|sqa-review`), `selectedTransferAppId`, applications, checklist items, review elements, config-view sub-state. Backed by mocks in `src/mock/transfer-maintenance.ts`.
-- **`permission.ts`** — project-level roles + `rolePermissions`, plus separate `globalRoles` / `globalRolePerms`. Exports two helpers used everywhere: **`hasPermission(user, permKey)`** (imperative) and **`useHasPermission(user)`** (hook). The global role **`管理组`** bypasses every project-level check via `isGlobalAdmin`.
+- **`permission.ts`** — project-level roles + `rolePermissions`, and a separate v2 `permissionCenter` for Header-level authorization. Personnel and departments belong to each center role; menu policies contain functional actions, row conditions and visible columns. Only the fixed `builtin:superadmin` role bypasses permission checks. Legacy `globalRoles` / `globalRolePerms` remain for standalone fallbacks; initialized center state is authoritative. Project helpers **`hasPermission(user, permKey)`** and **`useHasPermission(user)`** remain separate from global menu helpers.
 
 ### Container components consume the stores
 
@@ -75,7 +75,7 @@ This refactor is documented in `docs/superpowers/plans/2026-04-15-core-refactor-
 - **Feishu notifications** are a stub — `src/lib/feishu-notify.ts` (`notifyPublishChanges`, `notifyDueTasks`) currently `console.log`s. The header comment explains the production wiring; treat changes there as front-end-only mocks unless the user asks for the backend.
 - **Path alias.** `@/*` → `src/*` (see `tsconfig.json`). Always use the alias, never relative `../../` from `src/`.
 - **Styling.** Bulk styling lives in `src/styles/globals.css` (~1366 lines, "purple glassmorphism" theme + Ant Design overrides + `pms-table`, `pms-modal`, `pms-card-hover`, `pms-sidebar`, `pms-edit-input` classes). Page-level overrides should stay tiny inside the component; don't duplicate what's already in `globals.css`.
-- **Mock users.** `ALL_USERS` (`src/components/permission/PermissionModule.tsx`) lists the 8 testable identities; `DEFAULT_LOGIN_USER = '张三'`. `张三` and `李白` are in the `管理组` global role and therefore bypass project RBAC by default.
+- **Mock users.** Current identities come from `PROJECT_USER_CHOICES`; the default is `演示用户01`. The permission-center seed (`src/lib/permissionCenterSeed.ts`) assigns `演示用户01` and `演示用户07` to the fixed system superadmin role. Ordinary `管理员` and role-group labels never imply a bypass. Valid old global mock snapshots refresh once to this seed; saved v2 assignments persist and corrupt caches fail closed.
 
 ### Domain glossary (helps reading the code)
 

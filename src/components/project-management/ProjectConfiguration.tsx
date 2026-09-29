@@ -11,7 +11,6 @@ import { useUiStore } from '@/stores/ui'
 import { useActivateProject } from '@/hooks/useActivateProject'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import {
-  canManageProjectRegistry,
   deleteConfiguredProject,
   getBindableFormalProjects,
   getLinkedRegistryProjects,
@@ -29,7 +28,9 @@ import { getProjectAttribute, isFormalProject, PROJECT_ATTRIBUTE_LABELS } from '
 import type { ProjectItem } from '@/types/app'
 import NewProjectModal from '@/components/project-management/NewProjectModal'
 import ProjectCreationNotice from '@/components/project-management/ProjectCreationNotice'
-import { canAccessProjectRegistry, canEditProjectRegistry } from '@/lib/projectRegistryPermissions'
+import { canUseProjectRegistry } from '@/lib/projectRegistryAuthorization'
+import { projectMenuRows, projectPermissionSource, projectFieldAllowed, registerProjectPermissionFields, hasAllProjectFields, canReadProjectRegistryHistory } from '@/lib/projectMenuPermissions'
+import { getAuthorizedColumns } from '@/lib/permissionCenter'
 import type { ProjectCreationNotification } from '@/types/projectRegistry'
 
 type EditableField = 'name' | 'projectCode' | 'boundFormalProjectId'
@@ -43,10 +44,12 @@ interface EditingCell {
 export default function ProjectConfiguration() {
   const { message } = App.useApp()
   const [modal, modalContextHolder] = Modal.useModal()
-  const projects = useProjectStore(state => state.projects)
+  const allProjects = useProjectStore(state => state.projects)
   const registryHistory = useProjectStore(state => state.registryHistory)
   const currentLoginUser = useProjectStore(state => state.currentLoginUser)
-  const { globalRoles, rolesByProject } = usePermissionStore()
+  const { globalRoles, rolesByProject, permissionCenter } = usePermissionStore()
+  registerProjectPermissionFields()
+  const projects = useMemo(() => projectMenuRows(permissionCenter, currentLoginUser, 'project.config', allProjects) as ProjectItem[], [permissionCenter, currentLoginUser, allProjects])
   const {
     enterProjectSpace,
     navigateWithEditGuard,
@@ -64,23 +67,40 @@ export default function ProjectConfiguration() {
   const [editing, setEditing] = useState<EditingCell | null>(null)
   const editingRef = useRef<EditingCell | null>(null)
   const confirmingRef = useRef(false)
-  const canManage = canManageProjectRegistry(currentLoginUser)
+  const confirmDialogRef = useRef<{ destroy: () => void } | null>(null)
+  useEffect(() => () => { confirmDialogRef.current?.destroy(); confirmingRef.current = false }, [permissionCenter, currentLoginUser])
+  const canExport = canUseProjectRegistry(currentLoginUser, 'export')
   const isAdmin = globalRoles.some(role => role.name === '管理组' && role.members.includes(currentLoginUser))
-  const canCreate = canAccessProjectRegistry(currentLoginUser, isAdmin)
-  const canEdit = (project: ProjectItem) => canEditProjectRegistry(currentLoginUser, project, isAdmin)
+  const canCreate = canUseProjectRegistry(currentLoginUser, 'create')
+  const sourceProject = (project: ProjectItem) => allProjects.find(item => item.id === project.id)
+  const canEdit = (project: ProjectItem, field?: string) => {
+    const source = sourceProject(project)
+    return Boolean(source && canUseProjectRegistry(currentLoginUser, 'edit', source) && (!field || !permissionCenter || projectFieldAllowed(getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.config', 'edit', projectPermissionSource(source)), field)))
+  }
+  const canReadHistory = (project: ProjectItem) => hasAllProjectFields(permissionCenter, currentLoginUser, 'project.config', projectPermissionSource({ ...(sourceProject(project) ?? project) }))
+  const isFormal = (project: ProjectItem) => isFormalProject(sourceProject(project) ?? project)
   const filteredProjects = useMemo(() => filterConfigurationProjects(projects, filters), [projects, filters])
   const hasFilters = Boolean(filters.name || filters.projectCode || filters.boundFormalProjectName || filters.projectTypes.length || filters.projectAttributes.length)
   const currentPage = Math.min(Math.max(1, projectConfigurationPage), Math.max(1, Math.ceil(filteredProjects.length / 15)))
 
   const exportProjects = (scope: 'all' | 'current') => {
-    if (!canManageProjectRegistry(useProjectStore.getState().currentLoginUser)) return
-    const rows = buildProjectConfigurationExportRows(scope === 'all' ? projects : filteredProjects, projects)
+    const actor = useProjectStore.getState().currentLoginUser
+    if (!canUseProjectRegistry(actor, 'export')) return
+    const model = usePermissionStore.getState().permissionCenter
+    const ids = new Set((scope === 'all' ? projects : filteredProjects).map(project => project.id))
+    const exportSources = allProjects.filter(project => ids.has(project.id))
+    const authorized = projectMenuRows(model, actor, 'project.config', exportSources, 'export') as ProjectItem[]
+    const rows = buildProjectConfigurationExportRows(authorized, authorized).map((row, index) => {
+      const source = exportSources.find(project => project.id === authorized[index].id)!
+      const fields = model ? getAuthorizedColumns(model, actor, 'project.config', 'export', projectPermissionSource(source)) : Object.keys(row)
+      return Object.fromEntries(Object.entries(row).filter(([key]) => projectFieldAllowed(fields, key === 'boundFormalProject' ? 'boundFormalProjectId' : key)))
+    })
     exportSheet(rows, [
       { key: 'name', title: '项目名称' }, { key: 'type', title: '项目类型' },
       { key: 'projectAttribute', title: '项目属性' }, { key: 'projectCode', title: '项目编码' },
       { key: 'createdBy', title: '创建人' }, { key: 'createdAt', title: '创建时间' },
       { key: 'boundFormalProject', title: '绑定正式项目' },
-    ], `项目配置-${scope === 'all' ? '全部' : '当前'}-${exportTimestamp()}.xlsx`, '项目配置')
+    ].filter(column => !model || rows.some(row => Object.hasOwn(row, column.key))), `项目配置-${scope === 'all' ? '全部' : '当前'}-${exportTimestamp()}.xlsx`, '项目配置')
   }
 
   useEffect(() => {
@@ -93,7 +113,7 @@ export default function ProjectConfiguration() {
   }
 
   const beginEdit = (project: ProjectItem, field: EditableField) => {
-    if (!canEdit(project) || isFormalProject(project) || confirmingRef.current) return
+    if (!canEdit(project, field) || isFormal(project) || confirmingRef.current) return
     const rawValue = project[field]
     setCurrentEditing({
       projectId: project.id,
@@ -130,7 +150,7 @@ export default function ProjectConfiguration() {
       return normalized || '未填写'
     }
     confirmingRef.current = true
-    modal.confirm({
+    confirmDialogRef.current = modal.confirm({
       centered: true,
       className: 'pms-modal',
       width: 560,
@@ -181,20 +201,24 @@ export default function ProjectConfiguration() {
       requestConfirmation()
       return
     }
+    const source = sourceProject(project)
+    if (!source || !canUseProjectRegistry(currentLoginUser, 'view', source)) return
     if (!canEnter(project)) {
       message.warning('当前用户未配置该项目空间角色，无法进入项目空间')
       return
     }
     navigateWithEditGuard(() => {
-      activateProject(project)
+      activateProject(source)
       setProjectSpaceModule('basic')
       enterProjectSpace({ module: 'projectManagement', projectManagementTab: 'configuration' })
     }, false)
   }
 
   const confirmDelete = (project: ProjectItem) => {
-    const linked = isFormalProject(project) ? getLinkedRegistryProjects(projects, project.id) : []
-    modal.confirm({
+    const source = sourceProject(project)
+    if (!source || !canUseProjectRegistry(currentLoginUser, 'delete', source)) return
+    const linked = isFormal(project) ? getLinkedRegistryProjects(projects, project.id) : []
+    confirmDialogRef.current = modal.confirm({
       centered: true,
       className: 'pms-modal',
       width: 560,
@@ -240,7 +264,7 @@ export default function ProjectConfiguration() {
       return (
         <div className="pms-project-config__cell-value">
           <Tooltip title={project.name}><Button type="link" className="pms-project-config__name" onClick={() => openProject(project)}>{project.name}</Button></Tooltip>
-          {!isFormalProject(project) && canEdit(project) ? (
+          {!isFormal(project) && canEdit(project, field) ? (
             <Tooltip title="编辑项目名称"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的项目名称`} icon={<EditOutlined />} onClick={() => beginEdit(project, field)} /></Tooltip>
           ) : null}
         </div>
@@ -248,7 +272,7 @@ export default function ProjectConfiguration() {
     }
     return (
       <div className="pms-project-config__cell-value">
-        <Tooltip title={value || '—'}>{!isFormalProject(project) && canEdit(project) ? (
+        <Tooltip title={value || '—'}>{!isFormal(project) && canEdit(project, field) ? (
           <Button
             type="text"
             size="small"
@@ -259,7 +283,7 @@ export default function ProjectConfiguration() {
             {value || '—'}
           </Button>
         ) : <span>{value || '—'}</span>}</Tooltip>
-        {!isFormalProject(project) && canEdit(project) ? (
+        {!isFormal(project) && canEdit(project, field) ? (
           <Tooltip title="编辑项目编码"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的项目编码`} icon={<EditOutlined />} onClick={() => beginEdit(project, field)} /></Tooltip>
         ) : null}
       </div>
@@ -276,7 +300,7 @@ export default function ProjectConfiguration() {
     {
       title: '绑定正式项目', dataIndex: 'boundFormalProjectId', width: 220,
       render: (_, project) => {
-        if (isFormalProject(project)) return '—'
+        if (isFormal(project)) return '—'
         const isEditing = editing?.projectId === project.id && editing.field === 'boundFormalProjectId'
         const boundName = projects.find(item => item.id === project.boundFormalProjectId)?.name
         if (isEditing) {
@@ -289,7 +313,7 @@ export default function ProjectConfiguration() {
               style={{ width: '100%' }}
               value={editing.value || undefined}
               placeholder="选择同类型正式项目"
-              options={getBindableFormalProjects(projects, project).map(item => ({ value: item.id, label: item.name }))}
+              options={getBindableFormalProjects(allProjects.filter(item => canUseProjectRegistry(currentLoginUser, 'view', item)), sourceProject(project) ?? project).map(item => ({ value: item.id, label: item.name }))}
               onChange={value => changeEditing(value ?? null)}
               onBlur={requestConfirmation}
             />
@@ -297,7 +321,7 @@ export default function ProjectConfiguration() {
         }
         return (
           <div className="pms-project-config__cell-value">
-            <Tooltip title={boundName || '—'}>{canEdit(project) ? (
+            <Tooltip title={boundName || '—'}>{canEdit(project, 'boundFormalProjectId') ? (
               <Button
                 type="text"
                 size="small"
@@ -308,7 +332,7 @@ export default function ProjectConfiguration() {
                 {boundName || '—'}
               </Button>
             ) : <span>{boundName || '—'}</span>}</Tooltip>
-            {canEdit(project) ? (
+            {canEdit(project, 'boundFormalProjectId') ? (
               <Tooltip title="编辑绑定正式项目"><Button type="text" size="small" className="pms-project-config__edit-trigger" aria-label={`编辑${project.name}的绑定正式项目`} icon={<EditOutlined />} onClick={() => beginEdit(project, 'boundFormalProjectId')} /></Tooltip>
             ) : null}
           </div>
@@ -319,16 +343,30 @@ export default function ProjectConfiguration() {
       title: '操作', key: 'actions', width: 130, fixed: 'right',
       render: (_, project) => (
         <Space size={2}>
-          <Button type="link" size="small" icon={<HistoryOutlined />} onClick={() => setHistoryProjectId(project.id)}>历史</Button>
-          {canManage ? <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDelete(project)}>删除</Button> : null}
+          {canReadHistory(project) && <Button type="link" size="small" icon={<HistoryOutlined />} onClick={() => setHistoryProjectId(project.id)}>历史</Button>}
+          {sourceProject(project) && canUseProjectRegistry(currentLoginUser, 'delete', sourceProject(project)) ? <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDelete(project)}>删除</Button> : null}
         </Space>
       ),
     },
   ]
 
+  const safeColumns = columns.filter(column => !('dataIndex' in column) || !permissionCenter || projectFieldAllowed(getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.config'), String(column.dataIndex))).map(column => {
+    if (!('dataIndex' in column)) return column
+    const field = String(column.dataIndex)
+    const render = column.render
+    return { ...column, render: (value: unknown, project: ProjectItem, index: number) => Object.hasOwn(project, field) ? (render ? render(value, project, index) : value as string) : null }
+  })
+  useEffect(() => {
+    if (historyProjectId && !projects.some(project => project.id === historyProjectId && canReadHistory(project))) setHistoryProjectId(null)
+    if (editing && (!projects.some(project => project.id === editing.projectId) || !canEdit(allProjects.find(project => project.id === editing.projectId)!, editing.field))) { editingRef.current = null; setEditing(null); Modal.destroyAll() }
+    if (!canCreate) { setNewProjectOpen(false); setCreationNotice(null) }
+  }, [permissionCenter, currentLoginUser, projects, historyProjectId, editing, canCreate, allProjects])
+
   const history = useMemo(
-    () => registryHistory.filter(entry => entry.projectId === historyProjectId),
-    [historyProjectId, registryHistory],
+    () => registryHistory.filter(entry => entry.projectId === historyProjectId && canReadProjectRegistryHistory(
+      permissionCenter, currentLoginUser, allProjects.find(project => project.id === historyProjectId), entry,
+    )),
+    [historyProjectId, registryHistory, allProjects, currentLoginUser, permissionCenter],
   )
   const historyRows = useMemo(
     () => buildProjectRegistryHistoryRows(history, projects),
@@ -367,7 +405,7 @@ export default function ProjectConfiguration() {
         </div>
         <div className="pms-project-config__actions">
           <Button icon={<ClearOutlined />} disabled={!hasFilters} onClick={resetFilters}>清空筛选</Button>
-          {canManage && <Dropdown trigger={['click']} menu={{ items: [
+          {canExport && <Dropdown trigger={['click']} menu={{ items: [
             { key: 'all', label: '导出全部', title: '导出全部项目配置', disabled: !projects.length },
             { key: 'current', label: '导出当前', title: '导出当前筛选结果，包含所有分页', disabled: !filteredProjects.length },
           ], onClick: ({ key }) => exportProjects(key as 'all' | 'current') }}>
@@ -379,7 +417,7 @@ export default function ProjectConfiguration() {
       <Table<ProjectItem>
         className="pms-table"
         rowKey="id"
-        columns={columns}
+        columns={safeColumns}
         dataSource={filteredProjects}
         locale={{ emptyText: hasFilters ? '未找到符合条件的项目' : '暂无项目' }}
         scroll={{ x: 1320 }}

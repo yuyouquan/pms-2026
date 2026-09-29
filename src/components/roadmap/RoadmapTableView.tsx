@@ -39,6 +39,9 @@ interface RoadmapTableViewProps {
   visibleColumns: readonly RoadmapColumnKey[]
   sort: RoadmapSortState
   canEdit: boolean
+  canEditRow?: (row: RoadmapProjectRow) => boolean
+  canDeleteRow?: (row: RoadmapProjectRow) => boolean
+  canViewHistory?: boolean
   onViewProject: (projectId: string) => void
   onSortChange: (sort: RoadmapSortState) => void
   onOpenProjectHistory: (projectId: string) => void
@@ -107,6 +110,9 @@ export default function RoadmapTableView({
   visibleColumns,
   sort,
   canEdit,
+  canEditRow,
+  canDeleteRow,
+  canViewHistory = true,
   onViewProject,
   onSortChange,
   onOpenProjectHistory,
@@ -272,7 +278,7 @@ export default function RoadmapTableView({
           : undefined
         return (
           <Flex className="roadmap-table-row-actions" align="center" gap={2} wrap={false}>
-            {isPlanned && canEdit ? (
+            {(canEditRow ? canEditRow(row) : isPlanned && canEdit) ? (
               <Tooltip title="编辑项目">
                 <Button
                   type="text"
@@ -283,7 +289,7 @@ export default function RoadmapTableView({
                 />
               </Tooltip>
             ) : null}
-            <Tooltip title="历史记录">
+            {canViewHistory ? <Tooltip title="历史记录">
               <Button
                 type="text"
                 size="small"
@@ -291,7 +297,7 @@ export default function RoadmapTableView({
                 icon={<HistoryOutlined aria-hidden />}
                 onClick={() => onOpenProjectHistory(row.id)}
               />
-            </Tooltip>
+            </Tooltip> : null}
             {conflictKey ? (
               <Tooltip title="解决冲突">
                 <Button
@@ -304,7 +310,7 @@ export default function RoadmapTableView({
                 />
               </Tooltip>
             ) : null}
-            {isPlanned && canEdit ? (
+            {(canDeleteRow ? canDeleteRow(row) : isPlanned && canEdit) ? (
               <Tooltip title="删除项目">
                 <Button
                   type="text"

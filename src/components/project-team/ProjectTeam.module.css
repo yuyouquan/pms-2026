@@ -1,0 +1,26 @@
+.root { min-width: 0; }
+.heading, .toolbar, .roleHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.heading { min-height: 32px; }
+.note, .muted { color: #6b7280; font-size: 12px; }
+.note { margin: 8px 0 16px; line-height: 1.6; }
+.layout { display: grid; grid-template-columns: 204px minmax(0, 1fr); gap: 16px; }
+.collapsed { grid-template-columns: 32px minmax(0, 1fr); }
+.sidebar { min-width: 0; border-right: 1px solid #eef0f3; padding-right: 12px; }
+.roleHeading { margin-bottom: 8px; font-size: 13px; }
+.roleName { display: inline-block; max-width: 143px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+.content { min-width: 0; }
+.toolbar { margin-bottom: 12px; }
+.toolbar > :last-child { max-width: 300px; }
+.selection { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.cell { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px; }
+@media (max-width: 800px) {
+  .layout { grid-template-columns: 164px minmax(0, 1fr); gap: 8px; }
+  .collapsed { grid-template-columns: 32px minmax(0, 1fr); }
+  .roleName { max-width: 105px; }
+  .toolbar { align-items: stretch; flex-direction: column; gap: 8px; }
+  .toolbar > :last-child { max-width: none; }
+}
+@media (max-width: 520px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { border-right: 0; border-bottom: 1px solid #eef0f3; padding: 0 0 8px; }
+}

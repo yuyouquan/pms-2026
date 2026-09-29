@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { pmsLocalStorage } from '@/lib/mockDatasetStorage'
-import { hasGlobalPermission } from '@/stores/permission'
+import { hasGlobalMenuPermission } from '@/lib/globalMenuPermissions'
 import { createTransferTemplateVersions, getTransferRoleConfig, validateTransferTeamConfig, type TransferProjectType, type TransferTeamRole, type TransferTemplateVersions, type TransferTemplateKind, type TransferTemplateRow } from '@/lib/transferConfig'
 import { syncTransferPipeline } from '@/lib/transferWorkflow'
 import { getTransferAiCheckResult } from '@/lib/transferAiCheck'
@@ -260,7 +260,7 @@ export const useTransferStore = create<TransferState & TransferActions>()(persis
   setTmHistory: value => set(state => ({ tmHistory: typeof value === 'function' ? value(state.tmHistory) : value })),
   setTmReopenAppId: id => set({ tmReopenAppId: id }),
   saveTransferTeamConfig: (kind, roles, actor) => {
-    if (!hasGlobalPermission(actor, 'configCenter:transferEdit')) return ['暂无转维配置编辑权限']
+    if (!hasGlobalMenuPermission(actor, `config.transfer:${kind}:team`, 'edit')) return ['暂无转维配置编辑权限']
     const errors = validateTransferTeamConfig(roles)
     const current = get(), previous = current.tmTeamConfigs[kind]
     const removed = previous.filter(role => !roles.some(next => next.id === role.id))
@@ -280,7 +280,7 @@ export const useTransferStore = create<TransferState & TransferActions>()(persis
     return []
   },
   importTransferTemplate: (kind, templateKind, rows, actor) => {
-    if (!hasGlobalPermission(actor, 'configCenter:transferEdit') || (kind === 'tOS版本项目' && templateKind === 'review') || !rows.length) return false
+    if (!hasGlobalMenuPermission(actor, `config.transfer:${kind}:${templateKind}`, 'import') || (kind === 'tOS版本项目' && templateKind === 'review') || !rows.length) return false
     const versions = get().tmTemplateVersions, previous = versions[kind][templateKind]
     const snapshot = { id: `${kind}-${templateKind}-${Date.now()}`, version: `v${previous.length + 1}.0`, kind: templateKind, date: new Date().toISOString(), createdBy: actor, rows: structuredClone(rows) }
     set({ tmTemplateVersions: { ...versions, [kind]: { ...versions[kind], [templateKind]: [...previous, snapshot] } }, tmConfigSelectedVersion: snapshot.id })

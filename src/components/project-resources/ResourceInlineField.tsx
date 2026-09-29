@@ -23,7 +23,8 @@ export default function ResourceInlineField({ label, value, display, readOnly = 
   })).current
   const root = useRef<HTMLDivElement>(null)
   const popupRoot = useRef<HTMLDivElement | null>(null)
-  const saveRef = useRef(onSave); saveRef.current = onSave
+  // Keep the opening callback through the edit, including its original authorization scope.
+  const saveRef = useRef(onSave); if (!session.state.editing) saveRef.current = onSave
   const { editing, error } = session.state
   useEffect(() => {
     if (!editing) return

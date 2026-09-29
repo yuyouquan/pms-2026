@@ -1,4 +1,4 @@
-import { withResourceMutationContext } from '@/lib/resourceMutationContext'
+import { assertResourceOpening, withResourceMutationContext } from '@/lib/resourceMutationContext'
 import { canUpdateResourceFields, resourceInlinePermission } from '@/lib/resourceActionPermissions'
 import type { StoreApi } from 'zustand'
 import type { ResourceProject, ResourceVersion } from '@/components/project-resources/resourceVersionAdapter'
@@ -115,6 +115,7 @@ export function createResourceStoreState<S extends DomainState>(category:HrProje
      if(!project)return
      const monthlyRow=name==='updateMonthlyInvestment'?state.monthlyInvestments.find(row=>row.id===args[0]):undefined
      const version=project.versions.find(item=>item.id===(monthlyRow?.versionId ?? args[1]))
+     assertResourceOpening(category, project.id, version?.id)
      let permitted=false
      if(['createResourceVersion','createVersionInline','addVersion','copyVersion'].includes(name)) permitted=canResourceAction(project,'createVersion')
      else if(name==='setVersionLocked') permitted=canResourceAction(project,'lockVersion')

@@ -6,6 +6,10 @@ import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import { getProjectListExportValue } from '@/lib/projectListExport'
 import { formatMarketName } from '@/lib/marketNameDisplay'
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
+import { useProjectStore } from '@/stores/project'
+import { usePermissionStore, hasMenuPermission } from '@/stores/permission'
+import { getAuthorizedColumns } from '@/lib/permissionCenter'
+import { projectFieldAllowed, projectPermissionSource, projectSummaryRows } from '@/lib/projectMenuPermissions'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
@@ -105,6 +109,7 @@ interface ProjectSummaryVersion {
 }
 
 export interface ProjectSummaryTableProps {
+  permissionSources?: ReadonlyMap<string, Record<string, unknown>>
   projects: ProjectInfoProject[]
   optionProjects: ProjectInfoProject[]
   planTasksByProjectId: Record<string, ProjectSummaryTemplateTask[]>
@@ -191,6 +196,7 @@ const cloneConditions = (conditions: readonly AnyFilterCondition[]) => (
 )
 
 export default function ProjectSummaryTable({
+  permissionSources,
   projects,
   optionProjects,
   planTasksByProjectId,
@@ -221,9 +227,14 @@ export default function ProjectSummaryTable({
   controlledTablePage,
   onTablePageChange,
 }: ProjectSummaryTableProps) {
+  const currentLoginUser = useProjectStore(state => state.currentLoginUser)
+  const permissionCenter = usePermissionStore(state => state.permissionCenter)
+  const sources = useMemo(() => permissionSources ?? new Map([...projects, ...optionProjects].map(project => [project.id, projectPermissionSource(project)])), [permissionSources, projects, optionProjects])
+  const allowedFields = permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view') : null
+  const canExport = !permissionCenter || hasMenuPermission(currentLoginUser, 'project.view', 'export')
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
-  const filters = controlledFilters ?? uncontrolledFilters
+  const filters = useMemo(() => (controlledFilters ?? uncontrolledFilters).filter(condition => condition.field === 'technicalProjectType' || !allowedFields || projectFieldAllowed(allowedFields, condition.field)), [controlledFilters, uncontrolledFilters, allowedFields?.join('|')])
   const setFilters = (next: AnyFilterCondition[] | ((current: AnyFilterCondition[]) => AnyFilterCondition[])) => {
     const resolved = typeof next === 'function' ? next(filters) : next
     if (controlledFilters !== undefined) onFiltersChange?.(resolved)
@@ -245,6 +256,7 @@ export default function ProjectSummaryTable({
     if (controlledTablePage !== undefined) onTablePageChange?.(page)
     else setUncontrolledTablePage(page)
   }
+  useEffect(() => { setFilterOpen(false); setColumnOpen(false); setTempFilters([createFilterCondition()]); setSelectedRowKey('') }, [currentLoginUser, permissionCenter])
   const tablePageResetInputs = useRef({ filters, matrixVariant, projectType, tablePageSize })
   const compactControlSize = matrixVariant ? 'small' : 'middle'
 
@@ -274,12 +286,15 @@ export default function ProjectSummaryTable({
   ])
 
   const effectiveTemplateTasks = matrixTemplateTasks ?? templateTasks
-  const fieldDefinitions = useMemo(() => matrixVariant
+  const sourceFieldDefinitions = useMemo(() => matrixVariant
     ? getProjectListFieldDefinitions(matrixVariant, effectiveTemplateTasks, projectType)
     : [
         ...getProjectSummaryFieldDefinitions(projectType),
         ...getTemplateTaskFieldDefinitions(projectType, templateTasks),
       ], [effectiveTemplateTasks, matrixVariant, projectType, templateTasks])
+
+  const allowedFieldKey = allowedFields?.join('|')
+  const fieldDefinitions = useMemo(() => sourceFieldDefinitions.filter(field => !allowedFields || projectFieldAllowed(allowedFields, field.key)), [sourceFieldDefinitions, allowedFieldKey])
 
   const fixedColumnOrder = useMemo(
     () => matrixVariant ? getProjectListFixedColumnKeys(matrixVariant) : ['projectName'],
@@ -330,32 +345,28 @@ export default function ProjectSummaryTable({
     setColumnSettings(normalizeProjectListUnitSettings(columnUnitDefinitions, nextSettings))
   }, [columnUnitDefinitions])
 
-  const baseRows = useMemo(
-    () => providedRows?.map(row => Object.fromEntries([
-      ...fieldDefinitions.map(definition => [definition.key, row[definition.key] ?? '-']),
-      ...Object.entries(row),
-    ]) as ProjectSummaryRow) ?? projects.map(project => buildProjectSummaryRow(
-      project,
-      fieldDefinitions,
-      planTasksByProjectId[project.id],
-    )),
-    [fieldDefinitions, planTasksByProjectId, projects, providedRows],
+  const rawBaseRows = useMemo(
+    () => providedRows ?? projects.map(project => buildProjectSummaryRow(project, sourceFieldDefinitions, planTasksByProjectId[project.id])),
+    [sourceFieldDefinitions, planTasksByProjectId, projects, providedRows],
   )
+  const baseRows = useMemo(() => projectSummaryRows(permissionCenter, currentLoginUser, rawBaseRows, sources), [permissionCenter, currentLoginUser, rawBaseRows, sources])
+  const optionRows = useMemo(() => projectSummaryRows(permissionCenter, currentLoginUser, providedExportRows ?? optionProjects.map(project => buildProjectSummaryRow(project, sourceFieldDefinitions, planTasksByProjectId[project.id])), sources), [permissionCenter, currentLoginUser, providedExportRows, optionProjects, sourceFieldDefinitions, planTasksByProjectId, sources])
   const quickFilterDefinitions = useMemo(() => {
     if (matrixVariant === 'machine') {
-      return getProjectSummaryQuickFilterDefinitions(projectType, optionProjects)
+      return getProjectSummaryQuickFilterDefinitions(projectType, []).filter(field => !allowedFields || projectFieldAllowed(allowedFields, field.key)).map(field => ({ ...field, options: collectOptions(optionRows, field.key) }))
     }
     if (!matrixVariant?.startsWith('technical')) {
-      return getProjectSummaryQuickFilterDefinitions(projectType, optionProjects)
+      return getProjectSummaryQuickFilterDefinitions(projectType, []).filter(field => !allowedFields || projectFieldAllowed(allowedFields, field.key)).map(field => ({ ...field, options: collectOptions(optionRows, field.key) }))
     }
     const optionsFor = (key: string) => collectOptions(baseRows, key)
-    return matrixVariant === 'technical-subproject'
+    const technicalDefinitions = matrixVariant === 'technical-subproject'
       ? [{ key: 'parentProjectName', label: '所属TDT项目名称', options: optionsFor('parentProjectName') }]
       : [
           { key: 'technicalTrack', label: '技术赛道', options: optionsFor('technicalTrack') },
           { key: 'tmg', label: 'TMG及技术领域', options: optionsFor('tmg') },
         ]
-  }, [baseRows, matrixVariant, optionProjects, projectType])
+    return technicalDefinitions.filter(field => !allowedFields || projectFieldAllowed(allowedFields, field.key))
+  }, [baseRows, matrixVariant, optionRows, projectType, allowedFieldKey])
   const quickFilterByKey = useMemo(
     () => new Map(quickFilterDefinitions.map(definition => [definition.key, definition])),
     [quickFilterDefinitions],
@@ -660,7 +671,7 @@ export default function ProjectSummaryTable({
             }
           : key === 'marketName' ? (value: unknown, row: ProjectSummaryRow) => formatMarketName(value, row.brand)
           : key === 'jiraProjects' ? (_value: unknown, row: ProjectSummaryRow) => <JiraProjectTags value={row.__jiraProjects} compact />
-          : key === 'fanTrialEnabled' ? (value: unknown, row: ProjectSummaryRow) => row.__fanTrialEnabled === '是' ? <FanTrialTags value={row.__fanTrialCountries as ProjectInfoValue} compact /> : String(value ?? '否')
+          : key === 'fanTrialEnabled' ? (value: unknown, row: ProjectSummaryRow) => value === undefined ? null : row.__fanTrialEnabled === '是' && row.__fanTrialCountries !== undefined ? <FanTrialTags value={row.__fanTrialCountries as ProjectInfoValue} compact /> : String(value ?? '否')
           : undefined,
         onHeaderCell: () => {
           const headerCell = baseHeaderCell?.() ?? {}
@@ -920,11 +931,17 @@ export default function ProjectSummaryTable({
   }
 
   const exportRows = (scope: 'all' | 'current') => {
-    const rows = scope === 'current' ? filteredRows : providedExportRows ?? optionProjects.map(project => buildProjectSummaryRow(project, fieldDefinitions, planTasksByProjectId[project.id]))
-    const exportColumns = visibleDefinitions.filter(field => field.key !== 'projectCount').map(field => ({
+    const actor = useProjectStore.getState().currentLoginUser
+    const model = usePermissionStore.getState().permissionCenter
+    if (model && !hasMenuPermission(actor, 'project.view', 'export')) return
+    const currentKeys = new Set(filteredRows.map(row => row.key))
+    const candidates = scope === 'current' ? rawBaseRows.filter(row => currentKeys.has(row.key)) : providedExportRows ?? optionProjects.map(project => buildProjectSummaryRow(project, sourceFieldDefinitions, planTasksByProjectId[project.id]))
+    const rows = projectSummaryRows(model, actor, candidates, sources, 'export')
+    const exportFields = model ? getAuthorizedColumns(model, actor, 'project.view', 'export') : null
+    const exportColumns = visibleDefinitions.filter(field => field.key !== 'projectCount' && (!exportFields || projectFieldAllowed(exportFields, field.key))).map(field => ({
       key: field.key,
       title: typeof field.title === 'string' ? field.title : field.key,
-      formatter: (_value: unknown, row: ProjectSummaryRow) => getProjectListExportValue(field.key, row),
+      formatter: (_value: unknown, row: ProjectSummaryRow) => Object.hasOwn(row, field.key) ? getProjectListExportValue(field.key, row) : '',
     }))
     exportSheet(rows, exportColumns, `${projectType}_项目视图_${scope === 'all' ? '全部' : '当前'}_${exportTimestamp()}.xlsx`, '项目视图')
   }
@@ -1034,12 +1051,12 @@ export default function ProjectSummaryTable({
           onApply={applyColumnSettings}
         />
       )}
-      <Dropdown trigger={['click']} menu={{ items: [
+      {canExport && <Dropdown trigger={['click']} menu={{ items: [
         { key: 'all', label: '导出全部', title: '当前项目分类及查看范围内全部项目，使用当前显示字段' },
         { key: 'current', label: '导出当前', title: '当前筛选结果，包含所有分页，使用当前显示字段', disabled: !filteredRows.length },
       ], onClick: ({ key }) => exportRows(key as 'all' | 'current') }}>
         <Button icon={<ExportOutlined />}>导出</Button>
-      </Dropdown>
+      </Dropdown>}
       {toolbarTrailingAction}
     </Space>
   )

@@ -583,6 +583,7 @@ export const initialProjects: ProjectSeed[] = [
   ...formalProjectSeeds.slice(1),
 ].map((project, index) => ({
   ...project, projectAttribute: project.projectAttribute || 'formal',
+  ...(['1', '2', '5', '9'].includes(project.id) ? { mockTeamSourceId: `legacy:${project.id}` } : {}),
   ...(['1', '3'].includes(project.id) ? { fieldValues: { ...project.fieldValues, fanTrialEnabled: '是', fanTrialCountries: project.id === '1'
     ? [{ country: '尼日利亚', quantity: 20 }]
     : [{ country: '尼日利亚', quantity: 30 }, { country: '肯尼亚', quantity: 20 }, { country: '印度', quantity: 15 }] } } : {}),

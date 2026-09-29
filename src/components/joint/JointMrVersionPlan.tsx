@@ -1,5 +1,7 @@
 'use client'
 
+import { isProjectTeamReadOnly } from '@/stores/permission'
+import { useProjectTeamStore } from '@/stores/projectTeam'
 import { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import {
@@ -19,7 +21,7 @@ import { LockOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
-import { usePermissionStore } from '@/stores/permission'
+import { usePermissionStore, hasMenuPermission, useMenuPermission } from '@/stores/permission'
 import { makeMrMachineRowLockKey, rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { ensureEnumHydrated, useEnumStore } from '@/stores/enums'
 import { buildMrAggregationSources, selectCanonicalTosMrInstances } from '@/lib/mrPlanSourceAdapters'
@@ -154,19 +156,41 @@ function resolveCurrentBatchAccess(): { actor: string; permission: MrPermissionR
   return {
     actor,
     permission: {
-      canView: Boolean(actor),
+      canView: Boolean(actor) && (!permissionState.permissionCenter || hasMenuPermission(actor, 'joint.plan')),
       canEditTemplate: isGlobalAdmin,
       canEditTos: false,
-      canEditMachine: isGlobalAdmin,
+      canEditMachine: isGlobalAdmin && (!permissionState.permissionCenter || hasMenuPermission(actor, 'joint.plan', 'edit')),
       canStopRelease: false,
       canEditMarket: false,
-      canManageMachineLocks: isGlobalAdmin || managedTosProjectIds.length > 0,
+      canManageMachineLocks: (isGlobalAdmin || managedTosProjectIds.length > 0) && (!permissionState.permissionCenter || hasMenuPermission(actor, 'joint.plan', 'edit')),
       tosProjectIds: managedTosProjectIds,
     },
   }
 }
 
+function resolveCurrentMachineAccess(row: MrJointMachineRow): { actor: string; permission: MrPermissionResult } {
+  const projectState = useProjectStore.getState()
+  const planState = usePlanStore.getState()
+  const permissionState = usePermissionStore.getState()
+  const sources = buildMrAggregationSources({
+    projects: filterFormalRegistryProjects(projectState.projects), marketConfigsByProjectId: projectState.marketConfigsByProjectId,
+    tosTypeConfigsByProjectId: projectState.tosTypeConfigsByProjectId, marketVersionsByKey: planState.marketVersionsByKey,
+    tosTypeVersionsByKey: planState.tosTypeVersionsByKey, publishedSnapshots: planState.publishedSnapshots,
+    fallbackVersions: planState.versions, packageModeRows: useEnumStore.getState().rowsByType['package-mode-mapping'],
+  })
+  const actor = projectState.currentLoginUser
+  const machine = sources.machineProjects.find(project => project.id === row.projectId)
+  const permission = resolveMrPermissions({ context: 'joint-machine', currentUser: actor,
+    globalAdminUsers: permissionState.globalRoles.find(role => role.name === '管理组')?.members ?? [],
+    tosManagerUsers: sources.tosManagerUsersByProjectId[row.tosProjectId] ?? [], machineSpm: machine?.spm ?? '', machineSpmUsers: machine?.spmUsers,
+    machineProjectId: row.projectId, tosProjectId: row.tosProjectId, locked: Boolean(useMrVersionPlanStore.getState().machineRowLocks[makeMrMachineRowLockKey(row)]),
+  })
+  if (permissionState.permissionCenter && !hasMenuPermission(actor, 'joint.plan', 'edit')) permission.canEditMachine = false
+  return { actor, permission }
+}
+
 export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlanProps) {
+  const teamSnapshot = useProjectTeamStore(state => state.teamsByProjectId)
   const [messageApi, messageContextHolder] = message.useMessage()
   const [modalApi, modalContextHolder] = Modal.useModal()
   const [hydrated, setHydrated] = useState(jointMrHydrated)
@@ -186,6 +210,10 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     tosTypePlanDataByProjectId,
   } = usePlanStore()
   const globalRoles = usePermissionStore(state => state.globalRoles)
+  const centerInitialized = usePermissionStore(state => Boolean(state.permissionCenter))
+  const jointPermission = useMenuPermission(currentLoginUser, 'joint.plan')
+  const canViewJoint = !centerInitialized || jointPermission.can('view')
+  const canEditJoint = !centerInitialized || jointPermission.can('edit')
   const enumRowsByType = useEnumStore(state => state.rowsByType)
   const enumHasHydrated = useEnumStore(state => state.hasHydrated)
   const enumHydrationError = useEnumStore(state => state.hydrationError)
@@ -255,7 +283,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   )
 
   useEffect(() => {
-    if (!hydrated || !sourcesHydrated) return
+    if (!hydrated || !sourcesHydrated || !canViewJoint) return
     reconcileMachinePlans({
       today,
       tosProjects: sources.tosProjects,
@@ -263,7 +291,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
       latestPublishedLevel1ByProjectId: sources.latestPublishedLevel1ByProjectId,
       preserveMachineProjectIds,
     })
-  }, [hydrated, sourcesHydrated, reconcileMachinePlans, sources, today, tosInstancesByProjectId, preserveMachineProjectIds])
+  }, [hydrated, sourcesHydrated, reconcileMachinePlans, sources, today, tosInstancesByProjectId, preserveMachineProjectIds, canViewJoint])
 
   const projection = useMemo(() => reconcileJointMachinePlans({
     today,
@@ -373,24 +401,26 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
       locked: Boolean(machineRowLocks[lockKey]),
     }),
   ] as const]
-  })), [currentLoginUser, globalAdminUsers, machineRowLocks, projection.rows, sources.machineProjects, sources.tosManagerUsersByProjectId])
+  })), [teamSnapshot, currentLoginUser, globalAdminUsers, machineRowLocks, projection.rows, sources.machineProjects, sources.tosManagerUsersByProjectId])
   const isGlobalAdmin = globalAdminUsers.some(user => user.trim() === currentLoginUser.trim())
   const managedTosProjectIds = useMemo(() => sources.tosProjects
     .filter(project => (sources.tosManagerUsersByProjectId[project.projectId] ?? []).some(user => user.trim() === currentLoginUser.trim()))
     .map(project => project.projectId), [currentLoginUser, sources.tosManagerUsersByProjectId, sources.tosProjects])
-  const canBatchManage = isGlobalAdmin || managedTosProjectIds.length > 0
+  const canBatchManage = canEditJoint && (isGlobalAdmin || managedTosProjectIds.length > 0)
   useEffect(() => {
     const selectableKeys = new Set(filteredRows.flatMap(row => (
-      row.kind === 'machine' && (isGlobalAdmin || managedTosProjectIds.includes(row.tosProjectId)) ? [row.key] : []
+      row.kind === 'machine' && !isProjectTeamReadOnly(currentLoginUser, row.projectId) && canEditJoint && (isGlobalAdmin || managedTosProjectIds.includes(row.tosProjectId)) ? [row.key] : []
     )))
     setSelectedRowKeys(previous => previous.filter(key => selectableKeys.has(key)))
-  }, [filteredRows, isGlobalAdmin, managedTosProjectIds])
-  const handleTransferType = (row: MrJointMachineRow, value: MrTransferType, permission: MrPermissionResult) => {
-    const updated = updateMachineTransferType(row.key, value, currentLoginUser, permission)
+  }, [filteredRows, isGlobalAdmin, managedTosProjectIds, canEditJoint, currentLoginUser, teamSnapshot])
+  const handleTransferType = (row: MrJointMachineRow, value: MrTransferType) => {
+    const access = resolveCurrentMachineAccess(row)
+    const updated = updateMachineTransferType(row.key, value, access.actor, access.permission)
     if (!updated) void messageApi.error('1+N转测类型更新失败，请检查项目权限')
   }
-  const handleDate = (row: MrJointMachineRow, activityId: string, value: string, permission: MrPermissionResult) => {
-    const updated = updateMachineDate(row.key, activityId, value, currentLoginUser, permission)
+  const handleDate = (row: MrJointMachineRow, activityId: string, value: string) => {
+    const access = resolveCurrentMachineAccess(row)
+    const updated = updateMachineDate(row.key, activityId, value, access.actor, access.permission)
     if (!updated) void messageApi.error('日期更新失败，请检查项目权限或日期格式')
   }
   const handleOpenProject = (row: MrJointMachineRow, metadata: MrMachineMetadata) => {
@@ -402,6 +432,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
     return projection.rows.filter((row): row is MrJointMachineRow => row.kind === 'machine' && selected.has(row.key))
   }, [projection.rows, selectedRowKeys])
   const confirmBatch = (action: 'lock' | 'unlock') => {
+    if (!canEditJoint) return
     const rows = selectedMachineRows
     const title = action === 'lock' ? '锁定所选项目' : '解锁所选项目'
     modalApi.confirm({
@@ -474,8 +505,8 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
             aria-label={`${row.projectId}-${row.tosVersion}-1+N版本类型`}
             value={row.plan.transferType}
             options={MR_TRANSFER_OPTIONS.map(value => ({ value, label: value }))}
-            disabled={!permission?.canEditMachine}
-            onChange={value => handleTransferType(row, value, permission!)}
+            disabled={!canEditJoint || !permission?.canEditMachine}
+            onChange={value => handleTransferType(row, value)}
             style={{ width: 88 }}
           />
           </Tooltip>
@@ -521,7 +552,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
         }
         const permission = permissionByRowKey.get(row.key)
         const value = row.plan.dates[activity.id] || ''
-        const content = !permission?.canEditMachine
+        const content = !canEditJoint || !permission?.canEditMachine
           ? <span aria-label={ariaLabel}>{display(value)}</span>
           : (
           <DatePicker
@@ -529,7 +560,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
             format="YYYY-MM-DD"
             allowClear
             aria-label={ariaLabel}
-            onChange={date => handleDate(row, activity.id, date?.format('YYYY-MM-DD') ?? '', permission)}
+            onChange={date => handleDate(row, activity.id, date?.format('YYYY-MM-DD') ?? '')}
             status={errors.length ? 'error' : undefined}
             style={{ width: '100%' }}
           />
@@ -547,6 +578,8 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
   if (!hydrated) {
     return <div className="pms-joint-mr-loading" aria-busy="true"><Spin size="small" /> MR版本计划加载中</div>
   }
+
+  if (!canViewJoint) return <Empty description="暂无项目组合计划权限" />
 
   return (
     <div className="pms-joint-mr-plan">
@@ -601,7 +634,7 @@ export default function JointMrVersionPlan({ onOpenProject }: JointMrVersionPlan
           fixed: 'left',
           onChange: keys => setSelectedRowKeys(keys.map(String)),
           getCheckboxProps: row => ({
-            disabled: row.kind === 'tos-reference' || (!isGlobalAdmin && !managedTosProjectIds.includes(row.tosProjectId)),
+            disabled: row.kind === 'tos-reference' || isProjectTeamReadOnly(currentLoginUser, row.projectId) || (!isGlobalAdmin && !managedTosProjectIds.includes(row.tosProjectId)),
             'aria-label': row.kind === 'tos-reference'
               ? `tOS基准行-${row.tosVersion}-不可选`
               : `选择-${row.tosVersion}-${sources.machineMetadataByProjectId[row.projectId]?.projectName ?? row.projectId}`,

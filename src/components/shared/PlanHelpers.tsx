@@ -438,6 +438,7 @@ export function sortTeamMembers(members: TMTeamMember[]): TMTeamMember[] {
 export const NOTIFY_DIFF_FIELDS = ['taskName', 'planStartDate', 'planEndDate', 'responsible', 'predecessor'] as const
 
 export const MOCK_USER_MAP: Record<string, FeishuRecipient> = {
+  'SnoopyYu': { openId: 'ou_mock_demo_snoopy_yu', email: 'snoopy_yu@example.com', name: 'SnoopyYu' },
   '演示用户01': { openId: 'ou_mock_demo_user_01', email: 'demo_user_01@example.com', name: '演示用户01' },
   '演示用户02': { openId: 'ou_mock_demo_user_02',     email: 'demo_user_02@example.com',     name: '演示用户02' },
   '演示用户03': { openId: 'ou_mock_demo_user_03',   email: 'demo_user_03@example.com',   name: '演示用户03' },
@@ -447,6 +448,8 @@ export const MOCK_USER_MAP: Record<string, FeishuRecipient> = {
   '演示用户07': { openId: 'ou_mock_demo_user_07', email: 'demo_user_07@example.com', name: '演示用户07' },
   '演示用户08': { openId: 'ou_mock_demo_user_08', email: 'demo_user_08@example.com', name: '演示用户08' },
   '演示用户09': { openId: 'ou_mock_demo_user_09', email: 'demo_user_09@example.com', name: '演示用户09' },
+  '演示用户10': { openId: 'ou_mock_demo_user_10', email: 'demo_user_10@example.com', name: '演示用户10' },
+  '演示用户11': { openId: 'ou_mock_demo_user_11', email: 'demo_user_11@example.com', name: '演示用户11' },
   '演示成员03': { openId: 'ou_mock_demo_member_03',    email: 'demo_member_03@example.com',    name: '演示成员03' },
 }
 

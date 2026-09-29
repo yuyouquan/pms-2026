@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, Suspense } from 'react'
+import { useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   Card, Tag, Space, Input, Button, Tooltip, Empty, Segmented, Divider, Row, Col, Table
@@ -24,6 +24,9 @@ import {
 } from '@/lib/columnSettings'
 import { isMachineProjectType, PROJECT_TYPE_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { useProjectStore } from '@/stores/project'
+import { usePermissionStore, useHasPermission } from '@/stores/permission'
+import { canEnterProjectSpace } from '@/lib/projectListFilters'
+import { isPermissionCenterAdmin } from '@/lib/permissionCenter'
 import { usePlanStore } from '@/stores/plan'
 import { resolveTechnicalSharePlan, useTechnicalPlanStore } from '@/stores/technicalPlan'
 import { getSharedLevel1Scopes, resolveSharedLevel1Plan } from '@/lib/sharePlan'
@@ -42,6 +45,12 @@ function SharePlanEmpty({ description }: { description: string }) {
 function SharePlanContent() {
   const searchParams = useSearchParams()
   const projectId = searchParams.get('projectId')
+  const actor = useProjectStore(state => state.currentLoginUser)
+  const permissionModel = usePermissionStore(state => state.permissionCenter)
+  const projectRoles = usePermissionStore(state => state.rolesByProject)
+  const canProject = useHasPermission(actor, projectId ?? undefined)
+  useEffect(() => { usePermissionStore.getState().ensurePermissionCenter() }, [])
+  const canViewSharedPlan = !!projectId && !!permissionModel && canEnterProjectSpace(projectId, actor, projectRoles, isPermissionCenterAdmin(permissionModel, actor)) && canProject('plan:一级计划-查看')
   const level = searchParams.get('level') || 'level1'
   const technical = searchParams.get('technical')
   const technicalKind = searchParams.get('kind')
@@ -99,6 +108,9 @@ function SharePlanContent() {
   const planTitle = isTechnicalShare
     ? (technicalKind === 'tdt' ? 'TDT项目计划' : '子项目计划')
     : '一级计划'
+
+  if (!permissionModel) return <SharePlanEmpty description="正在加载访问权限" />
+  if (!canViewSharedPlan) return <SharePlanEmpty description="暂无可查看的已发布计划" />
 
   // Technical links intentionally use one non-sensitive empty state for invalid and unpublished scopes.
   if (isTechnicalShare && (!projectId || !project || !technicalSharePlan.ok)) {

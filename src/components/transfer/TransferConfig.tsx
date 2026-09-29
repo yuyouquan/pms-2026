@@ -6,17 +6,21 @@ import { DeleteOutlined, DiffOutlined, DownloadOutlined, EditOutlined, PlusOutli
 import * as XLSX from 'xlsx'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
-import { hasGlobalPermission, useHasGlobalPermission } from '@/stores/permission'
+import { canRunGlobalMenuAction, useGlobalMenuPermission } from '@/lib/globalMenuPermissions'
 import { TRANSFER_TEMPLATE_HEADERS, compareTransferTemplates, parseTransferTemplateRows, transferTemplateMatrix, transferTemplateRowSpans, type TransferTemplateKind, type TransferTemplateRow, type TransferTeamRole } from '@/lib/transferConfig'
 import { exportMergedSheet, exportTimestamp } from '@/utils/exportExcel'
 
 export function TransferConfig(_props: unknown) {
   const state = useTransferStore()
   const actor = useProjectStore(s => s.currentLoginUser)
-  const canEdit = useHasGlobalPermission(actor)('configCenter:transferEdit')
   const projectType = state.transferProjectType
   const view = state.transferConfigView
   const kind: TransferTemplateKind = view === 'review' && projectType !== 'tOS版本项目' ? 'review' : 'checklist'
+  const menuId = `config.transfer:${projectType}:${view === 'team' ? 'team' : kind}` as const
+  const can = useGlobalMenuPermission(actor, menuId)
+  const canEdit = can('edit')
+  const canImport = can('import')
+  const canExport = can('export')
   const versions = state.tmTemplateVersions[projectType][kind]
   const selected = versions.find(version => version.id === state.tmConfigSelectedVersion) ?? versions.at(-1)
   const [editing, setEditing] = useState(false)
@@ -25,6 +29,7 @@ export function TransferConfig(_props: unknown) {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   useEffect(() => { setEditing(false); setPendingRows(null); state.setTmConfigDiffOpen(false) }, [actor, projectType, view])
+  useEffect(() => { if (!canEdit) setEditing(false); if (!canImport) setPendingRows(null) }, [canEdit, canImport])
   const rows = (selected?.rows ?? []).filter(row => !state.tmConfigSearchText || Object.values(row).some(value => String(value).toLowerCase().includes(state.tmConfigSearchText.toLowerCase())))
   const spans = transferTemplateRowSpans(rows)
   const cell = (_: unknown, index?: number) => ({ rowSpan: spans[index ?? 0] })
@@ -39,6 +44,7 @@ export function TransferConfig(_props: unknown) {
     { title: '智能检查规则', dataIndex: 'aiCheckRule', key: 'aiCheckRule', width: 280 },
   ]
   const exportRows = (template: boolean) => {
+    if (!canRunGlobalMenuAction(actor, menuId, 'export')) return
     const data = template ? (kind === 'checklist' ? [{ id: 1, seq: '1', checkItem: '填写标准', type: '检查项', responsibleRole: state.tmTeamConfigs[projectType][0].roleName, entryRole: `在研${state.tmTeamConfigs[projectType][0].roleName}`, reviewRole: `维护${state.tmTeamConfigs[projectType][0].roleName}`, aiCheckRule: '' }] : [{ id: 1, seq: '1', standard: '填写评审要素', type: '检查项', description: '', remark: '', responsibleRole: state.tmTeamConfigs[projectType][0].roleName, entryRole: `在研${state.tmTeamConfigs[projectType][0].roleName}`, reviewRole: `维护${state.tmTeamConfigs[projectType][0].roleName}`, aiCheckRule: '' }]) : selected?.rows ?? []
     const groupSpans = transferTemplateRowSpans(data)
     const merges = groupSpans.flatMap((span, row) => span > 1 ? [0, 1].map(col => ({ s: { r: row + 1, c: col }, e: { r: row + span, c: col } })) : [])
@@ -47,7 +53,7 @@ export function TransferConfig(_props: unknown) {
   const beforeUpload = async (file: File) => {
     const startActor = actor, startType = projectType, startView = view
     try {
-      if (!hasGlobalPermission(startActor, 'configCenter:transferEdit')) throw new Error('暂无转维配置编辑权限')
+      if (!canRunGlobalMenuAction(startActor, menuId, 'import')) throw new Error('暂无转维配置编辑权限')
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
       const sheet = workbook.Sheets[workbook.SheetNames[0]]
       if (!sheet) throw new Error('文件没有工作表')
@@ -58,6 +64,7 @@ export function TransferConfig(_props: unknown) {
         for (let row = merge.s.r; row <= merge.e.r; row++) if (matrix[row]) matrix[row][merge.s.c] = value
       }
       if (useProjectStore.getState().currentLoginUser !== startActor || useTransferStore.getState().transferProjectType !== startType || useTransferStore.getState().transferConfigView !== startView) return false
+      if (!canRunGlobalMenuAction(startActor, menuId, 'import')) throw new Error('转维配置导入权限已变更')
       setPendingRows(parseTransferTemplateRows(matrix, kind, state.tmTeamConfigs[projectType]))
     } catch (error) { message.error(error instanceof Error ? error.message : '无法读取文件，请使用Excel模板') }
     return false
@@ -67,12 +74,13 @@ export function TransferConfig(_props: unknown) {
     const after = versions.find(version => version.id === to)?.rows ?? []
     return compareTransferTemplates(before, after, kind)
   }, [from, to, versions, kind])
+  if (!can('view')) return <Empty description="暂无此配置查看权限" />
   if (view === 'team') return <>
-    <Card className="pms-config-workspace-card pms-solid-surface pms-transfer-surface" title={`${projectType} · 转维团队配置`} extra={canEdit && <Button icon={<EditOutlined />} onClick={() => { setRoles(structuredClone(state.tmTeamConfigs[projectType])); setEditing(true) }}>编辑</Button>}>
+    <Card className="pms-config-workspace-card pms-solid-surface pms-transfer-surface" title={`${projectType} · 转维团队配置`} extra={canEdit && <Button icon={<EditOutlined />} onClick={() => { if (!canRunGlobalMenuAction(actor, menuId, 'edit')) return; setRoles(structuredClone(state.tmTeamConfigs[projectType])); setEditing(true) }}>编辑</Button>}>
       <Table className="pms-table" size="small" rowKey="id" pagination={false} dataSource={state.tmTeamConfigs[projectType]} columns={[{ title: '角色名', dataIndex: 'roleName' }, { title: 'IPM角色Code', dataIndex: 'ipmRoleCode' }]} />
     </Card>
     <Modal className="pms-modal pms-transfer-surface" title={`${projectType} · 转维团队配置`} open={editing} width={700} onCancel={() => setEditing(false)} okText="保存" onOk={() => {
-      if (useProjectStore.getState().currentLoginUser !== actor) return
+      if (!canRunGlobalMenuAction(actor, menuId, 'edit')) return
       const errors = state.saveTransferTeamConfig(projectType, roles, actor)
       if (errors.length) { message.error(errors.join('；')); return }
       setEditing(false); message.success('团队配置已保存，新申请将使用当前配置')
@@ -87,9 +95,9 @@ export function TransferConfig(_props: unknown) {
   </>
   return <>
     <Card className="pms-config-workspace-card pms-solid-surface pms-transfer-surface" title={`${projectType} · ${kind === 'checklist' ? 'CheckList' : '评审要素'}`} extra={<Space wrap>
-      <Button icon={<DownloadOutlined />} onClick={() => exportRows(true)}>下载导入模板</Button>
-      {canEdit && <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={beforeUpload}><Button icon={<UploadOutlined />}>导入</Button></Upload>}
-      <Button icon={<DownloadOutlined />} onClick={() => exportRows(false)}>导出</Button>
+      <Button disabled={!canExport} icon={<DownloadOutlined />} onClick={() => exportRows(true)}>下载导入模板</Button>
+      {canImport && <Upload accept=".xlsx,.xls" showUploadList={false} beforeUpload={beforeUpload}><Button icon={<UploadOutlined />}>导入</Button></Upload>}
+      <Button disabled={!canExport} icon={<DownloadOutlined />} onClick={() => exportRows(false)}>导出</Button>
       <Select aria-label="转维模板版本" style={{ width: 110 }} value={selected?.id} options={versions.map(version => ({ value: version.id, label: version.version }))} onChange={state.setTmConfigSelectedVersion} />
       <Button icon={<DiffOutlined />} disabled={versions.length < 2} onClick={() => { setFrom(versions.at(-2)?.id ?? ''); setTo(selected?.id ?? ''); state.setTmConfigDiffOpen(true) }}>版本对比</Button>
     </Space>}>
@@ -97,7 +105,7 @@ export function TransferConfig(_props: unknown) {
       <Table className="pms-table" rowKey="id" size="small" pagination={false} dataSource={rows} columns={columns} scroll={{ x: kind === 'review' ? 1540 : 1150 }} />
     </Card>
     <Modal className="pms-modal pms-transfer-surface" title="确认导入模板" open={Boolean(pendingRows)} onCancel={() => setPendingRows(null)} okText="确认导入" onOk={() => {
-      if (!pendingRows || useProjectStore.getState().currentLoginUser !== actor) return
+      if (!pendingRows || !canRunGlobalMenuAction(actor, menuId, 'import')) return
       try {
         const validated = parseTransferTemplateRows([TRANSFER_TEMPLATE_HEADERS[kind], ...transferTemplateMatrix(pendingRows, kind)], kind, useTransferStore.getState().tmTeamConfigs[projectType])
         if (!state.importTransferTemplate(projectType, kind, validated, actor)) { message.error('导入失败，请检查权限'); return }

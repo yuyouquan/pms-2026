@@ -2,12 +2,14 @@ import { PROJECT_TEMPLATE_TYPES } from '@/constants/projectTypes'
 import { CONFIG_MODULE_MAP } from '@/constants/hrConfig'
 import { ENUM_DEFINITIONS, ENUM_TYPE_KEYS } from '@/lib/enumValues'
 import type { EnumTypeKey } from '@/types/enums'
+import { ROLE_TEMPLATE_TYPES, type RoleTemplateProjectType } from '@/types/rolePermissionTemplate'
 
 export type ConfigMenuTarget =
   | { module: 'plan'; projectType: (typeof PROJECT_TEMPLATE_TYPES)[number] }
   | { module: 'transfer'; projectType: '整机产品项目' | 'tOS版本项目'; view: 'checklist' | 'review' | 'team' }
   | { module: 'enum'; enumType: EnumTypeKey }
   | { module: 'hrPipeline'; moduleKey: 'hrModel' | 'nonLaborSubject' | 'feeRate' }
+  | { module: 'rolePermission'; projectType: RoleTemplateProjectType }
 
 export interface ConfigMenuLeaf {
   key: string
@@ -22,6 +24,7 @@ export interface ConfigMenuGroup {
 }
 
 export const CONFIG_MENU_GROUPS: ConfigMenuGroup[] = [
+  { key: 'rolePermission', label: '角色权限配置模板', children: ROLE_TEMPLATE_TYPES.map(projectType => ({ key: `rolePermission:${projectType}`, label: projectType, target: { module: 'rolePermission' as const, projectType } })) },
   {
     key: 'plan', label: '计划模板配置',
     children: PROJECT_TEMPLATE_TYPES.map(projectType => ({

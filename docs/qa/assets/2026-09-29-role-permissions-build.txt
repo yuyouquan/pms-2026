@@ -1,0 +1,36 @@
+
+> project-management-system@1.0.0 build
+> next build
+
+  ▲ Next.js 14.2.5
+
+   Creating an optimized production build ...
+Browserslist: browsers data (caniuse-lite) is 7 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/8) ...
+   Generating static pages (2/8) 
+   Generating static pages (4/8) 
+   Generating static pages (6/8) 
+ ✓ Generating static pages (8/8)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    197 B           1.3 MB
+├ ○ /_not-found                          879 B          88.2 kB
+├ ○ /config/level1-template              542 B           1.3 MB
+├ ○ /config/level2-template              543 B           1.3 MB
+├ ○ /icon.svg                            0 B                0 B
+└ ○ /share/plan                          3.87 kB         723 kB
++ First Load JS shared by all            87.3 kB
+  ├ chunks/23-4a9b7426bc541ef6.js        31.7 kB
+  ├ chunks/fd9d1056-ea250322482a6b55.js  53.7 kB
+  └ other shared chunks (total)          1.97 kB
+
+
+○  (Static)  prerendered as static content
+

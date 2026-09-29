@@ -1,0 +1,12 @@
+PASS actual workspace callbacks + real stores Machine/annual: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Machine/projectEstimate: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Machine/projectBudget: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Tos/annual: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Tos/projectEstimate: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Tos/projectBudget: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Technical/annual: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Technical/projectEstimate: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Technical/projectBudget: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Capability/annual: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Capability/projectEstimate: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock
+PASS actual workspace callbacks + real stores Capability/projectBudget: default/select/activate/clear/refresh/rehydrate/guard cancel/confirm/lock

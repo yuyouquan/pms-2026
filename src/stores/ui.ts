@@ -13,6 +13,7 @@ export type MainModule =
   | 'roadmap'
   | 'hrPipeline'
   | 'config'
+  | 'globalPermission'
   | 'projectSpace'
 
 export type WorkbenchTab = 'todo'
@@ -69,6 +70,7 @@ export interface UiState {
 
   // Edit guard
   isEditMode: boolean
+  permissionCenterHasDraft: boolean
   showLeaveConfirm: boolean
   pendingNavigation: (() => void) | null
 
@@ -109,6 +111,7 @@ export interface UiActions {
   clearMrPlanNavigationIntent: () => void
 
   setIsEditMode: (v: boolean) => void
+  setPermissionCenterHasDraft: (v: boolean) => void
   setShowLeaveConfirm: (v: boolean) => void
   setPendingNavigation: (v: (() => void) | null) => void
 
@@ -155,6 +158,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
 
   // Edit guard
   isEditMode: false,
+  permissionCenterHasDraft: false,
   showLeaveConfirm: false,
   pendingNavigation: null,
 
@@ -265,6 +269,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
   clearMrPlanNavigationIntent: () => set({ mrPlanNavigationIntent: null }),
 
   setIsEditMode: (v) => set({ isEditMode: v }),
+  setPermissionCenterHasDraft: (v) => set({ permissionCenterHasDraft: v }),
   setShowLeaveConfirm: (v) => set({ showLeaveConfirm: v }),
   setPendingNavigation: (v) => set({ pendingNavigation: v }),
 
@@ -277,8 +282,8 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
 
   // Convenience methods
   navigateWithEditGuard: (action, isCurrentDraft) => {
-    const { isEditMode } = get()
-    if (isEditMode && !isCurrentDraft) {
+    const { isEditMode, permissionCenterHasDraft } = get()
+    if (permissionCenterHasDraft || (isEditMode && !isCurrentDraft)) {
       set({ pendingNavigation: action, showLeaveConfirm: true })
     } else {
       action()
@@ -290,7 +295,7 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
     if (pendingNavigation) {
       pendingNavigation()
     }
-    set({ isEditMode: false, showLeaveConfirm: false, pendingNavigation: null })
+    set({ isEditMode: false, permissionCenterHasDraft: false, showLeaveConfirm: false, pendingNavigation: null })
   },
 
   handleCancelLeave: () => {

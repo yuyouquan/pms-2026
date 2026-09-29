@@ -16,11 +16,11 @@ const ui = get('src/stores/ui.ts').useUiStore
 const rules = get('src/lib/hrVersionRules.ts')
 const access = get('src/lib/hrProjectRegistry.ts')
 const noop = () => {}
-let selected, currentStore, hookCursor = 0
+let selected, currentStore, hookCursor = 0, refCursor = 0, refs = []
 // Keep React/AntD rendering as a minimal element harness; execute the actual
 // workspace handlers, permission rules, edit guard, and persisted store actions.
 const modules = {
-  react: { useEffect: noop, useState: initial => { const index = hookCursor++; return index === 2 ? [selected, value => { selected = value }] : [initial, noop] } },
+  react: { useRef: value => { const index = refCursor++; return refs[index] ??= { current: value } }, useEffect: noop, useState: initial => { const index = hookCursor++; return index === 2 ? [selected, value => { selected = value }] : [initial, noop] } },
   antd: { App: { useApp: () => ({ message: { success: noop, warning: noop } }) }, ...Object.fromEntries(['Alert', 'Button', 'Empty', 'Popconfirm', 'Select', 'Space', 'Tabs', 'Tooltip'].map(name => [name, name])) },
   '@ant-design/icons': new Proxy({}, { get: (_, key) => String(key) }),
   '@/stores/project': { useProjectStore: noop },
@@ -42,6 +42,8 @@ for (const kind of ['Machine', 'Tos', 'Technical', 'Capability']) {
     const fixture = currentStore.getState().projects.find(p => access.canEditHrInScope(p, p.pmsProjectId) && access.getHrAllowedBudgetTypes(p).includes(budgetType) && p.versions.some(v => v.budgetType === budgetType))
     assert.ok(fixture, `${kind}/${budgetType} editable fixture`)
     const project = registry.getState().projects.find(p => p.id === fixture.pmsProjectId)
+    registry.setState({ selectedProject: project })
+    refs = []
     const read = () => currentStore.getState().projects.find(p => p.id === fixture.id)
     const versions = () => read().versions.filter(v => v.budgetType === budgetType)
     const first = versions()[0]
@@ -49,7 +51,7 @@ for (const kind of ['Machine', 'Tos', 'Technical', 'Capability']) {
     const latest = versions().at(-1)
     currentStore.getState().setVersionActive(fixture.id, first.id, true)
     selected = undefined
-    const render = () => { hookCursor = 0; return elements(module.exports.default({ project, category: kind.toLowerCase(), budgetType })) }
+    const render = () => { hookCursor = 0; refCursor = 0; return elements(module.exports.default({ project, category: kind.toLowerCase(), budgetType })) }
     const detail = () => render().find(node => node.type === 'ResourceInlineDetail')
     const button = label => render().find(node => node.type === 'Button' && node.props['aria-label'] === label)
     const active = () => rules.getActiveHrVersion(versions(), budgetType)?.id

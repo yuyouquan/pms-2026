@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert, App, Button, Empty, Popconfirm, Space, Tabs, Tooltip } from 'antd'
 import { FlagFilled, FlagOutlined, HistoryOutlined, DeleteOutlined, DownloadOutlined, LockOutlined, PlusOutlined, UnlockOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -18,6 +18,7 @@ import HrSourceLink from '@/components/project-resources/HrSourceLink'
 import ResourceVersionViews from '@/components/project-resources/ResourceVersionViews'
 import ResourceInlineDetail from '@/components/project-resources/ResourceInlineDetail'
 import { ResourceVersionCreateDialog, ResourceOperationLogDialog } from '@/components/project-resources/ResourceVersionDialogs'
+import { captureResourceOpening, withResourceOpening, type ResourceOpening } from '@/lib/resourceMutationContext'
 import { exportResourceVersion } from '@/components/project-resources/exportResourceVersion'
 
 export default function ResourceVersionWorkspace({ project, category, budgetType, initialVersionId }: {
@@ -29,6 +30,8 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
   const boundFormalProject = useProjectStore(state => getProjectAttribute(project) === 'budget'
     ? state.projects.find(item => item.id === project.boundFormalProjectId && getProjectAttribute(item) === 'formal') : undefined)
   usePermissionStore()
+  const createOpening = useRef<ResourceOpening>()
+  const actionOpening = useRef<ResourceOpening>()
   const [createSource, setCreateSource] = useState<string | null>(null)
   const [logsOpen, setLogsOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | undefined>(initialVersionId)
@@ -38,6 +41,8 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
   const versions = visibleProjects.flatMap(item => item.versions.filter(version => version.budgetType === budgetType)).sort((a, b) => b.minorVersion - a.minorVersion)
   const version = chooseResourceVersion(versions, selectedId)
   const owner = visibleProjects.find(item => item.versions.some(value => value.id === version?.id))
+  const opening = captureResourceOpening(category, project.id, owner?.id, version?.id)
+  const lifecycleKey = `${opening.actor}:${opening.sourceToken}`
   const canCreate = canResourceAction(own, 'createVersion', project.id) && canCreateHrVersion(own, budgetType)
   const canLock = canResourceAction(owner, 'lockVersion', project.id)
   const canSetOfficial = canResourceAction(owner, 'setOfficialVersion', project.id)
@@ -47,14 +52,22 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
   const linked = owner && owner.pmsProjectId !== project.id
   const allowed = getHrAllowedBudgetTypes(own).includes(budgetType)
   const guard = (action: () => void) => useUiStore.getState().navigateWithEditGuard(action, false)
-  const create = () => guard(() => {
-    const current = resourceStore(category).getState().projects.find(item => item.pmsProjectId === project.id)
-    if (!canResourceAction(current, 'createVersion', project.id) || !canCreateHrVersion(current, budgetType)) {
-      message.warning('当前项目新建版本权限已变化')
-      return
-    }
-    setCreateSource('')
-  })
+  const create = () => {
+    const started = { ...opening, projectId: own?.id, versionId: undefined }
+    guard(() => {
+      try {
+        withResourceOpening(started, () => {
+          const current = resourceStore(category).getState().projects.find(item => item.pmsProjectId === project.id)
+          if (!canResourceAction(current, 'createVersion', project.id) || !canCreateHrVersion(current, budgetType)) {
+            message.warning('当前项目新建版本权限已变化')
+            return
+          }
+          createOpening.current = started
+          setCreateSource('')
+        })
+      } catch (error) { message.warning(error instanceof Error ? error.message : '操作失败') }
+    })
+  }
   const openLogs = () => guard(() => {
     if (!canResourceAction({ pmsProjectId: project.id }, 'view', project.id)) {
       message.warning('当前项目资源查看权限已变化')
@@ -62,16 +75,22 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
     }
     setLogsOpen(true)
   })
-  const act = (action: ResourcePermissionAction, callback: (state: ResourceStoreView, currentOwner: ResourceProject, currentVersion: ResourceVersion) => void) => guard(() => {
-    try {
-      const state = resourceStore(category).getState()
-      const currentOwner = state.projects.find(item => item.id === owner?.id)
-      const currentVersion = currentOwner?.versions.find(item => item.id === version?.id && item.budgetType === budgetType)
-      if (!currentOwner || !currentVersion || !isHrVersionVisible(currentOwner, budgetType, project.id) || !canResourceAction(currentOwner, action, project.id)) throw new Error('当前版本或操作权限已变化')
-      if (action === 'deleteVersion' && currentVersion.lockState === 'locked') throw new Error('已锁定版本不能删除')
-      callback(state, currentOwner, currentVersion)
-    } catch (error) { message.warning(error instanceof Error ? error.message : '操作失败') }
-  })
+  const act = (action: ResourcePermissionAction, callback: (state: ResourceStoreView, currentOwner: ResourceProject, currentVersion: ResourceVersion) => void) => {
+    const started = actionOpening.current ?? opening
+    actionOpening.current = undefined
+    guard(() => {
+      try {
+        withResourceOpening(started, () => {
+          const state = resourceStore(category).getState()
+          const currentOwner = state.projects.find(item => item.id === owner?.id)
+          const currentVersion = currentOwner?.versions.find(item => item.id === version?.id && item.budgetType === budgetType)
+          if (!currentOwner || !currentVersion || !isHrVersionVisible(currentOwner, budgetType, project.id) || !canResourceAction(currentOwner, action, project.id)) throw new Error('当前版本或操作权限已变化')
+          if (action === 'deleteVersion' && currentVersion.lockState === 'locked') throw new Error('已锁定版本不能删除')
+          callback(state, currentOwner, currentVersion)
+        })
+      } catch (error) { message.warning(error instanceof Error ? error.message : '操作失败') }
+    })
+  }
   const logs = visibleProjects.flatMap(item => {
     const saved = item.resourceOperationLogs ?? []
     return [...saved, ...item.versions.filter(value => !saved.some(log => log.versionId === value.id && /创建|复制/.test(log.action))).map(value => ({
@@ -80,6 +99,7 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
     }))]
   }).filter(log => log.budgetType === budgetType)
   const label = BUDGET_TYPE_LABELS[budgetType]
+  const createToken = createOpening.current
   return <div className="pms-resource-workspace">
 
     <Tabs className="pms-resource-version-tabs" type="card" tabBarExtraContent={<Space size={6}><Tooltip title="查看操作日志"><Button aria-label="查看操作日志" icon={<HistoryOutlined />} onClick={openLogs} /></Tooltip>{canCreate && <Button icon={<PlusOutlined />} type="primary" onClick={create}>新建版本</Button>}</Space>} activeKey={version?.id} onChange={id => guard(() => setSelectedId(id))}
@@ -96,17 +116,18 @@ export default function ResourceVersionWorkspace({ project, category, budgetType
           {canLock && <Tooltip title={version.lockState === 'locked' ? '解锁' : '锁定'}><Button type="text" aria-label={version.lockState === 'locked' ? '解锁' : '锁定'} icon={version.lockState === 'locked' ? <UnlockOutlined /> : <LockOutlined />} onClick={() => act('lockVersion', (state, currentOwner, currentVersion) => state.setVersionLocked(currentOwner.id, currentVersion.id, currentVersion.lockState !== 'locked'))} /></Tooltip>}
           {canSetOfficial && <Tooltip title={version.isActive ? '取消设置为正式版本' : '设置为正式版本'}><Button type="text" aria-label={version.isActive ? '取消设置为正式版本' : '设置为正式版本'} icon={version.isActive ? <FlagFilled /> : <FlagOutlined />} onClick={() => act('setOfficialVersion', (state, currentOwner, currentVersion) => state.setVersionActive(currentOwner.id, currentVersion.id, !currentVersion.isActive))} /></Tooltip>}
           {canExport && <Tooltip title="导出版本"><Button type="text" aria-label="导出版本" icon={<DownloadOutlined />} onClick={() => act('export', (state, currentOwner, currentVersion) => exportResourceVersion(resourceProjectName(currentOwner), currentVersion, state.monthlyInvestments, '元'))} /></Tooltip>}
-          {canDelete && <Popconfirm title={`删除 ${version.versionNumber}？`} description="删除后无法恢复该版本及其月度投入。" okText="删除" cancelText="取消" onConfirm={() => act('deleteVersion', (state, currentOwner, currentVersion) => state.deleteVersion(currentOwner.id, currentVersion.id))}><Tooltip title="删除"><Button type="text" danger aria-label="删除" icon={<DeleteOutlined />} /></Tooltip></Popconfirm>}
+          {canDelete && <Popconfirm onCancel={() => { actionOpening.current = undefined }} onOpenChange={open => { actionOpening.current = open ? opening : actionOpening.current }} title={`删除 ${version.versionNumber}？`} description="删除后无法恢复该版本及其月度投入。" okText="删除" cancelText="取消" onConfirm={() => act('deleteVersion', (state, currentOwner, currentVersion) => state.deleteVersion(currentOwner.id, currentVersion.id))}><Tooltip title="删除"><Button type="text" danger aria-label="删除" icon={<DeleteOutlined />} /></Tooltip></Popconfirm>}
         </Space></div>
 
       </div>
-      <ResourceInlineDetail key={`detail-${version.id}`} category={category} project={owner} version={version} scopeId={project.id} laborReadOnly={!canEdit('laborEdit')} nonLaborReadOnly={!canEdit('nonLaborEdit')} setupReadOnly={!canEdit('createVersion')} />
-      <ResourceVersionViews key={`monthly-${version.id}`} category={category} version={version} rows={store.monthlyInvestments} readOnly={!canEdit('laborEdit')} onSaveMonth={(rowId, month, value) => resourceStore(category).getState().updateResourceMonthlyInvestment(owner.id, version.id, rowId, month, value, project.id)} />
+      <ResourceInlineDetail key={`detail-${version.id}-${lifecycleKey}`} category={category} project={owner} version={version} scopeId={project.id} laborReadOnly={!canEdit('laborEdit')} nonLaborReadOnly={!canEdit('nonLaborEdit')} setupReadOnly={!canEdit('createVersion')} />
+      <ResourceVersionViews key={`monthly-${version.id}-${lifecycleKey}`} category={category} version={version} rows={store.monthlyInvestments} readOnly={!canEdit('laborEdit')} onSaveMonth={(rowId, month, value) => withResourceOpening(opening, () => resourceStore(category).getState().updateResourceMonthlyInvestment(owner.id, version.id, rowId, month, value, project.id))} />
     </> : <div className="pms-resource-placeholder"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={!allowed ? budgetType === 'annual' ? '暂无关联的年度预算' : '该项目属性不支持此预算类型' : `暂无${label}版本`}>
       {canCreate && <Button type="primary" onClick={create}>创建第一个版本</Button>}
     </Empty></div>}
     {createSource !== null && own && <ResourceVersionCreateDialog versions={versions.filter(item => own.versions.some(ownVersion => ownVersion.id === item.id))} sourceId={createSource || undefined} onCancel={() => setCreateSource(null)} onCreate={options => {
-      const id = resourceStore(category).getState().createResourceVersion(own.id, budgetType, project.id, { ...options, sourceVersionId: options.sourceVersionId || undefined })
+      if (!createToken) throw new Error('请重新打开新建版本')
+      const id = withResourceOpening(createToken, () => resourceStore(category).getState().createResourceVersion(own.id, budgetType, project.id, { ...options, sourceVersionId: options.sourceVersionId || undefined }))
       setSelectedId(id); setCreateSource(null); message.success('版本已创建，可直接填写')
     }} />}
     {logsOpen && <ResourceOperationLogDialog logs={logs} budgetLabel={label} onCancel={() => setLogsOpen(false)} />}
