@@ -1,5 +1,9 @@
-.workspace { --permission-menu-width: 260px; display: flex; gap: 12px; position: relative; height: 100%; min-height: 420px; }
+.workspace { --permission-menu-width: 280px; display: flex; gap: 12px; position: relative; height: 100%; min-height: 420px; }
 .workspace .content { box-shadow: none; border: 1px solid #eeeaf6; border-top: 2px solid var(--pms-brand); }
+.roleList :global(.ant-tree-switcher) { display: none; }
+.roleList :global(.ant-tree-node-content-wrapper) { padding-inline: 8px; }
+.roleItem { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.localRoleIcon { flex: 0 0 auto; color: #8062bd; font-size: 13px; }
 .mobileRoleToggle { display: none; }
 @media (max-width: 760px) {
   .workspace { height: auto; min-height: calc(100dvh - 130px); padding-top: 40px; gap: 0; }

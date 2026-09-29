@@ -10041,6 +10041,13 @@ input.ant-input,
   background: #fff1f0;
 }
 
+/* Keep role-template table actions as links, including destructive actions. */
+.pms-role-template-actions .ant-btn.ant-btn-link {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 /* The project selector yields width before the fixed back/user controls. */
 .pms-project-space-header__selector { max-width: 100%; min-width: 0; }
 .pms-project-space-header__trigger { max-width: 100%; min-width: 0; }
