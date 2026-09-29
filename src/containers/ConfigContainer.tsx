@@ -22,7 +22,8 @@ import { useUiStore } from '@/stores/ui'
 import { usePlanStore, LEVEL2_PLAN_TYPES, VERSION_DATA, getConfigColumnsForView, getDefaultLevel1TasksForProjectType, getTemplateSnapshotKey } from '@/stores/plan'
 import { useTransferStore } from '@/stores/transfer'
 import { useProjectStore } from '@/stores/project'
-import { useHasGlobalPermission } from '@/stores/permission'
+import { usePermissionStore } from '@/stores/permission'
+import { canRunGlobalMenuAction, getAccessibleConfigGroups, useGlobalMenuPermission } from '@/lib/globalMenuPermissions'
 import { TransferConfig } from '@/components/transfer/TransferConfig'
 import MrTemplateTable from '@/components/plans/MrTemplateTable'
 import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION, getProjectTypeFamilyKey } from '@/constants/projectTypes'
@@ -45,6 +46,8 @@ import { notifyPublishChanges } from '@/lib/feishu-notify'
 import { cancelDraftRevision } from '@/lib/marketRules'
 import { comparePlanVersions, getNextPlanRevisionVersionNo, getPlanVersionId, type PlanRevisionKind } from '@/lib/planVersioning'
 import EnumConfig from '@/components/config/EnumConfig'
+import RolePermissionTemplateConfig from '@/components/permission/RolePermissionTemplateConfig'
+import { ROLE_TEMPLATE_TYPES, type RoleTemplateProjectType } from '@/types/rolePermissionTemplate'
 import {
   getTemplateSnapshotForProjectType,
   getTemplateTasksForProjectType,
@@ -57,7 +60,7 @@ import type { TechnicalTemplateKind } from '@/types/technicalPlan'
 import { rehydrateMrVersionPlanStore, useMrVersionPlanStore } from '@/stores/mrVersionPlan'
 import { validateMrTemplateForPublish } from '@/lib/mrTemplateRules'
 import { compareMrTemplateSnapshots, type MrTemplateSnapshotDiff } from '@/lib/mrTemplateCompare'
-import { createMrTemplateStorePermission, resolveMrTemplateConfigCapabilities } from '@/lib/mrTemplateConfigPermissions'
+import { createMrTemplateStorePermission } from '@/lib/mrTemplateConfigPermissions'
 import { resolveMrTemplateHistoryActivityLabel } from '@/lib/mrTemplateHistory'
 import type { MrTemplateChangeLog } from '@/types/mrVersionPlan'
 import { calculateTemplateIntervals, updateTemplateInterval, withTemplateIntervalSummary, formatTemplateIntervalRatio } from '@/lib/templateIntervals'
@@ -94,12 +97,12 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
   const updateTemplateActivities = useMrVersionPlanStore(state => state.updateTemplateActivities)
   const publishTemplateRevision = useMrVersionPlanStore(state => state.publishTemplateRevision)
   const cancelTemplateRevision = useMrVersionPlanStore(state => state.cancelTemplateRevision)
-  const hasMrConfigPermission = useHasGlobalPermission(currentLoginUser)
-  const canEditMrTemplate = hasMrConfigPermission('configCenter:planEdit')
-  const canPublishMrTemplate = hasMrConfigPermission('configCenter:planPublish')
-  const mrCapabilities = resolveMrTemplateConfigCapabilities(hasMrConfigPermission)
-  const mrEditPermission = createMrTemplateStorePermission(mrCapabilities.canEdit)
-  const mrPublishPermission = createMrTemplateStorePermission(mrCapabilities.canPublish)
+  const mrMenuId = `config.plan:${PROJECT_TYPE_TOS_VERSION}` as const
+  const canMr = useGlobalMenuPermission(currentLoginUser, mrMenuId)
+  const canEditMrTemplate = canMr('edit')
+  const canPublishMrTemplate = canMr('publish')
+  const mrEditPermission = () => createMrTemplateStorePermission(canRunGlobalMenuAction(currentLoginUser, mrMenuId, 'edit'))
+  const mrPublishPermission = () => createMrTemplateStorePermission(canRunGlobalMenuAction(currentLoginUser, mrMenuId, 'publish'))
 
   useEffect(() => {
     let active = true
@@ -123,26 +126,26 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
 
   const chooseVersion = (versionId: string) => useMrVersionPlanStore.setState({ currentTemplateVersionId: versionId })
   const createRevision = () => {
-    if (!canEditMrTemplate) return
-    createTemplateRevision(currentLoginUser, mrEditPermission) ? messageApi.success('已创建修订版本') : messageApi.error('创建修订版本失败')
+    if (!canRunGlobalMenuAction(currentLoginUser, mrMenuId, 'edit')) return
+    createTemplateRevision(currentLoginUser, mrEditPermission()) ? messageApi.success('已创建修订版本') : messageApi.error('创建修订版本失败')
   }
   const publishRevision = () => {
-    if (!canPublishMrTemplate || selectedVersion.status !== '修订中') return
+    if (!canRunGlobalMenuAction(currentLoginUser, mrMenuId, 'publish') || selectedVersion.status !== '修订中') return
     const errors = validateMrTemplateForPublish(selectedVersion.activities)
     if (errors.length > 0) {
       modalApi.error({ title: '模板校验未通过', content: <ul className="pms-mr-validation-errors">{errors.map(error => <li key={error}>{error}</li>)}</ul> })
       return
     }
-    const result = publishTemplateRevision(selectedVersion.id, currentLoginUser, mrPublishPermission)
+    const result = publishTemplateRevision(selectedVersion.id, currentLoginUser, mrPublishPermission())
     if (result.ok) messageApi.success('发布成功')
     else modalApi.error({ title: '发布失败', content: <ul>{result.errors.map(error => <li key={error}>{error}</li>)}</ul> })
   }
   const cancelRevision = () => {
-    if (!canEditMrTemplate || selectedVersion.status !== '修订中') return
+    if (!canRunGlobalMenuAction(currentLoginUser, mrMenuId, 'edit') || selectedVersion.status !== '修订中') return
     modalApi.confirm({
       title: '取消修订版本', content: `确认取消 ${selectedVersion.versionNo} 修订版本？`,
       okText: '确认取消', okType: 'danger', cancelText: '保留修订',
-      onOk: () => cancelTemplateRevision(selectedVersion.id, currentLoginUser, mrEditPermission)
+      onOk: () => cancelTemplateRevision(selectedVersion.id, currentLoginUser, mrEditPermission())
         ? messageApi.success('已取消修订') : messageApi.error('取消修订失败'),
     })
   }
@@ -178,7 +181,7 @@ function MrTemplateConfigSurface({ currentLoginUser }: { currentLoginUser: strin
       <Card className="pms-solid-surface pms-config-template-content-card" styles={{ body: { padding: 12, height: '100%', overflow: 'auto' } }}>
         <MrTemplateTable activities={selectedVersion.activities.map(activity => ({ ...activity }))} editable={editable}
           onChange={activities => {
-            if (editable && !updateTemplateActivities(selectedVersion.id, activities, currentLoginUser, mrEditPermission)) messageApi.error('模板更新失败')
+            if (editable && !updateTemplateActivities(selectedVersion.id, activities, currentLoginUser, mrEditPermission())) messageApi.error('模板更新失败')
           }} />
       </Card>
       <Modal title="历史修改记录" open={historyOpen} onCancel={() => setHistoryOpen(false)} footer={null} width={980}>
@@ -222,6 +225,7 @@ export default function ConfigContainer() {
   const selectedEnumType = useEnumStore(state => state.selectedType)
   const setSelectedEnumType = useEnumStore(state => state.setSelectedType)
   const selectedHrConfigModule = HR_CONFIG_CENTER_MODULES.includes(hrConfigModule) ? hrConfigModule : 'hrModel'
+  const [selectedRoleTemplateType, setSelectedRoleTemplateType] = useState<RoleTemplateProjectType>(ROLE_TEMPLATE_TYPES[0])
 
   const {
     planLevel, setPlanLevel, selectedPlanType, setSelectedPlanType,
@@ -247,9 +251,14 @@ export default function ConfigContainer() {
   const { transferConfigView, setTransferConfigView } = transferStore
 
   const { selectedProject, currentLoginUser } = useProjectStore()
-  const hasGlobalPermission = useHasGlobalPermission(currentLoginUser)
-  const canEditPlanTemplate = hasGlobalPermission('configCenter:planEdit')
-  const canPublishPlanTemplate = hasGlobalPermission('configCenter:planPublish')
+  const permissionModel = usePermissionStore(state => state.permissionCenter)
+  const configGroups = useMemo(() => getAccessibleConfigGroups(permissionModel, currentLoginUser), [permissionModel, currentLoginUser])
+  const allowedConfigKeys = useMemo(() => configGroups.flatMap(group => group.children.map(leaf => leaf.key)), [configGroups])
+  const planMenuId = `config.plan:${getProjectTypeFamilyKey(selectedProjectType)}` as const
+  const canPlan = useGlobalMenuPermission(currentLoginUser, planMenuId)
+  const canEditPlanTemplate = canPlan('edit')
+  const canPublishPlanTemplate = canPlan('publish')
+  const canEditPlanNow = () => canRunGlobalMenuAction(currentLoginUser, planMenuId, 'edit')
 
   // Derive the transfer-module current user from the logged-in user so it
   // tracks the user switcher instead of being pinned to MOCK_TM_USERS[0].
@@ -320,6 +329,7 @@ export default function ConfigContainer() {
   const templateIntervals = useMemo(() => calculateTemplateIntervals(configTasks), [configTasks])
   const canEditTemplate = canEditPlanTemplate && isCurrentDraft && isEditMode
   const setConfigTasks = (next: any[] | ((prev: any[]) => any[])) => {
+    if (!canEditPlanNow()) return
     if (isTechnicalTemplate) {
       setTechnicalTemplateTasks(technicalTemplateKind, next)
       return
@@ -429,6 +439,7 @@ export default function ConfigContainer() {
     const isLevel2Custom = !!customTasks
     const tableTasks = customTasks || configTasks
     const currentSetTasks = isLevel2Custom ? (newTasks: any[]) => {
+      if (!canEditPlanNow()) return
       const planId = customTasks?.[0]?.planId
       if (planId) {
         setLevel2PlanTasks(prev => [...prev.filter(t => t.planId !== planId), ...newTasks])
@@ -503,7 +514,7 @@ export default function ConfigContainer() {
           <span style={{ fontSize: 11, color: p === 100 ? '#52c41a' : '#4b5563', fontWeight: 500, minWidth: 32 }}>{p}%</span>
         </div>
       ) })
-      if (isEditMode) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { const filtered = tableTasks.filter((t: any) => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p2: any) => p2.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
+      if (isEditMode) cols.push({ title: '操作', key: 'action', width: 60, fixed: 'right', render: (_: any, record: any) => (<Popconfirm title="确认删除" description={`删除 "${record.taskName}" 及其子任务？`} onConfirm={() => { if (!canEditPlanNow()) return; const filtered = tableTasks.filter((t: any) => t.id !== record.id && t.parentId !== record.id && !(t.parentId && tableTasks.find((p2: any) => p2.id === t.parentId)?.parentId === record.id)); currentSetTasks(filtered); message.success(`已删除任务: ${record.id}`) }} okText="确认" cancelText="取消"><Button type="text" icon={<DeleteOutlined />} size="small" danger style={{ borderRadius: 4 }} /></Popconfirm>) })
       const configurableColumnByKey = new Map(
         cols
           .filter(column => column.key !== 'action')
@@ -517,6 +528,7 @@ export default function ConfigContainer() {
     }
 
     const handleTableDragEnd = (event: DragEndEvent) => {
+      if (!canEditPlanNow()) return
       const { active, over } = event
       if (!over || active.id === over.id) return
       const activeId = String(active.id)
@@ -566,6 +578,7 @@ export default function ConfigContainer() {
         {isEditMode && (
           <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', background: '#f8fafc' }}>
             <Button type="dashed" icon={<PlusOutlined />} style={{ width: '100%', borderRadius: 6, height: 36 }} onClick={() => {
+              if (!canEditPlanNow()) return
               const parentTasks = tableTasks.filter((t: any) => !t.parentId)
               const maxOrder = parentTasks.length > 0 ? Math.max(...parentTasks.map((t: any) => parseInt(t.id) || t.order)) : 0
               const newId = nextPlanTaskId(tableTasks, null, maxOrder + 1)
@@ -580,6 +593,7 @@ export default function ConfigContainer() {
   }
 
   const handleAddSubTask = (parentId: string) => {
+    if (!canEditPlanNow()) return
     if (isTechnicalTemplate && technicalTemplateKind === 'subproject') {
       message.warning('子项目计划只支持一级任务，不可添加子任务')
       return
@@ -627,7 +641,7 @@ export default function ConfigContainer() {
 
   // Action buttons
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
-    if (!canEditPlanTemplate) {
+    if (!canEditPlanNow()) {
       message.error('无计划模板编辑权限')
       return
     }
@@ -646,7 +660,7 @@ export default function ConfigContainer() {
   }
 
   const handlePublish = () => {
-    if (!canPublishPlanTemplate) {
+    if (!canRunGlobalMenuAction(currentLoginUser, planMenuId, 'publish')) {
       message.error('无计划模板发布权限')
       return
     }
@@ -691,7 +705,7 @@ export default function ConfigContainer() {
   }
 
   const handleCancelRevision = () => {
-    if (!canEditPlanTemplate) {
+    if (!canEditPlanNow()) {
       message.error('无计划模板编辑权限')
       return
     }
@@ -704,6 +718,7 @@ export default function ConfigContainer() {
       okType: 'danger',
       cancelText: '保留修订',
       onOk: () => {
+        if (!canEditPlanNow()) return
         const result = cancelDraftRevision(versions, currentVersion)
         setVersions(result.versions as typeof versions)
         setCurrentVersion(result.currentVersion)
@@ -721,11 +736,17 @@ export default function ConfigContainer() {
   const selectedConfigMenuKey = configTab === 'enum' ? `enum:${selectedEnumType}`
     : configTab === 'transfer' ? `transfer:${transferStore.transferProjectType}:${transferConfigView === 'home' ? 'checklist' : transferConfigView}`
       : configTab === 'hrPipeline' ? `hrPipeline:${selectedHrConfigModule}`
+        : configTab === 'rolePermission' ? `rolePermission:${selectedRoleTemplateType}`
         : `plan:${selectedTemplateType}`
 
   const handleConfigMenuSelect = (target: ConfigMenuTarget, key: string) => {
-    if (key === selectedConfigMenuKey) return
+    if (key === selectedConfigMenuKey || !canRunGlobalMenuAction(currentLoginUser, `config.${key}`, 'view')) return
     navigateWithEditGuard(() => {
+      if (!canRunGlobalMenuAction(currentLoginUser, `config.${key}`, 'view')) return
+      selectConfigTarget(target)
+    })
+  }
+  const selectConfigTarget = (target: ConfigMenuTarget) => {
       if (target.module === 'plan') {
         setSelectedProjectType(target.projectType)
         setPlanLevel(target.projectType === PROJECT_CATEGORY_TECH ? 'tdt' : 'level1')
@@ -734,13 +755,24 @@ export default function ConfigContainer() {
       } else if (target.module === 'transfer') {
         transferStore.setTransferProjectType(target.projectType)
         setTransferConfigView(target.view)
-      } else {
+      } else if (target.module === 'rolePermission') {
+        setSelectedRoleTemplateType(target.projectType)
+      } else if (target.module === 'hrPipeline') {
         setHrConfigModule(target.moduleKey)
       }
       setIsEditMode(false)
       setConfigTab(target.module)
-    })
   }
+  const selectedConfigAccessible = allowedConfigKeys.includes(selectedConfigMenuKey)
+  useEffect(() => {
+    if (selectedConfigAccessible) return
+    setShowVersionCompare(false)
+    setShowColumnModal(false)
+    setShowAddCustomType(false)
+    setIsEditMode(false)
+    const fallback = configGroups[0]?.children[0]
+    if (fallback) selectConfigTarget(fallback.target)
+  }, [selectedConfigAccessible, configGroups])
 
 
   const renderGanttChart = () => {
@@ -832,11 +864,12 @@ export default function ConfigContainer() {
         title="配置分类"
         ariaLabel="配置分类"
         className="pms-config-navigation-sidebar"
-        content={(
+        content={selectedConfigAccessible ? (
           <>
             {configTab === 'hrPipeline' && <HrConfigContent key={selectedHrConfigModule} moduleKey={selectedHrConfigModule} />}
             {configTab === 'transfer' && <TransferConfig />}
-            {configTab === 'enum' && <EnumConfig currentLoginUser={currentLoginUser} />}
+            {configTab === 'enum' && <EnumConfig key={`${currentLoginUser}:${selectedEnumType}`} currentLoginUser={currentLoginUser} />}
+            {configTab === 'rolePermission' && <RolePermissionTemplateConfig key={`${currentLoginUser}:${selectedRoleTemplateType}`} actor={currentLoginUser} projectType={selectedRoleTemplateType} />}
             {configTab === 'plan' && (
             <div className="pms-config-workspace-card">
             {/* Config header */}
@@ -889,7 +922,7 @@ export default function ConfigContainer() {
                         color={selectedPlanType === t ? 'blue' : 'default'}
                         style={{ cursor: 'pointer', borderRadius: 4, padding: '2px 10px', fontWeight: selectedPlanType === t ? 500 : 400 }}
                         onClick={() => navigateWithEditGuard(() => setSelectedPlanType(t))}
-                        closable={isCustom}
+                        closable={isCustom && canEditPlanTemplate}
                         onClose={(e) => {
                           e.preventDefault()
                           Modal.confirm({
@@ -898,6 +931,7 @@ export default function ConfigContainer() {
                             content: `确认删除自定义类型"${t}"？`,
                             okText: '删除', okType: 'danger', cancelText: '取消',
                             onOk: () => {
+                              if (!canEditPlanNow()) return
                               setCustomTypes(prev => prev.filter(c => c !== t))
                               if (selectedPlanType === t) setSelectedPlanType(LEVEL2_PLAN_TYPES[0])
                               message.success('已删除')
@@ -957,7 +991,7 @@ export default function ConfigContainer() {
             </Card>}
 
             {/* Table / Gantt content */}
-            {isMrTemplate ? <MrTemplateConfigSurface currentLoginUser={currentLoginUser} /> : (
+            {isMrTemplate ? <MrTemplateConfigSurface key={currentLoginUser} currentLoginUser={currentLoginUser} /> : (
               <Card className="pms-solid-surface pms-config-template-content-card" style={{ borderRadius: 8 }} styles={{ body: { padding: 0, height: '100%', overflow: 'auto' } }}>
                 {viewMode === 'gantt' ? renderGanttChart() : renderTaskTable()}
               </Card>
@@ -965,11 +999,12 @@ export default function ConfigContainer() {
             </div>
             )}
           </>
-        )}
+        ) : <Empty description="暂无可访问的配置菜单" />}
       >
         <ConfigNavigation
           collapsed={configSidebarCollapsed}
           selectedKey={selectedConfigMenuKey}
+          allowedKeys={allowedConfigKeys}
           onSelect={handleConfigMenuSelect}
         />
       </ConfigWorkspaceShell>
@@ -977,11 +1012,12 @@ export default function ConfigContainer() {
       {/* Custom type modal */}
       <Modal className="pms-modal"
         title="添加自定义二级计划类型"
-        open={showAddCustomType}
+        open={selectedConfigAccessible && canEditPlanTemplate && showAddCustomType}
         onCancel={() => { setShowAddCustomType(false); setNewCustomTypeName('') }}
         footer={[
           <Button key="cancel" onClick={() => { setShowAddCustomType(false); setNewCustomTypeName('') }}>取消</Button>,
           <Button key="add" type="primary" disabled={!newCustomTypeName.trim() || allPlanTypes.includes(newCustomTypeName.trim())} onClick={() => {
+            if (!canEditPlanNow()) return
             if (!newCustomTypeName.trim()) { message.error('请输入类型名称'); return }
             if (allPlanTypes.includes(newCustomTypeName.trim())) { message.error('该类型名称已存在'); return }
             setCustomTypes(prev => [...prev, newCustomTypeName.trim()])
@@ -1005,7 +1041,7 @@ export default function ConfigContainer() {
       {/* Version compare modal */}
       <Modal className="pms-modal"
         title={<Space><HistoryOutlined style={{ color: 'var(--pms-brand)' }} /><span style={{ fontWeight: 600 }}>历史版本对比</span></Space>}
-        open={showVersionCompare}
+        open={selectedConfigAccessible && configTab === 'plan' && showVersionCompare}
         onCancel={() => { setShowVersionCompare(false); setCompareResult([]); setCompareFilterType('all'); setCompareShowUnchanged(false) }}
         footer={null} width={1200}
         styles={{ body: { padding: '20px 24px' } }}

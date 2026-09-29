@@ -110,9 +110,11 @@ interface VersionTrainPlanProps {
   data?: VersionTrainRecord[]
   onDataChange?: (data: VersionTrainRecord[]) => void
   canEdit?: boolean
+  canExport?: boolean
+  canExportNow?: () => boolean
 }
 
-export default function VersionTrainPlan({ data: controlledData, onDataChange, canEdit = true }: VersionTrainPlanProps = {}) {
+export default function VersionTrainPlan({ data: controlledData, onDataChange, canEdit = true, canExport = true, canExportNow }: VersionTrainPlanProps = {}) {
   const [localData, setLocalData] = useState<VersionTrainRecord[]>(INITIAL_VERSION_TRAIN_DATA)
   const data = controlledData ?? localData
   const setData = (nextData: VersionTrainRecord[]) => {
@@ -239,6 +241,7 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
 
   // 导出数据
   const handleExport = () => {
+    if (!canExport || (canExportNow && !canExportNow())) { message.warning('无当前项目计划导出权限'); return }
     const headers = ['序号', '版本号', '版本分类', '状态', '计划编译时间', '计划转测时间', '计划测试开始时间', '计划测试完成时间', '主测机型', '版本目标', '实际编译时间', '实际转测时间', '实际测试开始时间', '实际测试完成时间']
     const rows = filteredData.map((r, i) => [
       i + 1, r.versionNo, r.versionCategory, r.status,
@@ -403,7 +406,7 @@ export default function VersionTrainPlan({ data: controlledData, onDataChange, c
             <Button type="primary" icon={<PlusOutlined />} style={{ borderRadius: 6 }} disabled={!canEdit} onClick={() => { form.resetFields(); setShowCreateModal(true) }}>
               添加版本
             </Button>
-            <Button icon={<ExportOutlined />} style={{ borderRadius: 6 }} onClick={handleExport}>
+            <Button icon={<ExportOutlined />} style={{ borderRadius: 6 }} disabled={!canExport} onClick={handleExport}>
               导出
             </Button>
           </Space>

@@ -31,7 +31,7 @@ export interface EnumActions {
   setEnumRowEnabled: (type: EnumTypeKey, rowId: string, enabled: boolean) => EnumActionResult
   deleteEnumRow: (type: EnumTypeKey, rowId: string) => EnumActionResult
   hydrateEnumStore: () => Promise<boolean>
-  resetLocalConfig: () => Promise<boolean>
+  resetLocalConfig: (authorize?: () => boolean) => Promise<boolean>
   completeHydration: (error?: unknown) => void
 }
 
@@ -460,12 +460,14 @@ export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
             })
           return hydrationInFlight
         },
-        resetLocalConfig: async () => {
+        resetLocalConfig: async (authorize = () => true) => {
+          if (!authorize()) return false
           if (resetInFlight) return resetInFlight
 
           const reset = async () => {
             const activeHydration = hydrationInFlight
             if (activeHydration) await activeHydration.catch(() => false)
+            if (!authorize()) return false
 
             try {
               enumStateStorage.removeItem(ENUM_STORAGE_KEY)

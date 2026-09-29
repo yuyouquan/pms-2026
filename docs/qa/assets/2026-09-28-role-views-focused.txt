@@ -1,0 +1,20 @@
+Permission center behavioral checks passed
+Permission center edge/migration/storage checks passed
+PASS verify-permission-center.mjs
+Permission center global integration checks passed
+Typed condition and enum reset guards passed
+Migration scope and corrupted persistence checks passed
+Navigation isolation and live authorization checks passed
+Standalone legacy fallback preserves original mapped operation boundaries
+PASS verify-permission-center-global.mjs
+Permission storage corruption: malformed envelopes fail closed; absent/legacy/valid model retain intended initialization
+PASS verify-permission-center-corruption.mjs
+Role membership across menus, atomic assignment, revocation/union, seed refresh, v2 preservation and fail-closed migration passed
+Strict old-policy validation, actual envelope refresh, reload and atomic storage failure passed
+PASS verify-permission-center-role-assignees.mjs
+PASS assignment retry honors current condition draft and resumes after resolution
+PASS verify-permission-center-assignee-ui.mjs
+PASS permission matrix menu coverage, full hierarchy, merged-cell coverage and filtered spans
+PASS verify-permission-center-matrix.mjs
+Inactive condition drafts canonicalize on save/read; actual reload preserves grants; active v1/v2 incomplete conditions deny
+PASS verify-permission-center-inactive-conditions.mjs

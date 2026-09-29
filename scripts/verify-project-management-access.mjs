@@ -15,16 +15,19 @@ const source = fs.readFileSync('src/containers/ProjectManagementContainer.tsx', 
 const output = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
 }).outputText
+const load = createTypeScriptModuleLoader()
+const { evaluateMenuPermission, createEmptyMenuPolicy } = load(path.resolve('src/lib/permissionCenter.ts'))
 const state = {
-  currentLoginUser: '管理员',
-  globalRoles: [{ name: '管理组', members: ['管理员', '第二位管理员'] }, { name: '项目管理员', members: ['普通用户'] }],
+  currentLoginUser: '演示用户01',
+  globalRoles: [{ name: '管理组', members: ['演示用户01', '演示用户07'] }, { name: '项目管理员', members: ['演示用户05'] }],
   projectManagementTab: 'configuration',
 }
+state.permissionCenter = load(path.resolve('src/lib/permissionCenterSeed.ts')).createPermissionCenterSeed()
 const store = selector => selector({ ...state, setProjectManagementTab: value => { state.projectManagementTab = value } })
 let offeredTabs = []
 const mocks = {
-  '@/lib/projectRegistryPermissions': createTypeScriptModuleLoader()(path.resolve('src/lib/projectRegistryPermissions.ts')),
   antd: {
+    Empty: ({ description }) => React.createElement('div', null, description),
     Card: ({ children }) => React.createElement('div', null, children),
     Segmented: ({ options }) => React.createElement('div', { role: 'radiogroup' }, options.map(option => React.createElement(React.Fragment, { key: option.value }, option.label))),
     Tabs: ({ activeKey, items, renderTabBar }) => {
@@ -34,7 +37,7 @@ const mocks = {
   },
   '@/stores/ui': { useUiStore: store },
   '@/stores/project': { useProjectStore: store },
-  '@/stores/permission': { usePermissionStore: store },
+  '@/stores/permission': { useMenuPermission: (user, menuId) => ({ can: (action = 'view', row) => evaluateMenuPermission(state.permissionCenter, user, menuId, action, row) }) },
   '@/components/project-management/ProjectConfiguration': { default: () => React.createElement('div', null, '配置内容') },
   '@/containers/ProjectListContainer': { default: () => React.createElement('div', null, '项目列表内容') },
 }
@@ -42,7 +45,7 @@ const module = { exports: {} }
 vm.runInThisContext(`(function(require, module, exports) { ${output}\n })`)(
   name => mocks[name] ?? require(name), module, module.exports,
 )
-const render = () => renderToStaticMarkup(React.createElement(module.exports.default))
+const render = () => { offeredTabs = []; return renderToStaticMarkup(React.createElement(module.exports.default)) }
 
 const admin = render()
 assert.match(admin, /radiogroup/)
@@ -51,7 +54,7 @@ assert.match(admin, /项目配置/)
 assert.match(admin, /配置内容/)
 assert.deepEqual(offeredTabs, ['view', 'configuration'])
 
-for (const user of ['普通用户', '无角色用户', '']) {
+for (const user of ['演示用户05']) {
   state.currentLoginUser = user
   for (const tab of ['view', 'configuration']) {
     state.projectManagementTab = tab
@@ -62,13 +65,29 @@ for (const user of ['普通用户', '无角色用户', '']) {
   }
 }
 
-state.currentLoginUser = '第二位管理员'
+state.currentLoginUser = '演示用户07'
 state.projectManagementTab = 'configuration'
 assert.match(render(), /配置内容/, 'access follows group membership, not a hardcoded login')
-state.globalRoles = state.globalRoles.map(role => role.name === '管理组' ? { ...role, members: [] } : role)
+state.permissionCenter = { ...state.permissionCenter, roles: state.permissionCenter.roles.map(role => role.builtin === 'superadmin' ? { ...role, members: [] } : role) }
 assert.doesNotMatch(render(), /radiogroup|配置内容/, 'revoking management membership removes access')
 for (const name of ['乔永峰','徐如秀（大圆）','孙仁海','游进','邓伟俊','陈佩玲','王健（Jim）']) {
   state.currentLoginUser = name
   assert.match(render(), /配置内容/, `${name} can enter configuration without gaining global administration`)
 }
-console.log('project management access: admin, non-admin, stale tab, alternate admin, revoked membership, and scoped managers passed')
+for (const user of ['无角色用户', '']) {
+  state.currentLoginUser = user
+  assert.match(render(), /暂无项目管理权限/, 'unknown and blank identities do not retain public access')
+  assert.deepEqual(offeredTabs, [], 'no unauthorized tab remains mounted')
+}
+state.currentLoginUser = '游进'
+state.permissionCenter = { ...state.permissionCenter, roles: state.permissionCenter.roles.map(role => role.id.startsWith('project-registry:') ? { ...role, members: role.members.filter(user => user !== '游进') } : role) }
+assert.doesNotMatch(render(), /配置内容/, 'scoped manager access can be revoked after migration')
+state.currentLoginUser = '演示用户06'
+state.permissionCenter.roles = state.permissionCenter.roles.map(role => ({ ...role, members: role.members.filter(user => user !== state.currentLoginUser), departments: [] }))
+state.permissionCenter.roles.push({ id: 'new-config', groupId: 'group-project', name: 'New config grant', description: '', members: [state.currentLoginUser], departments: [] })
+state.permissionCenter.policies.push({ ...createEmptyMenuPolicy('new-config', 'project.config'), actions: ['view'] })
+assert.match(render(), /配置内容/, 'new explicit config grants do not require legacy manager identity')
+assert.deepEqual(offeredTabs, ['configuration'], 'config-only access does not mount the project view')
+state.permissionCenter.policies = state.permissionCenter.policies.filter(policy => policy.roleId !== 'new-config')
+assert.match(render(), /暂无项目管理权限/, 'revoking the last menu grant removes stale tab content')
+console.log('project management access: migrated admins/readers/managers, no-access, explicit grants, stale tabs and revocation passed')

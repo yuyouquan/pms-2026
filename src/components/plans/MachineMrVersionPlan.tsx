@@ -1,5 +1,8 @@
 'use client'
 
+import { useProjectStore } from '@/stores/project'
+import { canExecuteProjectTeamWrite } from '@/lib/projectTeamMutationGuard'
+import { useProjectTeamStore } from '@/stores/projectTeam'
 import { useEffect, useMemo, useState, type HTMLAttributes, type ReactNode } from 'react'
 import { Alert, Card, DatePicker, Empty, Input, Radio, Select, Spin, Table, Tooltip, message } from 'antd'
 import { AppstoreOutlined, ExclamationCircleOutlined, TableOutlined } from '@ant-design/icons'
@@ -117,7 +120,8 @@ export default function MachineMrVersionPlan({
     machinePlans: Object.values(machinePlansByKey),
   }), [machinePlansByKey, tosInstancesByProjectId])
   const metadata = useMemo(() => projectMachineMrMetadata(project, marketRows), [marketRows, project])
-  const permission = useMemo(() => resolveMrPermissions({
+  useProjectTeamStore(state => state.teamsByProjectId)
+  const permission = resolveMrPermissions({
     context: 'machine-market',
     currentUser,
     globalAdminUsers,
@@ -125,7 +129,7 @@ export default function MachineMrVersionPlan({
     machineSpm: metadata.spm,
     machineSpmUsers: metadata.spmUsers,
     machineProjectId: project.id,
-  }), [currentUser, globalAdminUsers, metadata.spm, metadata.spmUsers, project.id])
+  })
   const scopeKey = `machine::${project.id}`
   const mode: MrPlanViewMode = viewModeByScope[scopeKey] ?? 'horizontal'
 
@@ -147,6 +151,7 @@ export default function MachineMrVersionPlan({
     })
   }
   const handleDateChange = (version: MrMachineMarketProjection, market: string, activity: MrTemplateActivity, value: string) => {
+    if (!canExecuteProjectTeamWrite(currentUser, project.id, useProjectStore.getState())) return
     const updated = updateMarketDate({
       projectId: project.id,
       tosVersion: version.tosVersion,

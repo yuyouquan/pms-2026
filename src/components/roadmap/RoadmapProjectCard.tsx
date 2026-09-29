@@ -38,6 +38,8 @@ export interface RoadmapProjectCardProps {
   visibleColumns: readonly RoadmapColumnKey[]
   conflictKey?: string
   canEdit: boolean
+  canDelete?: boolean
+  canViewHistory?: boolean
   onOpenProjectHistory: (projectId: string) => void
   onOpenProjectDetails: (row: RoadmapProjectRow) => void
   onOpenConflict: (conflictKey: string) => void
@@ -61,7 +63,8 @@ export function formatRoadmapCardValue(
 
 export function formatEvolutionCardTitle(row: RoadmapProjectRow): string {
   const marketName = formatMarketName(row.marketName, row.brand) || '—'
-  const projectName = row.source === 'planned' ? row.displayName : buildRoadmapDisplayName(row.projectCode, row.androidVersion, row.productType)
+  // Legacy complete rows may omit displayName; only derive from the already projected row.
+  const projectName = row.displayName || (row.projectCode ? buildRoadmapDisplayName(row.projectCode, row.androidVersion, row.productType) : '')
   return `${marketName}（${projectName || '—'}）`
 }
 
@@ -72,6 +75,8 @@ export default function RoadmapProjectCard({
   visibleColumns,
   conflictKey,
   canEdit,
+  canDelete = canEdit,
+  canViewHistory = true,
   onOpenProjectHistory,
   onOpenProjectDetails,
   onOpenConflict,
@@ -98,7 +103,7 @@ export default function RoadmapProjectCard({
   return (
     <article
       className={`pms-roadmap-evolution-card pms-glass-surface pms-interactive-surface${conflictKey && isPlanned ? ' is-conflict' : ''}`}
-      aria-label={`${title}，${isPlanned ? '待规划项目' : '正式项目，只读'}`}
+      aria-label={`${title}${row.source ? `，${isPlanned ? '待规划项目' : '正式项目，只读'}` : ''}`}
       tabIndex={0}
       onClick={() => onOpenProjectDetails(row)}
       onKeyDown={event => {
@@ -113,12 +118,12 @@ export default function RoadmapProjectCard({
         </Typography.Text>
         <Flex className="pms-roadmap-card-header-actions" align="center" gap={4} wrap={false}>
           <Flex className="pms-roadmap-card-header-tags" align="center" gap={4} wrap={false}>
-            {row.versionType && <Tag color={VERSION_TYPE_TAG_COLORS[row.versionType as keyof typeof VERSION_TYPE_TAG_COLORS] ?? 'default'}>
+            {visibleColumns.includes('versionType') && row.versionType && <Tag color={VERSION_TYPE_TAG_COLORS[row.versionType as keyof typeof VERSION_TYPE_TAG_COLORS] ?? 'default'}>
               {row.versionType}
             </Tag>}
-            <Tag color={row.productType === '新品' ? 'volcano' : 'default'}>
+            {visibleColumns.includes('productType') && row.productType ? <Tag color={row.productType === '新品' ? 'volcano' : 'default'}>
               {row.productType === '新品' ? 'New' : 'Old'}
-            </Tag>
+            </Tag> : null}
           </Flex>
         </Flex>
       </Flex>
@@ -191,7 +196,7 @@ export default function RoadmapProjectCard({
       >
         <div className="pms-roadmap-evolution-actions-inner">
           <Flex className="pms-roadmap-evolution-card-actions" gap={4} wrap>
-            <Button
+            {canViewHistory ? <Button
               type="link"
               size="small"
               icon={<HistoryOutlined aria-hidden />}
@@ -202,7 +207,7 @@ export default function RoadmapProjectCard({
               }}
             >
               历史
-            </Button>
+            </Button> : null}
             {conflictKey && isPlanned ? (
               <Button
                 type="link"
@@ -218,8 +223,7 @@ export default function RoadmapProjectCard({
                 冲突
               </Button>
             ) : null}
-            {isPlanned && canEdit ? (
-              <>
+            {canEdit ? (
               <Button
                 type="link"
                 size="small"
@@ -232,6 +236,8 @@ export default function RoadmapProjectCard({
               >
                 编辑
               </Button>
+            ) : null}
+            {canDelete ? (
               <Button
                 type="link"
                 danger
@@ -245,7 +251,6 @@ export default function RoadmapProjectCard({
               >
                 删除
               </Button>
-              </>
             ) : null}
           </Flex>
         </div>

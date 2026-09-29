@@ -7,14 +7,16 @@ import type { TransferItem } from '@/lib/transferWorkflow'
 import { exportSheet, exportTimestamp } from '@/utils/exportExcel'
 import { parseTransferEntryImport, type EntryImportChange } from '@/components/transfer/transferEntryImport'
 
-export function TransferEntryExchange({ items, title, canEdit, onImport }: {
-  items: TransferItem[]; title: string; canEdit: (item: TransferItem) => boolean; onImport: (changes: EntryImportChange[]) => boolean
+export function TransferEntryExchange({ items, title, canEdit, canExport, onImport }: {
+  items: TransferItem[]; title: string; canExport: () => boolean; canEdit: (item: TransferItem) => boolean; onImport: (changes: EntryImportChange[]) => boolean
 }) {
   const [changes, setChanges] = useState<EntryImportChange[] | null>(null)
   const [reading, setReading] = useState(false)
   const alive = useRef(true)
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
-  const exportItems = () => exportSheet(items, [
+  const exportItems = () => {
+    if (!canExport()) return
+    exportSheet(items, [
     { key: 'seq', title: '序号' },
     { key: 'checkItem', title: '标准', formatter: (_, row: TransferItem) => 'checkItem' in row ? row.checkItem : row.standard },
     { key: 'type', title: '类型' },
@@ -23,6 +25,7 @@ export function TransferEntryExchange({ items, title, canEdit, onImport }: {
     { key: 'reviewPerson', title: '人工审核-责任人' }, { key: 'aiCheckRule', title: '智能检查规则' },
     { key: 'entryContent', title: '录入内容', width: 40 }, { key: 'id', title: '资料标识', width: 36 },
   ], `${title.replace(/[\\/:*?"<>|]/g, '_')}_${exportTimestamp()}.xlsx`, '转维资料')
+  }
   return <>
     <Upload accept=".xlsx,.xls" showUploadList={false} disabled={reading || !items.some(item => canEdit(item))} beforeUpload={async file => {
       setReading(true)
@@ -38,7 +41,7 @@ export function TransferEntryExchange({ items, title, canEdit, onImport }: {
       finally { if (alive.current) setReading(false) }
       return false
     }}><Button size="small" icon={<UploadOutlined />} loading={reading} disabled={!items.some(item => canEdit(item))}>导入</Button></Upload>
-    <Button size="small" icon={<DownloadOutlined />} onClick={exportItems} disabled={!items.length}>导出</Button>
+    <Button size="small" icon={<DownloadOutlined />} onClick={exportItems} disabled={!items.length || !canExport()}>导出</Button>
     <Modal className="pms-modal pms-transfer-surface" title="导入录入内容" width={760} open={Boolean(changes)} onCancel={() => setChanges(null)} footer={<Space><Button onClick={() => setChanges(null)}>取消</Button><Button type="primary" onClick={() => { if (changes && onImport(changes)) setChanges(null) }}>确认导入</Button></Space>}>
       <Alert type="info" showIcon message="导入后保存为暂存。请逐项确认提交，完成 AI 检查后再提交角色审核。空白内容不会覆盖现有资料。" style={{ marginBottom: 16 }} />
       <Table rowKey="id" size="small" pagination={false} scroll={{ y: 320 }} dataSource={changes || []} columns={[

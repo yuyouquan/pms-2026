@@ -22,6 +22,10 @@ const compactControlStyle: CSSProperties = { minHeight: 30, height: 30, borderRa
 interface RoadmapToolbarProps {
   canView: boolean
   canEdit: boolean
+  canCreate: boolean
+  canExport: boolean
+  allowedBrands: readonly RoadmapBrand[]
+  allowedProductTypes: readonly RoadmapProductType[]
   viewMode: RoadmapViewMode
   versions: readonly TosVersionConfig[]
   selectedTosVersionId: string | null
@@ -47,9 +51,11 @@ interface RoadmapToolbarProps {
 
 export function RoadmapViewModeSwitch({
   value,
+  allowedModes = ['table', 'evolution'],
   onChange,
 }: {
   value: RoadmapViewMode
+  allowedModes?: readonly RoadmapViewMode[]
   onChange: (mode: RoadmapViewMode) => void
 }) {
   return (
@@ -58,8 +64,8 @@ export function RoadmapViewModeSwitch({
         aria-label="路标视图"
         value={value}
         options={[
-          { label: '表单视图', value: 'table' },
-          { label: '版本演进视图', value: 'evolution' },
+          ...(allowedModes.includes('table') ? [{ label: '表单视图', value: 'table' as const }] : []),
+          ...(allowedModes.includes('evolution') ? [{ label: '版本演进视图', value: 'evolution' as const }] : []),
         ]}
         onChange={onChange}
       />
@@ -70,6 +76,10 @@ export function RoadmapViewModeSwitch({
 export default function RoadmapToolbar({
   canView,
   canEdit,
+  canCreate,
+  canExport,
+  allowedBrands,
+  allowedProductTypes,
   viewMode,
   versions,
   selectedTosVersionId,
@@ -94,16 +104,13 @@ export default function RoadmapToolbar({
 }: RoadmapToolbarProps) {
   const brandOptions: Array<{ label: string; value: 'all' | 'custom' | RoadmapBrand; disabled?: boolean }> = [
     { label: '全部', value: 'all' },
-    { label: '示例品牌A', value: '示例品牌A' },
-    { label: '示例品牌B', value: '示例品牌B' },
-    { label: '示例品牌C', value: '示例品牌C' },
+    ...[...new Set(allowedBrands)].map(value => ({ label: value, value })),
   ]
   if (brandFilter === 'custom') brandOptions.push({ label: '自定义', value: 'custom', disabled: true })
 
   const productTypeOptions: Array<{ label: string; value: 'all' | 'custom' | RoadmapProductType; disabled?: boolean }> = [
     { label: '全部', value: 'all' },
-    { label: '新品', value: '新品' },
-    { label: '老品', value: '老品' },
+    ...[...new Set(allowedProductTypes)].map(value => ({ label: value, value })),
   ]
   if (productTypeFilter === 'custom') productTypeOptions.push({ label: '自定义', value: 'custom', disabled: true })
 
@@ -200,7 +207,7 @@ export default function RoadmapToolbar({
           )}
 
           <Tooltip title="导出当前路标数据">
-            <Button aria-label="导出" icon={<DownloadOutlined />} disabled={!canView} onClick={onExport} style={compactControlStyle}>
+            <Button aria-label="导出" icon={<DownloadOutlined />} disabled={!canExport} onClick={onExport} style={compactControlStyle}>
               导出
             </Button>
           </Tooltip>
@@ -210,10 +217,13 @@ export default function RoadmapToolbar({
               <Tooltip title="tOS 版本维护">
                 <Button aria-label="tOS 版本维护" icon={<SlidersOutlined />} onClick={onOpenTosMaintenance} style={compactControlStyle} />
               </Tooltip>
+            </>
+          ) : null}
+
+          {canCreate ? (
               <Tooltip title="前往项目配置创建项目">
                 <Button aria-label="前往项目配置" icon={<LoginOutlined />} onClick={onCreatePlannedProject} style={compactControlStyle} />
               </Tooltip>
-            </>
           ) : null}
 
           <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>

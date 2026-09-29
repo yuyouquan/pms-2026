@@ -14,6 +14,8 @@ import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
+import { evaluateMenuPermission, getAuthorizedColumns } from '@/lib/permissionCenter'
+import { projectPermissionSource, projectSummaryRows, projectFieldAllowed, registerProjectPermissionFields, hasAllProjectFields, canReadProjectClassification, matchesAuthorizedProjectClassification } from '@/lib/projectMenuPermissions'
 import { ProjectCard } from '@/components/workspace/WorkspaceModule'
 import type { ProjectType } from '@/components/workspace/WorkspaceModule'
 import ProjectSummaryTable from '@/components/project-summary/ProjectSummaryTable'
@@ -34,6 +36,8 @@ import {
   getLatestPublishedTemplateTasks,
   getLinkedQuickFilterValues,
   getProjectListFieldDefinitions,
+  getProjectSummaryFieldDefinitions,
+  getTemplateTaskFieldDefinitions,
   getProjectSummaryQuickFilterDefinitions,
   getWorkbenchListState,
   updateLinkedQuickFilterCondition,
@@ -118,7 +122,8 @@ export default function ProjectListContainer() {
     configTemplateVersionScopes, marketVersionsByKey, tosTypeVersionsByKey,
   } = usePlanStore()
 
-  const { globalRoles, rolesByProject } = usePermissionStore()
+  const { globalRoles, rolesByProject, permissionCenter } = usePermissionStore()
+  useMemo(() => registerProjectPermissionFields(configTemplateTasksByType, publishedSnapshots), [configTemplateTasksByType, publishedSnapshots])
   const activateProject = useActivateProject()
   const technicalSubprojects = useTechnicalProjectStore(state => state.subprojects)
   const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
@@ -184,38 +189,9 @@ export default function ProjectListContainer() {
     return adminGroup ? adminGroup.members.includes(currentLoginUser) : false
   }, [globalRoles, currentLoginUser])
 
-  const visibleProjects = useMemo(() => filterFormalRegistryProjects(projects), [projects])
-  const canEnterProject = (projectId: string) => canEnterProjectSpace(
-    projectId,
-    currentLoginUser,
-    rolesByProject,
-    isAdminUser,
-  )
-  const showProjectAccessDenied = () => messageApi.warning({
-    key: 'project-space-access-denied',
-    content: '当前用户未配置该项目空间角色，无法进入项目空间',
-  })
-
-  const aboutMineProjects = useMemo(() => filterProjectsForList({
-    projects: visibleProjects,
-    aboutMine: aboutMineOnly,
-    currentLoginUser,
-    rolesByProject,
-    getProjectId: project => project.id,
-    matchesCategory: () => true,
-    matchesSecondaryCategory: () => true,
-    matchesStatus: () => true,
-  }), [aboutMineOnly, currentLoginUser, rolesByProject, visibleProjects])
-
-  const categoryBaseProjects = useMemo(
-    () => aboutMineProjects.filter(project => (
-      matchesProjectTypeFilter(project.type, projectTypeFilter, project.secondaryCategory)
-    )),
-    [aboutMineProjects, projectTypeFilter],
-  )
-
+  const formalProjects = useMemo(() => filterFormalRegistryProjects(projects), [projects])
   const projectSummaryPlanTasksByProjectId = useMemo(() => (
-    Object.fromEntries(categoryBaseProjects.map(project => {
+    Object.fromEntries(formalProjects.map(project => {
       const mockPlanTasks = buildProjectListMockPlanTasks(
         project.id,
         getTemplateTasksForProjectType(configTemplateTasksByType, project.type) || [],
@@ -258,7 +234,7 @@ export default function ProjectListContainer() {
       return [project.id, publishedTasks.length ? publishedTasks : mockPlanTasks]
     }))
   ), [
-    categoryBaseProjects,
+    formalProjects,
     configTemplateTasksByType,
     marketConfigsByProjectId,
     marketVersionsByKey,
@@ -268,13 +244,58 @@ export default function ProjectListContainer() {
     versions,
   ])
 
+  const permissionSources = useMemo(() => new Map(formalProjects.map(project => {
+    const variant = isMachineProjectType(project.type) ? 'machine' : project.type === PROJECT_TYPE_TOS_VERSION ? 'tos' : 'technical-tdt'
+    const tasks = getTemplateTasksForProjectType(configTemplateTasksByType, project.type) ?? []
+    const definitions = [...getProjectSummaryFieldDefinitions(project.type), ...getProjectListFieldDefinitions(variant, tasks, project.type), ...getTemplateTaskFieldDefinitions(project.type, tasks)]
+    return [project.id, projectPermissionSource(project, definitions, projectSummaryPlanTasksByProjectId[project.id])]
+  })), [formalProjects, configTemplateTasksByType, projectSummaryPlanTasksByProjectId])
+  const allTechnicalRows = useMemo(() => buildTechnicalProjectListRows({ projects: formalProjects, subprojects: technicalSubprojects, plansByKey: technicalPlansByKey, machineProjects: formalProjects.filter(project => isMachineProjectType(project.type)) }), [formalProjects, technicalSubprojects, technicalPlansByKey])
+  const visibleProjects = useMemo(() => formalProjects.filter(project => !permissionCenter || evaluateMenuPermission(permissionCenter, currentLoginUser, 'project.view', 'view', permissionSources.get(project.id)) || (project.type === PROJECT_CATEGORY_TECH && [...allTechnicalRows.tdt, ...allTechnicalRows.children].some(row => String(row.targetProjectId ?? row.projectId) === project.id && evaluateMenuPermission(permissionCenter, currentLoginUser, 'project.view', 'view', { ...permissionSources.get(project.id), ...row })))), [formalProjects, permissionCenter, currentLoginUser, permissionSources, allTechnicalRows])
+  const hasHiddenClassification = visibleProjects.some(project => !canReadProjectClassification(permissionCenter, currentLoginUser, permissionSources.get(project.id) ?? {}))
+  useEffect(() => {
+    if (hasHiddenClassification) { setProjectTypeFilter('all'); setProjectSecondaryCategoryFilter('all'); setProjectStatusFilter('all') }
+  }, [permissionCenter, currentLoginUser, hasHiddenClassification, setProjectTypeFilter, setProjectSecondaryCategoryFilter, setProjectStatusFilter])
+  const matchesVisibleClassification = (project: typeof projects[number], category: string, secondary = 'all') => matchesAuthorizedProjectClassification(permissionCenter, currentLoginUser, permissionSources.get(project.id) ?? {}, category, secondary)
+  const displayFieldsFor = (projectId: string) => permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view', 'view', permissionSources.get(projectId)) : null
+  const safeSummaryRows = (rows: ProjectSummaryRow[]) => projectSummaryRows(permissionCenter, currentLoginUser, rows, permissionSources)
+  const canEnterProject = (projectId: string) => canEnterProjectSpace(
+    projectId,
+    currentLoginUser,
+    rolesByProject,
+    isAdminUser,
+  )
+  const showProjectAccessDenied = () => messageApi.warning({
+    key: 'project-space-access-denied',
+    content: '当前用户未配置该项目空间角色，无法进入项目空间',
+  })
+
+  const aboutMineProjects = useMemo(() => filterProjectsForList({
+    projects: visibleProjects,
+    aboutMine: aboutMineOnly,
+    currentLoginUser,
+    rolesByProject,
+    getProjectId: project => project.id,
+    matchesCategory: () => true,
+    matchesSecondaryCategory: () => true,
+    matchesStatus: () => true,
+  }), [aboutMineOnly, currentLoginUser, rolesByProject, visibleProjects])
+
+  const categoryBaseProjects = useMemo(
+    () => aboutMineProjects.filter(project => (
+      matchesVisibleClassification(project, projectTypeFilter)
+    )),
+    [aboutMineProjects, projectTypeFilter, permissionCenter, currentLoginUser, permissionSources],
+  )
+
+
   const categoryCounts = useMemo(() => {
     return countProjectsByCategory(
       aboutMineProjects,
       PROJECT_CATEGORIES,
-      (project, category) => matchesProjectTypeFilter(project.type, category, project.secondaryCategory),
+      (project, category) => matchesVisibleClassification(project, category),
     )
-  }, [aboutMineProjects])
+  }, [aboutMineProjects, permissionCenter, currentLoginUser, permissionSources])
 
   const categoryAndSecondaryFilteredProjects = useMemo(() => {
     return filterProjectsForList({
@@ -283,52 +304,48 @@ export default function ProjectListContainer() {
       currentLoginUser,
       rolesByProject,
       getProjectId: project => project.id,
-      matchesCategory: project => matchesProjectTypeFilter(project.type, projectTypeFilter, project.secondaryCategory),
-      matchesSecondaryCategory: project => matchesProjectSecondaryCategoryFilter(
-        project.type,
-        project.secondaryCategory,
-        projectSecondaryCategoryFilter,
-      ),
+      matchesCategory: project => matchesVisibleClassification(project, projectTypeFilter),
+      matchesSecondaryCategory: project => matchesVisibleClassification(project, projectTypeFilter, projectSecondaryCategoryFilter),
       matchesStatus: () => true,
     })
-  }, [aboutMineOnly, currentLoginUser, projectSecondaryCategoryFilter, projectTypeFilter, rolesByProject, visibleProjects])
+  }, [aboutMineOnly, currentLoginUser, projectSecondaryCategoryFilter, projectTypeFilter, rolesByProject, visibleProjects, permissionCenter, permissionSources])
 
   const workspaceFilteredProjects = useMemo(() => (
     projectStatusFilter === 'all'
       ? categoryAndSecondaryFilteredProjects
       : categoryAndSecondaryFilteredProjects.filter(project => (
-          project.status === projectStatusFilter
+          (!permissionCenter || displayFieldsFor(project.id)?.includes('status')) && project.status === projectStatusFilter
         ))
-  ), [categoryAndSecondaryFilteredProjects, projectStatusFilter, projectTypeFilter])
+  ), [categoryAndSecondaryFilteredProjects, projectStatusFilter, projectTypeFilter, permissionCenter, currentLoginUser, permissionSources])
 
   const secondaryCategoryOptions = useMemo(() => {
     if (projectTypeFilter === 'all') return []
     if (projectTypeFilter === PROJECT_TYPE_TOS_VERSION) return [{ label: '全部', value: 'all' }]
     const categoryOptions = PROJECT_SECONDARY_CATEGORIES[projectTypeFilter as keyof typeof PROJECT_SECONDARY_CATEGORIES] as readonly string[] | undefined
-    return categoryOptions ? [{ label: '全部', value: 'all' }, ...categoryOptions.map(value => ({ label: value, value }))] : []
-  }, [projectTypeFilter])
+    return categoryOptions ? [{ label: '全部', value: 'all' }, ...categoryOptions.filter(value => categoryBaseProjects.some(project => matchesVisibleClassification(project, projectTypeFilter, value))).map(value => ({ label: value, value }))] : []
+  }, [projectTypeFilter, categoryBaseProjects, permissionCenter, currentLoginUser, permissionSources])
 
   const statusOptions = useMemo(() => [
     { label: '全部', value: 'all' },
     ...(projectTypeFilter === 'all' || !statusHasHydrated || statusHydrationError
       ? []
-      : configuredStatusOptions),
-  ], [configuredStatusOptions, projectTypeFilter, statusHasHydrated, statusHydrationError])
+      : configuredStatusOptions.filter(option => categoryAndSecondaryFilteredProjects.some(project => project.status === option.value && (!permissionCenter || displayFieldsFor(project.id)?.includes('status'))))),
+  ], [configuredStatusOptions, projectTypeFilter, statusHasHydrated, statusHydrationError, categoryAndSecondaryFilteredProjects, permissionCenter, currentLoginUser, permissionSources])
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { all: categoryAndSecondaryFilteredProjects.length }
     categoryAndSecondaryFilteredProjects.forEach(project => {
-      counts[project.status] = (counts[project.status] || 0) + 1
+      if (!permissionCenter || displayFieldsFor(project.id)?.includes('status')) counts[project.status] = (counts[project.status] || 0) + 1
     })
     return counts
-  }, [categoryAndSecondaryFilteredProjects])
+  }, [categoryAndSecondaryFilteredProjects, permissionCenter, currentLoginUser, permissionSources])
 
   const technicalRows = useMemo(() => buildTechnicalProjectListRows({
-    projects: aboutMineProjects,
+    projects: categoryBaseProjects,
     subprojects: technicalSubprojects,
     plansByKey: technicalPlansByKey,
-    machineProjects: aboutMineProjects.filter(project => isMachineProjectType(project.type)),
-  }), [aboutMineProjects, technicalPlansByKey, technicalSubprojects])
+    machineProjects: aboutMineProjects.filter(project => matchesVisibleClassification(project, PROJECT_CATEGORY_MACHINE)),
+  }), [aboutMineProjects, categoryBaseProjects, technicalPlansByKey, technicalSubprojects, permissionCenter, currentLoginUser, permissionSources])
 
   const technicalTdtScope = configTemplateVersionScopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'tdt')]
   const technicalSubprojectScope = configTemplateVersionScopes[getTemplateConfigScopeKey(PROJECT_CATEGORY_TECH, 'subproject')]
@@ -358,7 +375,7 @@ export default function ProjectListContainer() {
     configTemplateTasksByType,
     projectTypeFilter,
   ) ?? []
-  const standardFieldDefinitions = useMemo(() => (
+  const allStandardFieldDefinitions = useMemo(() => (
     standardMatrixVariant
       ? getProjectListFieldDefinitions(
           standardMatrixVariant,
@@ -367,6 +384,8 @@ export default function ProjectListContainer() {
         )
       : []
   ), [projectTypeFilter, standardMatrixVariant, standardTemplateTasks])
+  const allowedViewFields = permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view') : null
+  const standardFieldDefinitions = useMemo(() => allStandardFieldDefinitions.filter(field => !allowedViewFields || projectFieldAllowed(allowedViewFields, field.key)), [allStandardFieldDefinitions, allowedViewFields?.join('|')])
   const standardQuickFilterDefinitions = useMemo(() => (
     getProjectSummaryQuickFilterDefinitions(projectTypeFilter, categoryBaseProjects)
   ), [categoryBaseProjects, projectTypeFilter])
@@ -379,13 +398,13 @@ export default function ProjectListContainer() {
       multiple: quickKeys.has(definition.key),
     }))
   }, [standardFieldDefinitions, standardQuickFilterDefinitions])
-  const standardRows = useMemo(() => workspaceFilteredProjects.map(project => (
+  const standardRows = useMemo(() => safeSummaryRows(workspaceFilteredProjects.map(project => (
     buildProjectSummaryRow(
       project,
       standardFieldDefinitions,
       projectSummaryPlanTasksByProjectId[project.id],
     )
-  )), [projectSummaryPlanTasksByProjectId, standardFieldDefinitions, workspaceFilteredProjects])
+  ))), [projectSummaryPlanTasksByProjectId, allStandardFieldDefinitions, workspaceFilteredProjects, permissionCenter, currentLoginUser, permissionSources])
   const standardFilteredProjectIds = useMemo(() => new Set(
     applyFilterConditions(
       standardRows,
@@ -397,21 +416,25 @@ export default function ProjectListContainer() {
     !standardMatrixVariant || standardFilteredProjectIds.has(project.id)
   )), [standardFilteredProjectIds, standardMatrixVariant, workspaceFilteredProjects])
 
-  const technicalActiveRows = (technicalActiveType === 'tdt'
+  const rawTechnicalActiveRows = (technicalActiveType === 'tdt'
     ? technicalRows.tdt
     : technicalRows.children) as ProjectSummaryRow[]
+  const technicalActiveRows = safeSummaryRows(rawTechnicalActiveRows)
   const technicalStatusRows = useMemo(() => technicalActiveRows.filter(row => (
     projectStatusFilter === 'all' || row.status === projectStatusFilter
   )), [projectStatusFilter, technicalActiveRows])
   const technicalFilteredRows = useMemo(() => (
-    applyFilterConditions(technicalStatusRows, technicalFilters)
+    applyFilterConditions(technicalStatusRows, technicalFilters.filter(condition => condition.field !== 'technicalProjectType'))
   ), [technicalFilters, technicalStatusRows])
   const openProjectFromList = (project: ProjectType | typeof projects[number], targetSubprojectId?: string) => {
+    const source = projects.find(item => item.id === project.id)
+    if (!source || (permissionCenter && !evaluateMenuPermission(permissionCenter, currentLoginUser, 'project.view', 'view', permissionSources.get(source.id)))) return
+    if (!canEnterProject(source.id)) { showProjectAccessDenied(); return }
     navigateWithEditGuard(() => {
       if (targetSubprojectId) {
         pmsSessionStorage.setItem('pms:technical-project-list-target-child', targetSubprojectId)
       }
-      activateProject(project as typeof projects[number])
+      activateProject(source)
       setProjectSpaceModule('basic')
       enterProjectSpace({ module: 'projectManagement', projectManagementTab: 'view' })
     }, false)
@@ -428,26 +451,23 @@ export default function ProjectListContainer() {
     openProjectFromList(project, row.targetSubprojectId ? String(row.targetSubprojectId) : undefined)
   }
 
-  const renderProjectCard = (project: typeof projects[number]) => (
-    <ProjectCard
-      project={project as ProjectType}
-      setSelectedProject={(p) => activateProject(p as typeof projects[number])}
-      setProjectSpaceModule={setProjectSpaceModule}
-      setActiveModule={(module) => {
-        if (module === 'projectSpace') enterProjectSpace({ module: 'projectManagement', projectManagementTab: 'view' })
-      }}
-      PROJECT_STATUS_CONFIG={PROJECT_STATUS_CONFIG}
-      canOpen={canEnterProject(project.id)}
-      onOpenDenied={showProjectAccessDenied}
-      onOpenProject={openProjectFromList}
-    />
-  )
+  const renderProjectCard = (project: typeof projects[number]) => {
+    const allowed = displayFieldsFor(project.id)
+    if (hasAllProjectFields(permissionCenter, currentLoginUser, 'project.view', permissionSources.get(project.id) ?? {})) return <ProjectCard project={project as ProjectType} setSelectedProject={() => undefined} setProjectSpaceModule={setProjectSpaceModule} setActiveModule={() => undefined} PROJECT_STATUS_CONFIG={PROJECT_STATUS_CONFIG} canOpen={canEnterProject(project.id)} onOpenDenied={showProjectAccessDenied} onOpenProject={openProjectFromList} />
+    const source = permissionSources.get(project.id) ?? {}
+    const fields = [{ key: 'type', label: '项目类型' }, { key: 'brand', label: '品牌' }, { key: 'productLine', label: '产品线' }, { key: 'marketName', label: '市场名' }, { key: 'developmentMode', label: '开发模式' }, { key: 'spm', label: '负责人' }, { key: 'planEndDate', label: '计划结束' }]
+    return <Card role="button" tabIndex={0} hoverable className="pms-project-card pms-project-card-surface pms-glass-surface pms-interactive-surface" aria-label={`打开项目 ${String(source.name ?? '')}`} onClick={() => openProjectFromList(project)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectFromList(project) } }}>
+      <div className="pms-project-card-header"><div className="pms-project-card-title">{allowed?.includes('name') ? String(source.name ?? '') : ''}</div>{allowed?.includes('status') && <span>{String(source.status ?? '')}</span>}</div>
+      <div className="pms-project-card-fields">{fields.filter(field => allowed?.includes(field.key)).map(field => <div key={field.key} className="pms-project-card-field"><span className="pms-project-card-field-label">{field.label}</span> <span className="pms-project-card-field-value">{String(source[field.key] ?? '')}</span></div>)}</div>
+    </Card>
+  }
 
   const cardRows = projectTypeFilter === PROJECT_CATEGORY_TECH
     ? technicalFilteredRows
     : cardProjects
   const displayCategoryCounts = {
     ...categoryCounts,
+    all: aboutMineProjects.length,
     [projectTypeFilter]: cardRows.length,
   }
   const pagedCardRows = cardRows.slice(
@@ -495,6 +515,8 @@ export default function ProjectListContainer() {
       : summaryFilters.some(isFilterConditionActive)
   )
 
+  if (permissionCenter && !evaluateMenuPermission(permissionCenter, currentLoginUser, 'project.view')) return <Empty description="暂无项目视图权限" />
+
   return (
     <div className="pms-project-list">
       {/* Unified toolbar */}
@@ -505,7 +527,7 @@ export default function ProjectListContainer() {
         >
             <div className="pms-project-list-category-row" aria-label="项目分类筛选" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
               <span style={{ width: 92, paddingLeft: 4, color: '#6b7280', fontSize: 12, fontWeight: 600 }}>项目分类</span>
-              {PROJECT_CATEGORIES.map(value => ({ label: value, value })).map(item => {
+              {[...(hasHiddenClassification || projectTypeFilter === 'all' ? [{ label: '全部项目', value: 'all' }] : []), ...PROJECT_CATEGORIES.map(value => ({ label: value, value }))].map(item => {
                 const isActive = projectTypeFilter === item.value
                 return (
                   <button
@@ -729,6 +751,7 @@ export default function ProjectListContainer() {
                 />
                 {projectTypeFilter === PROJECT_CATEGORY_TECH ? (
                   <ProjectSummaryTable
+                    permissionSources={permissionSources}
                     projects={[]}
                     optionProjects={[]}
                     planTasksByProjectId={{}}
@@ -739,8 +762,8 @@ export default function ProjectListContainer() {
                     currentTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
-                    providedRows={technicalStatusRows}
-                    providedExportRows={technicalActiveRows}
+                    providedRows={rawTechnicalActiveRows.filter(row => technicalStatusRows.some(visible => visible.key === row.key))}
+                    providedExportRows={rawTechnicalActiveRows}
                     storageNamespace={`project-list-technical-${technicalActiveType}`}
                     onViewProject={() => undefined}
                     onViewRow={enterSummaryRow}
@@ -755,6 +778,7 @@ export default function ProjectListContainer() {
                   />
                 ) : standardMatrixVariant ? (
                   <ProjectSummaryTable
+                    permissionSources={permissionSources}
                     projects={workspaceFilteredProjects}
                     optionProjects={categoryBaseProjects}
                     planTasksByProjectId={projectSummaryPlanTasksByProjectId}
@@ -827,6 +851,7 @@ export default function ProjectListContainer() {
                 </div>
                 {projectTypeFilter === PROJECT_CATEGORY_TECH ? (
                   <ProjectSummaryTable
+                    permissionSources={permissionSources}
                     projects={[]}
                     optionProjects={[]}
                     planTasksByProjectId={{}}
@@ -837,8 +862,8 @@ export default function ProjectListContainer() {
                     currentTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
-                    providedRows={technicalStatusRows}
-                    providedExportRows={technicalActiveRows}
+                    providedRows={rawTechnicalActiveRows.filter(row => technicalStatusRows.some(visible => visible.key === row.key))}
+                    providedExportRows={rawTechnicalActiveRows}
                     storageNamespace={`project-list-technical-${technicalActiveType}`}
                     onViewProject={() => undefined}
                     onViewRow={enterSummaryRow}
@@ -853,6 +878,7 @@ export default function ProjectListContainer() {
                   />
                 ) : standardMatrixVariant ? (
                   <ProjectSummaryTable
+                    permissionSources={permissionSources}
                     projects={workspaceFilteredProjects}
                     optionProjects={categoryBaseProjects}
                     planTasksByProjectId={projectSummaryPlanTasksByProjectId}
@@ -880,6 +906,7 @@ export default function ProjectListContainer() {
               projectTypeFilter === PROJECT_CATEGORY_TECH ? (
                 <div className="pms-technical-list-panel">
                   <ProjectSummaryTable
+                    permissionSources={permissionSources}
                     projects={[]}
                     optionProjects={[]}
                     planTasksByProjectId={{}}
@@ -890,8 +917,8 @@ export default function ProjectListContainer() {
                     currentTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixTemplateTasks={technicalActiveType === 'tdt' ? technicalTdtTemplate : technicalSubprojectTemplate}
                     matrixVariant={technicalActiveType === 'tdt' ? 'technical-tdt' : 'technical-subproject'}
-                    providedRows={technicalStatusRows}
-                    providedExportRows={technicalActiveRows}
+                    providedRows={rawTechnicalActiveRows.filter(row => technicalStatusRows.some(visible => visible.key === row.key))}
+                    providedExportRows={rawTechnicalActiveRows}
                     storageNamespace={`project-list-technical-${technicalActiveType}`}
                     onViewProject={() => undefined}
                     onViewRow={enterSummaryRow}
@@ -909,6 +936,7 @@ export default function ProjectListContainer() {
                 </div>
               ) : (
                 <ProjectSummaryTable
+                    permissionSources={permissionSources}
                   projects={workspaceFilteredProjects}
                   optionProjects={categoryBaseProjects}
                   planTasksByProjectId={projectSummaryPlanTasksByProjectId}
@@ -918,7 +946,7 @@ export default function ProjectListContainer() {
                   publishedSnapshots={publishedSnapshots}
                   currentTemplateTasks={standardTemplateTasks}
                   storageNamespace="workbench-project-list"
-                  matrixVariant={standardMatrixVariant ?? 'tos'}
+                  matrixVariant={standardMatrixVariant ?? undefined}
                   controlledFilters={summaryFilters}
                   onFiltersChange={setSummaryFilters}
                   showQuickFilters

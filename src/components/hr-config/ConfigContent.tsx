@@ -1,20 +1,26 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Card, Tag, Input, Space } from 'antd'
+import { Card, Tag, Input, Space, Empty } from 'antd'
 import { SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import type { ConfigModuleKey } from '@/types/hrConfig'
 import { CONFIG_MODULE_MAP } from '@/constants/hrConfig'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import FeeRateConfig from '@/components/hr-config/FeeRateConfig'
-import ConfigTablePanel from './ConfigTablePanel'
-import ConfigEditModal from './ConfigEditModal'
+import ConfigTablePanel from '@/components/hr-config/ConfigTablePanel'
+import ConfigEditModal from '@/components/hr-config/ConfigEditModal'
+
+import { useProjectStore } from '@/stores/project'
+import { HR_CONFIG_PERMISSION_MENUS, useGlobalMenuPermission } from '@/lib/globalMenuPermissions'
 
 interface ConfigContentProps {
   moduleKey: ConfigModuleKey
 }
 
 export default function ConfigContent({ moduleKey }: ConfigContentProps) {
+  const actor = useProjectStore(state => state.currentLoginUser)
+  const can = useGlobalMenuPermission(actor, HR_CONFIG_PERMISSION_MENUS[moduleKey])
+  if (!can('view')) return <Empty description="暂无此配置查看权限" />
   return moduleKey === 'feeRate' ? <FeeRateConfig /> : <RecordsConfigContent moduleKey={moduleKey} />
 }
 function RecordsConfigContent({ moduleKey }: ConfigContentProps) {

@@ -37,6 +37,7 @@ export interface RoadmapConflictDrawerProps {
   tosVersions: readonly TosVersionConfig[]
   selectedConflictKey: string | null
   canEdit: boolean
+  canDeleteRow?: (row: RoadmapProjectRow) => boolean
   onClose: () => void
   onSelectedConflictKeyChange: (key: string | null) => void
   onViewProject: (projectId: string) => void
@@ -128,6 +129,7 @@ export default function RoadmapConflictDrawer({
   tosVersions,
   selectedConflictKey,
   canEdit,
+  canDeleteRow,
   onClose,
   onSelectedConflictKeyChange,
   onViewProject,
@@ -255,7 +257,7 @@ export default function RoadmapConflictDrawer({
                           tosVersion={versionFor(project)}
                           fallbackTosVersionName={project.firstSaleTosVersionId.trim() || '未维护'}
                           kind="normal"
-                          canEdit={canEdit}
+                          canEdit={canDeleteRow ? canDeleteRow(project) : canEdit}
                           onViewProject={onViewProject}
                           onDeletePlannedProject={onDeletePlannedProject}
                         />
@@ -275,7 +277,7 @@ export default function RoadmapConflictDrawer({
                           tosVersion={versionFor(project)}
                           fallbackTosVersionName={project.firstSaleTosVersionId.trim() || '未维护'}
                           kind="planned"
-                          canEdit={canEdit}
+                          canEdit={canDeleteRow ? canDeleteRow(project) : canEdit}
                           onViewProject={onViewProject}
                           onDeletePlannedProject={onDeletePlannedProject}
                         />

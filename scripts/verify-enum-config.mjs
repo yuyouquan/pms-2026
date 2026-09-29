@@ -623,8 +623,8 @@ assert.match(enumUi, /title:\s*['"]序号['"][\s\S]*render:\s*\([^)]*,\s*[^)]*,\
 assert.match(enumUi, /selectedDefinition\.columns\.map/, 'business columns are generated from the selected registry definition')
 assert.match(enumUi, /formatEnumCellValue/, 'table cells use the central formatter so tOS has one display prefix')
 assert.match(enumUi, /canEditEnums[\s\S]*title:\s*['"]操作['"]/, 'the action column is appended only for users with enum-edit permission')
-assert.match(enumUi, /const hasGlobalPermission\s*=\s*useHasGlobalPermission\(currentLoginUser\)/, 'EnumConfig resolves global permissions for the current user')
-assert.match(enumUi, /hasGlobalPermission\(['"]configCenter:enumEdit['"]\)/, 'enum mutations use the dedicated enum-edit permission')
+assert.ok(enumUi.includes('useGlobalMenuPermission(currentLoginUser, `config.enum:${selectedType}`)'), 'EnumConfig resolves exact selected-menu permissions for the current user')
+assert.ok(enumUi.includes("canRunGlobalMenuAction(currentLoginUser, `config.enum:${type}`, 'edit')"), 'enum mutations re-check the captured leaf and active identity')
 for (const copy of ['新增枚举值', '加载枚举值失败', '暂无配置值', '枚举值筛选', '清空筛选', '暂无匹配的配置值', '芯片编码', '芯片型号', '芯片平台', 'IPM项目分类', 'PMS项目分类', 'PMS二级项目分类', 'TMG及技术领域', '子领域', '安卓版本', '组包方式']) {
   assert.ok(enumUi.includes(copy), `EnumConfig must include UI copy: ${copy}`)
 }
@@ -651,10 +651,8 @@ assert.match(enumUi, /updateEnumRow\(editorType,/, 'update targets the captured 
 assert.doesNotMatch(enumUi, /(?:addEnumRow|updateEnumRow)\(selectedType,/, 'modal mutations never retarget to a later live selection')
 assert.match(enumUi, /setEditorType\(null\)/, 'closing the editor clears its captured type')
 assert.match(enumUi, /const deleteType\s*=\s*selectedType[\s\S]{0,900}deleteEnumRow\(deleteType,\s*row\.id\)/, 'delete confirmation captures its own type before the asynchronous confirmation')
-assert.match(enumUi, /const canEditRef\s*=\s*useRef\(canEditEnums\)/, 'mutation-time permission state is retained in a live ref')
-assert.match(enumUi, /canEditRef\.current\s*=\s*canEditEnums/, 'the live permission ref is synchronized on every render')
-assert.match(enumUi, /if \(!canEditRef\.current\)[\s\S]{0,500}(?:addEnumRow|updateEnumRow)\(editorType,/, 'submit re-checks live permission immediately before its row mutation')
-assert.match(enumUi, /onOk:\s*\(\)\s*=>\s*\{[\s\S]{0,300}if \(!canEditRef\.current\)[\s\S]{0,500}deleteEnumRow\(deleteType,/, 'static delete confirmation re-checks the live permission ref at confirmation time')
+assert.match(enumUi, /if \(!canEditType\(editorType\)\)[\s\S]{0,500}(?:addEnumRow|updateEnumRow)\(editorType,/, 'submit re-checks exact captured-type permission immediately before mutation')
+assert.match(enumUi, /onOk:\s*\(\)\s*=>\s*\{[\s\S]{0,300}if \(!canEditType\(deleteType\)\)[\s\S]{0,500}deleteEnumRow\(deleteType,/, 'static delete confirmation re-checks its exact menu permission at confirmation time')
 assert.match(enumUi, /useEffect\(\(\)\s*=>\s*\{[\s\S]{0,400}!canEditEnums[\s\S]{0,400}setEditorType\(null\)/, 'permission revocation closes an active editor and clears its captured type')
 assert.match(enumUi, /无权限/, 'revoked mutation attempts expose a clear permission message')
 assert.match(enumUi, /const editorTriggerRef\s*=\s*useRef<HTMLElement\s*\|\s*null>/, 'editor focus restoration retains the actual opening element')

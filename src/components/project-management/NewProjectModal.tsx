@@ -10,7 +10,7 @@ import { createConfiguredProject } from '@/lib/projectRegistry'
 import { ensureEnumHydrated, useEnumStore } from '@/stores/enums'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
-import { canConfigureProjectScope, getCreatableProjectAttributes, getCreatableProjectTypes } from '@/lib/projectRegistryPermissions'
+import { canUseProjectRegistry, getAllowedRegistryAttributes, getAllowedRegistryTypes } from '@/lib/projectRegistryAuthorization'
 import {
   getRegistryProjectTypes,
   PROJECT_ATTRIBUTE_LABELS,
@@ -33,7 +33,8 @@ export default function NewProjectModal({ open, onCancel, onCreated }: NewProjec
   const projects = useProjectStore(state => state.projects)
   const currentLoginUser = useProjectStore(state => state.currentLoginUser)
   const isAdmin = usePermissionStore(state => state.globalRoles.some(role => role.name === '管理组' && role.members.includes(currentLoginUser)))
-  const allowedAttributes = useMemo(() => getCreatableProjectAttributes(currentLoginUser, isAdmin), [currentLoginUser, isAdmin])
+  const permissionCenter = usePermissionStore(state => state.permissionCenter)
+  const allowedAttributes = useMemo(() => getAllowedRegistryAttributes(currentLoginUser), [currentLoginUser, permissionCenter, isAdmin])
   const rowsByType = useEnumStore(state => state.rowsByType)
   const hasHydrated = useEnumStore(state => state.hasHydrated)
   const hydrationError = useEnumStore(state => state.hydrationError)
@@ -48,7 +49,7 @@ export default function NewProjectModal({ open, onCancel, onCreated }: NewProjec
     if (!open) return
     form.resetFields()
     const attribute = allowedAttributes[0]
-    const types = attribute ? getCreatableProjectTypes(currentLoginUser, attribute, isAdmin) : []
+    const types = attribute ? getAllowedRegistryTypes(currentLoginUser, attribute) : []
     form.setFieldsValue({ projectAttribute: attribute, type: attribute === 'roadmap' ? types[0] : undefined })
   }, [open, currentLoginUser, isAdmin, allowedAttributes, form])
 
@@ -56,9 +57,9 @@ export default function NewProjectModal({ open, onCancel, onCreated }: NewProjec
     const registered = new Set(projects.map(project => project.sourceBid).filter(Boolean))
     return EXTERNAL_PROJECT_POOL.filter(source => {
       const category = findProjectCategoryMapping(rowsByType, source.ipmProjectCategoryName)?.pmsProjectCategory
-      return !registered.has(source.bid) && Boolean(category && canConfigureProjectScope(currentLoginUser, 'formal', category, isAdmin))
+      return !registered.has(source.bid) && Boolean(category && canUseProjectRegistry(currentLoginUser, 'create', { ...source, type: category, projectAttribute: 'formal' }))
     })
-  }, [projects, rowsByType, currentLoginUser, isAdmin])
+  }, [projects, rowsByType, currentLoginUser, isAdmin, permissionCenter])
 
   const source = useMemo(
     () => EXTERNAL_PROJECT_POOL.find(item => item.bid === sourceBid),
@@ -170,7 +171,7 @@ export default function NewProjectModal({ open, onCancel, onCreated }: NewProjec
           <Select
             disabled={projectAttribute === 'formal' || projectAttribute === 'roadmap'}
             placeholder={projectAttribute === 'formal' ? '由 IPM 项目分类自动带出' : '请选择项目类型'}
-            options={getCreatableProjectTypes(currentLoginUser, projectAttribute, isAdmin).map(value => ({ value, label: value }))}
+            options={getAllowedRegistryTypes(currentLoginUser, projectAttribute).map(value => ({ value, label: value }))}
           />
         </Form.Item>
 

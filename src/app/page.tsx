@@ -2,10 +2,10 @@
 
 import { useTosMrLevel1Sync } from '@/hooks/useTosMrLevel1Sync'
 import { useHrFormalProjectSync } from '@/hooks/useHrFormalProjectSync'
-import { useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRoadmapRegistryMigration } from '@/hooks/useRoadmapRegistryMigration'
 import { isFormalProject } from '@/types/projectRegistry'
-import { Alert, Modal, Button, Space } from 'antd'
+import { Alert, Empty, Modal, Button, Space } from 'antd'
 import { ExclamationCircleOutlined } from '@ant-design/icons'
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
@@ -24,6 +24,10 @@ import { useActivateProject } from '@/hooks/useActivateProject'
 import { useProjectInfoLink } from '@/hooks/useProjectInfoLink'
 import type { ProjectItem } from '@/types/app'
 import ProjectSpaceAccessBoundary from '@/components/permission/ProjectSpaceAccessBoundary'
+import GlobalPermissionContainer from '@/containers/GlobalPermissionContainer'
+import { usePermissionStore } from '@/stores/permission'
+import { canAccessMainModule, PERMISSION_MAIN_NAV } from '@/components/permission-center/navigation'
+import { registerProjectPermissionFields } from '@/lib/projectMenuPermissions'
 
 // Minimal page-specific style overrides (bulk styles live in globals.css)
 const globalStyles = `
@@ -33,6 +37,23 @@ const globalStyles = `
 `
 
 export default function Home() {
+  const [permissionReady, setPermissionReady] = useState(false)
+  const [permissionInitError, setPermissionInitError] = useState('')
+  const permissionCenter = usePermissionStore(state => state.permissionCenter)
+  const permissionDraft = useUiStore(state => state.permissionCenterHasDraft)
+  const configTemplates = usePlanStore(state => state.configTemplateTasksByType)
+  const publishedTemplates = usePlanStore(state => state.publishedSnapshots)
+  useMemo(() => registerProjectPermissionFields(configTemplates, publishedTemplates), [configTemplates, publishedTemplates])
+  useEffect(() => {
+    const initialize = () => {
+      const result = usePermissionStore.getState().ensurePermissionCenter()
+      setPermissionInitError(result.ok ? '' : result.error)
+      setPermissionReady(result.ok)
+    }
+    const unsubscribe = usePermissionStore.persist.onFinishHydration(initialize)
+    if (usePermissionStore.persist.hasHydrated()) initialize()
+    return unsubscribe
+  }, [])
   const projectInfoLinkError = useProjectInfoLink()
   useHrFormalProjectSync()
   useTosMrLevel1Sync()
@@ -67,6 +88,19 @@ export default function Home() {
     }
   }, [setActiveModule])
 
+  const canAccessActiveModule = canAccessMainModule(permissionCenter, currentLoginUser, activeModule)
+  useEffect(() => {
+    if (!permissionReady || activeModule === 'projectSpace' || canAccessActiveModule) return
+    const fallback = PERMISSION_MAIN_NAV.find(item => canAccessMainModule(permissionCenter, currentLoginUser, item.key))
+    const ui = useUiStore.getState()
+    ui.setPermissionCenterHasDraft(false)
+    ui.setIsEditMode(false)
+    ui.setShowColumnModal(false)
+    ui.setShowVersionCompare(false)
+    ui.setShowCreateLevel2Plan(false)
+    if (fallback) setActiveModule(fallback.key)
+  }, [activeModule, canAccessActiveModule, currentLoginUser, permissionCenter, permissionReady, setActiveModule])
+
   // ═══════ Roadmap callback (needs cross-store wiring) ═══════
   const handleViewProjectFromRoadmap = (projectId: string, market?: string) => {
     const project = projects.find(p => p.id === projectId)
@@ -97,6 +131,12 @@ export default function Home() {
             {roadmapMigrationConflicts.map(conflict => <Alert key={conflict} type="warning" showIcon message={conflict} />)}
 
             <div className="pms-main-content" style={{ padding: 24 }}>
+              {permissionInitError && <Alert type="error" showIcon message={permissionInitError} action={<Button onClick={() => {
+                const result = usePermissionStore.getState().ensurePermissionCenter()
+                setPermissionInitError(result.ok ? '' : result.error); setPermissionReady(result.ok)
+              }}>重试</Button>} />}
+              {!permissionInitError && !canAccessActiveModule && <Empty description={permissionReady ? '当前用户没有可访问的菜单；如有团队项目，请通过顶部“我的团队项目”进入' : '正在恢复权限配置'} />}
+              {permissionReady && canAccessActiveModule && <>
               {/* Workbench (todo center + work tracker) */}
               {activeModule === 'workbench' && <WorkbenchContainer />}
 
@@ -119,6 +159,8 @@ export default function Home() {
 
               {/* Config Center */}
               {activeModule === 'config' && <ConfigContainer />}
+              {activeModule === 'globalPermission' && <GlobalPermissionContainer />}
+              </>}
             </div>
           </>
         )}
@@ -144,7 +186,7 @@ export default function Home() {
         width={420}
       >
         <div style={{ padding: '12px 0', fontSize: 14, color: '#4b5563' }}>
-          您还未提交现有编辑内容，是否要离开该界面？
+          {permissionDraft ? '权限配置尚未确认，离开将丢弃未生效的输入。是否继续？' : '您还未提交现有编辑内容，是否要离开该界面？'}
         </div>
       </Modal>
     </>

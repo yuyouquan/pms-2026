@@ -45,6 +45,9 @@ export interface RoadmapEvolutionViewProps {
   columnOrder: readonly RoadmapColumnKey[]
   visibleColumns: readonly RoadmapColumnKey[]
   canEdit: boolean
+  canEditRow?: (row: RoadmapProjectRow) => boolean
+  canDeleteRow?: (row: RoadmapProjectRow) => boolean
+  canViewHistory?: boolean
   collapsedTargetVersionIds: ReadonlySet<string>
   onToggleTarget: (versionId: string) => void
   onOpenProjectHistory: (projectId: string) => void
@@ -166,6 +169,9 @@ export default function RoadmapEvolutionView({
   columnOrder,
   visibleColumns,
   canEdit,
+  canEditRow,
+  canDeleteRow,
+  canViewHistory = true,
   collapsedTargetVersionIds,
   onToggleTarget,
   onOpenProjectHistory,
@@ -193,7 +199,9 @@ export default function RoadmapEvolutionView({
       columnOrder={columnOrder}
       visibleColumns={visibleColumns}
       conflictKey={conflictKeyByIdentity.get(`${row.source}:${row.id}`)}
-      canEdit={canEdit}
+      canEdit={canEditRow ? canEditRow(row) : row.source === 'planned' && canEdit}
+      canDelete={canDeleteRow ? canDeleteRow(row) : row.source === 'planned' && canEdit}
+      canViewHistory={canViewHistory}
       onOpenProjectHistory={onOpenProjectHistory}
       onOpenProjectDetails={onOpenProjectDetails}
       onOpenConflict={onOpenConflict}
@@ -349,6 +357,15 @@ export default function RoadmapEvolutionView({
             />
           </div>
         ))}
+        {orderedVersions.map((version, index) => {
+          const unclassified = rows.filter(row => row.firstSaleTosVersionId === version.id && !row.productType)
+          return unclassified.length ? (
+            <div key={`unclassified:${version.id}`} className="pms-roadmap-evolution-grid-cell" style={{ gridColumn: index + 1, gridRow: 5 }}>
+              <Typography.Text type="secondary">项目（未显示产品类型）</Typography.Text>
+              <div className="pms-roadmap-evolution-card-list">{unclassified.map(renderProjectCard)}</div>
+            </div>
+          ) : null
+        })}
       </div>
 
       <style jsx global>{`

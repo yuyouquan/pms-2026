@@ -1,0 +1,1047 @@
+{
+  "results": [
+    {
+      "name": "verify-budget-cross-tab.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 33712
+    },
+    {
+      "name": "verify-budget-milestone-scheduling.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 32465
+    },
+    {
+      "name": "verify-collapsible-sidebars.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 389
+    },
+    {
+      "name": "verify-compact-ui-density.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 46
+    },
+    {
+      "name": "verify-config-navigation.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 724
+    },
+    {
+      "name": "verify-enum-config.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 699
+    },
+    {
+      "name": "verify-enum-consumers.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 578
+    },
+    {
+      "name": "verify-enum-status.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 836
+    },
+    {
+      "name": "verify-fan-trial.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9877
+    },
+    {
+      "name": "verify-field-configuration-copy.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 43
+    },
+    {
+      "name": "verify-filter-conditions.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 452
+    },
+    {
+      "name": "verify-filter-delete-button-layout.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 47
+    },
+    {
+      "name": "verify-floating-config-panels.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 62
+    },
+    {
+      "name": "verify-global-permission-matrix.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 45
+    },
+    {
+      "name": "verify-hide-global-permission-entry.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9472
+    },
+    {
+      "name": "verify-hr-config-serialization.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9801
+    },
+    {
+      "name": "verify-hr-investment-audit.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10204
+    },
+    {
+      "name": "verify-hr-investment.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10485
+    },
+    {
+      "name": "verify-hr-model.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9894
+    },
+    {
+      "name": "verify-hr-project-registry.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10471
+    },
+    {
+      "name": "verify-hr-resource-regressions.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10292
+    },
+    {
+      "name": "verify-hr-version-forms.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 16485
+    },
+    {
+      "name": "verify-hr-version-refinement.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8956
+    },
+    {
+      "name": "verify-jira-project-rules.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 423
+    },
+    {
+      "name": "verify-level1-browser-harness.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 2045
+    },
+    {
+      "name": "verify-level1-flat-milestone-gantt.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 1594
+    },
+    {
+      "name": "verify-level1-plan-governance.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8438
+    },
+    {
+      "name": "verify-level1-shared-business.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9449
+    },
+    {
+      "name": "verify-liquid-glass-theme-self-test.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 454
+    },
+    {
+      "name": "verify-liquid-glass-theme.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 215
+    },
+    {
+      "name": "verify-machine-end-milestones.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10503
+    },
+    {
+      "name": "verify-machine-mr-level1-projection.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9869
+    },
+    {
+      "name": "verify-machine-project-type-integration.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 438
+    },
+    {
+      "name": "verify-machine-project-types.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 422
+    },
+    {
+      "name": "verify-machine-stage-split.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10138
+    },
+    {
+      "name": "verify-machine-str5-periods.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 717
+    },
+    {
+      "name": "verify-machine-tos-versions.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9151
+    },
+    {
+      "name": "verify-market-build-config.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 621
+    },
+    {
+      "name": "verify-market-version-rules.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 529
+    },
+    {
+      "name": "verify-mock-data-hygiene.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9793
+    },
+    {
+      "name": "verify-mock-dataset-storage.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8557
+    },
+    {
+      "name": "verify-mr-downstream-source-sync.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 847
+    },
+    {
+      "name": "verify-mr-mock-and-info-grid.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 565
+    },
+    {
+      "name": "verify-mr-mock-recovery.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 797
+    },
+    {
+      "name": "verify-mr-source-indicator.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 7747
+    },
+    {
+      "name": "verify-mr-transfer-type-sequence.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 642
+    },
+    {
+      "name": "verify-mr-version-plan.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9449
+    },
+    {
+      "name": "verify-non-labor-import.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 549
+    },
+    {
+      "name": "verify-non-labor-investment.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 17318
+    },
+    {
+      "name": "verify-non-labor-units.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8775
+    },
+    {
+      "name": "verify-permission-center-corruption.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8494
+    },
+    {
+      "name": "verify-permission-center-global.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8457
+    },
+    {
+      "name": "verify-permission-center-matrix.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 728
+    },
+    {
+      "name": "verify-permission-center-projects.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8999
+    },
+    {
+      "name": "verify-permission-center-roadmap.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 810
+    },
+    {
+      "name": "verify-permission-center-role-assignees.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 27481
+    },
+    {
+      "name": "verify-permission-center.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10219
+    },
+    {
+      "name": "verify-plan-rehydrate-ui.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 21140
+    },
+    {
+      "name": "verify-plan-snapshot-persistence.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11499
+    },
+    {
+      "name": "verify-plan-snapshot-stability.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8705
+    },
+    {
+      "name": "verify-plan-task-identity.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 389
+    },
+    {
+      "name": "verify-plan-versioning.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 183
+    },
+    {
+      "name": "verify-plan-workspace-shell.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 697
+    },
+    {
+      "name": "verify-project-configuration-filters.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8192
+    },
+    {
+      "name": "verify-project-core-layout.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 37
+    },
+    {
+      "name": "verify-project-creation-draft.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 466
+    },
+    {
+      "name": "verify-project-creation-rules.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8545
+    },
+    {
+      "name": "verify-project-field-order-followup.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 733
+    },
+    {
+      "name": "verify-project-field-preferences.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 424
+    },
+    {
+      "name": "verify-project-health-enum.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 545
+    },
+    {
+      "name": "verify-project-info-followup-adjustments.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 604
+    },
+    {
+      "name": "verify-project-info-frame-runtime.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 1054
+    },
+    {
+      "name": "verify-project-info-link.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 374
+    },
+    {
+      "name": "verify-project-info-matrix-refresh.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 563
+    },
+    {
+      "name": "verify-project-info-modal-jira-save.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 494
+    },
+    {
+      "name": "verify-project-info-todos.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8415
+    },
+    {
+      "name": "verify-project-list-fullscreen.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 33
+    },
+    {
+      "name": "verify-project-list-header-reorder.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 439
+    },
+    {
+      "name": "verify-project-list-matrix.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8363
+    },
+    {
+      "name": "verify-project-list-refinement.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 412
+    },
+    {
+      "name": "verify-project-management-access.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 674
+    },
+    {
+      "name": "verify-project-management-navigation.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9681
+    },
+    {
+      "name": "verify-project-management-reaudit.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11070
+    },
+    {
+      "name": "verify-project-person-choices.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 13940
+    },
+    {
+      "name": "verify-project-registry-final-fixes.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11182
+    },
+    {
+      "name": "verify-project-registry-transactions.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10870
+    },
+    {
+      "name": "verify-project-registry.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 20268
+    },
+    {
+      "name": "verify-project-resource-fixtures.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 19699
+    },
+    {
+      "name": "verify-project-responsibility-sync.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 485
+    },
+    {
+      "name": "verify-project-roadmap.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 32146
+    },
+    {
+      "name": "verify-project-role-sync.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8749
+    },
+    {
+      "name": "verify-project-space-followup.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8780
+    },
+    {
+      "name": "verify-project-space-permission-matrix.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9744
+    },
+    {
+      "name": "verify-project-summary-sorting.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 814
+    },
+    {
+      "name": "verify-project-summary.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10733
+    },
+    {
+      "name": "verify-project-surfaces-visual-refresh.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 1145
+    },
+    {
+      "name": "verify-project-template-compatibility.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 510
+    },
+    {
+      "name": "verify-project-view-market-display.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8397
+    },
+    {
+      "name": "verify-project-view-milestone-mock-rules.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 38
+    },
+    {
+      "name": "verify-project-view-requirements.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9181
+    },
+    {
+      "name": "verify-project-view-tos-mock-values.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 41
+    },
+    {
+      "name": "verify-resource-activation-interactions.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9958
+    },
+    {
+      "name": "verify-resource-cell-editing.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 440
+    },
+    {
+      "name": "verify-resource-cross-tab-storage.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 27537
+    },
+    {
+      "name": "verify-resource-cumulative-estimate.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9521
+    },
+    {
+      "name": "verify-resource-dashboard-business.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9352
+    },
+    {
+      "name": "verify-resource-dashboard.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11767
+    },
+    {
+      "name": "verify-resource-dataset-refresh.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 21453
+    },
+    {
+      "name": "verify-resource-empty-project-persistence.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 37178
+    },
+    {
+      "name": "verify-resource-expense-followup.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 17645
+    },
+    {
+      "name": "verify-resource-form-followup.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11159
+    },
+    {
+      "name": "verify-resource-form-snapshots.cjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 675
+    },
+    {
+      "name": "verify-resource-formal-domain.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11632
+    },
+    {
+      "name": "verify-resource-formal-status.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 18953
+    },
+    {
+      "name": "verify-resource-inline-date.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 1515
+    },
+    {
+      "name": "verify-resource-inline-editing.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 23619
+    },
+    {
+      "name": "verify-resource-inline-editor.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 858
+    },
+    {
+      "name": "verify-resource-inline-import.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 17246
+    },
+    {
+      "name": "verify-resource-inline-refresh.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 25460
+    },
+    {
+      "name": "verify-resource-inline-render.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 547
+    },
+    {
+      "name": "verify-resource-legacy-startup.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 25263
+    },
+    {
+      "name": "verify-resource-log-dialog.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 473
+    },
+    {
+      "name": "verify-resource-milestone-ownership.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 15422
+    },
+    {
+      "name": "verify-resource-mixed-version-storage.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 50481
+    },
+    {
+      "name": "verify-resource-model-selection.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11139
+    },
+    {
+      "name": "verify-resource-monthly-cost.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 606
+    },
+    {
+      "name": "verify-resource-monthly-presentation.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 12634
+    },
+    {
+      "name": "verify-resource-monthly-reallocation.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11268
+    },
+    {
+      "name": "verify-resource-permission-defaults.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 17261
+    },
+    {
+      "name": "verify-resource-permission-ui.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 577
+    },
+    {
+      "name": "verify-resource-permissions.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9530
+    },
+    {
+      "name": "verify-resource-release-audit.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 11069
+    },
+    {
+      "name": "verify-resource-startup.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10747
+    },
+    {
+      "name": "verify-resource-subject-description.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 17338
+    },
+    {
+      "name": "verify-resource-total-consumers.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9886
+    },
+    {
+      "name": "verify-resource-total-editing.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9315
+    },
+    {
+      "name": "verify-resource-version-lifecycle.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 10214
+    },
+    {
+      "name": "verify-resource-version-modal-save.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9655
+    },
+    {
+      "name": "verify-resource-version-workspace.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 577
+    },
+    {
+      "name": "verify-resource-workspace-integration.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9437
+    },
+    {
+      "name": "verify-roadmap-mock-seeds.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 1308
+    },
+    {
+      "name": "verify-roadmap-registry.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 16457
+    },
+    {
+      "name": "verify-roadmap-space-editor.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 629
+    },
+    {
+      "name": "verify-roadmap-table-interactions.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8036
+    },
+    {
+      "name": "verify-roadmap-view-cleared.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 366
+    },
+    {
+      "name": "verify-roadmap-visibility-optional.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8523
+    },
+    {
+      "name": "verify-session-boundaries.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9397
+    },
+    {
+      "name": "verify-shared-plan-snapshots.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9582
+    },
+    {
+      "name": "verify-sortable-column-settings.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 15899
+    },
+    {
+      "name": "verify-summary-collapse-behavior.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 37
+    },
+    {
+      "name": "verify-technical-plan-operations.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 713
+    },
+    {
+      "name": "verify-technical-plan.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8180
+    },
+    {
+      "name": "verify-technical-project.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9032
+    },
+    {
+      "name": "verify-technical-resource-followup.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9634
+    },
+    {
+      "name": "verify-technical-subproject-columns.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 712
+    },
+    {
+      "name": "verify-template-interval-ui.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9178
+    },
+    {
+      "name": "verify-template-intervals.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 16527
+    },
+    {
+      "name": "verify-todo-center.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 586
+    },
+    {
+      "name": "verify-tos-mr-level1-sync.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9036
+    },
+    {
+      "name": "verify-tos-planning-phase.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9160
+    },
+    {
+      "name": "verify-tos-project-status.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 422
+    },
+    {
+      "name": "verify-tos-roadmap-fidelity-filter.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 406
+    },
+    {
+      "name": "verify-tos-roadmap-single-entry.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 752
+    },
+    {
+      "name": "verify-tos-type-integration.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 81
+    },
+    {
+      "name": "verify-tos-type-rules.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 466
+    },
+    {
+      "name": "verify-transfer-entry-exchange.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 772
+    },
+    {
+      "name": "verify-transfer-integration.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8858
+    },
+    {
+      "name": "verify-transfer-template-refresh.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9319
+    },
+    {
+      "name": "verify-transfer-ui-guards.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9072
+    },
+    {
+      "name": "verify-transfer-workflow.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 9087
+    },
+    {
+      "name": "verify-whole-machine-project-fields.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 529
+    },
+    {
+      "name": "verify-workbench-project-list.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 42
+    },
+    {
+      "name": "verify-workbench-split.mjs",
+      "code": 0,
+      "signal": null,
+      "durationMs": 8050
+    }
+  ],
+  "exclusions": {
+    "verify-full-regression.mjs": "this runner",
+    "verify-project-resource-regression.mjs": "aggregate; its individual checks run here",
+    "verify-legacy-template-routes.mjs": "browser scenario; verify through the browser tool"
+  }
+}

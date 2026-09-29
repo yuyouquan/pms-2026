@@ -17,8 +17,8 @@ requireSource(root, 'src/stores/ui.ts', /projectSpaceOrigin\b/, 'missing project
 const uiSource = readSource(root, 'src/stores/ui.ts')
 assert.deepEqual(
   getStringUnionTypeMembers(uiSource, 'MainModule'),
-  ['workbench', 'projectManagement', 'jointProjectSpace', 'roadmap', 'hrPipeline', 'config', 'projectSpace'],
-  'MainModule must use the unified seven-module navigation contract',
+  ['workbench', 'projectManagement', 'jointProjectSpace', 'roadmap', 'hrPipeline', 'config', 'globalPermission', 'projectSpace'],
+  'MainModule must use the eight-module contract including the permission center and project space',
 )
 requireSource(root, 'src/stores/ui.ts', /activeModule:\s*['"]workbench['"]/, 'workbench must be the default module')
 assert.match(uiSource, /export type WorkbenchTab = ['"]todo['"]/, 'legacy workbench origin supports only the task page')
@@ -76,12 +76,20 @@ assert.match(activationSource, /setTransferView\(null\)/, 'shared activation mus
 assert.match(activationSource, /setSelectedProject\(project\)/, 'shared activation must select the project')
 assert.match(activationSource, /setSelectedMarketTab\(selectedMarket\)/, 'shared activation must select the requested or default market')
 assert.match(activationSource, /buildTosTypeRows[\s\S]*?getMainTosType[\s\S]*?setSelectedTosTypeTab/, 'shared activation must select the tOS main type')
-const expectedHeaderOrder = /key:\s*['"]workbench['"],\s*label:\s*['"]工作台['"][\s\S]*?key:\s*['"]projectManagement['"],\s*label:\s*['"]项目管理['"][\s\S]*?key:\s*['"]jointProjectSpace['"],\s*label:\s*['"]项目组合管理['"][\s\S]*?key:\s*['"]roadmap['"],\s*label:\s*['"]tOS路标['"][\s\S]*?key:\s*['"]hrPipeline['"],\s*label:\s*['"]人力资源管道['"][\s\S]*?key:\s*['"]config['"],\s*label:\s*['"]配置中心['"]/
-assert.match(
-  shellSource,
-  expectedHeaderOrder,
-  'main header order must place project management between workbench and project combination management',
-)
+const { PERMISSION_MAIN_NAV } = loadTypeScriptModule(root, 'src/components/permission-center/navigation.ts')
+assert.deepEqual(PERMISSION_MAIN_NAV, [
+  { key: 'workbench', label: '工作台' },
+  { key: 'projectManagement', label: '项目管理' },
+  { key: 'jointProjectSpace', label: '项目组合管理' },
+  { key: 'roadmap', label: 'tOS路标' },
+  { key: 'hrPipeline', label: '人力资源管道' },
+  { key: 'config', label: '配置中心' },
+  { key: 'globalPermission', label: '权限中心' },
+], 'shared header order preserves the workbench/project-management split and places permission center after configuration')
+assert.deepEqual(PERMISSION_MAIN_NAV.map(item => item.key), getStringUnionTypeMembers(uiSource, 'MainModule').filter(module => module !== 'projectSpace'),
+  'the shared navigation includes every outer module while project space keeps its own header')
+assert.match(shellSource, /items=\{PERMISSION_MAIN_NAV\.filter\(item => canAccessMainModule\(permissionCenter, currentLoginUser, item\.key\)\)\}/,
+  'main header consumes the shared ordered directory and filters it by current access')
 assert.equal(hasNestedCallExpression(shellSource, 'navigateWithEditGuard', 'returnFromProjectSpace'), true, 'ProjectSpaceHeader calls origin return inside the edit-guard callback')
 
 const { useUiStore } = loadTypeScriptModule(root, 'src/stores/ui.ts')

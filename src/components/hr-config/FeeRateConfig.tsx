@@ -2,17 +2,16 @@
 import { useId } from 'react'
 import { InputNumber } from 'antd'
 import { CalculatorOutlined } from '@ant-design/icons'
-import { useHrConfigStore, canEditHrConfig } from '@/stores/hrConfig'
+import { useHrConfigStore } from '@/stores/hrConfig'
 import { useProjectStore } from '@/stores/project'
-import { usePermissionStore } from '@/stores/permission'
+import { canRunGlobalMenuAction, useGlobalMenuPermission } from '@/lib/globalMenuPermissions'
 import ResourceInlineField from '@/components/project-resources/ResourceInlineField'
 
 export default function FeeRateConfig() {
   const rate = useHrConfigStore(state => Number(state.data.feeRate?.[0]?.value ?? 5))
-  useProjectStore(state => state.currentLoginUser)
-  usePermissionStore()
+  const actor = useProjectStore(state => state.currentLoginUser)
   const id = useId()
-  const canEdit = canEditHrConfig('feeRate')
+  const canEdit = useGlobalMenuPermission(actor, 'config.hrPipeline:feeRate')('edit')
   const formatAmount = (value: number) => value.toLocaleString('zh-CN', { maximumFractionDigits: 20 })
   return <section className="pms-resource-fee-config" aria-labelledby={`${id}-title`}>
     <header className="pms-fee-config-header">
@@ -27,7 +26,10 @@ export default function FeeRateConfig() {
         <label htmlFor={`${id}-rate`}>每人月费率</label>
         <ResourceInlineField label="费率" value={rate} readOnly={!canEdit}
           display={<span className="pms-fee-config-readonly">{formatAmount(rate)}<span>万元</span></span>}
-          onSave={value => useHrConfigStore.getState().setFeeRate(value === null ? 0 : Number(value))}
+          onSave={value => {
+            if (!canRunGlobalMenuAction(actor, 'config.hrPipeline:feeRate', 'edit')) throw new Error('无费率编辑权限')
+            useHrConfigStore.getState().setFeeRate(value === null ? 0 : Number(value))
+          }}
           renderEditor={(value, change) => <InputNumber id={`${id}-rate`} controls={false} min={0}
             aria-label="每人月费率" aria-describedby={`${id}-hint`} suffix="万元"
             value={value === null ? null : Number(value)} onChange={change} />} />

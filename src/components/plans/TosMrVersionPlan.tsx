@@ -1,5 +1,8 @@
 'use client'
 
+import { useProjectStore } from '@/stores/project'
+import { canExecuteProjectTeamWrite } from '@/lib/projectTeamMutationGuard'
+import { useProjectTeamStore } from '@/stores/projectTeam'
 import { useEffect, useMemo, useState } from 'react'
 import { Card, Empty, Input, Radio, Space, Spin, Tag, message } from 'antd'
 import { AppstoreOutlined, TableOutlined } from '@ant-design/icons'
@@ -107,14 +110,15 @@ export default function TosMrVersionPlan({
   }, [sortedInstances, versionQuery])
   const candidates = useMemo(() => source ? selectTosMrVersionCandidatesFromTasks(source) : [], [source])
   const latestTemplate = useMemo(() => selectLatestPublishedTemplate(templateVersions), [templateVersions])
-  const permission = useMemo(() => resolveMrPermissions({
+  useProjectTeamStore(state => state.teamsByProjectId)
+  const permission = resolveMrPermissions({
     context: 'tos',
     currentUser,
     globalAdminUsers,
     tosManagerUsers: getTosManagerUsers(project),
     machineSpm: '',
     tosProjectId: project.id,
-  }), [currentUser, globalAdminUsers, project])
+  })
   const scopeKey = `tos::${project.id}`
   const mode: MrPlanViewMode = viewModeByScope[scopeKey] ?? 'horizontal'
   const instanceAccessByVersion = useMemo(() => new Map(sortedInstances.map(instance => [
@@ -148,6 +152,7 @@ export default function TosMrVersionPlan({
   }))
 
   const handleDateChange = (row: MrPlanGridRow, activityId: string, value: string) => {
+    if (!canExecuteProjectTeamWrite(currentUser, project.id, useProjectStore.getState())) return
     const access = instanceAccessByVersion.get(row.version)
     if (!access?.canEdit) {
       void messageApi.error(access?.reason ?? '当前tOS版本在一级计划中不存在，无法修改日期')

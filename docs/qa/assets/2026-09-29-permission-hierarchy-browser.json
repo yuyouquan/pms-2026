@@ -1,0 +1,88 @@
+{
+  "url": "http://localhost:3017/",
+  "checks": [
+    {
+      "check": "two columns and superadmin locked",
+      "checks": 97,
+      "headers": [
+        "菜单",
+        "功能权限"
+      ],
+      "locked": true
+    },
+    {
+      "check": "individual and all collapse",
+      "pass": true
+    },
+    {
+      "check": "search reveals collapsed descendants, empty state, restore and independent nested groups",
+      "pass": true
+    },
+    {
+      "check": "checkbox persisted after reload",
+      "pass": true
+    },
+    {
+      "check": "person readonly and inline source roles",
+      "headers": [
+        "菜单",
+        "功能权限"
+      ],
+      "readonly": true,
+      "source": true
+    },
+    {
+      "check": "final indentation and restored grants",
+      "headers": [
+        "菜单",
+        "功能权限"
+      ],
+      "indent": [
+        {
+          "label": "工作台",
+          "padding": "30px"
+        },
+        {
+          "label": "项目视图",
+          "padding": "30px"
+        },
+        {
+          "label": "项目配置",
+          "padding": "30px"
+        }
+      ],
+      "overflow": false,
+      "restored": true
+    },
+    {
+      "check": "narrow layout",
+      "mode": "block",
+      "pageOverflow": false,
+      "tableOverflow": false,
+      "width": 700
+    },
+    {
+      "check": "shared project table remains intact",
+      "checks": 21,
+      "groups": 4,
+      "headers": [
+        "菜单",
+        "功能权限"
+      ],
+      "width": "163.984px"
+    },
+    {
+      "check": "nested configuration categories retain labels and indentation",
+      "headers": [
+        "菜单",
+        "功能权限"
+      ],
+      "indents": [
+        "48px",
+        "66px"
+      ],
+      "leafHasFlatPaths": false
+    }
+  ],
+  "logs": []
+}

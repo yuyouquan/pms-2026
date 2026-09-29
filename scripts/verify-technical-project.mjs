@@ -657,7 +657,7 @@ permissionModule.usePermissionStore.getState().syncProjectTeamPermissionMembers(
   technicalOther: '演示用户02',
   fieldValues: { ...technicalOtherProject.fieldValues, technicalOther: '演示用户02' },
 })
-assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '其他')?.members, ['演示用户02'], 'permission sync updates Other membership after technical editing')
+assert.deepEqual(permissionModule.usePermissionStore.getState().rolesByProject['9'].find(role => role.name === '其他')?.members, ['演示用户01'], 'technical field changes preserve independently saved local Other role membership')
 permissionModule.usePermissionStore.setState({ rolesByProject: {}, rolePermissionsByProject: {} })
 permissionModule.usePermissionStore.getState().ensureProjectPermissions(technicalSeeds.filter(project => project.id.startsWith('mock-tech-')))
 for (const project of technicalSeeds.filter(project => project.id.startsWith('mock-tech-'))) {
