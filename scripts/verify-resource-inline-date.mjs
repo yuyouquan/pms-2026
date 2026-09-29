@@ -1,3 +1,4 @@
+import { resourceOpeningHarness } from './lib/resource-opening-harness.mjs'
 import assert from 'node:assert/strict'
 import path from 'node:path'
 import { createTypeScriptModuleLoader } from './lib/typescript-module-loader.mjs'
@@ -36,6 +37,7 @@ const { default: ts } = await import('typescript')
 const require = createRequire(import.meta.url)
 const sessionModule = get(path.resolve('src/components/project-resources/inlineFieldSession.ts'))
 const modules = {
+  '@/lib/resourceMutationContext': resourceOpeningHarness(() => ({ currentLoginUser: 'owner', selectedProject: { id: 'p' } })),
   react: { useRef: value => ({ current: value }) },
   antd: { App: { useApp: () => ({ message: {} }) }, DatePicker: function DatePicker() {}, Descriptions: 'Descriptions', Input: 'Input', InputNumber: 'InputNumber', Select: 'Select', Space: 'Space', Table: 'Table', Tabs: 'Tabs', Tooltip: 'Tooltip', Upload: 'Upload', Button: 'Button' },
   '@ant-design/icons': new Proxy({}, { get: (_, key) => String(key) }),

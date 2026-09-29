@@ -2,6 +2,7 @@ import { useProjectStore } from '@/stores/project'
 import { buildTechnicalPlanTabs, getTechnicalPlanKey, useTechnicalPlanStore, type TechnicalPlanScope } from '@/stores/technicalPlan'
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import { getTechnicalLevel1MaintainerUsers } from '@/lib/projectSpaceLevel1Rules'
+import { isProjectTeamMember } from '@/lib/projectTeam'
 import { canMaintainLevel1Plan } from '@/lib/level1PlanRules'
 import { useProjectTeamStore } from '@/stores/projectTeam'
 import { effectiveTeamProjectId } from '@/stores/rolePermissionTemplates'
@@ -35,7 +36,7 @@ export function canImportTechnicalDraft(actor: string, projectId: string): boole
   return Boolean(project && project.id === projectId && live.currentLoginUser === actor && project.type === '技术项目'
     && hasPermission(actor, projectId, 'plan:一级计划-查看') && hasPermission(actor, projectId, 'plan:导入')
     && canMaintainLevel1Plan({ projectType: project.type, currentUser: actor, spmUsers: [],
-      technicalLead: getTechnicalLevel1MaintainerUsers(project, usePermissionStore.getState().rolesByProject[projectId] ?? []),
+      technicalLead: getTechnicalLevel1MaintainerUsers(project, isProjectTeamMember(actor, projectId) ? [] : usePermissionStore.getState().rolesByProject[projectId] ?? []),
       globalAdmins: isGlobalAdmin(actor) ? [actor] : [],
     }))
 }

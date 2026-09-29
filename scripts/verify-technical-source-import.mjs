@@ -24,6 +24,13 @@ assert.equal(can(), true, 'source import grant plus canonical technical responsi
 assert.equal(guard.canExecuteProjectTeamWrite(actor, project.id, useProjectStore.getState()), false, 'import grant never enables broad L1 writes')
 useProjectStore.setState({ selectedProject: { ...project, fieldValues: { technicalLead: ['演示用户11'] } } })
 assert.equal(can(), false, 'missing canonical responsibility denies despite grant')
+const missingLead = { ...project, fieldValues: {} }
+delete missingLead.technicalLead
+useProjectStore.setState({ selectedProject: missingLead })
+assert.equal(usePermissionStore.getState().setProjectRoleAssignees('演示用户01', project.id, '技术项目负责人', { users: [actor], departments: [] }).ok, true)
+assert.equal(can(), false, 'editable local lead role cannot replace absent canonical responsibility for source member')
+useProjectStore.setState({ selectedProject: { ...missingLead, fieldValues: { technicalLead: [] } } })
+assert.equal(can(), false, 'cleared canonical lead cannot fall back to local role')
 useProjectStore.setState({ selectedProject: project })
 useTechnicalPlanStore.setState({ plansByKey: { [key]: { scope, currentVersionId: version.id, versions: [{ ...version, status: '已发布' }] } } })
 assert.equal(can(), false, 'published version cannot be imported')

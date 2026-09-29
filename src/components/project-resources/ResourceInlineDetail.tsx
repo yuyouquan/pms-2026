@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx'
 import type { ColumnsType } from 'antd/es/table'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import type { ResourceProject, ResourceVersion } from '@/components/project-resources/resourceVersionAdapter'
+import { captureResourceOpening, isResourceOpeningCurrent, withResourceOpening } from '@/lib/resourceMutationContext'
 import { resourceStore } from '@/components/project-resources/resourceVersionAdapter'
 import ResourceInlineField from '@/components/project-resources/ResourceInlineField'
 import { useInlineImportSession } from '@/components/project-resources/useInlineImportSession'
@@ -35,12 +36,13 @@ export default function ResourceInlineDetail({ category, project, version, scope
   const records = useHrConfigStore(state => state.data.hrModel ?? [])
   const currentVersion = useRef(version); currentVersion.current = version
   const importSession = useInlineImportSession()
+  const opening = captureResourceOpening(category, scopeId, project.id, version.id)
   const isImportCurrent = (permission: 'laborEdit' | 'nonLaborEdit') => {
     const current = resourceStore(category).getState().projects.find(item => item.id === project.id)
     const saved = current?.versions.find(item => item.id === version.id)
-    return saved === version && canResourceAction(current, permission, scopeId) && isHrVersionEditable(current, saved, permission)
+    return isResourceOpeningCurrent(opening) && saved === version && canResourceAction(current, permission, scopeId) && isHrVersionEditable(current, saved, permission)
   }
-  const persist = (patch: ResourceInlinePatch) => resourceStore(category).getState().updateVersionInline(project.id, version.id, patch, scopeId)
+  const persist = (patch: ResourceInlinePatch) => withResourceOpening(opening, () => resourceStore(category).getState().updateVersionInline(project.id, version.id, patch, scopeId))
   const action = (fn: () => void) => { try { fn() } catch (error) { message.warning(error instanceof Error ? error.message : '保存失败') } }
   const dates = ('projectStartTime' in version ? version : version.milestones) as unknown as Record<string, string | null>
   const machine = 'hrModelVersion' in version ? version : null

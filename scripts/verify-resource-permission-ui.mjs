@@ -1,3 +1,4 @@
+import { resourceOpeningHarness } from './lib/resource-opening-harness.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
@@ -7,6 +8,7 @@ const require = createRequire(import.meta.url)
 const noop = () => {}
 const actions = ['view', 'createVersion', 'lockVersion', 'setOfficialVersion', 'deleteVersion', 'export', 'laborEdit', 'nonLaborEdit']
 let actor = 'owner', granted = new Set(actions), defer = false, pending, exports = [], mutations = [], warnings = []
+let refs = [], refCursor = 0
 let current, budgetType = 'projectBudget', hookCursor = 0, hooks = []
 const project = { id: 'scope', name: '资源权限验证', projectAttribute: 'formal', type: '能力建设项目' }
 const canResourceAction = (record, action, scope = record?.pmsProjectId) => !!record && actor === 'owner' && granted.has('view') && granted.has(action)
@@ -18,7 +20,8 @@ const stateStore = { getState: () => current }
 const registry = Object.assign(selector => selector?.({ currentLoginUser: actor, projects: [project] }), { getState: () => ({ currentLoginUser: actor, projects: [project] }) })
 const config = Object.assign(selector => selector({ data: { hrModel: [], feeRate: [{ value: 5 }] } }), { getState: () => ({ data: { feeRate: [{ value: 5 }] } }) })
 const imports = {
-  react: { useEffect: noop, useRef: value => ({ current: value }), useState: initial => { const index = hookCursor++; return [index in hooks ? hooks[index] : typeof initial === 'function' ? initial() : initial, value => { hooks[index] = value }] } },
+  '@/lib/resourceMutationContext': resourceOpeningHarness(() => ({ currentLoginUser: actor, selectedProject: project })),
+  react: { useEffect: noop, useRef: value => { const i = refCursor++; return refs[i] ??= { current: value } }, useState: initial => { const index = hookCursor++; return [index in hooks ? hooks[index] : typeof initial === 'function' ? initial() : initial, value => { hooks[index] = value }] } },
   antd: new Proxy({ App: { useApp: () => ({ message: { success: noop, warning: value => warnings.push(value) } }) }, Table: table, DatePicker: { RangePicker: 'RangePicker' } }, { get: (target, key) => target[key] ?? String(key) }),
   '@ant-design/icons': new Proxy({}, { get: (_, key) => String(key) }),
   xlsx: { read: () => ({ SheetNames: ['sheet'], Sheets: { sheet: {} } }), utils: { sheet_to_json: () => [['一级部门', '二级部门', '预估投入'], ['A', 'B', 15]] } },
@@ -82,13 +85,13 @@ function elements(node) {
     .filter(child => child && typeof child === 'object' && child.type).flatMap(elements)]
 }
 function reset() {
-  actor = 'owner'; granted = new Set(actions); hooks = []; budgetType = 'projectBudget'; defer = false; pending = undefined; exports = []; mutations = []; warnings = []
+  actor = 'owner'; granted = new Set(actions); hooks = []; refs = []; refCursor = 0; budgetType = 'projectBudget'; defer = false; pending = undefined; exports = []; mutations = []; warnings = []
   const version = { id: 'v1', budgetType: 'projectBudget', minorVersion: 1, versionNumber: 'V0.1', lockState: 'unlocked', isActive: true, createdAt: '2026-09-21', projectStartTime: '2026-01-01', departmentInvestments: [{ id: 'd1', primaryDepartment: 'A', secondaryDepartment: 'B', estimatedInvestment: 10 }], estimatedInvestment: 10 }
   current = { projects: [{ id: 'record', pmsProjectId: 'scope', name: project.name, status: 'active', versions: [version] }], monthlyInvestments: [], refreshFormalProjects: noop,
     setVersionLocked: (...args) => mutations.push(['lock', ...args]), setVersionActive: (...args) => mutations.push(['official', ...args]), deleteVersion: (...args) => mutations.push(['delete', ...args]), updateVersionInline: (...args) => mutations.push(['inline', ...args]),
     createResourceVersion: (...args) => { mutations.push(['create', ...args]); return 'new' }, updateResourceMonthlyInvestment: noop }
 }
-const renderWorkspace = () => { hookCursor = 0; return elements(Workspace({ project, category: 'capability', budgetType })) }
+const renderWorkspace = () => { hookCursor = 0; refCursor = 0; return elements(Workspace({ project, category: 'capability', budgetType })) }
 const button = (tree, label) => tree.find(node => node.type === 'Button' && (node.props['aria-label'] === label || node.props.children === label))
 const detailProps = tree => tree.find(node => node.type === 'ResourceInlineDetail').props
 const renderDetail = flags => { hookCursor = 0; return elements(Detail({ category: 'capability', project: current.projects[0], version: current.projects[0].versions[0], scopeId: project.id, laborReadOnly: true, nonLaborReadOnly: true, setupReadOnly: true, ...flags })) }

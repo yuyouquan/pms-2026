@@ -1,8 +1,10 @@
+import { resourceOpeningHarness } from './lib/resource-opening-harness.mjs'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import ts from 'typescript'
 const require = createRequire(import.meta.url)
+let refs = [], refCursor = 0
 let states = [], cursor = 0, serial = 1
 const version = id => ({ id, versionNumber: `V0.${id}`, budgetType: 'projectEstimate', minorVersion: Number(id), lockState: 'unlocked', isActive: false, estimatedInvestment: 10, createdAt: '2026-01-01' })
 const owner = { id: 'resource', pmsProjectId: 'p', versions: [version('1')] }
@@ -10,7 +12,8 @@ const store = { projects: [owner], monthlyInvestments: [], createResourceVersion
 const ui = { navigateWithEditGuard: fn => fn() }
 const noop = () => {}
 const modules = {
-  react: { useEffect: noop, useState: initial => { const index = cursor++; if (!(index in states)) states[index] = initial; return [states[index], value => { states[index] = value }] } },
+  '@/lib/resourceMutationContext': resourceOpeningHarness(() => ({ currentLoginUser: 'owner', selectedProject: { id: 'p' } })),
+  react: { useRef: value => { const i = refCursor++; return refs[i] ??= { current: value } }, useEffect: noop, useState: initial => { const index = cursor++; if (!(index in states)) states[index] = initial; return [states[index], value => { states[index] = value }] } },
   antd: { App: { useApp: () => ({ message: { success: noop, warning: noop } }) }, Alert: 'Alert', Button: 'Button', Empty: 'Empty', Popconfirm: 'Popconfirm', Select: 'Select', Space: 'Space', Tabs: 'Tabs', Tag: 'Tag', Tooltip: 'Tooltip' },
   '@ant-design/icons': new Proxy({}, { get: (_, key) => String(key) }),
   '@/stores/project': { useProjectStore: noop }, '@/stores/permission': { usePermissionStore: noop }, '@/stores/ui': { useUiStore: { getState: () => ui } },
@@ -31,7 +34,7 @@ for (const value of Object.values(modules)) if (value && Object.hasOwn(value, 'd
 const module = { exports: {} }
 const output = ts.transpileModule(fs.readFileSync('src/components/project-resources/ResourceVersionWorkspace.tsx', 'utf8'), { compilerOptions: { jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, esModuleInterop: true } }).outputText
 new Function('require', 'module', 'exports', output)(id => modules[id] ?? require(id), module, module.exports)
-const render = () => { cursor = 0; return module.exports.default({ project: { id: 'p' }, category: 'technical', budgetType: 'projectEstimate' }) }
+const render = () => { cursor = 0; refCursor = 0; return module.exports.default({ project: { id: 'p' }, category: 'technical', budgetType: 'projectEstimate' }) }
 function children(node) { return [node?.props?.children, node?.props?.tabBarExtraContent].flat(Infinity).filter(value => value && typeof value === 'object') }
 function elements(node) { return [node, ...children(node).flatMap(elements)] }
 function validate(tree) {
