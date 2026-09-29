@@ -1,22 +1,32 @@
-import { getPermissionFields, registerPermissionFields } from '@/constants/permissionCenter'
+import { getPermissionFields, registerPermissionFields, registerProjectColumnFields } from '@/constants/permissionCenter'
 import { PROJECT_CATEGORY_MACHINE, PROJECT_CATEGORY_TECH, PROJECT_TYPE_TOS_VERSION, PROJECT_SECONDARY_CATEGORIES, matchesProjectTypeFilter, matchesProjectSecondaryCategoryFilter } from '@/constants/projectTypes'
-import { getAuthorizedColumns, evaluateMenuPermission, projectAuthorizedRows } from '@/lib/permissionCenter'
-import { buildProjectSummaryRow, getProjectListFieldDefinitions, getProjectSummaryFieldDefinitions, getTemplateTaskFieldDefinitions, type ProjectSummaryFieldDefinition, type ProjectSummaryRow, type ProjectSummaryTemplateTask } from '@/lib/projectSummary'
+import { getAuthorizedColumns, evaluateMenuPermission, getMatchingMenuPolicies, isPermissionCenterAdmin, projectAuthorizedRows } from '@/lib/permissionCenter'
+import { buildProjectSummaryRow, getLatestPublishedTemplateTasks, getProjectListFieldDefinitions, getProjectSummaryFieldDefinitions, getTemplateTaskFieldDefinitions, type ProjectSummaryFieldDefinition, type ProjectSummaryRow, type ProjectSummaryTemplateTask } from '@/lib/projectSummary'
 import type { ProjectInfoProject } from '@/lib/projectInfoValues'
 import type { PermissionAction, PermissionCenterModel, PermissionMenuId } from '@/types/permissionCenter'
 import type { ProjectItem } from '@/types/app'
+import { getProjectListFixedColumnKeys } from '@/lib/projectListMatrix'
+import { getTemplateConfigScopeKey } from '@/lib/technicalPlanRules'
+import { getTemplateTasksForProjectType } from '@/lib/projectTemplateCompatibility'
+import type { ConfigTemplateVersionScope } from '@/types/technicalPlan'
 import { getProjectAttribute, type ProjectRegistryHistoryEntry } from '@/types/projectRegistry'
 
 /** Register actual list/task metadata before either the editor or consumers evaluate policies. */
-export function registerProjectPermissionFields(templates: Record<string, readonly ProjectSummaryTemplateTask[]> = {}, snapshots: Record<string, readonly ProjectSummaryTemplateTask[]> = {}): void {
+export function registerProjectPermissionFields(templates: Record<string, readonly ProjectSummaryTemplateTask[]> = {}, snapshots: Record<string, readonly ProjectSummaryTemplateTask[]> = {}, scopes: Record<string, ConfigTemplateVersionScope> = {}): void {
   const definitions: ProjectSummaryFieldDefinition[] = []
   for (const [type, variant] of [[PROJECT_CATEGORY_MACHINE, 'machine'], [PROJECT_TYPE_TOS_VERSION, 'tos'], [PROJECT_CATEGORY_TECH, 'technical-tdt'], [PROJECT_CATEGORY_TECH, 'technical-subproject']] as const) {
-    const tasks = templates[type] ?? []
+    const planLevel = variant === 'technical-tdt' ? 'tdt' : variant === 'technical-subproject' ? 'subproject' : undefined
+    const scope = planLevel ? scopes[getTemplateConfigScopeKey(type, planLevel)] : undefined
+    const tasks = planLevel ? getLatestPublishedTemplateTasks<ProjectSummaryTemplateTask>(type, scope?.versions ?? [], snapshots, scope?.currentVersion ?? '', [], { namespacedOnly: true, planLevel }) : getTemplateTasksForProjectType(templates, type) ?? []
+    const listFields = getProjectListFieldDefinitions(variant, tasks, type)
+    const fixedKeys = getProjectListFixedColumnKeys(variant)
+    registerProjectColumnFields(variant, listFields.map(field => ({ key: field.key, label: field.title, kind: field.inputType === 'date' ? 'date' : 'text', required: fixedKeys.includes(field.key) })))
     definitions.push(...getProjectSummaryFieldDefinitions(type), ...getProjectListFieldDefinitions(variant, tasks, type), ...getTemplateTaskFieldDefinitions(type, tasks))
     for (const snapshot of Object.values(snapshots)) definitions.push(...getProjectListFieldDefinitions(variant, snapshot, type), ...getTemplateTaskFieldDefinitions(type, snapshot))
   }
+  registerProjectColumnFields('capability', [])
   const existing = new Map(getPermissionFields('project.view').map(field => [field.key, field]))
-  registerPermissionFields('project.view', [...existing.values(), { key: 'secondaryCategory', label: '二级分类', kind: 'enum', options: [...new Set(Object.values(PROJECT_SECONDARY_CATEGORIES).flat())] }, ...definitions.filter(field => !['projectName', 'projectCategory'].includes(field.key)).map(field => existing.get(field.key) ?? ({ key: field.key, label: field.title, kind: field.inputType === 'date' ? 'date' as const : 'text' as const }))])
+  registerPermissionFields('project.view', [...existing.values(), { key: 'secondaryCategory', label: '二级分类', kind: 'enum', options: [...new Set(Object.values(PROJECT_SECONDARY_CATEGORIES).flat())] }, ...definitions.map(field => existing.get(field.key) ?? ({ key: field.key, label: field.title, kind: field.inputType === 'date' ? 'date' as const : 'text' as const }))])
   registerPermissionFields('project.config', [...getPermissionFields('project.config'), ...['createdBy', 'createdAt', 'boundFormalProjectId', 'brand', 'productLine'].map(key => ({ key, label: ({ projectCode: '项目编码', createdBy: '创建人', createdAt: '创建时间', boundFormalProjectId: '绑定正式项目', brand: '品牌', productLine: '产品线' })[key]!, kind: 'text' as const }))])
 }
 
@@ -57,7 +67,13 @@ export function projectMenuRows<T extends ProjectInfoProject>(model: PermissionC
 }
 
 export function hasAllProjectFields(model: PermissionCenterModel | undefined, user: string, menu: PermissionMenuId, row: Record<string, unknown>, action: PermissionAction = 'view'): boolean {
-  return !model || evaluateMenuPermission({ ...model, policies: model.policies.filter(policy => policy.columns.mode === 'all') }, user, menu, action, row)
+  return !model || isPermissionCenterAdmin(model, user) || getMatchingMenuPolicies(model, user, menu, action, row).some(policy => policy.columns.mode === 'all')
+}
+
+/** A permitted child may disclose its type without granting access to its parent TDT row. */
+export function getReadableProjectClassificationSource(model: PermissionCenterModel | undefined, user: string, parent: Record<string, unknown>, children: readonly Record<string, unknown>[] = [], secondary = false): Record<string, unknown> | undefined {
+  return [parent, ...children.map(child => ({ ...parent, ...child }))].find(source =>
+    (!model || evaluateMenuPermission(model, user, 'project.view', 'view', source)) && canReadProjectClassification(model, user, source, secondary))
 }
 
 /** Category counts and filters are disclosures too; structural routing fields are not display grants. */

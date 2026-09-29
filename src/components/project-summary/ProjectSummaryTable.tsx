@@ -230,7 +230,7 @@ export default function ProjectSummaryTable({
   const currentLoginUser = useProjectStore(state => state.currentLoginUser)
   const permissionCenter = usePermissionStore(state => state.permissionCenter)
   const sources = useMemo(() => permissionSources ?? new Map([...projects, ...optionProjects].map(project => [project.id, projectPermissionSource(project)])), [permissionSources, projects, optionProjects])
-  const allowedFields = permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view') : null
+  const allowedFields = permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view', 'view', undefined, matrixVariant) : null
   const canExport = !permissionCenter || hasMenuPermission(currentLoginUser, 'project.view', 'export')
   const [uncontrolledFilters, setUncontrolledFilters] = useState<AnyFilterCondition[]>([])
   const isFilterControlled = controlledFilters !== undefined
@@ -937,7 +937,7 @@ export default function ProjectSummaryTable({
     const currentKeys = new Set(filteredRows.map(row => row.key))
     const candidates = scope === 'current' ? rawBaseRows.filter(row => currentKeys.has(row.key)) : providedExportRows ?? optionProjects.map(project => buildProjectSummaryRow(project, sourceFieldDefinitions, planTasksByProjectId[project.id]))
     const rows = projectSummaryRows(model, actor, candidates, sources, 'export')
-    const exportFields = model ? getAuthorizedColumns(model, actor, 'project.view', 'export') : null
+    const exportFields = model ? getAuthorizedColumns(model, actor, 'project.view', 'export', undefined, matrixVariant) : null
     const exportColumns = visibleDefinitions.filter(field => field.key !== 'projectCount' && (!exportFields || projectFieldAllowed(exportFields, field.key))).map(field => ({
       key: field.key,
       title: typeof field.title === 'string' ? field.title : field.key,

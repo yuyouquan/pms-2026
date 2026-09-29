@@ -43,7 +43,8 @@ export default function Home() {
   const permissionDraft = useUiStore(state => state.permissionCenterHasDraft)
   const configTemplates = usePlanStore(state => state.configTemplateTasksByType)
   const publishedTemplates = usePlanStore(state => state.publishedSnapshots)
-  useMemo(() => registerProjectPermissionFields(configTemplates, publishedTemplates), [configTemplates, publishedTemplates])
+  const templateScopes = usePlanStore(state => state.configTemplateVersionScopes)
+  useMemo(() => registerProjectPermissionFields(configTemplates, publishedTemplates, templateScopes), [configTemplates, publishedTemplates, templateScopes])
   useEffect(() => {
     const initialize = () => {
       const result = usePermissionStore.getState().ensurePermissionCenter()
