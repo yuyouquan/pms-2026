@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { ROLE_TEMPLATE_STORAGE_KEY, useRolePermissionTemplateStore } from '@/stores/rolePermissionTemplates'
 import { usePermissionStore } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
@@ -37,6 +38,7 @@ export function startHrFormalProjectSync(eventTarget: Window = window) {
   // tab must never write its old version collection during a registry binding change.
   const sharedStores = stores
   const names = new Set(sharedStores.map(store => store.persist.getOptions().name))
+  names.add(ROLE_TEMPLATE_STORAGE_KEY)
   const onStorage = (event: StorageEvent) => {
     if (!event.key || !names.has(event.key) || event.storageArea !== eventTarget.localStorage) return
     hydrating = true
@@ -46,6 +48,7 @@ export function startHrFormalProjectSync(eventTarget: Window = window) {
       // Older open builds can downgrade a schema stamp during migration. Echoing
       // an upgraded stamp here would create an endless cross-version event loop.
       withoutPmsHydrationWrites(() => {
+        useRolePermissionTemplateStore.getState().rehydrate()
         for (const store of sharedStores) void store.persist.rehydrate()
       })
     } finally { hydrating = false }

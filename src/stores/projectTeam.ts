@@ -1,3 +1,4 @@
+import { projectTeamRows } from '@/lib/projectTeamPresentation'
 import { create } from 'zustand'
 import { initialProjects } from '@/data/projects'
 import { MOCK_IPM_TEAMS_BY_BID, MOCK_LEGACY_IPM_TEAMS_BY_PROJECT_ID } from '@/mock/projectTeam'
@@ -29,7 +30,7 @@ function buildSnapshot(projects: readonly ProjectTeamProjectRef[]) {
           ? MOCK_LEGACY_IPM_TEAMS_BY_PROJECT_ID[scope]
           : undefined
       : undefined
-    if (source) teamsByProjectId[project.id] = { ...source, projectId: project.id, members: source.members.map(member => ({ ...member, roles: [...member.roles] })) }
+    if (source) teamsByProjectId[project.id] = { ...source, sourceBinding: root?.sourceBid && root.nameInferredSourceBid !== root.sourceBid ? root.sourceBid : root?.mockTeamSourceId || '', projectId: project.id, members: projectTeamRows(source) }
   }
   return { teamsByProjectId, scopeByProjectId }
 }

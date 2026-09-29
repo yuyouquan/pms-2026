@@ -1,6 +1,6 @@
 import { MOCK_LOGIN_EMPLOYEE_IDS } from '@/mock/projectTeam'
 import { useProjectTeamStore } from '@/stores/projectTeam'
-import type { ProjectTeamSnapshot } from '@/types/projectTeam'
+import type { ProjectTeamMember, ProjectTeamSnapshot } from '@/types/projectTeam'
 
 function belongsToTeam(userName: string, team: ProjectTeamSnapshot | undefined): boolean {
   const employeeId = MOCK_LOGIN_EMPLOYEE_IDS[userName]
@@ -14,4 +14,11 @@ export function isProjectTeamMember(userName: string, projectId: string | undefi
 export function useIsProjectTeamMember(userName: string, projectId: string | undefined): boolean {
   const team = useProjectTeamStore(state => projectId ? state.teamsByProjectId[projectId] : undefined)
   return belongsToTeam(userName, team)
+}
+
+/** Read-only source assignment; never matches a display name. */
+export function getProjectTeamRoleMembers(projectId: string, ipmRoleCode: string): readonly ProjectTeamMember[] {
+  return (useProjectTeamStore.getState().teamsByProjectId[projectId]?.members ?? [])
+    .filter(member => member.roleCodes?.includes(ipmRoleCode))
+    .map(member => ({ ...member, roles: [...member.roles], roleCodes: [...(member.roleCodes ?? [])] }))
 }

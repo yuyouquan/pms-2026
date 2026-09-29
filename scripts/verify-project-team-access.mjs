@@ -54,10 +54,10 @@ const rolePermissionsByProject = { ...original.rolePermissionsByProject, '1': { 
 } } }
 usePermissionStore.setState({ rolesByProject, rolePermissionsByProject })
 for (const key of ['basicInfo:编辑', 'plan:一级计划-编辑', 'projectPermission:manageRoles', 'plan:导出', 'resource:laborEdit']) {
-  assert.equal(hasPermission(member, '1', key), false, `team read-only denies ${key}`)
+  assert.equal(hasPermission(member, '1', key), false, `default source views deny ${key}`)
 }
 for (const key of ['basicInfo:查看', 'plan:一级计划-查看', 'resource:view']) {
-  assert.equal(hasPermission(member, '1', key), true, `team read-only permits ${key}`)
+  assert.equal(hasPermission(member, '1', key), true, `default source views permit ${key}`)
 }
 assert.equal(isProjectTeamReadOnly(member, '1'), true)
 assert.equal(hasProjectRoleManagementAccess(usePermissionStore.getState(), member, '1'), false)
@@ -98,7 +98,7 @@ const seeded = useProjectStore.getState().projects.find(item => item.id === '1')
 assert.equal(seeded.mockTeamSourceId, 'legacy:1', 'existing seed has explicit legacy identity')
 const legacyRecord = { ...seeded }
 delete legacyRecord.mockTeamSourceId
-assert.equal(migrateProjectState({ projects: [legacyRecord] }, PROJECT_STORE_VERSION - 1).projects[0].mockTeamSourceId, 'legacy:1', 'old saved seed receives one-time migration')
+assert.equal(migrateProjectState({ projects: [legacyRecord] }, 10).projects[0].mockTeamSourceId, 'legacy:1', 'old saved seed receives one-time migration')
 const startingProjects = useProjectStore.getState().projects
 useProjectStore.getState().setProjects(rows => rows.map(item => item.id === '1' ? { ...item, sourceBid: 'EXT-001' } : item))
 assert.equal(useProjectStore.getState().projects.find(item => item.id === '1').mockTeamSourceId, null, 'binding change permanently clears legacy marker')
@@ -108,6 +108,10 @@ const cleared = useProjectStore.getState().projects.find(item => item.id === '1'
 assert.equal(migrateProjectState({ projects: [cleared] }, PROJECT_STORE_VERSION).projects[0].mockTeamSourceId, null, 'reload preserves removed source marker')
 assert.equal(migrateProjectState({ projects: [cleared] }, PROJECT_STORE_VERSION).projects[0].sourceBid, '', 'reload does not infer a removed source')
 useProjectStore.setState({ projects: startingProjects })
+const capabilitySeed = startingProjects.find(row => row.id === '5')
+const oldCapability = { ...capabilitySeed }; delete oldCapability.mockTeamSourceId
+assert.equal(migrateProjectState({ projects: [oldCapability] }, 11).projects[0].mockTeamSourceId, 'legacy:5')
+assert.equal(migrateProjectState({ projects: [{ ...oldCapability, mockTeamSourceId: null }] }, 11).projects[0].mockTeamSourceId, null, 'capability migration never revives explicitly removed source')
 console.log('project-team access: passed')
 
 // Hydration may infer a display BID by name, but it is not a stable team association.
@@ -133,7 +137,7 @@ assert.equal(useProjectStore.getState().projects[0].nameInferredSourceBid, 'EXT-
 const explicit = migrateProjectState({ projects: [{ ...collision, sourceBid: 'EXT-001' }] }, PROJECT_STORE_VERSION).projects[0]
 team.syncProjects([explicit])
 assert.equal(isProjectTeamMember(member, collision.id), true, 'genuine explicit BID survives hydration')
-const trusted = migrateProjectState({ projects: [legacyRecord] }, PROJECT_STORE_VERSION - 1).projects.find(row => row.id === '1')
+const trusted = migrateProjectState({ projects: [legacyRecord] }, 10).projects.find(row => row.id === '1')
 team.syncProjects([trusted])
 assert.equal(isProjectTeamMember(member, '1'), true, 'trusted seed stable identity remains authorized')
 console.log('project-team inferred-source hydration provenance: passed')

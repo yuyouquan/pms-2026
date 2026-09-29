@@ -114,7 +114,9 @@ const persisted = permissionModule.migratePermissionState({
   rolePermissionsByProject: { persisted: { 自定义角色: { 'basicInfo:查看': true, bad: 'yes' } } },
 }, 1)
 assert.deepEqual(persisted.rolesByProject.persisted, [{ name: '自定义角色', members: ['演示用户01'], isFixed: false }], 'persist migration keeps and sanitizes custom roles and members')
-assert.deepEqual(persisted.rolePermissionsByProject.persisted, { 自定义角色: { 'basicInfo:查看': true } }, 'persist migration keeps boolean role permissions')
+assert.equal(persisted.rolePermissionsByProject.persisted.自定义角色['basicInfo:查看'], true, 'persist migration preserves saved boolean permission')
+assert.equal(persisted.rolePermissionsByProject.persisted.自定义角色.bad, undefined, 'persist migration rejects nonboolean permission')
+assert.equal(persisted.rolePermissionsByProject.persisted.自定义角色['resource:createVersion'], false, 'legacy custom names receive no resource management default')
 
 const legacyProjectOne = {
   rolesByProject: {
@@ -141,11 +143,7 @@ assert.deepEqual(
   { name: '自定义项目角色', members: ['演示用户02'], isFixed: false },
   'the one-time legacy permission migration preserves custom roles',
 )
-assert.deepEqual(
-  migratedProjectOne.rolePermissionsByProject['1'],
-  legacyProjectOne.rolePermissionsByProject['1'],
-  'the one-time legacy permission migration preserves configured permissions',
-)
+for (const [name, grants] of Object.entries(legacyProjectOne.rolePermissionsByProject['1'])) for (const [key, value] of Object.entries(grants)) assert.equal(migratedProjectOne.rolePermissionsByProject['1'][name][key], value, 'legacy resource upgrade preserves every saved grant')
 const currentProjectOne = permissionModule.migratePermissionState(legacyProjectOne, permissionModule.PERMISSION_STORAGE_VERSION)
 assert.deepEqual(
   currentProjectOne.rolesByProject['1'].find(role => role.name === '项目经理')?.members,
@@ -176,12 +174,12 @@ const afterPermissionSave = projectStore.getState().projects[0]
 assert.deepEqual(afterPermissionSave.fieldValues.tosVersionProjectManager, ['B'], 'permission save writes the team field')
 assert.deepEqual(afterPermissionSave.responsiblePersons, ['B'], 'version manager updates responsible persons')
 assert.equal(afterPermissionSave.leader, 'B')
-assert.deepEqual(permissionStore.getState().rolesByProject['role-tos'][0].members, ['B'])
+assert.deepEqual(permissionStore.getState().rolesByProject['role-tos'][0].members, ['A'], 'source field changes preserve the initial local authorization copy')
 const teamSaved = projectStore.getState().updateProject('role-tos', {
   fieldValues: { ...afterPermissionSave.fieldValues, tosVersionProjectManager: ['C'] },
 })
 assert.equal(teamSaved?.id, 'role-tos', 'team update returns the saved project')
-assert.deepEqual(permissionStore.getState().rolesByProject['role-tos'][0].members, ['C'], 'later team save overwrites permission members')
+assert.deepEqual(permissionStore.getState().rolesByProject['role-tos'][0].members, ['A'], 'later team save never overwrites independently editable local members')
 
 const modal = readSource(root, 'src/components/project-info/ProjectInfoModal.tsx')
 const permission = readSource(root, 'src/components/permission/ProjectPermissionConfig.tsx')

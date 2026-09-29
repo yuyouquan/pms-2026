@@ -147,6 +147,7 @@ check('single tOS team-role edits and explicit clearing preserve every untouched
   const baseline = { versionProjectManager:[owner], se:['演示用户03'], sqa:['演示用户04'] }
   assert.ok(store.getState().updateProject(id,{fieldValues:{...record(id).fieldValues,tosTeamRoles:baseline}},owner))
   const permissionSnapshot = JSON.parse(JSON.stringify(permissions.getState().rolePermissionsByProject[id]))
+  const localMembers = JSON.parse(JSON.stringify(permissions.getState().rolesByProject[id]))
   const roleMembers = name => permissions.getState().rolesByProject[id].find(role=>role.name===name)?.members
   const submit = infoValues => {
     const current = record(id)
@@ -157,15 +158,15 @@ check('single tOS team-role edits and explicit clearing preserve every untouched
   for (const changedMembers of [['演示用户05'], []]) {
     submit({tosSe:changedMembers})
     assert.deepEqual(record(id).fieldValues.tosTeamRoles,{...baseline,se:changedMembers})
-    assert.deepEqual(roleMembers('版本项目经理'),[owner]); assert.deepEqual(roleMembers('SQA'),['演示用户04'])
-    assert.deepEqual(roleMembers('SE'),changedMembers)
+    assert.deepEqual(roleMembers('版本项目经理'),[owner]); assert.deepEqual(roleMembers('SQA'),localMembers.find(role => role.name === 'SQA').members)
+    assert.deepEqual(roleMembers('SE'),localMembers.find(role => role.name === 'SE').members, 'edited team fields do not reset local role members')
     assert.deepEqual(record(id).responsiblePersons,[owner]); assert.equal(record(id).leader,owner)
     assert.equal(hasPermission(owner,id,'basicInfo:编辑'),true)
     assert.deepEqual(permissions.getState().rolePermissionsByProject[id],permissionSnapshot)
   }
   submit({tosVersion:'tOS手动快照'})
   assert.deepEqual(record(id).fieldValues.tosTeamRoles,{...baseline,se:[]})
-  assert.deepEqual(roleMembers('版本项目经理'),[owner]); assert.deepEqual(roleMembers('SQA'),['演示用户04'])
+  assert.deepEqual(roleMembers('版本项目经理'),[owner]); assert.deepEqual(roleMembers('SQA'),localMembers.find(role => role.name === 'SQA').members)
   registry.deleteConfiguredProject(id,admin)
 })
 check('binding/unbinding and formal deletion preserve roadmap data and ID while canonical deletion removes projection', () => {

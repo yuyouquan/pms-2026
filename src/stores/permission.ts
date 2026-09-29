@@ -1,7 +1,13 @@
+import { MOCK_LOGIN_EMPLOYEE_IDS } from '@/mock/projectTeam'
+import { useProjectTeamStore } from '@/stores/projectTeam'
+import { effectiveTeamProjectId, getSyncedProjectRoles, getTeamProjectContext, registerRoleTemplateAuthority, useRolePermissionTemplateStore } from '@/stores/rolePermissionTemplates'
+import { projectGrantKeys } from '@/lib/rolePermissionTemplates'
+import type { ProjectRoleTarget } from '@/types/rolePermissionTemplate'
+export { getSyncedProjectRoles, useSyncedProjectRoles } from '@/stores/rolePermissionTemplates'
 import { roleAppliesToUser, normalizeProjectRoleDepartments } from '@/lib/projectRoleMembership'
 import { isProjectTeamMember, useIsProjectTeamMember } from '@/lib/projectTeam'
 import { createPermissionCenterSeed } from '@/lib/permissionCenterSeed'
-import { PERMISSION_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
+import { PERMISSION_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID, getPermissionMenu } from '@/constants/permissionCenter'
 import { createEmptyMenuPolicy, evaluateMenuPermission, getAuthorizedColumns, isPermissionCenterAdmin, legacyPermissionTargets, isValidLegacyPermissionCenter, normalizePermissionName, normalizePolicyActions, parsePermissionCenter, projectAuthorizedRows, validateMenuPolicy } from '@/lib/permissionCenter'
 import type { CenterRoleInput, MenuPolicy, PermissionAction, PermissionCenterModel, PermissionMenuId, PermissionMutationResult } from '@/types/permissionCenter'
 import { getPmsLocalStorage, isPmsHydrationWriteSuppressed } from '@/lib/mockDatasetStorage'
@@ -98,7 +104,7 @@ export const resolvePermissionProjectId = (projectId: string, parentProjectId?: 
 )
 
 export const PERMISSION_STORAGE_KEY = 'pms-project-permissions'
-export const PERMISSION_STORAGE_VERSION = 5
+export const PERMISSION_STORAGE_VERSION = 6
 
 // ─── Defaults shared by every project's initial role-permission slot ─
 
@@ -325,7 +331,7 @@ const sanitizeRolesByProject = (value: unknown): Record<string, Role[]> => {
       return [{
         name,
         members: normalizeRoleMembers(rawRole.members),
-        isFixed: rawRole.isFixed === true,
+        isFixed: false,
         ...(rawRole.departments !== undefined ? { departments: normalizeProjectRoleDepartments(rawRole.departments) } : {}),
         ...(typeof rawRole.groupName === 'string' ? { groupName: rawRole.groupName.trim() } : {}),
         ...(typeof rawRole.description === 'string' ? { description: rawRole.description.trim() } : {}),
@@ -396,6 +402,16 @@ export function migratePermissionState(persistedState: unknown, version: number)
     rolePermissionsByProject: sanitizeRolePermissionsByProject(isRecord(persistedState) ? persistedState.rolePermissionsByProject : undefined),
   }
   const rolesByProject = sanitizeRolesByProject(persistedState.rolesByProject)
+  const migratedGrants = sanitizeRolePermissionsByProject(persistedState.rolePermissionsByProject)
+  if (version < 6) {
+    for (const [projectId, roles] of Object.entries(rolesByProject)) {
+      const rawRoles = isRecord(persistedState.rolesByProject) && Array.isArray(persistedState.rolesByProject[projectId]) ? persistedState.rolesByProject[projectId] as unknown[] : []
+      const legacyRoles = roles.map(role => ({ ...role, isFixed: rawRoles.some(raw => isRecord(raw) && raw.name === role.name && raw.isFixed === true) }))
+      const projectType = isRecord(persistedState.projectTypesByProject) && typeof persistedState.projectTypesByProject[projectId] === 'string'
+        ? persistedState.projectTypesByProject[projectId] as string : initialProjects.find(project => project.id === projectId)?.type
+      migratedGrants[projectId] = initializeResourcePermissions(legacyRoles, migratedGrants[projectId] ?? {}, projectType)
+    }
+  }
   if (version < 2 && rolesByProject['1']) {
     rolesByProject['1'] = withProjectSpecificMockMembers('1', rolesByProject['1'])
   }
@@ -420,7 +436,7 @@ export function migratePermissionState(persistedState: unknown, version: number)
     ...(Array.isArray(persistedState.globalRoles) ? { globalRoles: sanitizeRolesByProject({ global: persistedState.globalRoles }).global ?? [] } : {}),
     ...(isRecord(persistedState.globalRolePerms) ? { globalRolePerms: sanitizeGlobalPermissions(persistedState.globalRolePerms) } : {}),
     rolesByProject,
-    rolePermissionsByProject: sanitizeRolePermissionsByProject(persistedState.rolePermissionsByProject),
+    rolePermissionsByProject: migratedGrants,
   }
 }
 
@@ -436,6 +452,7 @@ export function partializePermissionState(state: PermissionState & PermissionAct
   }
 }
 
+let publishingCommittedPermission = false
 const safePermissionStorage: StateStorage = {
   getItem(name) {
     if (typeof window === 'undefined') return null
@@ -453,7 +470,7 @@ const safePermissionStorage: StateStorage = {
     }
   },
   setItem(name, value) {
-    if (typeof window === 'undefined' || isPmsHydrationWriteSuppressed()) return
+    if (typeof window === 'undefined' || isPmsHydrationWriteSuppressed() || publishingCommittedPermission) return
     try {
       getPmsLocalStorage().setItem(name, value)
     } catch (error) {
@@ -489,6 +506,7 @@ function buildInitialPerProject(): {
         ))
     rolesByProject[p.id] = withProjectSpecificMockMembers(p.id, baseRoles)
     rolePermissionsByProject[p.id] = buildPermissionsForRoles(rolesByProject[p.id], p.type)
+    rolesByProject[p.id] = rolesByProject[p.id].map(role => ({ ...role, isFixed: false }))
   })
   return { rolesByProject, rolePermissionsByProject, projectTypesByProject: Object.fromEntries(initialProjects.map(project => [project.id, project.type])) }
 }
@@ -503,7 +521,8 @@ export function hasProjectRoleManagementAccess(
   const user = actor.trim()
   if (!user || !projectId) return false
   if (state.permissionCenter ? isPermissionCenterAdmin(state.permissionCenter, user) : state.globalRoles.some(role => role.name === '管理组' && role.members.includes(user))) return true
-  if (isProjectTeamMember(user, projectId)) return false
+  projectId = effectiveTeamProjectId(projectId)
+  if (isProjectTeamMember(user, projectId)) return hasSyncedPermission(user, projectId, 'projectPermission:manageRoles')
   const roleNames = (state.rolesByProject[projectId] || [])
     .filter(role => roleAppliesToUser(role, user))
     .map(role => role.name)
@@ -548,10 +567,13 @@ export interface PermissionActions {
   setCenterRoleAssignees: (actor: string, roleId: string, assignees: { users: string[]; departments: string[] }) => PermissionMutationResult
   setSuperAdminMembers: (actor: string, members: string[]) => PermissionMutationResult
 
+  toggleProjectRolePermissions: (actor: string, projectId: string, target: ProjectRoleTarget, keys: readonly string[], enabled: boolean) => PermissionMutationResult
+  updateMenuActionsBulk: (actor: string, roleId: string, targets: readonly { menuId: PermissionMenuId; actions: readonly PermissionAction[] }[], enabled: boolean) => PermissionMutationResult
   // Per-project actions
   createProjectRole: (actor: string, projectId: string, input: CenterRoleInput) => PermissionMutationResult
   updateProjectRole: (actor: string, projectId: string, roleName: string, input: CenterRoleInput) => PermissionMutationResult
   deleteProjectRole: (actor: string, projectId: string, roleName: string) => PermissionMutationResult
+  setProjectRoleAssignees: (actor: string, projectId: string, roleName: string, assignees: { users: string[]; departments: string[] }) => PermissionMutationResult
   setProjectRoleDepartments: (actor: string, projectId: string, roleName: string, departments: string[]) => PermissionMutationResult
   setRolesForProject: (projectId: string, v: Role[] | ((prev: Role[]) => Role[])) => void
   setRolePermissionsForProject: (projectId: string, v: Record<string, Record<string, boolean>> | ((prev: Record<string, Record<string, boolean>>) => Record<string, Record<string, boolean>>)) => void
@@ -651,6 +673,36 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     model.policies = [...model.policies.filter(policy => policy.roleId !== roleId || policy.menuId !== menuId), next]
     return { ok: true }
   }),
+  updateMenuActionsBulk: (actor, roleId, targets, enabled) => mutatePermissionCenter(get, set, actor, model => {
+    if (roleId === SUPER_ADMIN_ROLE_ID || !model.roles.some(role => role.id === roleId) || !Array.isArray(targets) || typeof enabled !== 'boolean') return { ok: false, error: '无效的角色或权限目标' }
+    const merged = new Map<PermissionMenuId, Set<PermissionAction>>()
+    for (const target of targets) {
+      const menu = getPermissionMenu(target.menuId)
+      if (!menu || !Array.isArray(target.actions) || target.actions.some((action: PermissionAction) => !menu.actions.includes(action))) return { ok: false, error: '权限目标无效' }
+      const actions = merged.get(target.menuId) ?? new Set<PermissionAction>()
+      target.actions.forEach((action: PermissionAction) => actions.add(action))
+      merged.set(target.menuId, actions)
+    }
+    for (const [menuId, actions] of merged) {
+      const previous = model.policies.find(policy => policy.roleId === roleId && policy.menuId === menuId) ?? createEmptyMenuPolicy(roleId, menuId)
+      const next = structuredClone(previous)
+      next.actions = normalizePolicyActions(enabled ? [...new Set([...previous.actions, ...actions])] : previous.actions.filter(action => !actions.has(action)), previous.actions)
+      const validation = validateMenuPolicy(next)
+      if (!validation.ok) return validation
+      model.policies = [...model.policies.filter(policy => policy.roleId !== roleId || policy.menuId !== menuId), next]
+    }
+    return { ok: true }
+  }),
+  toggleProjectRolePermissions: (actor, projectId, target, keys, enabled) => {
+    if (target.source === 'ipm') return useRolePermissionTemplateStore.getState().updateSyncedRoleGrants(actor, projectId, target.id, keys, enabled)
+    const { scope, type, attribute } = getTeamProjectContext(projectId)
+    if (!type || !Array.isArray(keys) || typeof enabled !== 'boolean' || keys.some(key => !projectGrantKeys(type, attribute).includes(key))) return { ok: false, error: '权限目标无效' }
+    return mutateProjectRoles(get, set, actor, scope, (roles, grants) => {
+      if (!roles.some(role => role.name === target.name)) return { ok: false, error: '本地角色不存在' }
+      grants[target.name] = { ...grants[target.name], ...Object.fromEntries([...new Set(keys)].map(key => [key, enabled])) }
+      return { ok: true }
+    })
+  },
   setCenterRoleAssignees: (actor, roleId, assignees) => mutatePermissionCenter(get, set, actor, model => {
     const role = model.roles.find(role => role.id === roleId)
     if (!role) return { ok: false, error: '角色不存在' }
@@ -695,6 +747,16 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     roles.splice(index, 1); delete grants[roleName]
     return { ok: true }
   }),
+  setProjectRoleAssignees: (actor, projectId, roleName, assignees) => mutateProjectRoles(get, set, actor, effectiveTeamProjectId(projectId), roles => {
+    const role = roles.find(role => role.name === roleName)
+    if (!role) return { ok: false, error: '本地角色不存在' }
+    if (!assignees || !Array.isArray(assignees.users) || !Array.isArray(assignees.departments)
+      || assignees.users.some(user => typeof user !== 'string' || !PERMISSION_USERS.includes(user))
+      || assignees.departments.some(department => typeof department !== 'string' || !PERMISSION_DEPARTMENTS.includes(department))) return { ok: false, error: '请选择有效的系统人员和部门' }
+    role.members = [...new Set(assignees.users)]
+    role.departments = [...new Set(assignees.departments)]
+    return { ok: true }
+  }),
   setProjectRoleDepartments: (actor, projectId, roleName, departments) => mutateProjectRoles(get, set, actor, projectId, roles => {
     const role = roles.find(role => role.name === roleName)
     if (!role) return { ok: false, error: '角色不存在' }
@@ -728,53 +790,29 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     return true
   },
   initProjectPermissions: (projectId, overrides) => set((s) => {
-    const roles = (s.rolesByProject[projectId] ?? buildDefaultRoles()).map(r => overrides && overrides[r.name] ? { ...r, members: [...overrides[r.name]!] } : r)
+    if (Object.prototype.hasOwnProperty.call(s.rolesByProject, projectId)) return {}
+    const roles = buildDefaultRoles().map(r => overrides && overrides[r.name] ? { ...r, members: [...overrides[r.name]!] } : r)
     const perms = initializeResourcePermissions(roles, {
       ...buildPermissionsForRoles(roles, s.projectTypesByProject[projectId]),
       ...s.rolePermissionsByProject[projectId],
     }, s.projectTypesByProject[projectId])
     return {
-      rolesByProject: { ...s.rolesByProject, [projectId]: roles },
+      rolesByProject: { ...s.rolesByProject, [projectId]: roles.map(role => ({ ...role, isFixed: false })) },
       rolePermissionsByProject: { ...s.rolePermissionsByProject, [projectId]: perms },
     }
   }),
-  syncProjectTeamPermissionMembers: (project) => set((s) => {
-    const previousRoles = s.rolesByProject[project.id] ?? []
-    const roles = mergeProjectRoles(project, previousRoles)
-    const previousPermissions = s.rolePermissionsByProject[project.id] ?? {}
-    const rolePermissions = initializeResourcePermissions(roles, {
-      ...buildPermissionsForRoles(roles, project.type),
-      ...previousPermissions,
-    }, project.type)
-    return {
-      projectTypesByProject: { ...s.projectTypesByProject, [project.id]: project.type },
-      rolesByProject: { ...s.rolesByProject, [project.id]: roles },
-      rolePermissionsByProject: { ...s.rolePermissionsByProject, [project.id]: rolePermissions },
-    }
-  }),
-  ensureProjectPermissions: (projects) => set((s) => {
-    const rolesByProject = { ...s.rolesByProject }
-    const rolePermissionsByProject = { ...s.rolePermissionsByProject }
-    const projectTypesByProject = { ...s.projectTypesByProject }
-    projects.forEach(project => {
+  syncProjectTeamPermissionMembers: project => get().ensureProjectPermissions([project]),
+  ensureProjectPermissions: projects => set(state => {
+    const rolesByProject = { ...state.rolesByProject }
+    const rolePermissionsByProject = { ...state.rolePermissionsByProject }
+    const projectTypesByProject = { ...state.projectTypesByProject }
+    for (const project of projects) {
       projectTypesByProject[project.id] = project.type
-      const expectedFixed = getFixedProjectRoles(project)
-      const expectedNames = new Set(expectedFixed.map(role => role.name))
-      const existing = rolesByProject[project.id] || []
-      const existingByName = new Map(existing.map(role => [role.name, role]))
-      const fixed = expectedFixed.map(role => {
-        const configured = existingByName.get(role.name)
-        if (project.type === PROJECT_CATEGORY_MACHINE && role.name === 'SPM') return { ...configured, ...role }
-        return configured?.isFixed ? configured : role
-      })
-      const custom = existing.filter(role => !expectedNames.has(role.name) && !role.isFixed)
-      const roles = [...fixed, ...custom]
-      rolesByProject[project.id] = roles
-      rolePermissionsByProject[project.id] = initializeResourcePermissions(roles, {
-        ...buildPermissionsForRoles(roles, project.type),
-        ...(rolePermissionsByProject[project.id] || {}),
-      }, project.type)
-    })
+      if (Object.prototype.hasOwnProperty.call(rolesByProject, project.id)) continue
+      const initial = getFixedProjectRoles(project)
+      rolePermissionsByProject[project.id] = buildPermissionsForRoles(initial, project.type)
+      rolesByProject[project.id] = initial.map(role => ({ ...role, isFixed: false }))
+    }
     return { rolesByProject, rolePermissionsByProject, projectTypesByProject }
   }),
 
@@ -806,16 +844,7 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
     const migrated = migratePermissionState(persistedState, PERMISSION_STORAGE_VERSION)
     const projectTypesByProject = { ...currentState.projectTypesByProject, ...migrated.projectTypesByProject }
     const rolesByProject = { ...currentState.rolesByProject, ...migrated.rolesByProject }
-    // SPM is sourced from the established project's real field, including old caches.
-    initialProjects.filter(project => project.type === PROJECT_CATEGORY_MACHINE).forEach(project => {
-      if (rolesByProject[project.id]?.some(role => role.name === 'SPM' && role.isFixed)) return
-      const spm = getFixedProjectRoles(project as unknown as RoleProject).find(role => role.name === 'SPM')!
-      rolesByProject[project.id] = [...(rolesByProject[project.id] || []).filter(role => role.name !== 'SPM'), spm]
-    })
     const rolePermissionsByProject = { ...currentState.rolePermissionsByProject, ...migrated.rolePermissionsByProject }
-    Object.entries(rolesByProject).forEach(([projectId, roles]) => {
-      rolePermissionsByProject[projectId] = initializeResourcePermissions(roles, rolePermissionsByProject[projectId] || {}, projectTypesByProject[projectId])
-    })
     return {
       ...currentState,
       permissionCenter: migrated.permissionCenter,
@@ -832,7 +861,7 @@ export const usePermissionStore = create<PermissionState & PermissionActions>()(
 }))
 
 // ─── Permission helpers ─────────────────────────────────────────────
-// Global "管理组" bypasses every project-level check.
+// The initialized center recognizes only the builtin system-superadmin identity.
 export function isGlobalAdmin(userName: string): boolean {
   const s = usePermissionStore.getState()
   if (s.permissionCenter) return isPermissionCenterAdmin(s.permissionCenter, userName)
@@ -853,11 +882,6 @@ export function useIsProjectTeamReadOnly(userName: string, projectId: string | u
     : globalRoles.some(role => role.name === '管理组' && role.members.includes(userName))
   return member && !admin
 }
-
-const TEAM_VIEW_PERMISSIONS = new Set([
-  'basicInfo:查看', 'basicInfo:transferView', 'basicInfo:planConfigView',
-  'plan:一级计划-查看', 'plan:二级计划-查看', 'resource:view',
-])
 
 // Global permission check used by cross-project modules such as Project Roadmap.
 // A user may belong to several global roles; permissions are the union of all roles.
@@ -890,7 +914,8 @@ export function hasPermission(userName: string, projectId: string | undefined, p
   if (!userName) return false
   if (isGlobalAdmin(userName)) return true
   if (!projectId) return false
-  if (isProjectTeamMember(userName, projectId)) return TEAM_VIEW_PERMISSIONS.has(permKey)
+  projectId = effectiveTeamProjectId(projectId)
+  if (isProjectTeamMember(userName, projectId)) return hasSyncedPermission(userName, projectId, permKey)
   const s = usePermissionStore.getState()
   const projectRoles = s.rolesByProject[projectId] ?? []
   const projectPerms = s.rolePermissionsByProject[projectId] ?? {}
@@ -898,22 +923,22 @@ export function hasPermission(userName: string, projectId: string | undefined, p
   return userRoles.some(role => projectPerms[role]?.[permKey] === true)
 }
 
-// React hook variant — subscribes to per-project slot so UI re-renders on change.
+// Subscribe to source membership, copied grants and local grants; callbacks read live authority.
 export function useHasPermission(userName: string, projectId: string | undefined): (permKey: string) => boolean {
-  const teamMember = useIsProjectTeamMember(userName, projectId)
-  const permissionCenter = usePermissionStore(s => s.permissionCenter)
-  const globalRoles = usePermissionStore(s => s.globalRoles)
-  const projectRoles = usePermissionStore(s => (projectId ? s.rolesByProject[projectId] : undefined))
-  const projectPerms = usePermissionStore(s => (projectId ? s.rolePermissionsByProject[projectId] : undefined))
-  return (permKey: string) => {
-    if (!userName) return false
-    const admin = globalRoles.find(r => r.name === '管理组')
-    if (permissionCenter ? isPermissionCenterAdmin(permissionCenter, userName) : admin?.members.includes(userName)) return true
-    if (teamMember) return TEAM_VIEW_PERMISSIONS.has(permKey)
-    if (!projectId || !projectRoles || !projectPerms) return false
-    const userRoles = projectRoles.filter(r => roleAppliesToUser(r, userName)).map(r => r.name)
-    return userRoles.some(role => projectPerms[role]?.[permKey] === true)
-  }
+  usePermissionStore(state => state.permissionCenter)
+  usePermissionStore(state => state.globalRoles)
+  usePermissionStore(state => state.rolesByProject)
+  usePermissionStore(state => state.rolePermissionsByProject)
+  useProjectTeamStore(state => state.teamsByProjectId)
+  useProjectTeamStore(state => state.scopeByProjectId)
+  useRolePermissionTemplateStore(state => state.copiesByProject)
+  return (key: string) => hasPermission(userName, projectId, key)
+}
+function hasSyncedPermission(userName: string, projectId: string, key: string): boolean {
+  const team = useProjectTeamStore.getState().teamsByProjectId[projectId]
+  const employeeId = MOCK_LOGIN_EMPLOYEE_IDS[userName]
+  const codes = new Set(team?.members.filter(member => member.employeeId === employeeId).flatMap(member => member.roleCodes ?? []) ?? [])
+  return getSyncedProjectRoles(projectId).some(role => codes.has(role.ipmRoleCode) && role.grants[key] === true)
 }
 
 function validateRoleInput(model: PermissionCenterModel, input: CenterRoleInput, roleId?: string): string | undefined {
@@ -941,7 +966,8 @@ function commitPermissionCenter(get: () => PermissionState & PermissionActions, 
   } catch {
     return { ok: false, error: '自动保存失败，请检查浏览器存储后重试；原权限保持不变' }
   }
-  set({ permissionCenter: model, permissionCenterError: undefined, globalRoles })
+  publishingCommittedPermission = true
+  try { set({ permissionCenter: model, permissionCenterError: undefined, globalRoles }) } finally { publishingCommittedPermission = false }
   return { ok: true }
 }
 function mutatePermissionCenter(get: () => PermissionState & PermissionActions, set: (state: Partial<PermissionState>) => void, actor: string, mutate: (model: PermissionCenterModel) => PermissionMutationResult): PermissionMutationResult {
@@ -998,6 +1024,18 @@ function mutateProjectRoles(
   } catch {
     return { ok: false, error: '自动保存失败，请检查浏览器存储后重试；原权限保持不变' }
   }
-  set(update)
+  publishingCommittedPermission = true
+  try { set(update) } finally { publishingCommittedPermission = false }
   return result
 }
+
+registerRoleTemplateAuthority({
+  template: (actor, type) => hasMenuPermission(actor, `config.rolePermission:${type}`, 'view') && hasMenuPermission(actor, `config.rolePermission:${type}`, 'edit'),
+  project: (actor, projectId) => hasProjectRoleManagementAccess(usePermissionStore.getState(), actor, projectId),
+})
+// Sync source definitions once; existing copies (including empty grants) are immutable to refresh.
+useRolePermissionTemplateStore.getState().ensureProjectCopies()
+useProjectTeamStore.subscribe(() => { useRolePermissionTemplateStore.getState().ensureProjectCopies() })
+usePermissionStore.subscribe((state, previous) => {
+  if (state.projectTypesByProject !== previous.projectTypesByProject) useRolePermissionTemplateStore.getState().ensureProjectCopies()
+})

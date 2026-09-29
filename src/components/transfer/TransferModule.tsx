@@ -26,6 +26,7 @@ export interface TransferModuleProps {
   // Project context
   selectedProject: { id: string; name: string; [key: string]: any } | null
   currentUser: { id: string; name: string; [key: string]: any }
+  sourceScopeToken?: string
   canApplyTransfer?: boolean
   canViewTransfer?: boolean
 
@@ -151,7 +152,7 @@ const isLiveTransferContext = (props: TransferModuleProps) => {
   const live = useProjectStore.getState()
   return live.currentLoginUser === props.currentUser.name && live.selectedProject?.id === props.selectedProject?.id
 }
-const canWrite = (props: TransferModuleProps) => canExecuteProjectTeamWrite(props.currentUser.name, props.selectedProject?.id, useProjectStore.getState())
+const canWrite = (props: TransferModuleProps, operationKey?: string) => canExecuteProjectTeamWrite(props.currentUser.name, props.selectedProject?.id, useProjectStore.getState(), props.selectedProject?.id, operationKey, props.sourceScopeToken)
 const canView = (props: TransferModuleProps) => Boolean(props.canViewTransfer) && isLiveTransferContext(props)
 
 function LongText({ value, lines = 3 }: { value?: string; lines?: number }) {
@@ -292,7 +293,7 @@ export function TransferApply(props: TransferModuleProps) {
     const state = useTransferStore.getState()
     const currentConfig = state.tmTeamConfigs[projectType]
     const predecessor = state.tmReopenAppId ? state.transferApplications.find(app => app.id === state.tmReopenAppId) : undefined
-    if (!props.selectedProject || !props.canApplyTransfer || !canView(props) || !canWrite(props) || !hasPermission(props.currentUser.name, resolvePermissionProjectId(props.selectedProject.id, props.selectedProject.parentProjectId), 'basicInfo:applyTransfer')) { message.warning('暂无申请权限'); return }
+    if (!props.selectedProject || !props.canApplyTransfer || !canView(props) || !canWrite(props, 'basicInfo:applyTransfer') || !hasPermission(props.currentUser.name, resolvePermissionProjectId(props.selectedProject.id, props.selectedProject.parentProjectId), 'basicInfo:applyTransfer')) { message.warning('暂无申请权限'); return }
     if (predecessor && (!matchesTransferProject(predecessor, props.selectedProject) || predecessor.status !== 'failed' || predecessor.reopenedAsId || !canManageTransfer(predecessor, props.currentUser, props.selectedProject, Boolean(props.canApplyTransfer)))) { message.warning('当前不可重新发起该申请'); return }
     if (state.transferApplications.some(app => matchesTransferProject(app, props.selectedProject) && ['in_progress', 'completed'].includes(app.status))) { message.warning('当前项目已有进行中或已完成的转维申请'); return }
     if (!state.tmApplyDate) { message.warning('请选择计划评审日期'); return }

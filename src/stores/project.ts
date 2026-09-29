@@ -96,7 +96,7 @@ type ProjectUpdate = ProjectPatch | ((project: Project) => Project)
 export type ProjectListViewMode = 'list' | 'card' | 'calendar'
 type PersistedProjectState = { projects: Project[]; projectListView: ProjectListViewMode; registryHistory: ProjectRegistryHistoryEntry[]; migratedRoadmapIds: string[] }
 
-export const PROJECT_STORE_VERSION = 11
+export const PROJECT_STORE_VERSION = 12
 
 const withEosTransitionTime = (project: Project, previous?: Project, now = new Date().toISOString()): Project => {
   if (project.status !== 'EOS') return project
@@ -225,7 +225,7 @@ const migrateProjectHistory = (project: Project): Project => (
 
 const initialProjectState = (initialProjects as Project[]).map(migrateProjectHistory)
 
-const LEGACY_MOCK_TEAM_SOURCE_IDS = new Set(['1', '2', '9'])
+const LEGACY_MOCK_TEAM_SOURCE_IDS = new Set(['1', '2', '5', '9'])
 
 function keepMockTeamSourceLifecycle(previous: Project | undefined, next: Project): Project {
   if (!previous) return next.mockTeamSourceId === undefined ? next : { ...next, mockTeamSourceId: null }
@@ -490,7 +490,7 @@ export function migrateProjectState(persistedState: unknown, version: number): P
     } as Project)
     // Pre-v11 records had no team-source lifecycle field. Only the named seed
     // fixtures may receive a one-time legacy binding; current records fail closed.
-    if (version < 11 && !Object.prototype.hasOwnProperty.call(value, 'mockTeamSourceId')
+    if ((version < 11 || (version < 12 && id === '5')) && !Object.prototype.hasOwnProperty.call(value, 'mockTeamSourceId')
       && (!migrated.sourceBid || migrated.nameInferredSourceBid === migrated.sourceBid) && migrated.projectAttribute === 'formal'
       && LEGACY_MOCK_TEAM_SOURCE_IDS.has(id)) migrated.mockTeamSourceId = `legacy:${id}`
     return [migrated]

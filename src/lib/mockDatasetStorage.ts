@@ -12,6 +12,7 @@ const LOCAL_STORAGE_KEYS = new Set([
   'pms-hr-technical',
   'pms-hr-capability',
   'pms-project-permissions',
+  'pms-role-permission-templates',
   'pms-plan-store',
   'pms-enum-values',
   'pms-project-roadmap',

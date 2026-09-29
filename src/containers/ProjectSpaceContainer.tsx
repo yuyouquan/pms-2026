@@ -1,12 +1,11 @@
 'use client'
 
-import { canExecuteProjectTeamWrite } from '@/lib/projectTeamMutationGuard'
+import { canExecuteProjectTeamWrite, projectTeamScopeToken } from '@/lib/projectTeamMutationGuard'
 import ProjectTeam from '@/components/project-team/ProjectTeam'
 import { useIsProjectTeamReadOnly } from '@/stores/permission'
 import { applyLevel1BusinessTasks, captureLevel1BusinessTasks, getLevel1BusinessScopeKey, selectLevel1BusinessSeedTasks } from '@/lib/level1SharedBusinessTasks'
 
 import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachineBudget, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
-import { hasDerivedMachineResponsibilityRoles } from '@/stores/permission'
 
 /**
  * ProjectSpaceContainer
@@ -257,7 +256,6 @@ import {
   getProjectResponsiblePersons,
   haveProjectResponsiblePersonsChanged,
   mergeResponsiblePersonsIntoVisibleMembers,
-  replaceProjectSystemAdministrators,
 } from '@/lib/projectResponsibility'
 import { PROJECT_STATUS_CONFIG } from '@/data/projects'
 import {
@@ -938,16 +936,11 @@ export default function ProjectSpaceContainer() {
     typeof selectedProject?.parentProjectId === 'string' ? selectedProject.parentProjectId : undefined,
   )
   const teamReadOnly = useIsProjectTeamReadOnly(currentLoginUser, _permProjectId)
-  const canMutateCurrentProject = () => canExecuteProjectTeamWrite(currentLoginUser, selectedProject?.id, useProjectStore.getState(), _permProjectId)
+  const sourceScopeToken = projectTeamScopeToken(selectedProject?.id)
+  const canMutateCurrentProject = (operationKey?: string) => canExecuteProjectTeamWrite(currentLoginUser, selectedProject?.id, useProjectStore.getState(), _permProjectId, operationKey, sourceScopeToken)
   const canDo = useHasPermission(currentLoginUser, _permProjectId)
   const canManageRoles = canDo('projectPermission:manageRoles')
   const roles = useMemo(() => perm.rolesByProject[_permProjectId] ?? [], [perm.rolesByProject, _permProjectId])
-  const setRoles = (v: Parameters<typeof perm.setRolesForProject>[1]) => {
-    if (!_permProjectId) return
-    if (!perm.setRolesForProjectGuarded(_permProjectId, currentLoginUser, v)) {
-      message.error('无权限修改项目角色')
-    }
-  }
   const isTechnicalProject = selectedProject?.type === '技术项目'
 
   // ═══════ Permissions ═══════
@@ -956,16 +949,16 @@ export default function ProjectSpaceContainer() {
   const canViewBasicInfo = canDo('basicInfo:查看')
   const canEditLevel1Plan = canDo('plan:一级计划-编辑')
   const canEditLevel2Plan = canDo('plan:二级计划-编辑')
-  type Level2MutationOpening = { actor: string; projectId: string; permissionProjectId: string; market: string; tosType: string; planId?: string }
+  type Level2MutationOpening = { actor: string; projectId: string; permissionProjectId: string; market: string; tosType: string; planId?: string; sourceToken?: string }
   const level2CreateOpening = useRef<Level2MutationOpening | null>(null)
   const level2DeleteOpening = useRef<Level2MutationOpening | null>(null)
   const captureLevel2Opening = (planId?: string): Level2MutationOpening => ({
     actor: currentLoginUser, projectId: selectedProject?.id || '', permissionProjectId: _permProjectId,
-    market: selectedMarketTab, tosType: selectedTosTypeTab, planId,
+    market: selectedMarketTab, tosType: selectedTosTypeTab, planId, sourceToken: sourceScopeToken,
   })
   const canMutateLevel2Plan = (opening: Level2MutationOpening | null) => {
     const live = useProjectStore.getState()
-    return Boolean(opening && canExecuteProjectTeamWrite(opening.actor, opening.projectId, live, opening.permissionProjectId)
+    return Boolean(opening && canExecuteProjectTeamWrite(opening.actor, opening.projectId, live, opening.permissionProjectId, 'plan:二级计划-编辑', opening.sourceToken)
       && opening.market === live.selectedMarketTab && opening.tosType === live.selectedTosTypeTab
       && hasPermission(opening.actor, opening.permissionProjectId, 'plan:二级计划-编辑'))
   }
@@ -1640,7 +1633,7 @@ export default function ProjectSpaceContainer() {
         }
 
   const setEffectiveTasks = (value: any[] | ((previous: any[]) => any[])) => {
-    if (!canMutateCurrentProject()) return
+    if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
     writeEffectiveTasks(value)
   }
 
@@ -1925,6 +1918,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const saveTosTypeConfig = () => {
+    if (!canMutateCurrentProject('basicInfo:编辑')) return false
     if (!canEditBasicInfo) {
       void containerMessageApi.error('无基本信息编辑权限')
       return
@@ -1994,6 +1988,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const saveMarketConfig = () => {
+    if (!canMutateCurrentProject('basicInfo:编辑')) return false
     if (!canEditBasicInfo) {
       message.error('无基础信息编辑权限')
       return
@@ -2504,7 +2499,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleAddSubTask = (parentId: string) => {
-    if (!canMutateCurrentProject()) return
+    if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
     if (followedTosLevel1ReadOnly) {
       void message.warning(tosLevel1FollowSourceText)
       return
@@ -2538,7 +2533,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleProgressChange = (taskId: string, newProgress: number) => {
-    if (!canMutateCurrentProject()) return
+    if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
     if (followedTosLevel1ReadOnly) {
       void message.warning(tosLevel1FollowSourceText)
       return
@@ -2590,7 +2585,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleGanttTimeChange = (taskId: string, field: 'planStartDate' | 'planEndDate', date: string) => {
-    if (!canMutateCurrentProject()) return
+    if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
     if (!canMaintainCurrentPlan) {
       void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : currentPlanMaintenanceDisabledReason)
       return
@@ -2601,7 +2596,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const confirmPredecessorChange = () => {
-    if (!canMutateCurrentProject()) return
+    if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
     if (!canMaintainCurrentPlan) {
       void message.warning(machineMarketPlanUnavailable ? '请先配置并选择有效市场' : currentPlanMaintenanceDisabledReason)
       return
@@ -2612,7 +2607,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleCreateRevision = (revisionKind: PlanRevisionKind) => {
-    if (!canMutateCurrentProject()) return
+    if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
     if (!canCreateCurrentRevision) {
       if (followedTosLevel1ReadOnly) void message.warning(tosLevel1FollowSourceText)
       else if (isMarketScopedLevel1 && currentMarketIsFollow) void message.warning(`当前市场跟随 ${primaryMarket}，不能创建一级计划修订`)
@@ -2767,7 +2762,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handlePublish = () => {
-    if (!canMutateCurrentProject()) return
+    if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
     if (!canMaintainCurrentPlan) {
       void message.warning(followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`)
       return
@@ -3058,7 +3053,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleCancelRevision = () => {
-    if (!canMutateCurrentProject()) return
+    if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
     if (!canMaintainCurrentPlan) {
       void message.warning(followedTosLevel1ReadOnly ? tosLevel1FollowSourceText : `无${currentPlanPermissionLabel}编辑权限`)
       return
@@ -3071,7 +3066,7 @@ export default function ProjectSpaceContainer() {
       okType: 'danger',
       cancelText: '保留修订',
       onOk: () => {
-        if (!canMutateCurrentProject()) return
+        if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
         const result = cancelDraftRevision(versions, currentVersion)
         setVersions(result.versions as typeof versions)
         setCurrentVersion(result.currentVersion)
@@ -3158,6 +3153,7 @@ export default function ProjectSpaceContainer() {
     setBasicInfoEditMode(true)
   }
   const saveBasicInfoEdit = () => {
+    if (!canMutateCurrentProject('basicInfo:编辑')) return false
     if (!canEditBasicInfo) return
     const enumState = useEnumStore.getState()
     if (!enumState.hasHydrated || enumState.hydrationError) {
@@ -3211,6 +3207,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const saveTargetProjectInfo = async (payload: ProjectInfoSubmitPayload) => {
+    if (!canMutateCurrentProject('basicInfo:编辑')) return false
     if (!selectedProject || !canEditBasicInfo) return false
     const previousResponsiblePersons = getProjectResponsiblePersons(selectedProject)
     const responsiblePersonsChanged = haveProjectResponsiblePersonsChanged(
@@ -3314,8 +3311,7 @@ export default function ProjectSpaceContainer() {
           payload.responsiblePersons,
         ),
       )
-      // Derived machine roles were committed by the responsibility save, even when the saver just lost access.
-      if (!hasDerivedMachineResponsibilityRoles(selectedProject)) setRoles(previous => replaceProjectSystemAdministrators(previous, payload.responsiblePersons))
+      // Named responsibility changes do not overwrite independently configured local roles.
     }
     setShowProjectInfoEditor(false)
     message.success('项目信息已保存')
@@ -3324,7 +3320,7 @@ export default function ProjectSpaceContainer() {
 
   // Export functions
   const handleExportVerticalPlan = (scope: 'current' | 'all') => {
-    if (!canMutateCurrentProject() || !hasPermission(currentLoginUser, _permProjectId, 'plan:导出')) return
+    if (!canMutateCurrentProject('plan:导出')) return
     const isGovernedLevel1Export = projectPlanLevel === 'level1' && (isWholeMachineProject || isTosVersionProject)
     const cols = scope === 'current' ? TABLE_COLUMNS.filter(c => visibleColumns.includes(c.key)) : TABLE_COLUMNS
     const exportCols: ExportColumn[] = isGovernedLevel1Export
@@ -3348,7 +3344,7 @@ export default function ProjectSpaceContainer() {
   }
 
   const handleExportHorizontalPlan = (_scope: 'current' | 'all') => {
-    if (!canMutateCurrentProject() || !hasPermission(currentLoginUser, _permProjectId, 'plan:导出')) return
+    if (!canMutateCurrentProject('plan:导出')) return
     const displayVersions = selectLevel1HorizontalVersions(level1SurfaceVersions, {
       surface: 'project-plan',
       includeDraft: level1SurfaceCanMaintain,
@@ -3408,6 +3404,7 @@ export default function ProjectSpaceContainer() {
   }), [currentLoginUser])
   const transferProps = {
     selectedProject, currentUser: transferCurrentUser,
+    sourceScopeToken,
     canApplyTransfer: canDo('basicInfo:applyTransfer'),
     canViewTransfer: canDo('basicInfo:transferView'),
     transferView: transfer.transferView, setTransferView: transfer.setTransferView,
@@ -3812,7 +3809,7 @@ export default function ProjectSpaceContainer() {
       }
     } : setEffectiveTasks
     const currentSetTasks = (newTasks: any[]) => {
-      if (!canMutateCurrentProject()) return
+      if (!canMutateCurrentProject(projectPlanLevel === 'level2' ? 'plan:二级计划-编辑' : undefined)) return
       if (isFollowReadOnlyTable) {
         void message.warning(tosLevel1FollowSourceText)
         return
@@ -4206,7 +4203,7 @@ export default function ProjectSpaceContainer() {
     //   isRowEditable — 编辑模式下用户有编辑权 OR 是该行责任人 → 只能改自己负责的行的单元格
     const editPerm = isLevel2Custom ? canEditLevel2Plan : projectPlanLevel === 'level1' ? canGovernLevel1Plan : canEditLevel1Plan
     const canFullyEdit = isEditMode && editPerm && !isFollowReadOnlyTable
-    const isRowEditable = (record: any) => !teamReadOnly && isEditMode && !isFollowReadOnlyTable && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
+    const isRowEditable = (record: any) => (!teamReadOnly || ((isLevel2Custom || projectPlanLevel === 'level2') && canEditLevel2Plan)) && isEditMode && !isFollowReadOnlyTable && (editPerm || isResponsibleNameMatched(record.responsible, currentLoginUser))
     const isGovernedDraft = isGovernedLevel1Table && isCurrentDraft && canMaintainCurrentPlan && !isFollowReadOnlyTable
     const parentForGovernedTask = (record: any) => record.parentId
       ? tableTasks.find((task: any) => task.id === record.parentId)
@@ -5660,7 +5657,7 @@ export default function ProjectSpaceContainer() {
                   {projectPlanLevel === 'level1' && versions.some(v => v.status === '已发布') && (
                     <Tooltip title="复制已发布计划链接；当前为本地演示，其他浏览器不会同步本地修改">
                       <Button disabled={!canShareTechnicalPlan} icon={<ShareAltOutlined />} style={{ borderRadius: 6 }} onClick={() => {
-                        if (!canShareTechnicalPlan) return
+                        if (!canMutateCurrentProject('plan:一级计划-分享')) return
                         const url = `${window.location.origin}/share/plan?projectId=${selectedProject?.id}&level=level1`
                         navigator.clipboard.writeText(url).then(() => { message.success('分享链接已复制到剪贴板') }).catch(() => { message.error('复制失败，请检查浏览器剪贴板权限后重试') })
                       }} aria-label="分享计划" />

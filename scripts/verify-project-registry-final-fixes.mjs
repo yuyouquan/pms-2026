@@ -26,7 +26,7 @@ async function check(name, run) {
   try { await run(); passed++; console.log(`PASS ${name}`) }
   catch (error) { failed++; console.error(`FAIL ${name}: ${error.stack}`) }
 }
-await check('manual machine UI replacement/removal revokes derived source access, preserves independent roles/grants and reload', async () => {
+await check('manual machine owner fields change without resetting independently saved local grants', async () => {
   const created = createConfiguredProject({projectAttribute:'budget', type:'整机产品项目', name:'责任人最终回归', responsiblePersons:[previousOwner]}, admin)
   assert.equal(created.ok, true)
   const id = created.projectId
@@ -42,13 +42,15 @@ await check('manual machine UI replacement/removal revokes derived source access
     const infoValues = {machineSpm:members}
     const responsible = resolveManualCompletionResponsibility(project(id).type,infoValues,members,project(id).responsiblePersons,project(id).responsiblePersons)
     assert.ok(save(id,infoValues,responsible,actor))
-    // Same functional updater as ProjectSpaceContainer.handleProjectInfoSubmit; runs after store synchronization.
-    if (!hasDerivedMachineResponsibilityRoles(project(id))) permissions.getState().setRolesForProjectGuarded(id,actor,roles => replaceProjectSystemAdministrators(roles,responsible))
+    // Local role authorization is independent of the project responsibility fields.
   }
   runUiSave([nextOwner], previousOwner)
-  assert.deepEqual(permissions.getState().rolesByProject[id].find(role => role.name === 'SPM').members,[nextOwner])
-  for (const edit of [false,true]) assert.equal(hr.canAccessHrProject({pmsProjectId:id},edit,previousOwner),false)
-  assert.equal(hasPermission(nextOwner,id,'basicInfo:编辑'),true)
+  assert.deepEqual(permissions.getState().rolesByProject[id].find(role => role.name === 'SPM').members,[previousOwner])
+  assert.equal(hr.canAccessHrProject({pmsProjectId:id},false,previousOwner),true)
+  assert.deepEqual(project(id).spm, [nextOwner])
+  const { getLevel1MaintainerUsers } = get('src/lib/projectSpaceLevel1Rules.ts')
+  assert.deepEqual(getLevel1MaintainerUsers(project(id).spm, permissions.getState().rolesByProject[id]), [nextOwner], 'L1 uses updated SPM field, not preserved SPM authorization role')
+  assert.equal(hasPermission(nextOwner,id,'basicInfo:编辑'),false, 'named responsibility alone does not add local role authority')
   registry.setState({currentLoginUser:previousOwner})
   assert.equal(hasPermission(previousOwner,scopeId,'basicInfo:查看'),true)
   assert.equal(hr.isHrVersionVisible({pmsProjectId:id},'annual',scopeId),true,'formal resource membership independently permits linked annual viewing')
@@ -58,9 +60,10 @@ await check('manual machine UI replacement/removal revokes derived source access
   assert.equal(hr.canAccessHrProject({pmsProjectId:id},false,'独立用户'),true)
   assert.deepEqual(permissions.getState().rolePermissionsByProject[id],grants)
   await registry.persist.rehydrate(); await permissions.persist.rehydrate()
-  assert.equal(hr.canAccessHrProject({pmsProjectId:id},true,previousOwner),false)
-  runUiSave([], nextOwner)
-  for (const role of ['SPM','系统管理员']) assert.deepEqual(permissions.getState().rolesByProject[id].find(item => item.name === role).members,[])
+  assert.equal(hasPermission(previousOwner,id,'basicInfo:编辑'),true)
+  runUiSave([], admin)
+  for (const role of ['SPM','系统管理员']) assert.deepEqual(permissions.getState().rolesByProject[id].find(item => item.name === role).members,[previousOwner])
+  assert.deepEqual(getLevel1MaintainerUsers(project(id).spm, permissions.getState().rolesByProject[id]), [], 'clearing SPM immediately revokes named L1 maintenance')
   await registry.persist.rehydrate(); await permissions.persist.rehydrate()
   assert.equal(hr.canAccessHrProject({pmsProjectId:id},false,nextOwner),false)
   assert.deepEqual(permissions.getState().rolesByProject['1'],formalRoles)

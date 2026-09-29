@@ -1,3 +1,4 @@
+import { ROLE_TEMPLATE_TYPES } from '@/types/rolePermissionTemplate'
 import { CONFIG_MENU_GROUPS } from '@/lib/configNavigation'
 import { HR_SIDEBAR_NAV } from '@/constants/hrPipeline'
 import { ROADMAP_COLUMNS } from '@/types/roadmap'
@@ -21,6 +22,7 @@ export const PERMISSION_MENUS: PermissionMenu[] = [
   ...(['table', 'evolution'] as const).map(view => ({ id: `roadmap.${view}` as PermissionMenuId, label: view === 'table' ? '表单视图' : '版本演进图', category: 'tOS路标', actions: ['view', 'export', 'edit', 'create', 'delete'] as PermissionAction[], fields: roadmapFields(view === 'evolution') })),
   ...HR_SIDEBAR_NAV.flatMap(group => group.children.map(leaf => ({ id: `hr.${leaf.key}` as PermissionMenuId, label: leaf.label, category: `人力资源管道 / ${group.label}`, actions: (group.key === 'config' ? ['view', 'edit', 'import', 'export'] : ['view']) as PermissionAction[], fields: [] }))),
   ...CONFIG_MENU_GROUPS.flatMap(group => group.children.map(leaf => ({ id: `config.${leaf.key}` as PermissionMenuId, label: leaf.target.module === 'transfer' ? `${leaf.target.projectType} / ${leaf.label}` : leaf.label, category: `配置中心 / ${group.label}`, actions: (group.key === 'plan' ? ['view', 'edit', 'publish'] : leaf.target.module === 'transfer' && leaf.target.view !== 'team' ? ['view', 'import', 'export'] : leaf.target.module === 'hrPipeline' && leaf.target.moduleKey !== 'feeRate' ? ['view', 'edit', 'import', 'export'] : ['view', 'edit']) as PermissionAction[], fields: [] }))),
+  ...ROLE_TEMPLATE_TYPES.map(type => ({ id: `config.rolePermission:${type}` as PermissionMenuId, label: type, category: '配置中心 / 角色权限配置模板', actions: ['view', 'edit'] as PermissionAction[], fields: [] })),
   { id: 'permission.center', label: '角色与权限配置', category: '权限中心', actions: ['view', 'manage'], fields: [] },
 ]
 export const getPermissionMenu = (id: string) => PERMISSION_MENUS.find(menu => menu.id === id)

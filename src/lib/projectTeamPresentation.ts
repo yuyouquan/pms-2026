@@ -6,7 +6,7 @@ export function projectTeamRows(team: ProjectTeamSnapshot | undefined): ProjectT
   for (const member of team?.members || []) {
     if (!member.employeeId) continue
     const previous = rows.get(member.employeeId)
-    rows.set(member.employeeId, { ...member, roles: [...new Set([...(previous?.roles || []), ...member.roles])] })
+    rows.set(member.employeeId, { ...member, roles: [...new Set([...(previous?.roles || []), ...member.roles])], roleCodes: [...new Set([...(previous?.roleCodes || []), ...(member.roleCodes || [])])] })
   }
   return [...rows.values()]
 }

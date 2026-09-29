@@ -38,7 +38,7 @@
 - Add behavioral verification in `scripts/verify-role-permission-templates.mjs`, `scripts/verify-synced-role-permissions.mjs`; update existing team verification for the new semantics while preserving its original security assertions.
 
 **Interfaces:**
-- Produce a typed four-type template model with stable row ID, roleName, ipmRoleCode, pmsRoleName, pmsRoleCode, grants.
+- Produce a typed four-type template model with stable row ID, roleName (the PMS role name), ipmRoleCode, pmsRoleCode, grants. User correction removes the redundant pmsRoleName field and column.
 - Expose template create/update/delete/updateGrants operations taking the current actor and returning the existing `{ ok, error? }` result convention; validate the matching global `config.rolePermission:<type>` view/edit permission.
 - Expose read-only synced role selectors scoped to the effective project and mutation APIs accepting stable source role identity; expose an atomic project multi-key toggle and an atomic global multi-menu action update. Report exact exported signatures for Task 2.
 - Preserve `hasPermission(user, projectId, key)` / `useHasPermission` call signatures, local direct/department inheritance, and source membership hooks. IPM users resolve only their source role union except builtin superadmin.
@@ -66,7 +66,7 @@
 **Files:**
 - Create `src/components/permission/RolePermissionTemplateConfig.tsx` and a focused `ProjectTeamMembers.tsx` table component plus small CSS module if needed.
 - Modify `src/lib/configNavigation.ts`, `src/constants/permissionCenter.ts` if needed, `src/containers/ConfigContainer.tsx` to register/mount four role-template entries.
-- Modify `src/components/permission/ProjectPermissionConfig.tsx`, `ProjectFunctionalPermissions.tsx`, `projectPermissionCatalog.ts`, `ProjectPermissionConfig.module.css`, `src/components/permission-center/FunctionalMatrix.tsx`, `FunctionalPermissionsTable.module.css`.
+- Modify `src/components/permission/ProjectPermissionConfig.tsx`, `ProjectRoleAssignees.tsx`, `ProjectFunctionalPermissions.tsx`, `projectPermissionCatalog.ts`, `ProjectPermissionConfig.module.css`, `src/components/permission-center/FunctionalMatrix.tsx`, `FunctionalPermissionsTable.module.css`.
 - Modify `src/lib/projectSpaceNavigation.ts`, `src/containers/ProjectSpaceContainer.tsx` for merged navigation, team alias resolution and readonly unified page access. Remove obsolete standalone team UI only after references are gone.
 - Add `scripts/verify-team-role-template-ui.mjs` exercising actual React handlers/store mutations; update affected existing UI tests for intentional copy and ordering changes.
 
@@ -76,9 +76,9 @@
 - All table/modal mutations use the atomic result and render a retryable error on failure; actor/project changes invalidate old callbacks.
 
 - [ ] Write failing UI behavior tests for four nav entries, source/local role identity, first functional tab, source readonly people, parent/leaf bulk scope under search, denied/stale callbacks, and template modal reuse. Run and capture RED.
-- [ ] Add template navigation and mapping CRUD table in the exact specified field order. Four fields required/trimmed, codes unique per type. 配置权限 opens a PMS-styled modal with the shared permission component and immediate saving. Gate view and edit separately.
+- [ ] Add template navigation and mapping CRUD table in order 角色名称 / PMS角色编码 / IPM角色编码 / 操作. Three fields required/trimmed, codes unique per type; first name already means PMS role name. 配置权限 opens a PMS-styled modal with the shared permission component and immediate saving. Gate view and edit separately.
 - [ ] Merge team navigation, resolve old `team` state to `permission`, and let members read the unified page. Prefer source roles in the narrow tree, tag source identity, protect source deletion. Local same-name roles remain separate/selectable/editable/deletable. Default functional tab on entry/role changes/new role.
-- [ ] Render source members with the exact columns `No. / 成员名称 / 工号 / 角色 / 价值交付 / 直属部门 / 人员邮箱`; dedup by employee ID, preserve same-name different IDs, search, name filter, name/employee sorting, empty states. Preserve local personnel/departments modal behavior.
+- [ ] Render source members with the exact columns `No. / 成员名称 / 工号 / 角色 / 价值交付 / 直属部门 / 人员邮箱`; dedup by employee ID, preserve same-name different IDs, search, name filter, name/employee sorting, empty states. Preserve local personnel/departments modal behavior; give ProjectRoleAssignees a disabled state for readonly visitors so configuration controls and any open picker become unavailable when management is revoked.
 - [ ] Add parent and leaf 全选/取消权限 controls to project/template/global functional trees. Keep fold action separate, show full-subtree scope tooltip under search, disable readonly/superadmin/invalid targets. Use one atomic store operation per click:
   ```ts
   const keys = [...new Set(group.rows.flatMap(row => row.actions.map(action => action.key)))];
