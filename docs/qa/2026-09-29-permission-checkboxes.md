@@ -15,3 +15,13 @@
 本次仅复测受影响的交互与构建。完整权限实现的上一轮 188 项回归与修复复测记录见 `2026-09-29-role-templates-team-permissions.md`。
 
 ![标题前批量复选框](assets/2026-09-29-permission-checkboxes.png)
+
+## 项目空间层级显示修复
+
+项目空间通用表格的单元格 padding 覆盖了功能表格的层级缩进。通过单元格局部的现有样式变量修正覆盖，并仅在项目空间将菜单列宽调整为 260px；移除功能表格内的行级和分组说明文案。
+
+- 最新构建后的 localhost:3017 验证：父级复选框 x=478.71，子级 x=496.72，子级向右缩进 18px；菜单列宽 260px，长菜单名称完整显示，说明文案不再显示。
+- `verify-project-permission-ui.mjs`、`verify-team-role-template-ui.mjs`、`npm run build`、构建后 `npx tsc --noEmit`、`git diff --check` 通过。
+- 浏览器 error/warn 为 0，独立代码审查通过；本次不改变权限计算或存储逻辑。
+
+![项目空间功能权限层级](assets/2026-09-29-project-permission-alignment.png)

@@ -3,8 +3,10 @@
 .permissions thead th { position: sticky; top: 0; background: #f7f5fb; color: #535a66; z-index: 2; }
 .permissions th:first-child { width: var(--permission-menu-width, 164px); }
 .permissions tbody th { font-weight: 500; }
-.permissions tbody tr:not(.groupRow) th { padding-left: 30px; }
-.permissions .groupRow th { padding: 0; background: #faf9fc; }
+/* The project shell applies native-table padding through this token. Keep the
+   hierarchy aligned in both the shell and the standalone template modal. */
+.permissions tbody tr:not(.groupRow) th { --pms-table-cell-padding: 10px 12px 10px 30px; padding-left: 30px; }
+.permissions .groupRow th { --pms-table-cell-padding: 0; padding: 0; background: #faf9fc; }
 .groupHeader { display: flex; align-items: center; gap: 8px; padding-inline: 12px; }
 .groupHeader > button { padding: 9px 0; display: flex; align-items: center; gap: 8px; flex: 1; color: #4b435e; background: transparent; border: 0; text-align: left; font-weight: 600; cursor: pointer; }
 .bulkCheckbox { flex: 0 0 auto; margin-inline: 0 !important; }
@@ -20,7 +22,7 @@
   .permissions thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .permissions, .permissions tbody, .permissions tbody tr, .permissions tbody th, .permissions tbody td { display: block; width: 100%; }
   .permissions tbody th:first-child { width: 100%; }
-  .permissions tbody tr:not(.groupRow) th { padding: 9px 8px 3px; border-bottom: 0; }
+  .permissions tbody tr:not(.groupRow) th { --pms-table-cell-padding: 9px 8px 3px 30px; padding: 9px 8px 3px 30px; border-bottom: 0; }
   .permissions .hint { padding: 6px 8px 10px; }
   .actions { gap: 8px 12px; }
 }
