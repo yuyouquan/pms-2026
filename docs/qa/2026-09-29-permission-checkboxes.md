@@ -25,3 +25,11 @@
 - 浏览器 error/warn 为 0，独立代码审查通过；本次不改变权限计算或存储逻辑。
 
 ![项目空间功能权限层级](assets/2026-09-29-project-permission-alignment.png)
+
+## 小屏阅读与菜单分隔优化
+
+菜单文字统一为 600 字重，项目菜单列宽为 280px；功能列左留白从 12px 调整为 28px，表头与选项对齐，菜单列增加浅色竖线。父级保留浅底色，子行增加轻量悬停/焦点反馈。窄屏纵向布局中，功能选项统一缩进并以竖线区分菜单。
+
+- 浏览器实际 CSS 视口 1280、1025、700px 检查通过：权限表及页面无横向溢出，功能选项自然换行；700px 采用纵向布局，菜单字重及缩进分隔正确。
+- 权限中心、项目空间、模板 Modal 均验证共用样式；项目搜索正常，全局超级管理员功能复选框保持只读，浏览器 error/warn 为 0。
+- `verify-project-permission-ui.mjs`、`verify-team-role-template-ui.mjs`、`verify-permission-center-matrix.mjs`、`npm run build`、构建后 `npx tsc --noEmit` 通过。

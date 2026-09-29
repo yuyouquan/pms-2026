@@ -2,7 +2,18 @@
 .permissions th, .permissions td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eeedf2; vertical-align: top; }
 .permissions thead th { position: sticky; top: 0; background: #f7f5fb; color: #535a66; z-index: 2; }
 .permissions th:first-child { width: var(--permission-menu-width, 164px); }
-.permissions tbody th { font-weight: 500; }
+.permissions tbody th { font-weight: 600; color: #35313f; }
+.permissions th:not([colspan]) { border-inline-end: 1px solid #e5e1ed; }
+.permissions thead th + th {
+  --pms-table-head-padding: 10px 16px 10px 28px;
+  padding-inline-start: 28px;
+  border-inline-end: 0;
+}
+.permissions tbody td {
+  --pms-table-cell-padding: 10px 16px 10px 28px;
+  padding-inline-start: 28px;
+}
+.permissions tbody tr:not(.groupRow):is(:hover, :focus-within) { background: #fcfbfe; }
 /* The project shell applies native-table padding through this token. Keep the
    hierarchy aligned in both the shell and the standalone template modal. */
 .permissions tbody tr:not(.groupRow) th { --pms-table-cell-padding: 10px 12px 10px 30px; padding-left: 30px; }
@@ -10,19 +21,19 @@
 .groupHeader { display: flex; align-items: center; gap: 8px; padding-inline: 12px; }
 .groupHeader > button { padding: 9px 0; display: flex; align-items: center; gap: 8px; flex: 1; color: #4b435e; background: transparent; border: 0; text-align: left; font-weight: 600; cursor: pointer; }
 .bulkCheckbox { flex: 0 0 auto; margin-inline: 0 !important; }
-.leafLabel { display: flex; align-items: flex-start; gap: 8px; }
+.leafLabel { display: flex; align-items: flex-start; gap: 8px; font-weight: 600; }
 .groupRow button:disabled { cursor: default; }
 .groupRow button:focus-visible { outline: 2px solid var(--pms-brand); outline-offset: -2px; }
 .groupRow button > span { font-size: 10px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px 20px; min-height: 20px; }
 .actions :global(.ant-checkbox-wrapper) { margin-inline-start: 0; white-space: nowrap; }
-.permissions .hint { font-size: 12px; color: #717680; padding: 6px 12px 10px 30px; }
 @media (max-width: 760px) {
   .permissions th, .permissions td { padding: 9px 8px; }
   .permissions thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .permissions, .permissions tbody, .permissions tbody tr, .permissions tbody th, .permissions tbody td { display: block; width: 100%; }
   .permissions tbody th:first-child { width: 100%; }
+  .permissions th:not([colspan]) { border-inline-end: 0; }
   .permissions tbody tr:not(.groupRow) th { --pms-table-cell-padding: 9px 8px 3px 30px; padding: 9px 8px 3px 30px; border-bottom: 0; }
-  .permissions .hint { padding: 6px 8px 10px; }
-  .actions { gap: 8px 12px; }
+  .permissions tbody td { --pms-table-cell-padding: 5px 12px 10px 52px; padding: 5px 12px 10px 52px; }
+  .actions { gap: 8px 16px; border-inline-start: 1px solid #e5e1ed; padding-inline-start: 12px; }
 }
