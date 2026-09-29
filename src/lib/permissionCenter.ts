@@ -1,8 +1,9 @@
 import { canConfigureProjectScope, PROJECT_REGISTRY_MANAGERS } from '@/lib/projectRegistryPermissions'
-import { getPermissionFields, getPermissionMenu, PERMISSION_DEPARTMENTS, PERMISSION_MENUS, PERMISSION_USER_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
+import { getPermissionFields, getPermissionMenu, PROJECT_DATA_SCOPES, PERMISSION_DEPARTMENTS, PERMISSION_MENUS, PERMISSION_USER_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
 import { getRegistryProjectTypes, getProjectAttribute, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import { getProjectInfoValue } from '@/lib/projectInfoValues'
-import type { MenuPolicy, PermissionAction, PermissionCenterModel, PermissionCondition, PermissionCenterRole, PermissionField, PermissionMenuId, PermissionMutationResult } from '@/types/permissionCenter'
+import type { MenuPolicy, PermissionAction, PermissionCenterModel, PermissionCondition, PermissionCenterRole, PermissionField, PermissionMenuId, PermissionMutationResult, ProjectDataScope } from '@/types/permissionCenter'
+import { getProjectDataPolicy, getProjectDataScope } from '@/lib/projectPermissionScope'
 export const normalizePermissionName = (name: string) => name.trim().normalize('NFKC').toLocaleLowerCase()
 export const createEmptyMenuPolicy = (roleId: string, menuId: PermissionMenuId): MenuPolicy => ({ roleId, menuId, actions: [], data: { mode: 'all', conjunction: 'all', conditions: [] }, columns: { mode: 'all', fields: [] } })
 const strings = (value: unknown): value is string[] => Array.isArray(value) && value.every(item => typeof item === 'string')
@@ -18,12 +19,20 @@ export function getAssignedPermissionUsers(model: PermissionCenterModel): string
 export const isPermissionCenterAdmin = (model: PermissionCenterModel | undefined, user: string) => model?.version === 2 && !!model.roles.some(role => role.id === SUPER_ADMIN_ROLE_ID && role.builtin === 'superadmin' && isRoleAssignedToUser(role, user))
 export const getPermissionOperators = (field: PermissionField): PermissionCondition['operator'][] => ['eq', 'neq', 'in', 'notIn', 'empty', 'notEmpty', ...(field.kind === 'number' || field.kind === 'date' ? ['gt', 'gte', 'lt', 'lte'] as const : ['contains', 'notContains'] as const)]
 const invalid = (error: string): PermissionMutationResult => ({ ok: false, error })
-export function validateMenuPolicy(policy: MenuPolicy): PermissionMutationResult {
+export function validateMenuPolicy(policy: MenuPolicy, scope?: ProjectDataScope): PermissionMutationResult {
   if (!policy || typeof policy !== 'object') return invalid('权限策略格式无效')
   const menu = getPermissionMenu(policy.menuId)
   if (!menu || !policy.roleId || !Array.isArray(policy.actions) || 'users' in policy || 'departments' in policy) return invalid('菜单或策略格式无效')
   if (policy.actions.some(action => !menu.actions.includes(action)) || (policy.actions.length > 0 && !policy.actions.includes('view'))) return invalid('功能权限无效；其他操作需要查看权限')
   if (!policy.data || !['all', 'conditions'].includes(policy.data.mode) || !['all', 'any'].includes(policy.data.conjunction) || !Array.isArray(policy.data.conditions)) return invalid('数据权限格式无效')
+  if (policy.projectScopes !== undefined) {
+    if (scope || policy.menuId !== 'project.view' || !policy.projectScopes || typeof policy.projectScopes !== 'object' || Array.isArray(policy.projectScopes)) return invalid('项目类型数据权限格式无效')
+    for (const [key, rule] of Object.entries(policy.projectScopes)) {
+      if (!PROJECT_DATA_SCOPES.includes(key as ProjectDataScope) || !rule || typeof rule !== 'object' || Object.keys(rule).some(key => !['data', 'columns'].includes(key))) return invalid('项目类型数据权限格式无效')
+      const result = validateMenuPolicy({ ...getProjectDataPolicy(policy), data: rule.data, columns: rule.columns }, key as ProjectDataScope)
+      if (!result.ok) return result
+    }
+  }
   const fields = getPermissionFields(policy.menuId)
   if (policy.data.mode === 'conditions') {
     if (!policy.data.conditions.length || !fields.length) return invalid('至少填写一条完整筛选条件')
@@ -38,7 +47,7 @@ export function validateMenuPolicy(policy: MenuPolicy): PermissionMutationResult
     }
   }
   if (!policy.columns || !['all', 'selected'].includes(policy.columns.mode) || !Array.isArray(policy.columns.fields)) return invalid('可见列格式无效')
-  if (policy.columns.mode === 'selected' && (!policy.columns.fields.length || policy.columns.fields.some(key => !fields.some(field => field.key === key)) || fields.some(field => field.required && !policy.columns.fields.includes(field.key)))) return invalid('指定列不能为空，且必须保留必要识别列')
+  if (policy.columns.mode === 'selected' && (!scope && !policy.columns.fields.length || policy.columns.fields.some(key => !fields.some(field => field.key === key)) || !scope && fields.some(field => field.required && !policy.columns.fields.includes(field.key)))) return invalid('指定列不能为空，且必须保留必要识别列')
   return { ok: true }
 }
 /** Treat an action change as one atomic dependency change. */
@@ -47,6 +56,9 @@ export function normalizePolicyActions(actions: PermissionAction[], previous: re
   return [...new Set(actions.length ? ['view' as const, ...actions] : [])]
 }
 export function readPermissionField(row: Record<string, unknown>, field: string): unknown {
+  if (field === 'projectName') return row.projectName ?? row.name
+  if (field === 'projectCategory') return row.projectCategory ?? row.type
+  if (field === 'projectCode') return row.projectCode ?? row.code
   if (field === 'projectAttribute') return getProjectAttribute(row as any)
   if (row.fieldValues && typeof row.fieldValues === 'object' && Object.prototype.hasOwnProperty.call(row.fieldValues, field)) return (row.fieldValues as Record<string, unknown>)[field]
   return getProjectInfoValue(row as any, field) ?? row[field]
@@ -74,23 +86,47 @@ export function matchesPermissionCondition(row: Record<string, unknown>, conditi
   }
 }
 export const matchesPermissionData = (policy: MenuPolicy, row: Record<string, unknown>) => policy.data.mode === 'all' || (policy.data.conjunction === 'all' ? policy.data.conditions.every(condition => matchesPermissionCondition(row, condition, getPermissionFields(policy.menuId).find(field => field.key === condition.field))) : policy.data.conditions.some(condition => matchesPermissionCondition(row, condition, getPermissionFields(policy.menuId).find(field => field.key === condition.field))))
-export function getMatchingMenuPolicies(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction, row?: Record<string, unknown>): MenuPolicy[] {
+export function getMatchingMenuPolicies(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction, row?: Record<string, unknown>, scope?: ProjectDataScope): MenuPolicy[] {
   if (model?.version !== 2 || !user || !getPermissionMenu(menuId)?.actions.includes(action)) return []
-  return model.policies.filter(policy => policy.menuId === menuId && model.roles.some(role => role.id === policy.roleId && role.id !== SUPER_ADMIN_ROLE_ID && isRoleAssignedToUser(role, user)) && validateMenuPolicy(policy).ok && policy.actions.includes(action) && (!row || matchesPermissionData(policy, row)))
+  const effectiveScope = menuId === 'project.view' ? scope ?? getProjectDataScope(row) : undefined
+  return model.policies.flatMap(policy => {
+    if (policy.menuId !== menuId || !model.roles.some(role => role.id === policy.roleId && role.id !== SUPER_ADMIN_ROLE_ID && isRoleAssignedToUser(role, user)) || !validateMenuPolicy(policy).ok || !policy.actions.includes(action)) return []
+    // A row with unknown classification cannot bypass type-specific restrictions.
+    if (menuId === 'project.view' && policy.projectScopes && row && !effectiveScope) return []
+    const candidates = menuId === 'project.view' && !row && !effectiveScope && policy.projectScopes
+      ? PROJECT_DATA_SCOPES.map(key => getProjectDataPolicy(policy, key))
+      : [getProjectDataPolicy(policy, effectiveScope)]
+    return candidates.filter(candidate => !row || matchesPermissionData(candidate, row))
+  })
 }
 export function evaluateMenuPermission(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction = 'view', row?: Record<string, unknown>): boolean {
   if (!getPermissionMenu(menuId)?.actions.includes(action)) return false
   return isPermissionCenterAdmin(model, user) || getMatchingMenuPolicies(model, user, menuId, action, row).length > 0
 }
-/** For operations affecting a whole collection, conditional grants are insufficient. */
+/** Whole-collection operations require a full grant for every project type, not just one type. */
 export function evaluateWholeMenuPermission(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction): boolean {
   if (!getPermissionMenu(menuId)?.actions.includes(action)) return false
-  return isPermissionCenterAdmin(model, user) || getMatchingMenuPolicies(model, user, menuId, action).some(policy => policy.data.mode === 'all' && policy.columns.mode === 'all')
+  if (isPermissionCenterAdmin(model, user)) return true
+  const unrestricted = (scope?: ProjectDataScope) => getMatchingMenuPolicies(model, user, menuId, action, undefined, scope).some(policy => policy.data.mode === 'all' && policy.columns.mode === 'all')
+  return menuId === 'project.view' ? PROJECT_DATA_SCOPES.every(unrestricted) : unrestricted()
 }
-export function getAuthorizedColumns(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction = 'view', row?: Record<string, unknown>): string[] {
+export function getAuthorizedColumns(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction = 'view', row?: Record<string, unknown>, scope?: ProjectDataScope): string[] {
   if (isPermissionCenterAdmin(model, user)) return getPermissionFields(menuId).map(field => field.key)
-  const policies = getMatchingMenuPolicies(model, user, menuId, action, row)
-  return getPermissionFields(menuId).filter(field => policies.some(policy => policy.columns.mode === 'all' || policy.columns.fields.includes(field.key))).map(field => field.key)
+  const policies = getMatchingMenuPolicies(model, user, menuId, action, row, scope)
+  const keys = getPermissionFields(menuId).filter(field => policies.some(policy => policy.columns.mode === 'all' || policy.columns.fields.includes(field.key))).map(field => field.key)
+  if (menuId !== 'project.view') return keys
+  // List aliases refer to the same value, not a second independent grant.
+  for (const [list, source] of [['projectName', 'name'], ['projectCategory', 'type'], ['projectCode', 'code']]) {
+    if (keys.includes(list) && !keys.includes(source)) keys.push(source)
+    if (keys.includes(source) && !keys.includes(list)) keys.push(list)
+  }
+  const effectiveScope = scope ?? getProjectDataScope(row)
+  // Selecting a named project-type scope already discloses that category. Secondary categories still need a grant.
+  if (effectiveScope && policies.some(policy => model?.policies.some(source => source.roleId === policy.roleId && source.menuId === menuId && source.projectScopes?.[effectiveScope]))) {
+    if (!keys.includes('type')) keys.push('type')
+    if (!keys.includes('projectCategory')) keys.push('projectCategory')
+  }
+  return keys
 }
 /** Never combine one grant's rows with another grant's fields. Structural IDs carry no display data. */
 export function projectAuthorizedRows<T extends object>(model: PermissionCenterModel | undefined, user: string, menuId: PermissionMenuId, action: PermissionAction, rows: readonly T[]): Partial<T>[] {
@@ -171,16 +207,23 @@ export function parsePermissionCenter(value: unknown): PermissionCenterModel {
   const policies = model.policies.filter(policy => isStructuralPolicy(policy, roles.map(role => role.id), false)).map(policy => policy.data.mode === 'all' ? { ...policy, data: { ...policy.data, conditions: [] } } : policy)
   return { version: 2, groups, roles, policies }
 }
-function isStructuralPolicy(value: unknown, roleIds: string[], legacy: boolean): boolean {
+function isStructuralPolicy(value: unknown, roleIds: string[], legacy: boolean, scope?: ProjectDataScope): boolean {
   if (!value || typeof value !== 'object') return false
   const policy = value as MenuPolicy & { users?: unknown; departments?: unknown }
   if (!roleIds.includes(policy.roleId) || !getPermissionMenu(policy.menuId) || !strings(policy.actions) || policy.actions.some(action => !getPermissionMenu(policy.menuId)!.actions.includes(action)) || policy.actions.length > 0 && !policy.actions.includes('view')) return false
   if (legacy ? !strings(policy.users) || !strings(policy.departments) || policy.users.some(user => !PERMISSION_USERS.includes(user)) || policy.departments.some(dept => !PERMISSION_DEPARTMENTS.includes(dept)) : 'users' in policy || 'departments' in policy) return false
+  if (policy.projectScopes !== undefined) {
+    if (scope || policy.menuId !== 'project.view' || !policy.projectScopes || typeof policy.projectScopes !== 'object' || Array.isArray(policy.projectScopes)) return false
+    for (const [key, rule] of Object.entries(policy.projectScopes)) {
+      if (!PROJECT_DATA_SCOPES.includes(key as ProjectDataScope) || !rule || typeof rule !== 'object' || Object.keys(rule).some(key => !['data', 'columns'].includes(key))) return false
+      if (!isStructuralPolicy({ ...getProjectDataPolicy(policy), data: rule.data, columns: rule.columns }, roleIds, legacy, key as ProjectDataScope)) return false
+    }
+  }
   const { data, columns } = policy
   if (!data || !['all', 'conditions'].includes(data.mode) || !['all', 'any'].includes(data.conjunction) || !Array.isArray(data.conditions) || !columns || !['all', 'selected'].includes(columns.mode) || !strings(columns.fields)) return false
-  if (data.mode === 'conditions' && !data.conditions.length || columns.mode === 'selected' && !columns.fields.length) return false
+  if (data.mode === 'conditions' && !data.conditions.length || columns.mode === 'selected' && !scope && !columns.fields.length) return false
   const fields = getPermissionFields(policy.menuId)
-  if (columns.mode === 'selected' && (columns.fields.some(key => !key.trim()) || fields.some(field => field.required && !columns.fields.includes(field.key)))) return false
+  if (columns.mode === 'selected' && (columns.fields.some(key => !key.trim()) || !scope && fields.some(field => field.required && !columns.fields.includes(field.key)))) return false
   // All-data ignores discarded filter drafts, matching validation and evaluation.
   if (data.mode === 'all') return true
   return data.conditions.every(condition => {

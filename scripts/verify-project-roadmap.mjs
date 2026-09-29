@@ -413,7 +413,8 @@ registerAssertion('workspace links category and supported secondary-category fil
   for (const fragment of [
     'projectSecondaryCategoryFilter, setProjectSecondaryCategoryFilter',
     'PROJECT_SECONDARY_CATEGORIES[projectTypeFilter',
-    'matchesAuthorizedProjectClassification(permissionCenter, currentLoginUser, permissionSources.get(project.id) ?? {}, category, secondary)',
+    'classificationSourceFor(project, secondary !== \'all\')',
+    'matchesAuthorizedProjectClassification(permissionCenter, currentLoginUser, source, category, secondary)',
     'matchesCategory: project => matchesVisibleClassification(project, projectTypeFilter)',
     'matchesSecondaryCategory: project => matchesVisibleClassification(project, projectTypeFilter, projectSecondaryCategoryFilter)',
     '(project, category) => matchesVisibleClassification(project, category)',

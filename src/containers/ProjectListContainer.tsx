@@ -15,7 +15,7 @@ import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
 import { usePermissionStore } from '@/stores/permission'
 import { evaluateMenuPermission, getAuthorizedColumns } from '@/lib/permissionCenter'
-import { projectPermissionSource, projectSummaryRows, projectFieldAllowed, registerProjectPermissionFields, hasAllProjectFields, canReadProjectClassification, matchesAuthorizedProjectClassification } from '@/lib/projectMenuPermissions'
+import { projectPermissionSource, projectSummaryRows, projectFieldAllowed, registerProjectPermissionFields, hasAllProjectFields, getReadableProjectClassificationSource, matchesAuthorizedProjectClassification } from '@/lib/projectMenuPermissions'
 import { ProjectCard } from '@/components/workspace/WorkspaceModule'
 import type { ProjectType } from '@/components/workspace/WorkspaceModule'
 import ProjectSummaryTable from '@/components/project-summary/ProjectSummaryTable'
@@ -123,7 +123,7 @@ export default function ProjectListContainer() {
   } = usePlanStore()
 
   const { globalRoles, rolesByProject, permissionCenter } = usePermissionStore()
-  useMemo(() => registerProjectPermissionFields(configTemplateTasksByType, publishedSnapshots), [configTemplateTasksByType, publishedSnapshots])
+  useMemo(() => registerProjectPermissionFields(configTemplateTasksByType, publishedSnapshots, configTemplateVersionScopes), [configTemplateTasksByType, publishedSnapshots, configTemplateVersionScopes])
   const activateProject = useActivateProject()
   const technicalSubprojects = useTechnicalProjectStore(state => state.subprojects)
   const technicalPlansByKey = useTechnicalPlanStore(state => state.plansByKey)
@@ -252,11 +252,19 @@ export default function ProjectListContainer() {
   })), [formalProjects, configTemplateTasksByType, projectSummaryPlanTasksByProjectId])
   const allTechnicalRows = useMemo(() => buildTechnicalProjectListRows({ projects: formalProjects, subprojects: technicalSubprojects, plansByKey: technicalPlansByKey, machineProjects: formalProjects.filter(project => isMachineProjectType(project.type)) }), [formalProjects, technicalSubprojects, technicalPlansByKey])
   const visibleProjects = useMemo(() => formalProjects.filter(project => !permissionCenter || evaluateMenuPermission(permissionCenter, currentLoginUser, 'project.view', 'view', permissionSources.get(project.id)) || (project.type === PROJECT_CATEGORY_TECH && [...allTechnicalRows.tdt, ...allTechnicalRows.children].some(row => String(row.targetProjectId ?? row.projectId) === project.id && evaluateMenuPermission(permissionCenter, currentLoginUser, 'project.view', 'view', { ...permissionSources.get(project.id), ...row })))), [formalProjects, permissionCenter, currentLoginUser, permissionSources, allTechnicalRows])
-  const hasHiddenClassification = visibleProjects.some(project => !canReadProjectClassification(permissionCenter, currentLoginUser, permissionSources.get(project.id) ?? {}))
+  const classificationSourceFor = (project: typeof projects[number], secondary = false) => getReadableProjectClassificationSource(
+    permissionCenter, currentLoginUser, permissionSources.get(project.id) ?? {},
+    project.type === PROJECT_CATEGORY_TECH ? [...allTechnicalRows.tdt, ...allTechnicalRows.children].filter(row => String(row.targetProjectId ?? row.projectId) === project.id) : [], secondary,
+  )
+  const hasHiddenClassification = visibleProjects.some(project => !classificationSourceFor(project))
   useEffect(() => {
     if (hasHiddenClassification) { setProjectTypeFilter('all'); setProjectSecondaryCategoryFilter('all'); setProjectStatusFilter('all') }
   }, [permissionCenter, currentLoginUser, hasHiddenClassification, setProjectTypeFilter, setProjectSecondaryCategoryFilter, setProjectStatusFilter])
-  const matchesVisibleClassification = (project: typeof projects[number], category: string, secondary = 'all') => matchesAuthorizedProjectClassification(permissionCenter, currentLoginUser, permissionSources.get(project.id) ?? {}, category, secondary)
+  const matchesVisibleClassification = (project: typeof projects[number], category: string, secondary = 'all') => {
+    if (category === 'all' && secondary === 'all') return true
+    const source = classificationSourceFor(project, secondary !== 'all')
+    return !!source && matchesAuthorizedProjectClassification(permissionCenter, currentLoginUser, source, category, secondary)
+  }
   const displayFieldsFor = (projectId: string) => permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view', 'view', permissionSources.get(projectId)) : null
   const safeSummaryRows = (rows: ProjectSummaryRow[]) => projectSummaryRows(permissionCenter, currentLoginUser, rows, permissionSources)
   const canEnterProject = (projectId: string) => canEnterProjectSpace(
@@ -285,7 +293,7 @@ export default function ProjectListContainer() {
     () => aboutMineProjects.filter(project => (
       matchesVisibleClassification(project, projectTypeFilter)
     )),
-    [aboutMineProjects, projectTypeFilter, permissionCenter, currentLoginUser, permissionSources],
+    [aboutMineProjects, projectTypeFilter, permissionCenter, currentLoginUser, permissionSources, allTechnicalRows],
   )
 
 
@@ -295,7 +303,7 @@ export default function ProjectListContainer() {
       PROJECT_CATEGORIES,
       (project, category) => matchesVisibleClassification(project, category),
     )
-  }, [aboutMineProjects, permissionCenter, currentLoginUser, permissionSources])
+  }, [aboutMineProjects, permissionCenter, currentLoginUser, permissionSources, allTechnicalRows])
 
   const categoryAndSecondaryFilteredProjects = useMemo(() => {
     return filterProjectsForList({
@@ -308,7 +316,7 @@ export default function ProjectListContainer() {
       matchesSecondaryCategory: project => matchesVisibleClassification(project, projectTypeFilter, projectSecondaryCategoryFilter),
       matchesStatus: () => true,
     })
-  }, [aboutMineOnly, currentLoginUser, projectSecondaryCategoryFilter, projectTypeFilter, rolesByProject, visibleProjects, permissionCenter, permissionSources])
+  }, [aboutMineOnly, currentLoginUser, projectSecondaryCategoryFilter, projectTypeFilter, rolesByProject, visibleProjects, permissionCenter, permissionSources, allTechnicalRows])
 
   const workspaceFilteredProjects = useMemo(() => (
     projectStatusFilter === 'all'
@@ -384,7 +392,7 @@ export default function ProjectListContainer() {
         )
       : []
   ), [projectTypeFilter, standardMatrixVariant, standardTemplateTasks])
-  const allowedViewFields = permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view') : null
+  const allowedViewFields = permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view', 'view', undefined, standardMatrixVariant ?? undefined) : null
   const standardFieldDefinitions = useMemo(() => allStandardFieldDefinitions.filter(field => !allowedViewFields || projectFieldAllowed(allowedViewFields, field.key)), [allStandardFieldDefinitions, allowedViewFields?.join('|')])
   const standardQuickFilterDefinitions = useMemo(() => (
     getProjectSummaryQuickFilterDefinitions(projectTypeFilter, categoryBaseProjects)
@@ -428,7 +436,11 @@ export default function ProjectListContainer() {
   ), [technicalFilters, technicalStatusRows])
   const openProjectFromList = (project: ProjectType | typeof projects[number], targetSubprojectId?: string) => {
     const source = projects.find(item => item.id === project.id)
-    if (!source || (permissionCenter && !evaluateMenuPermission(permissionCenter, currentLoginUser, 'project.view', 'view', permissionSources.get(source.id)))) return
+    if (!source) return
+    const child = targetSubprojectId ? allTechnicalRows.children.find(row => row.targetProjectId === source.id && row.targetSubprojectId === targetSubprojectId) : undefined
+    if (targetSubprojectId && !child) return
+    const accessSource = { ...permissionSources.get(source.id), ...child }
+    if (permissionCenter && !evaluateMenuPermission(permissionCenter, currentLoginUser, 'project.view', 'view', accessSource)) return
     if (!canEnterProject(source.id)) { showProjectAccessDenied(); return }
     navigateWithEditGuard(() => {
       if (targetSubprojectId) {
@@ -456,7 +468,7 @@ export default function ProjectListContainer() {
     if (hasAllProjectFields(permissionCenter, currentLoginUser, 'project.view', permissionSources.get(project.id) ?? {})) return <ProjectCard project={project as ProjectType} setSelectedProject={() => undefined} setProjectSpaceModule={setProjectSpaceModule} setActiveModule={() => undefined} PROJECT_STATUS_CONFIG={PROJECT_STATUS_CONFIG} canOpen={canEnterProject(project.id)} onOpenDenied={showProjectAccessDenied} onOpenProject={openProjectFromList} />
     const source = permissionSources.get(project.id) ?? {}
     const fields = [{ key: 'type', label: '项目类型' }, { key: 'brand', label: '品牌' }, { key: 'productLine', label: '产品线' }, { key: 'marketName', label: '市场名' }, { key: 'developmentMode', label: '开发模式' }, { key: 'spm', label: '负责人' }, { key: 'planEndDate', label: '计划结束' }]
-    return <Card role="button" tabIndex={0} hoverable className="pms-project-card pms-project-card-surface pms-glass-surface pms-interactive-surface" aria-label={`打开项目 ${String(source.name ?? '')}`} onClick={() => openProjectFromList(project)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectFromList(project) } }}>
+    return <Card role="button" tabIndex={0} hoverable className="pms-project-card pms-project-card-surface pms-glass-surface pms-interactive-surface" aria-label={allowed?.includes('name') ? `打开项目 ${String(source.name ?? '')}` : '打开项目'} onClick={() => openProjectFromList(project)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProjectFromList(project) } }}>
       <div className="pms-project-card-header"><div className="pms-project-card-title">{allowed?.includes('name') ? String(source.name ?? '') : ''}</div>{allowed?.includes('status') && <span>{String(source.status ?? '')}</span>}</div>
       <div className="pms-project-card-fields">{fields.filter(field => allowed?.includes(field.key)).map(field => <div key={field.key} className="pms-project-card-field"><span className="pms-project-card-field-label">{field.label}</span> <span className="pms-project-card-field-value">{String(source[field.key] ?? '')}</span></div>)}</div>
     </Card>
