@@ -36,6 +36,12 @@ export default function FunctionalMatrix({ model, actor, role, person, condition
   const findFull = (key: string, items: PermissionMenuNode[] = allNodes): PermissionMenuNode | undefined => {
     for (const item of items) { if (item.key === key) return item; const nested = item.children && findFull(key, item.children); if (nested) return nested }
   }
+  const isGranted = (menu: PermissionMenu, action: PermissionAction) => {
+    if (person) return evaluateMenuPermission(model, person, menu.id, action)
+    if (superRole) return true
+    const policy = role && model.policies.find(item => item.roleId === role.id && item.menuId === menu.id)
+    try { return !!policy && validateMenuPolicy(policy).ok && policy.actions.includes(action) } catch { return false }
+  }
   const bulkControls = (node: PermissionMenuNode, path: string) => {
     const all = descendants(findFull(node.key) ?? node)
     const invalid = !!role && all.some(menu => { const policy = model.policies.find(item => item.roleId === role.id && item.menuId === menu.id); if (!policy) return false; try { return !validateMenuPolicy(policy).ok } catch { return true } })
@@ -44,7 +50,12 @@ export default function FunctionalMatrix({ model, actor, role, person, condition
       if (disabled) return
       mutate(() => !liveActor() ? { ok: false, error: '当前用户已变化，请重新打开权限配置。' } : usePermissionStore.getState().updateMenuActionsBulk(actor!, role!.id, all.map(menu => ({ menuId: menu.id, actions: menu.actions })), enabled))
     }
-    return <span className={tableStyles.bulkControls}><Tooltip title={searching ? '作用于完整目录，包括搜索未显示的权限' : '作用于此菜单及下级全部权限'}><Button size="small" type="link" aria-label={`全选${path}`} disabled={disabled} onClick={() => change(true)}>全选</Button></Tooltip><Button size="small" type="link" aria-label={`取消${path}权限`} disabled={disabled} onClick={() => change(false)}>取消权限</Button></span>
+    const values = all.flatMap(menu => menu.actions.map(action => isGranted(menu, action)))
+    const checked = values.length > 0 && values.every(Boolean)
+    return <Tooltip title={searching ? '作用于完整目录，包括搜索未显示的权限' : '全选 / 取消全选'}>
+      <Checkbox className={tableStyles.bulkCheckbox} aria-label={`${path}全部权限`} disabled={disabled}
+        checked={checked} indeterminate={!checked && values.some(Boolean)} onChange={event => change(event.target.checked)} />
+    </Tooltip>
   }
   const toggle = (menu: PermissionMenu, action: PermissionAction, checked: boolean) => {
     if (!role || !actor) return
@@ -63,10 +74,10 @@ export default function FunctionalMatrix({ model, actor, role, person, condition
       const expanded = searching || !collapsed.includes(node.key)
       return <Fragment key={node.key}>
         <tr className={tableStyles.groupRow}><th colSpan={2}>
-          <div className={tableStyles.groupHeader}><button type="button" style={{ paddingInlineStart: indent }} aria-label={`${expanded ? '收起' : '展开'}${path}功能`} aria-expanded={expanded} disabled={searching}
+          <div className={tableStyles.groupHeader} style={{ paddingInlineStart: indent }}>{bulkControls(node, path)}<button type="button" aria-label={`${expanded ? '收起' : '展开'}${path}功能`} aria-expanded={expanded} disabled={searching}
             onClick={() => setCollapsed(previous => previous.includes(node.key) ? previous.filter(key => key !== node.key) : [...previous, node.key])}>
             {expanded ? <DownOutlined /> : <RightOutlined />} {node.label}
-          </button>{bulkControls(node, path)}</div>
+          </button></div>
         </th></tr>
         {expanded && renderNodes(node.children, [...parents, node.label])}
       </Fragment>
@@ -75,14 +86,13 @@ export default function FunctionalMatrix({ model, actor, role, person, condition
     const policy = role && model.policies.find(item => item.roleId === role.id && item.menuId === menu.id)
     let valid = false
     try { valid = !!policy && validateMenuPolicy(policy).ok } catch { /* Invalid saved rules cannot grant. */ }
-    const checked = (action: PermissionAction) => person ? evaluateMenuPermission(model, person, menu.id, action) : superRole || (valid && !!policy?.actions.includes(action))
     const sources = sourceRoles.filter(source => source.id === SUPER_ADMIN_ROLE_ID || model.policies.some(item => {
       if (item.roleId !== source.id || item.menuId !== menu.id) return false
       try { return validateMenuPolicy(item).ok && item.actions.some(action => menu.actions.includes(action)) } catch { return false }
     }))
     return <tr key={menu.id}>
-      <th scope="row"><span className={styles.functionalMenuLabel} style={{ paddingInlineStart: indent }}>{node.label}</span>{bulkControls(node, path)}</th>
-      <td><div className={tableStyles.actions}>{menu.actions.map(action => <Checkbox key={action} checked={checked(action)}
+      <th scope="row"><span className={tableStyles.leafLabel} style={{ paddingInlineStart: indent }}>{bulkControls(node, path)}<span>{node.label}</span></span></th>
+      <td><div className={tableStyles.actions}>{menu.actions.map(action => <Checkbox key={action} checked={isGranted(menu, action)}
         aria-label={`${path}：${PERMISSION_ACTION_LABELS[action]}`}
         disabled={!!person || !!superRole || conditionDirty || (!!policy && !valid)} onChange={event => toggle(menu, action, event.target.checked)}>
         {PERMISSION_ACTION_LABELS[action]}</Checkbox>)}</div>

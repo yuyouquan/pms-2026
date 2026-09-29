@@ -26,7 +26,14 @@ export default function ProjectFunctionalPermissions({ project, grants, disabled
     return rows.length ? [{ ...group, rows }] : []
   })
   const bulk = (keys: string[], enabled: boolean) => onBulkChange?.([...new Set(keys)], enabled)
-  const controls = (label: string, keys: string[]) => <span className={styles.bulkControls}><Tooltip title={query ? '作用于完整目录，包括搜索未显示的权限' : '作用于此菜单下所有权限'}><Button size="small" type="link" aria-label={`全选${label}`} disabled={disabled || !onBulkChange || !keys.length} onClick={() => bulk(keys, true)}>全选</Button></Tooltip><Button size="small" type="link" aria-label={`取消${label}权限`} disabled={disabled || !onBulkChange || !keys.length} onClick={() => bulk(keys, false)}>取消权限</Button></span>
+  const controls = (label: string, keys: string[]) => {
+    const checked = keys.length > 0 && keys.every(key => grants[key])
+    return <Tooltip title={query ? '作用于完整目录，包括搜索未显示的权限' : '全选 / 取消全选'}>
+      <Checkbox className={styles.bulkCheckbox} aria-label={`${label}全部权限`} checked={checked}
+        indeterminate={!checked && keys.some(key => grants[key])} disabled={disabled || !onBulkChange || !keys.length}
+        onChange={event => bulk(keys, event.target.checked)} />
+    </Tooltip>
+  }
   return <section className={shared.matrixPane} aria-label="项目功能权限">
     <div className={shared.matrixToolbar}>
       <Input prefix={<SearchOutlined />} placeholder="搜索菜单或功能" aria-label="搜索项目功能" value={search} onChange={event => setSearch(event.target.value)} allowClear />
@@ -40,14 +47,14 @@ export default function ProjectFunctionalPermissions({ project, grants, disabled
           const expanded = !!query || !collapsed.includes(group.id)
           return <Fragment key={group.id}>
             <tr className={styles.groupRow}><th colSpan={2}><div className={styles.groupHeader}>
+              {controls(group.label, catalog.find(item => item.id === group.id)!.rows.flatMap(row => row.actions.map(action => action.key)))}
               <button type="button" aria-label={`${expanded ? '收起' : '展开'}${group.label}功能`} aria-expanded={expanded} disabled={!!query}
                 onClick={() => setCollapsed(previous => previous.includes(group.id) ? previous.filter(id => id !== group.id) : [...previous, group.id])}>
                 {expanded ? <DownOutlined /> : <RightOutlined />} {group.label}
               </button>
-              {controls(group.label, catalog.find(item => item.id === group.id)!.rows.flatMap(row => row.actions.map(action => action.key)))}
             </div></th></tr>
             {expanded && group.rows.map(row => <tr key={row.id}>
-              <th scope="row"><span className={styles.leafLabel}>{row.label}</span>{controls(row.label, row.actions.map(action => action.key))}</th>
+              <th scope="row"><span className={styles.leafLabel}>{controls(row.label, row.actions.map(action => action.key))}<span>{row.label}</span></span></th>
               <td><div className={styles.actions}>{row.actions.map(action => <Checkbox key={action.key} checked={!!grants[action.key]} disabled={disabled}
                 aria-label={`${row.label}：${action.label}`} onChange={event => onChange(action.key, event.target.checked)}>{action.label}</Checkbox>)}</div>
                 {row.hint && <div className={shared.muted}>{row.hint}</div>}

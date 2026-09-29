@@ -4,16 +4,16 @@ import ts from 'typescript'
 import { loadTypeScriptModule } from './lib/source-contract.mjs'
 let hooks = [], cursor = 0
 const element = (type, props, key) => ({ type, props: props ?? {}, key })
-const react = { Fragment: 'Fragment', useState: initial => {
+const react = { Fragment: 'Fragment', useRef: value => ({ current: value }), useState: initial => {
   const index = cursor++
   if (!(index in hooks)) hooks[index] = typeof initial === 'function' ? initial() : initial
   return [hooks[index], next => { hooks[index] = typeof next === 'function' ? next(hooks[index]) : next }]
 } }
-const components = Object.fromEntries(['Button', 'Tag', 'Checkbox', 'Empty', 'Input'].map(name => [name, name]))
+const components = Object.fromEntries(['Alert', 'Button', 'Tag', 'Tooltip', 'Checkbox', 'Empty', 'Input'].map(name => [name, name]))
 const style = { __esModule: true, default: new Proxy({}, { get: (_, key) => String(key) }) }
-function load(file) {
+function load(file, extraModules = {}) {
   const modules = {
-    react, 'react/jsx-runtime': { jsx: element, jsxs: element }, antd: components,
+    ...extraModules, react, 'react/jsx-runtime': { jsx: element, jsxs: element }, antd: components,
     '@ant-design/icons': { DownOutlined: 'DownOutlined', RightOutlined: 'RightOutlined', SearchOutlined: 'SearchOutlined' },
     '@/components/permission-center/AssigneePickerModal': { __esModule: true, default: 'Picker' },
     '@/components/permission-center/PermissionCenter.module.css': style,
@@ -75,9 +75,53 @@ find(functional(), 'Input', '搜索项目功能').props.onChange({ target: { val
 assert(find(functional(), 'Checkbox', '基本信息：查看'), 'Search expands matching collapsed module')
 assert.equal(find(functional(), 'Checkbox', '二级计划：查看'), undefined)
 assert.equal(find(functional(), 'Checkbox', '转维信息：查看'), undefined, 'search hides unrelated descendants')
-find(functional(), 'Button', '全选基础信息').props.onClick()
+find(functional(), 'Checkbox', '基础信息全部权限').props.onChange({ target: { checked: true } })
 assert.equal(changes.at(-1)[0], 'bulk')
 assert(changes.at(-1)[1].includes('basicInfo:applyTransfer'), 'parent bulk includes descendants hidden by search')
-find(functional(), 'Button', '全选基本信息').props.onClick()
+find(functional(), 'Checkbox', '基本信息全部权限').props.onChange({ target: { checked: true } })
 assert.deepEqual(changes.at(-1), ['bulk', ['basicInfo:查看', 'basicInfo:编辑'], true], 'leaf bulk affects only its own keys')
 console.log('PASS project role UI: confirmation/cancel/retry/read-only/source locks and compact functional interaction')
+
+const leafBulk = extra => find(functional(extra), 'Checkbox', '基本信息全部权限')
+assert.equal(leafBulk().props.checked, false)
+assert.equal(leafBulk().props.indeterminate, true, 'partial selection uses mixed state')
+assert.equal(leafBulk({ grants: {} }).props.indeterminate, false)
+assert.equal(leafBulk({ grants: { 'basicInfo:查看': true, 'basicInfo:编辑': true } }).props.checked, true)
+leafBulk().props.onChange({ target: { checked: false } })
+assert.deepEqual(changes.at(-1), ['bulk', ['basicInfo:查看', 'basicInfo:编辑'], false], 'unchecking clears the leaf atomically')
+assert.equal(leafBulk({ disabled: true }).props.disabled, true)
+assert.equal(leafBulk({ onBulkChange: undefined }).props.disabled, true)
+assert.equal(nodes(functional()).some(node => node.type === 'Button' && ['全选', '取消权限'].includes(node.props.children)), false)
+console.log('PASS project/template bulk checkboxes: none/mixed/all, clear, full subtree under search, readonly')
+
+hooks = []; cursor = 0
+const permissionLib = loadTypeScriptModule(process.cwd(), 'src/lib/permissionCenter.ts')
+const constants = loadTypeScriptModule(process.cwd(), 'src/constants/permissionCenter.ts')
+const menuTree = loadTypeScriptModule(process.cwd(), 'src/components/permission-center/menuTree.ts')
+const bulkWrites = []
+const Matrix = load('src/components/permission-center/FunctionalMatrix.tsx', {
+  '@/constants/permissionCenter': constants,
+  '@/lib/permissionCenter': permissionLib,
+  '@/components/permission-center/menuTree': menuTree,
+  '@/stores/project': { useProjectStore: { getState: () => ({ currentLoginUser: 'admin' }) } },
+  '@/stores/permission': { usePermissionStore: { getState: () => ({ updateMenuActionsBulk: (...args) => { bulkWrites.push(args); return { ok: true } } }) } },
+})
+const globalRole = { id: 'test', name: 'Test', groupId: 'test', description: '', members: ['演示用户02'], departments: [] }
+const globalModel = { version: 2, groups: [{ id: 'test', name: 'Test' }], roles: [globalRole], policies: [{ ...permissionLib.createEmptyMenuPolicy('test', 'project.view'), actions: ['view'] }] }
+const matrix = extra => { cursor = 0; return Matrix({ model: globalModel, role: globalRole, actor: 'admin', ...extra }) }
+assert.equal(find(matrix(), 'Checkbox', '项目管理全部权限').props.indeterminate, true)
+assert.equal(find(matrix(), 'Checkbox', '项目管理 / 项目视图全部权限').props.indeterminate, true)
+find(matrix(), 'Input', '搜索功能菜单').props.onChange({ target: { value: '项目视图' } })
+find(matrix(), 'Checkbox', '项目管理全部权限').props.onChange({ target: { checked: true } })
+assert.deepEqual(bulkWrites.at(-1)[2].map(menu => menu.menuId), ['project.view', 'project.config'], 'global search preserves entire parent subtree')
+find(matrix(), 'Checkbox', '项目管理 / 项目视图全部权限').props.onChange({ target: { checked: false } })
+assert.deepEqual(bulkWrites.at(-1)[2].map(menu => menu.menuId), ['project.view'])
+assert.equal(bulkWrites.at(-1)[3], false)
+const fullPolicies = ['project.view', 'project.config'].map(menuId => ({ ...permissionLib.createEmptyMenuPolicy('test', menuId), actions: constants.PERMISSION_MENUS.find(menu => menu.id === menuId).actions }))
+assert.equal(find(matrix({ model: { ...globalModel, policies: fullPolicies } }), 'Checkbox', '项目管理全部权限').props.checked, true)
+assert.equal(find(matrix({ model: { ...globalModel, policies: [] } }), 'Checkbox', '项目管理全部权限').props.indeterminate, false)
+assert.equal(find(matrix({ person: '演示用户02', role: undefined }), 'Checkbox', '项目管理全部权限').props.disabled, true)
+assert.equal(find(matrix({ person: '演示用户02', role: undefined }), 'Checkbox', '项目管理全部权限').props.indeterminate, true)
+assert.equal(find(matrix({ role: { ...globalRole, id: constants.SUPER_ADMIN_ROLE_ID, builtin: 'superadmin' } }), 'Checkbox', '项目管理全部权限').props.checked, true)
+assert.equal(find(matrix({ conditionDirty: true }), 'Checkbox', '项目管理全部权限').props.disabled, true)
+console.log('PASS global bulk checkboxes: none/mixed/all, parent search, atomic leaf clear, effective readonly and superadmin')

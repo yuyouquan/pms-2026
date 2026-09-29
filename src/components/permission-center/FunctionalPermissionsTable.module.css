@@ -5,11 +5,10 @@
 .permissions tbody th { font-weight: 500; }
 .permissions tbody tr:not(.groupRow) th { padding-left: 30px; }
 .permissions .groupRow th { padding: 0; background: #faf9fc; }
-.groupHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.groupHeader > button { padding: 9px 12px; display: flex; align-items: center; gap: 8px; flex: 1; color: #4b435e; background: transparent; border: 0; text-align: left; font-weight: 600; cursor: pointer; }
-.bulkControls { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
-.bulkControls button { padding-inline: 4px !important; width: auto !important; font-size: 12px; }
-.leafLabel { display: block; margin-left: 18px; }
+.groupHeader { display: flex; align-items: center; gap: 8px; padding-inline: 12px; }
+.groupHeader > button { padding: 9px 0; display: flex; align-items: center; gap: 8px; flex: 1; color: #4b435e; background: transparent; border: 0; text-align: left; font-weight: 600; cursor: pointer; }
+.bulkCheckbox { flex: 0 0 auto; margin-inline: 0 !important; }
+.leafLabel { display: flex; align-items: flex-start; gap: 8px; }
 .groupRow button:disabled { cursor: default; }
 .groupRow button:focus-visible { outline: 2px solid var(--pms-brand); outline-offset: -2px; }
 .groupRow button > span { font-size: 10px; }
