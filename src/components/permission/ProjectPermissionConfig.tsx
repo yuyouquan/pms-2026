@@ -1,8 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type Key } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Empty, Input, Modal, Space, Tabs, Tag, Tooltip, Tree, message } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons'
 import type { DataNode } from 'antd/es/tree'
 import { CollapsibleSidebarShell } from '@/components/shared/CollapsibleWorkspace'
 import RoleForm from '@/components/permission-center/RoleForm'
@@ -35,7 +35,6 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
   const [search, setSearch] = useState('')
   const [collapsed, setCollapsed] = useState(false)
   const [narrow, setNarrow] = useState(false)
-  const [expanded, setExpanded] = useState<Key[]>(() => ['source', 'local', ...[...new Set(roles.map(groupName))].map(groupKey)])
   const [formRole, setFormRole] = useState<Role | 'new' | null>(null)
   const [epoch, setEpoch] = useState(0)
   const [error, setError] = useState('')
@@ -80,13 +79,15 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
   const navigate = (action: () => void) => useUiStore.getState().navigateWithEditGuard(() => {
     setDraft(false); setFormRole(null); setEpoch(value => value + 1); setError(''); action()
   }, false)
-  const title = (value: string) => <Tooltip title={value} placement="right"><span className={shared.node}>{value}</span></Tooltip>
+  const title = (value: string, local = false) => <Tooltip title={value} placement="right"><span className={styles.roleItem}>
+    {local && <UserOutlined className={styles.localRoleIcon} aria-label="自建角色" />}<span className={shared.node}>{value}</span>
+  </span></Tooltip>
   const query = search.trim().toLocaleLowerCase()
   const sourceMatches = sourceRoles.filter(item => `${item.roleName} ${item.sourceRoleName} ${item.ipmRoleCode}`.toLocaleLowerCase().includes(query))
-  const localMatches = roles.filter(item => `${groupName(item)} ${item.name}`.toLocaleLowerCase().includes(query))
+  const localMatches = roles.filter(item => item.name.toLocaleLowerCase().includes(query))
   const roleTree: DataNode[] = [
-    ...(sourceMatches.length ? [{ key: 'source', title: title('IPM 同步角色'), selectable: false, children: sourceMatches.map(item => ({ key: sourceKey(item.id), title: <Tooltip title={`IPM编码：${item.ipmRoleCode}`}><span className={shared.node}>{item.roleName} <Tag color="purple">来源</Tag></span></Tooltip>, isLeaf: true })) }] : []),
-    ...(localMatches.length ? [{ key: 'local', title: title('本地角色'), selectable: false, children: [...new Set(localMatches.map(groupName))].map(name => ({ key: groupKey(name), title: title(name), selectable: false, children: localMatches.filter(item => groupName(item) === name).map(item => ({ key: localKey(item.name), title: title(item.name), isLeaf: true })) })) }] : []),
+    ...sourceMatches.map(item => ({ key: sourceKey(item.id), title: title(item.roleName), isLeaf: true })),
+    ...localMatches.map(item => ({ key: localKey(item.name), title: title(item.name, true), isLeaf: true })),
   ]
   const deleteRole = () => {
     if (!role || !canManage) return
@@ -114,13 +115,13 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
     <CollapsibleSidebarShell className={shared.sidebar} collapsed={collapsed} onCollapsedChange={setCollapsed} title={null} ariaLabel="项目角色" expandedWidth={180} collapsedWidth={40} expandLabel="展开项目角色侧栏" collapseLabel="收起项目角色侧栏">
       <Input className={shared.search} prefix={<SearchOutlined />} placeholder="搜索角色" aria-label="搜索项目角色" value={search} onChange={event => setSearch(event.target.value)} allowClear />
       {canManage && <Button className={shared.addRole} icon={<PlusOutlined />} onClick={() => navigate(() => setFormRole('new'))}>添加角色</Button>}
-      {roleTree.length ? <Tree blockNode treeData={roleTree} selectedKeys={displayName ? [currentKey] : []} expandedKeys={query ? roleTree.flatMap(node => [node.key, ...(node.children?.map(child => child.key) ?? [])]) : expanded} onExpand={setExpanded} onSelect={keys => { const next = String(keys[0] ?? ''); if (next) navigate(() => { setSelectedKey(next); setTab('functional'); if (narrow) setCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}
+      {roleTree.length ? <Tree className={styles.roleList} blockNode treeData={roleTree} selectedKeys={displayName ? [currentKey] : []} onSelect={keys => { const next = String(keys[0] ?? ''); if (next) navigate(() => { setSelectedKey(next); setTab('functional'); if (narrow) setCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}
     </CollapsibleSidebarShell>
     <div className={`${shared.content} ${styles.content}`}>
       {displayName ? <>
         <div className={shared.roleHeader}><div className={shared.roleCopy}>
           <div className={shared.roleTitle}>{displayName} {sourceRole && <Tag color="purple">IPM 同步</Tag>}</div>
-          {sourceRole ? <div className={shared.muted}>IPM角色编码：{sourceRole.ipmRoleCode} · PMS角色编码：{sourceRole.pmsRoleCode || '未配置模板'} {sourceRole.templateId ? '' : '· 未配置模板'}</div> : <div className={shared.muted}>{groupName(role!)}</div>}
+          {sourceRole && <div className={shared.muted}>IPM角色编码：{sourceRole.ipmRoleCode} · PMS角色编码：{sourceRole.pmsRoleCode || '未配置模板'} {sourceRole.templateId ? '' : '· 未配置模板'}</div>}
           {role?.description && <div className={`${shared.muted} ${shared.description}`}>{role.description}</div>}
         </div>{role && canManage && <Space><Button icon={<EditOutlined />} onClick={() => navigate(() => setFormRole(role))}>编辑</Button><Button danger icon={<DeleteOutlined />} onClick={deleteRole}>删除</Button></Space>}</div>
         {error && <Alert className={shared.alert} type="error" showIcon message={error} action={retry.current && <Button onClick={() => { if (retry.current) mutate(retry.current.key, retry.current.action) }}>重试</Button>} />}
@@ -132,7 +133,7 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
         })} /> : null : <ProjectFunctionalPermissions key={currentKey} project={project} grants={sourceRole?.grants ?? store.rolePermissionsByProject[projectId]?.[role!.name] ?? {}} disabled={!canManage} onChange={(key, enabled) => onGrants([key], enabled)} onBulkChange={onGrants} />}
       </> : <Empty description="暂无角色，请先添加角色" />}
     </div>
-    {formRole && canManage && <RoleForm model={model} role={formRole === 'new' ? undefined : model.roles.find(item => item.name === formRole.name)} onDirty={() => setDraft(true)} onClose={() => navigate(() => setFormRole(null))} hint={formRole === 'new' ? '新角色默认可查看资源，可在功能权限中调整。' : undefined} onSubmit={input => {
+    {formRole && canManage && <RoleForm showGroup={false} model={model} role={formRole === 'new' ? undefined : model.roles.find(item => item.name === formRole.name)} onDirty={() => setDraft(true)} onClose={() => navigate(() => setFormRole(null))} hint={formRole === 'new' ? '新角色默认可查看资源，可在功能权限中调整。' : undefined} onSubmit={input => {
       const result = mutate(currentKey, () => formRole === 'new' ? usePermissionStore.getState().createProjectRole(actor, projectId, input) : usePermissionStore.getState().updateProjectRole(actor, projectId, formRole.name, input))
       if (result.ok) { setDraft(false); setFormRole(null); setSearch(''); setSelectedKey(localKey(result.roleId ?? input.name.trim())); setTab('functional'); setCollapsed(narrow) }
       return result

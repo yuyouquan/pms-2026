@@ -57,8 +57,12 @@ const ProjectPage = load('src/components/permission/ProjectPermissionConfig.tsx'
 const projectRender = () => { cursor = 0; return ProjectPage({ project, projectId: project.id, actor: '演示用户01' }) }
 let page = projectRender()
 const tree = find(page, 'Tree')
-assert.notEqual(tree.props.treeData[0].children[0].key, tree.props.treeData[1].children[0].children[0].key, 'source/local same-name identities stay separate')
-assert.equal(tree.props.treeData[1].children[0].key, 'group:%E8%87%AA%E5%AE%9A%E4%B9%89%E8%A7%92%E8%89%B2', 'local roles retain group hierarchy')
+assert.equal(tree.props.treeData.length, 2, 'source and local roles appear in one flat list')
+assert(tree.props.treeData.every(node => node.isLeaf && !node.children), 'project roles have no group wrappers')
+assert.notEqual(tree.props.treeData[0].key, tree.props.treeData[1].key, 'source/local same-name identities stay separate')
+assert.equal(find(tree.props.treeData[0].title, 'Tag'), undefined, 'source label is removed from the list')
+assert.equal(find(tree.props.treeData[0].title, 'UserOutlined'), undefined, 'synced role has no custom role icon')
+assert(find(tree.props.treeData[1].title, 'UserOutlined'), 'local role has a leading custom role icon')
 assert.equal(find(page, 'Tabs').props.activeKey, 'functional', 'first tab is functional')
 assert.deepEqual(find(page, 'Functional').props.grants, source.grants)
 const staleActorHandler = find(page, 'Functional').props.onChange
@@ -70,7 +74,7 @@ token = 'scope:source-2'
 staleActorHandler('basicInfo:查看', false)
 assert.equal(writes.length, 0, 'captured source cannot mutate after source rebinding')
 token = 'scope:source-1'
-find(projectRender(), 'Tree').props.onSelect([tree.props.treeData[1].children[0].children[0].key])
+find(projectRender(), 'Tree').props.onSelect([tree.props.treeData[1].key])
 page = projectRender()
 assert.equal(find(page, 'Tabs').props.activeKey, 'functional', 'switching role resets functional tab')
 assert.equal(find(page, 'Functional').props.grants['basicInfo:查看'], false)
@@ -87,6 +91,7 @@ token = 'scope:source-1'
 page = projectRender()
 all(page, 'Button').find(button => button.props.children === '编辑').props.onClick()
 assert(find(projectRender(), 'RoleForm'), 'local role form opened')
+assert.equal(find(projectRender(), 'RoleForm').props.showGroup, false, 'project role editing hides group selection')
 token = 'scope:source-2'
 page = projectRender()
 assert.equal(find(page, 'RoleForm').props.onSubmit({ name: 'SPM-2', groupName: '自定义角色', description: '' }).ok, false, 'rerendered role form retains opening source authority')
@@ -100,6 +105,28 @@ assert.equal(all(page, 'Button').some(button => button.props.children === '添�
 find(page, 'Tabs').props.onChange('assignees')
 page = projectRender()
 assert.equal(find(page, 'Assignees').props.disabled, true)
+
+hooks = []; cursor = 0
+ant.Form = Object.assign(() => null, { useForm: () => [{ submit() {}, setFieldValue() {} }], Item: 'Form.Item' })
+const RoleForm = load('src/components/permission-center/RoleForm.tsx', {
+  '@/lib/permissionCenter': { normalizePermissionName: name => name.trim().toLocaleLowerCase() },
+})
+const formModel = { version: 2, groups: [{ id: 'group-1', name: '已有分类' }], roles: [{ id: 'local-1', groupId: 'group-1', name: '已有角色', description: '' }], policies: [] }
+let submitted
+const formRender = options => { cursor = 0; return RoleForm({ model: formModel, onSubmit: input => { submitted = input; return { ok: true } }, onDirty() {}, onClose() {}, ...options }) }
+let formPage = formRender({ showGroup: false })
+assert.equal(all(formPage, 'Form.Item').some(node => node.props.name === 'groupName'), false, 'project add dialog only asks for role fields')
+find(formPage, ant.Form).props.onFinish({ name: '新角色', description: '查看范围' })
+assert.deepEqual(submitted, { name: '新角色', description: '查看范围', groupName: '自定义角色' }, 'group-free submission supplies compatible project metadata')
+formPage = formRender({ showGroup: false, role: formModel.roles[0] })
+find(formPage, ant.Form).props.onFinish({ name: '更名角色', description: '' })
+assert.equal(submitted.groupName, '已有分类', 'editing preserves stored metadata without displaying groups')
+const roleNameField = all(formPage, 'Form.Item').find(node => node.props.name === 'name')
+assert.equal(roleNameField.props.rules[0].required, true, 'role name stays required')
+formPage = formRender({ showGroup: false })
+await assert.rejects(all(formPage, 'Form.Item').find(node => node.props.name === 'name').props.rules[1].validator(null, '已有角色'), /不能重复/)
+assert(all(formRender({}), 'Form.Item').some(node => node.props.name === 'groupName' && node.props.rules[0].required), 'global permission center keeps required grouping')
+console.log('PASS flat project roles: source/local identity, custom icon, group-free create/edit and global grouping preservation')
 
 hooks = []; cursor = 0
 let templateWrites = []

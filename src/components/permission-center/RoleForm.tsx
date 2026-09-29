@@ -13,27 +13,29 @@ interface Props {
   onClose: () => void
   onDirty: () => void
   hint?: string
+  showGroup?: boolean
 }
 
-export default function RoleForm({ model, role, onSubmit, onClose, onDirty, hint }: Props) {
+export default function RoleForm({ model, role, onSubmit, onClose, onDirty, hint, showGroup = true }: Props) {
   const [form] = Form.useForm<CenterRoleInput>()
   const [groupSearch, setGroupSearch] = useState('')
   const [localGroups, setLocalGroups] = useState<string[]>([])
   const [error, setError] = useState('')
   const groupNames = [...model.groups.map(group => group.name), ...localGroups]
   const canCreate = groupSearch.trim() && !groupNames.some(name => normalizePermissionName(name) === normalizePermissionName(groupSearch))
+  const existingGroup = model.groups.find(group => group.id === role?.groupId)?.name
   return <Modal className="pms-modal" title={role ? '编辑角色' : '添加角色'} open width={480} onCancel={onClose}
     okText={role ? '确定' : '添加'} cancelText="取消" onOk={() => form.submit()}>
     <Form form={form} layout="vertical" onValuesChange={onDirty}
-      initialValues={{ groupName: model.groups.find(group => group.id === role?.groupId)?.name, name: role?.name, description: role?.description }}
-      onFinish={values => { const result = onSubmit(values); if (!result.ok) setError(result.error) }}>
-      <Form.Item label="分组" name="groupName" rules={[{ required: true, whitespace: true, message: '请选择或新增分组' }]}>
+      initialValues={{ groupName: existingGroup, name: role?.name, description: role?.description }}
+      onFinish={values => { const result = onSubmit(showGroup ? values : { ...values, groupName: existingGroup || '自定义角色' }); if (!result.ok) setError(result.error) }}>
+      {showGroup && <Form.Item label="分组" name="groupName" rules={[{ required: true, whitespace: true, message: '请选择或新增分组' }]}>
         <Select showSearch placeholder="选择或新增分组" options={groupNames.map(value => ({ value, label: value }))}
           onSearch={setGroupSearch} optionFilterProp="label" popupRender={menu => <>{menu}{canCreate && <Button type="text" block icon={<PlusOutlined />}
             onMouseDown={event => event.preventDefault()} onClick={() => {
               const name = groupSearch.trim(); setLocalGroups(groups => [...groups, name]); form.setFieldValue('groupName', name); setGroupSearch(''); onDirty()
             }}>新增分组“{groupSearch.trim()}”</Button>}</>} />
-      </Form.Item>
+      </Form.Item>}
       <Form.Item label="角色名称" name="name" rules={[{ required: true, whitespace: true, message: '请输入角色名称' }, { validator: (_, value) => {
         return model.roles.some(item => item.id !== role?.id && normalizePermissionName(item.name) === normalizePermissionName(value ?? ''))
           ? Promise.reject(new Error('角色名称不能重复')) : Promise.resolve()
