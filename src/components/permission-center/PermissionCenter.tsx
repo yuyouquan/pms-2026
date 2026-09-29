@@ -10,12 +10,13 @@ import { useMenuPermission, usePermissionStore } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 import { CollapsibleSidebarShell } from '@/components/shared/CollapsibleWorkspace'
-import type { PermissionCenterRole, PermissionMenuId } from '@/types/permissionCenter'
+import type { PermissionCenterRole, PermissionMenuId, ProjectDataScope } from '@/types/permissionCenter'
 import PolicyEditor from '@/components/permission-center/PolicyEditor'
 import RoleAssignees from '@/components/permission-center/RoleAssignees'
 import RoleForm from '@/components/permission-center/RoleForm'
 import FunctionalMatrix from '@/components/permission-center/FunctionalMatrix'
 import PersonDataView from '@/components/permission-center/PersonDataView'
+import ProjectDataScopeTabs from '@/components/permission-center/ProjectDataScopeTabs'
 import { buildPermissionMenuTree, CONFIGURABLE_PERMISSION_MENUS, getMenuGroupKeys, type PermissionMenuNode } from '@/components/permission-center/menuTree'
 import styles from '@/components/permission-center/PermissionCenter.module.css'
 
@@ -37,6 +38,7 @@ export default function PermissionCenter() {
   const [roleId, setRoleId] = useState(SUPER_ADMIN_ROLE_ID)
   const [personName, setPersonName] = useState('')
   const [menuId, setMenuId] = useState<PermissionMenuId>('project.view')
+  const [projectScope, setProjectScope] = useState<ProjectDataScope>('machine')
   const [roleSearch, setRoleSearch] = useState('')
   const [personSearch, setPersonSearch] = useState('')
   const [menuSearch, setMenuSearch] = useState('')
@@ -150,10 +152,16 @@ export default function PermissionCenter() {
                     onExpand={setMenuExpanded} onSelect={keys => { const selected = dataMenus().find(item => item.id === keys[0]); if (selected) navigate(() => setMenuId(selected.id)) }} />
                     : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到数据菜单" />}</div>
                 </nav>
-                <div className={styles.policyPane}>{menu
+                <div className={styles.policyPane}>
+                  {menu?.id === 'project.view' && <ProjectDataScopeTabs value={projectScope} onChange={scope => {
+                    if (scope !== projectScope) navigate(() => setProjectScope(scope))
+                  }} />}
+                  {menu
                   ? viewMode === 'role' && role
-                    ? <PolicyEditor key={`${actor}:${role.id}:${menu.id}:${editorEpoch}`} actor={actor} model={model} role={role} menu={menu} onDirtyChange={onConditionDirty} />
-                    : person ? <PersonDataView key={`${person}:${menu.id}`} model={model} person={person} menu={menu} /> : null
+                    ? <PolicyEditor key={`${actor}:${role.id}:${menu.id}:${projectScope}:${editorEpoch}`} actor={actor} model={model} role={role} menu={menu}
+                        projectScope={menu.id === 'project.view' ? projectScope : undefined} onDirtyChange={onConditionDirty} />
+                    : person ? <PersonDataView key={`${person}:${menu.id}:${projectScope}:${editorEpoch}`} model={model} person={person} menu={menu}
+                        projectScope={menu.id === 'project.view' ? projectScope : undefined} /> : null
                   : <Empty description="请选择数据菜单" />}</div>
               </div>}
         </>}

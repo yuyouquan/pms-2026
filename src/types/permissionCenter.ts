@@ -6,7 +6,9 @@ export interface PermissionMenu { id: PermissionMenuId; label: string; category:
 export interface PermissionGroup { id: string; name: string }
 export interface PermissionCenterRole { id: string; groupId: string; name: string; description: string; members: string[]; departments: string[]; builtin?: 'superadmin' }
 export interface PermissionCondition { id: string; field: string; operator: PermissionOperator; value?: string | number | string[] }
-export interface MenuPolicy { roleId: string; menuId: PermissionMenuId; actions: PermissionAction[]; data: { mode: 'all' | 'conditions'; conjunction: 'all' | 'any'; conditions: PermissionCondition[] }; columns: { mode: 'all' | 'selected'; fields: string[] } }
+export type ProjectDataScope = 'machine' | 'tos' | 'technical-tdt' | 'technical-subproject' | 'capability'
+export interface ProjectDataRule { data: MenuPolicy['data']; columns: MenuPolicy['columns'] }
+export interface MenuPolicy { projectScopes?: Partial<Record<ProjectDataScope, ProjectDataRule>>; roleId: string; menuId: PermissionMenuId; actions: PermissionAction[]; data: { mode: 'all' | 'conditions'; conjunction: 'all' | 'any'; conditions: PermissionCondition[] }; columns: { mode: 'all' | 'selected'; fields: string[] } }
 export interface PermissionCenterModel { version: 2; groups: PermissionGroup[]; roles: PermissionCenterRole[]; policies: MenuPolicy[] }
 export type PermissionMutationResult = { ok: true; roleId?: string } | { ok: false; error: string }
 export interface CenterRoleInput { name: string; groupName: string; description?: string }

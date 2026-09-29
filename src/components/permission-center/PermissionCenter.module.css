@@ -46,6 +46,11 @@
 .menuNavigationTitle { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
 .menuTree { flex: 1; min-height: 0; overflow-y: auto; }
 .policyPane { min-width: 0; min-height: 0; overflow-y: auto; padding-left: 12px; }
+.projectScopeNavigation { margin-bottom: 12px; }
+.projectScopeTabs :global(.ant-tabs-nav) { margin-bottom: 8px; }
+.projectScopeTabs :global(.ant-tabs-tab) { padding-top: 2px; padding-bottom: 8px; }
+.projectScopeTabs :global(.ant-tabs-tab + .ant-tabs-tab) { margin-left: 20px; }
+.technicalScopeRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .roleCopy { min-width: 0; }
 .roleTitle { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .muted { color: #717680; font-size: 12px; line-height: 20px; }

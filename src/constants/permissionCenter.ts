@@ -4,7 +4,7 @@ import { ROADMAP_COLUMNS } from '@/types/roadmap'
 import { MACHINE_PROJECT_INFO_FIELDS, TOS_PROJECT_INFO_FIELDS, TECHNICAL_PROJECT_INFO_FIELDS } from '@/constants/projectInfoSchema'
 import { MOCK_TM_USERS } from '@/mock/transfer-maintenance'
 import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
-import type { PermissionAction, PermissionField, PermissionMenu, PermissionMenuId } from '@/types/permissionCenter'
+import type { PermissionAction, PermissionField, PermissionMenu, PermissionMenuId, ProjectDataScope } from '@/types/permissionCenter'
 export const SUPER_ADMIN_ROLE_ID = 'builtin:superadmin'
 export const PERMISSION_ACTION_LABELS: Record<PermissionAction, string> = { view: '查看', export: '导出', import: '导入', create: '新增', edit: '编辑', delete: '删除', publish: '发布', share: '分享', baseline: '基线', manage: '管理' }
 export const PERMISSION_USERS = PROJECT_USER_CHOICES
@@ -31,3 +31,14 @@ export function registerPermissionFields(id: PermissionMenuId, fields: readonly 
   registeredFields.set(id, [...new Map([...(getPermissionMenu(id)?.fields ?? []), ...fields].map(field => [field.key, field])).values()])
 }
 export const getPermissionFields = (id: string): readonly PermissionField[] => registeredFields.get(id) ?? getPermissionMenu(id)?.fields ?? []
+
+export const PROJECT_DATA_SCOPES: readonly ProjectDataScope[] = ['machine', 'tos', 'technical-tdt', 'technical-subproject', 'capability']
+export const PROJECT_DATA_SCOPE_LABELS: Record<ProjectDataScope, string> = { machine: '整机产品项目', tos: 'tOS版本项目', 'technical-tdt': 'TDT项目', 'technical-subproject': '子项目', capability: '能力建设项目' }
+const projectColumnFields = new Map<ProjectDataScope, readonly PermissionField[]>()
+/** Replace each catalog with the same ordered definitions used by the corresponding project list. */
+export function registerProjectColumnFields(scope: ProjectDataScope, fields: readonly PermissionField[]): void {
+  projectColumnFields.set(scope, fields)
+}
+export function getPermissionColumnFields(id: string, scope?: ProjectDataScope): readonly PermissionField[] {
+  return id === 'project.view' && scope ? projectColumnFields.get(scope) ?? [] : getPermissionFields(id)
+}
