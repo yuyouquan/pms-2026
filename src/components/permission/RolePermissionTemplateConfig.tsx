@@ -38,7 +38,7 @@ export default function RolePermissionTemplateConfig({ actor, projectType }: Pro
       { title: '角色名称', dataIndex: 'roleName', key: 'roleName' },
       { title: 'PMS角色编码', dataIndex: 'pmsRoleCode', key: 'pmsRoleCode' },
       { title: 'IPM角色编码', dataIndex: 'ipmRoleCode', key: 'ipmRoleCode' },
-      { title: '操作', key: 'operations', render: (_, row) => <Space size={4}>
+      { title: '操作', key: 'operations', render: (_, row) => <Space className="pms-role-template-actions" size={4}>
         <Button type="link" size="small" onClick={() => { setPermissionId(row.id); setError('') }}>配置权限</Button>
         {canEdit && <><Button type="link" size="small" onClick={() => { setEditing(row); setInput({ roleName: row.roleName, pmsRoleCode: row.pmsRoleCode, ipmRoleCode: row.ipmRoleCode }); setError('') }}>编辑</Button><Button type="link" size="small" danger onClick={() => Modal.confirm({ title: `删除角色模板“${row.roleName}”？`, okText: '删除', okButtonProps: { danger: true }, onOk: () => { const result = run(() => useRolePermissionTemplateStore.getState().deleteTemplate(actor, projectType, row.id)); if (!result.ok) return Promise.reject(new Error(result.error)) } })}>删除</Button></>}
       </Space> },
