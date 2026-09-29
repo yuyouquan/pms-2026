@@ -57,7 +57,8 @@ const ProjectPage = load('src/components/permission/ProjectPermissionConfig.tsx'
 const projectRender = () => { cursor = 0; return ProjectPage({ project, projectId: project.id, actor: '演示用户01' }) }
 let page = projectRender()
 const tree = find(page, 'Tree')
-assert.notEqual(tree.props.treeData[0].children[0].key, tree.props.treeData[1].children[0].key, 'source/local same-name identities stay separate')
+assert.notEqual(tree.props.treeData[0].children[0].key, tree.props.treeData[1].children[0].children[0].key, 'source/local same-name identities stay separate')
+assert.equal(tree.props.treeData[1].children[0].key, 'group:%E8%87%AA%E5%AE%9A%E4%B9%89%E8%A7%92%E8%89%B2', 'local roles retain group hierarchy')
 assert.equal(find(page, 'Tabs').props.activeKey, 'functional', 'first tab is functional')
 assert.deepEqual(find(page, 'Functional').props.grants, source.grants)
 const staleActorHandler = find(page, 'Functional').props.onChange
@@ -69,12 +70,29 @@ token = 'scope:source-2'
 staleActorHandler('basicInfo:查看', false)
 assert.equal(writes.length, 0, 'captured source cannot mutate after source rebinding')
 token = 'scope:source-1'
-find(projectRender(), 'Tree').props.onSelect([tree.props.treeData[1].children[0].key])
+find(projectRender(), 'Tree').props.onSelect([tree.props.treeData[1].children[0].children[0].key])
 page = projectRender()
 assert.equal(find(page, 'Tabs').props.activeKey, 'functional', 'switching role resets functional tab')
 assert.equal(find(page, 'Functional').props.grants['basicInfo:查看'], false)
 find(page, 'Functional').props.onBulkChange(['basicInfo:查看'], true)
 assert.deepEqual(writes.at(-1)[2], { source: 'local', name: 'SPM' })
+find(page, 'Tabs').props.onChange('assignees')
+page = projectRender()
+const writesBeforeRebind = writes.length
+token = 'scope:source-2'
+page = projectRender()
+assert.equal(find(page, 'Assignees').props.onCommit('departments', ['市场部']).ok, false, 'rerendered open picker retains opening source authority')
+assert.equal(writes.length, writesBeforeRebind)
+token = 'scope:source-1'
+page = projectRender()
+all(page, 'Button').find(button => button.props.children === '编辑').props.onClick()
+assert(find(projectRender(), 'RoleForm'), 'local role form opened')
+token = 'scope:source-2'
+page = projectRender()
+assert.equal(find(page, 'RoleForm').props.onSubmit({ name: 'SPM-2', groupName: '自定义角色', description: '' }).ok, false, 'rerendered role form retains opening source authority')
+assert.equal(writes.length, writesBeforeRebind)
+token = 'scope:source-1'
+find(projectRender(), 'Tabs').props.onChange('functional')
 manage = false
 page = projectRender()
 assert.equal(find(page, 'Functional').props.disabled, true)
@@ -100,6 +118,7 @@ const actionCell = find(rendered, 'Table').props.columns[3].render(null, templat
 find(actionCell, 'Button').props.onClick()
 rendered = templateRender()
 assert.equal(find(rendered, 'Functional').props.grants, template.grants, 'template modal reuses project permission matrix')
+assert(all(rendered, ant.Modal).some(modal => modal.props.open && modal.props.title.includes('整机产品项目')), 'template permission title keeps project type visible')
 const captured = find(rendered, 'Functional').props.onBulkChange
 actor = '演示用户02'
 captured(['basicInfo:查看'], false)

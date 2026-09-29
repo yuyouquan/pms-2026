@@ -53,7 +53,7 @@ export default function RolePermissionTemplateConfig({ actor, projectType }: Pro
         {([['roleName', '角色名称'], ['pmsRoleCode', 'PMS角色编码'], ['ipmRoleCode', 'IPM角色编码']] as const).map(([key, label]) => <Form.Item key={key} label={label} required><Input aria-label={label} value={input[key]} maxLength={80} onChange={event => setInput(previous => ({ ...previous, [key]: event.target.value }))} /></Form.Item>)}
       </Form>
     </Modal>
-    <Modal className="pms-modal" title={`${selected?.roleName ?? ''} · 配置权限`} open={!!selected && canView} width={980} footer={null} onCancel={() => { setPermissionId(null); setError('') }} destroyOnClose>
+    <Modal className="pms-modal" title={`${projectType} · ${selected?.roleName ?? ''} · 配置权限`} open={!!selected && canView} width={980} footer={null} onCancel={() => { setPermissionId(null); setError('') }} destroyOnClose>
       {error && <Alert type="error" showIcon message={error} style={{ marginBottom: 12 }} action={retry.current && <Button onClick={() => run(retry.current!)}>重试</Button>} />}
       {selected && <ProjectFunctionalPermissions key={selected.id} project={{ type: projectType, projectAttribute: 'formal' } as ProjectItem} grants={selected.grants} disabled={!canEdit}
         onChange={(key, enabled) => { run(() => useRolePermissionTemplateStore.getState().updateTemplateGrants(actor, projectType, selected.id, [key], enabled)) }}

@@ -35,7 +35,7 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
   const [search, setSearch] = useState('')
   const [collapsed, setCollapsed] = useState(false)
   const [narrow, setNarrow] = useState(false)
-  const [expanded, setExpanded] = useState<Key[]>(['source', 'local'])
+  const [expanded, setExpanded] = useState<Key[]>(() => ['source', 'local', ...[...new Set(roles.map(groupName))].map(groupKey)])
   const [formRole, setFormRole] = useState<Role | 'new' | null>(null)
   const [epoch, setEpoch] = useState(0)
   const [error, setError] = useState('')
@@ -49,7 +49,9 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
   const displayName = sourceRole?.roleName || role?.name
   const target = sourceRole ? { source: 'ipm' as const, id: sourceRole.id } : role ? { source: 'local' as const, name: role.name } : null
   const canManage = hasPermission(actor, projectId, 'projectPermission:manageRoles')
-  const openingToken = projectTeamScopeToken(project.id)
+  // Keep the authority context from the page opening. An already-open picker or
+  // role form must not acquire a new source binding merely because React rerenders.
+  const openingToken = useRef(projectTeamScopeToken(project.id)).current
   const setDraft = useUiStore(state => state.setPermissionCenterHasDraft)
   const onDirty = useCallback((dirty: boolean) => setDraft(dirty), [setDraft])
   useEffect(() => () => setDraft(false), [setDraft])
@@ -84,7 +86,7 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
   const localMatches = roles.filter(item => `${groupName(item)} ${item.name}`.toLocaleLowerCase().includes(query))
   const roleTree: DataNode[] = [
     ...(sourceMatches.length ? [{ key: 'source', title: title('IPM 同步角色'), selectable: false, children: sourceMatches.map(item => ({ key: sourceKey(item.id), title: <Tooltip title={`IPM编码：${item.ipmRoleCode}`}><span className={shared.node}>{item.roleName} <Tag color="purple">来源</Tag></span></Tooltip>, isLeaf: true })) }] : []),
-    ...(localMatches.length ? [{ key: 'local', title: title('本地角色'), selectable: false, children: localMatches.map(item => ({ key: localKey(item.name), title: title(item.name), isLeaf: true })) }] : []),
+    ...(localMatches.length ? [{ key: 'local', title: title('本地角色'), selectable: false, children: [...new Set(localMatches.map(groupName))].map(name => ({ key: groupKey(name), title: title(name), selectable: false, children: localMatches.filter(item => groupName(item) === name).map(item => ({ key: localKey(item.name), title: title(item.name), isLeaf: true })) })) }] : []),
   ]
   const deleteRole = () => {
     if (!role || !canManage) return
@@ -112,7 +114,7 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
     <CollapsibleSidebarShell className={shared.sidebar} collapsed={collapsed} onCollapsedChange={setCollapsed} title={null} ariaLabel="项目角色" expandedWidth={180} collapsedWidth={40} expandLabel="展开项目角色侧栏" collapseLabel="收起项目角色侧栏">
       <Input className={shared.search} prefix={<SearchOutlined />} placeholder="搜索角色" aria-label="搜索项目角色" value={search} onChange={event => setSearch(event.target.value)} allowClear />
       {canManage && <Button className={shared.addRole} icon={<PlusOutlined />} onClick={() => navigate(() => setFormRole('new'))}>添加角色</Button>}
-      {roleTree.length ? <Tree blockNode treeData={roleTree} selectedKeys={displayName ? [currentKey] : []} expandedKeys={query ? roleTree.map(node => node.key) : expanded} onExpand={setExpanded} onSelect={keys => { const next = String(keys[0] ?? ''); if (next) navigate(() => { setSelectedKey(next); setTab('functional'); if (narrow) setCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}
+      {roleTree.length ? <Tree blockNode treeData={roleTree} selectedKeys={displayName ? [currentKey] : []} expandedKeys={query ? roleTree.flatMap(node => [node.key, ...(node.children?.map(child => child.key) ?? [])]) : expanded} onExpand={setExpanded} onSelect={keys => { const next = String(keys[0] ?? ''); if (next) navigate(() => { setSelectedKey(next); setTab('functional'); if (narrow) setCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}
     </CollapsibleSidebarShell>
     <div className={`${shared.content} ${styles.content}`}>
       {displayName ? <>
