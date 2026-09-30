@@ -20,7 +20,7 @@ export function registerProjectPermissionFields(templates: Record<string, readon
     const tasks = planLevel ? getLatestPublishedTemplateTasks<ProjectSummaryTemplateTask>(type, scope?.versions ?? [], snapshots, scope?.currentVersion ?? '', [], { namespacedOnly: true, planLevel }) : getTemplateTasksForProjectType(templates, type) ?? []
     const listFields = getProjectListFieldDefinitions(variant, tasks, type)
     const fixedKeys = getProjectListFixedColumnKeys(variant)
-    registerProjectColumnFields(variant, listFields.map(field => ({ key: field.key, label: field.title, kind: field.inputType === 'date' ? 'date' : 'text', required: fixedKeys.includes(field.key) })))
+    registerProjectColumnFields(variant, listFields.map(field => ({ key: field.key, label: field.title, kind: field.inputType === 'date' ? 'date' : 'text', required: fixedKeys.includes(field.key), source: field.source })))
     definitions.push(...getProjectSummaryFieldDefinitions(type), ...getProjectListFieldDefinitions(variant, tasks, type), ...getTemplateTaskFieldDefinitions(type, tasks))
     for (const snapshot of Object.values(snapshots)) definitions.push(...getProjectListFieldDefinitions(variant, snapshot, type), ...getTemplateTaskFieldDefinitions(type, snapshot))
   }
