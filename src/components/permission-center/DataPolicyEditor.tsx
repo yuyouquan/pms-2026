@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button, Checkbox, Empty, Input, InputNumber, Popover, Radio, Select, Tooltip } from 'antd'
-import { CloseCircleFilled, DownOutlined, UpOutlined, DeleteOutlined, FilterOutlined, LockOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
+import type { GetRef } from 'antd'
+import { CloseCircleFilled, DownOutlined, UpOutlined, DeleteOutlined, FilterOutlined, LockOutlined, PlusOutlined, SearchOutlined, SettingOutlined } from '@ant-design/icons'
 import { getPermissionColumnFields, getPermissionFields } from '@/constants/permissionCenter'
 import { getPermissionColumnUnits, getPermissionColumnUnitState, getSelectedPermissionColumns, togglePermissionColumnUnit } from '@/lib/permissionColumnUnits'
 import { getPermissionOperators, validateMenuPolicy } from '@/lib/permissionCenter'
@@ -31,6 +32,9 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
   const [draft, setDraft] = useState(policy.data)
   const [draftError, setDraftError] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
+  const [conditionSearch, setConditionSearch] = useState('')
+  const conditionListRef = useRef<HTMLDivElement>(null)
+  const filterPopoverRef = useRef<GetRef<typeof Popover>>(null)
   const [columnSearch, setColumnSearch] = useState('')
   const [columnOpen, setColumnOpen] = useState(false)
   const [columnsExpanded, setColumnsExpanded] = useState(false)
@@ -39,6 +43,7 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
   const savedDataKey = JSON.stringify(policy.data)
   useEffect(() => { setDraft(policy.data); setDraftError(''); onDirtyChange(false) }, [savedDataKey]) // Only persisted data changes replace the condition draft.
   useEffect(() => () => onDirtyChange(false), [])
+  useEffect(() => { if (conditionListRef.current) conditionListRef.current.scrollTop = 0 }, [draft.conditions[0]?.id, conditionSearch, filterOpen])
   const updateData = (data: MenuPolicy['data']) => {
     setDraft(data)
     // A filter edit must not migrate or expand legacy selected columns.
@@ -57,16 +62,29 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
   const matchingUnits = columnUnits.filter(unit => unit.label.toLowerCase().includes(columnSearch.toLowerCase()))
   const requiredColumns = columnFields.filter(field => field.required).map(field => field.key)
   const updateColumns = (keys: string[], mode: 'all' | 'selected' = 'selected') => onColumnsUpdate(previous => ({ ...previous, columns: { mode, fields: mode === 'all' ? [] : [...new Set([...requiredColumns, ...keys.filter(key => columnKeys.includes(key))])] } }))
+  const matchingConditions = draft.conditions.map((condition, index) => ({ condition, index })).filter(({ condition }) => {
+    const label = filterFields.find(field => field.key === condition.field)?.label ?? (condition.field || '未选择字段')
+    return label.toLowerCase().includes(conditionSearch.trim().toLowerCase())
+  })
+  useEffect(() => { if (filterOpen) filterPopoverRef.current?.forceAlign() }, [filterOpen, matchingConditions.length, draftError])
   const filterEditor = <div className={styles.editor} aria-label="筛选条件编辑器">
-    <Select aria-label="条件匹配方式" value={draft.conjunction} onChange={conjunction => updateData({ ...draft, conjunction })}
+    <div className={styles.conditionToolbar}>
+    <Select className={styles.conditionMatch} aria-label="条件匹配方式" value={draft.conjunction} onChange={conjunction => updateData({ ...draft, conjunction })}
       options={[{ value: 'all', label: '满足所有条件' }, { value: 'any', label: '满足任一条件' }]} disabled={disabled} />
-    {draft.conditions.map((condition, index) => {
+    <span className={styles.conditionCount}>{conditionSearch.trim() ? `${matchingConditions.length} / ${draft.conditions.length} 条` : `共 ${draft.conditions.length} 条`}</span>
+    </div>
+    <div className={styles.conditionToolbar}>
+      <Input prefix={<SearchOutlined />} placeholder="搜索已添加的字段" aria-label="搜索已添加的筛选字段" value={conditionSearch} onChange={event => setConditionSearch(event.target.value)} allowClear />
+      <Button icon={<PlusOutlined />} disabled={disabled} onClick={() => { setConditionSearch(''); updateData({ ...draft, mode: 'conditions', conditions: [newCondition(), ...draft.conditions] }) }}>添加条件</Button>
+    </div>
+    <div className={styles.conditionList} ref={conditionListRef} role="list" aria-label="已添加的筛选条件">
+    {matchingConditions.map(({ condition, index }) => {
       const field = filterFields.find(field => field.key === condition.field)
       const operators = field ? getPermissionOperators(field) : ['eq'] as PermissionOperator[]
       const isMultiple = ['in', 'notIn'].includes(condition.operator)
       const substring = ['contains', 'notContains'].includes(condition.operator)
       const noValue = ['empty', 'notEmpty'].includes(condition.operator)
-      return <div key={condition.id} className={styles.condition}>
+      return <div key={condition.id} className={styles.condition} role="listitem" aria-label={`条件${index + 1}`}>
         <Select aria-label={`条件${index + 1}字段`} className={styles.conditionFields} showSearch optionFilterProp="label" placeholder="选择字段"
           value={condition.field || undefined} options={filterFields.map(field => ({ value: field.key, label: field.label }))} disabled={disabled}
           onChange={field => updateCondition(condition.id, { field, operator: 'eq', value: '' })} />
@@ -86,8 +104,9 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
         <Button className={styles.conditionRemove} aria-label={`删除条件${index + 1}`} type="text" danger icon={<DeleteOutlined />} disabled={disabled} onClick={() => removeCondition(condition.id)} />
       </div>
     })}
-    <Button icon={<PlusOutlined />} disabled={disabled} onClick={() => updateData({ ...draft, mode: 'conditions', conditions: [...draft.conditions, newCondition()] })}>添加条件</Button>
-    {draftError && <div className={styles.inlineError} role="status">条件未完整，尚未生效。{draftError}；继续使用上次已生效配置。</div>}
+    {!matchingConditions.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={conditionSearch.trim() ? '没有匹配的筛选条件' : '暂无筛选条件'} />}
+    </div>
+    {draftError && <div className={`${styles.inlineError} ${styles.conditionDraftError}`} role="status">条件未完整，尚未生效。{draftError}；继续使用上次已生效配置。</div>}
   </div>
   const columnEditor = <div className={styles.columnEditor} aria-label="可见列设置">
     <Input placeholder="搜索列" aria-label="搜索可见列" value={columnSearch} onChange={event => setColumnSearch(event.target.value)} allowClear />
@@ -111,7 +130,7 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
     <section className={styles.dataSection} aria-label="可见数据配置">
     <div className={styles.dataSectionHeader}>
       <h3 className={styles.dataSectionTitle}>可见数据</h3>
-      <Popover trigger="click" title="筛选条件" content={filterEditor} open={filterOpen} onOpenChange={setFilterOpen} placement="bottomRight">
+      <Popover ref={filterPopoverRef} trigger="click" title="筛选条件" content={filterEditor} open={filterOpen} onOpenChange={setFilterOpen} placement="bottomRight" arrow={false} classNames={{ root: styles.filterPopover }} align={{ offset: [0, 0], overflow: { adjustX: true, adjustY: true, shiftX: true, shiftY: true } }}>
         <Button icon={<FilterOutlined />} disabled={disabled} onClick={() => { if (draft.mode === 'all') updateData({ ...draft, mode: 'conditions', conditions: draft.conditions.length ? draft.conditions : [newCondition()] }) }}>筛选条件</Button>
       </Popover>
     </div>
