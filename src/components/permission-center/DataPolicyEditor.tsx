@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { Button, Checkbox, Empty, Input, InputNumber, Popover, Radio, Select, Tooltip } from 'antd'
-import { CloseCircleFilled, DeleteOutlined, FilterOutlined, LockOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
+import { CloseCircleFilled, DownOutlined, UpOutlined, DeleteOutlined, FilterOutlined, LockOutlined, PlusOutlined, SettingOutlined } from '@ant-design/icons'
 import { getPermissionColumnFields, getPermissionFields } from '@/constants/permissionCenter'
+import { getPermissionColumnUnits, getPermissionColumnUnitState, getSelectedPermissionColumns, togglePermissionColumnUnit } from '@/lib/permissionColumnUnits'
 import { getPermissionOperators, validateMenuPolicy } from '@/lib/permissionCenter'
 import type { MenuPolicy, PermissionCondition, PermissionMutationResult, PermissionOperator, ProjectDataScope } from '@/types/permissionCenter'
 import styles from '@/components/permission-center/PermissionCenter.module.css'
@@ -32,6 +33,8 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
   const [filterOpen, setFilterOpen] = useState(false)
   const [columnSearch, setColumnSearch] = useState('')
   const [columnOpen, setColumnOpen] = useState(false)
+  const [columnsExpanded, setColumnsExpanded] = useState(false)
+  const columnUnits = getPermissionColumnUnits(policy.menuId, projectScope)
   const columnControlsDisabled = disabled || columnsDisabled
   const savedDataKey = JSON.stringify(policy.data)
   useEffect(() => { setDraft(policy.data); setDraftError(''); onDirtyChange(false) }, [savedDataKey]) // Only persisted data changes replace the condition draft.
@@ -48,8 +51,10 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
   const updateCondition = (id: string, patch: Partial<PermissionCondition>) => updateData({ ...draft, conditions: draft.conditions.map(condition => condition.id === id ? { ...condition, ...patch } : condition) })
   const removeCondition = (id: string) => updateData({ ...draft, mode: 'conditions', conditions: draft.conditions.filter(condition => condition.id !== id) })
   const columnKeys = columnFields.map(field => field.key)
-  const legacyColumnAliases: Record<string, string> = { name: 'projectName', code: 'projectCode', type: 'projectCategory' }
-  const selectedColumns = policy.columns.mode === 'all' ? columnKeys : [...new Set(policy.columns.fields.map(key => projectScope ? legacyColumnAliases[key] ?? key : key))].filter(key => columnKeys.includes(key))
+  const selectedColumns = getSelectedPermissionColumns(policy.menuId, policy.columns, projectScope)
+  const selectedUnits = columnUnits.filter(unit => getPermissionColumnUnitState(unit, selectedColumns).selectedCount > 0)
+  const previewUnits = columnsExpanded ? selectedUnits : selectedUnits.slice(0, 8)
+  const matchingUnits = columnUnits.filter(unit => unit.label.toLowerCase().includes(columnSearch.toLowerCase()))
   const requiredColumns = columnFields.filter(field => field.required).map(field => field.key)
   const updateColumns = (keys: string[], mode: 'all' | 'selected' = 'selected') => onColumnsUpdate(previous => ({ ...previous, columns: { mode, fields: mode === 'all' ? [] : [...new Set([...requiredColumns, ...keys.filter(key => columnKeys.includes(key))])] } }))
   const filterEditor = <div className={styles.editor} aria-label="筛选条件编辑器">
@@ -90,27 +95,35 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
       <Button type="link" onClick={() => updateColumns(columnKeys)} disabled={columnControlsDisabled}>全选</Button>
       <Button type="link" onClick={() => updateColumns(requiredColumns)} disabled={columnControlsDisabled}>清空可选列</Button>
     </div>
-    <div className={styles.columnList}>{columnFields.filter(field => field.label.toLowerCase().includes(columnSearch.toLowerCase())).map(field => <Checkbox
-      key={field.key} checked={selectedColumns.includes(field.key)} disabled={columnControlsDisabled || field.required}
-      onChange={event => updateColumns(event.target.checked ? [...selectedColumns, field.key] : selectedColumns.filter(key => key !== field.key))}>
-      {field.label}{field.required && <Tooltip title="视图必要识别列，必须保留"><span className={styles.muted}>（必要）</span></Tooltip>}
-    </Checkbox>)}</div>
+    <div className={styles.columnList}>{matchingUnits.map(unit => {
+      const state = getPermissionColumnUnitState(unit, selectedColumns)
+      return <Checkbox key={unit.key} checked={state.checked} indeterminate={state.indeterminate} disabled={columnControlsDisabled || unit.required}
+        onChange={event => updateColumns(togglePermissionColumnUnit(selectedColumns, unit, event.target.checked))}>
+        {unit.label}{unit.required && <Tooltip title="视图必要识别列，必须保留"><span className={styles.muted}>（必要）</span></Tooltip>}
+        {state.indeterminate && <Tooltip title={`已授权 ${state.selectedCount}/${unit.fieldKeys.length} 个节点，勾选后授权全部节点`}><span className={styles.muted}>（部分）</span></Tooltip>}
+      </Checkbox>
+    })}</div>
+    {!matchingUnits.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的列" />}
   </div>
   if (projectScope === 'capability') return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可配置列" />
   if (!filterFields.length) return null
-  return <section className={styles.section}>
-    <h3 className={styles.sectionTitle}>数据权限</h3>
-    <div className={styles.dataRow}><span>可见数据</span><Radio.Group value={draft.mode} disabled={disabled} onChange={event => {
+  return <div className={styles.dataSections}>
+    <section className={styles.dataSection} aria-label="可见数据配置">
+    <div className={styles.dataSectionHeader}>
+      <h3 className={styles.dataSectionTitle}>可见数据</h3>
+      <Popover trigger="click" title="筛选条件" content={filterEditor} open={filterOpen} onOpenChange={setFilterOpen} placement="bottomRight">
+        <Button icon={<FilterOutlined />} disabled={disabled} onClick={() => { if (draft.mode === 'all') updateData({ ...draft, mode: 'conditions', conditions: draft.conditions.length ? draft.conditions : [newCondition()] }) }}>筛选条件</Button>
+      </Popover>
+    </div>
+    <div className={styles.dataRow}><Radio.Group value={draft.mode} disabled={disabled} onChange={event => {
       const mode = event.target.value as 'all' | 'conditions'
       updateData({ ...draft, mode, conditions: mode === 'conditions' && !draft.conditions.length ? [newCondition()] : draft.conditions })
       if (mode === 'conditions') setFilterOpen(true)
     }}><Radio value="all">全部数据</Radio><Radio value="conditions">符合筛选条件的数据</Radio></Radio.Group>
-      <Popover trigger="click" title="筛选条件" content={filterEditor} open={filterOpen} onOpenChange={setFilterOpen} placement="bottomLeft">
-        <Button icon={<FilterOutlined />} disabled={disabled} onClick={() => { if (draft.mode === 'all') updateData({ ...draft, mode: 'conditions', conditions: draft.conditions.length ? draft.conditions : [newCondition()] }) }}>筛选条件</Button>
-      </Popover>
     </div>
     {draftError && <div className={styles.inlineError} role="status">条件未完整，尚未生效；继续使用上次已生效配置。<Button type="link" onClick={() => setFilterOpen(true)}>继续填写</Button></div>}
-    {policy.data.mode === 'conditions' && <>
+    {policy.data.mode === 'all' && <div className={styles.dataSummary}>可查看当前菜单下的全部数据</div>}
+    {policy.data.mode === 'conditions' && <div className={styles.dataSummary}>
       <div className={styles.muted}>{policy.data.conjunction === 'all' ? '满足所有条件' : '满足任一条件'}</div>
       <div className={styles.chips} aria-label="已生效筛选条件">{policy.data.conditions.map(condition => {
         const field = filterFields.find(field => field.key === condition.field)
@@ -123,15 +136,31 @@ export default function DataPolicyEditor({ policy, projectScope, disabled, colum
           </button></Tooltip><button type="button" className="pms-active-filter-chip__remove" disabled={disabled} aria-label={`删除筛选条件：${text}`} onClick={() => removeCondition(condition.id)}><CloseCircleFilled /></button>
         </span>
       })}</div>
-    </>}
-    {columnFields.length ? <><div className={styles.dataRow} style={{ marginTop: 12 }} aria-describedby={columnsDisabled ? 'permission-condition-draft-block' : undefined}><span>可见列</span><Radio.Group value={policy.columns.mode} disabled={columnControlsDisabled}
-      onChange={event => updateColumns(selectedColumns, event.target.value)}><Radio value="all">全部列</Radio><Radio value="selected">指定列</Radio></Radio.Group>
-      <Popover trigger="click" title="可见列" content={columnEditor} placement="bottomLeft" open={columnOpen} onOpenChange={setColumnOpen}><Button icon={<SettingOutlined />} disabled={columnControlsDisabled}>列设置</Button></Popover>
+    </div>}
+    </section>
+    <section className={styles.dataSection} aria-label="可见列配置" aria-describedby={columnsDisabled ? 'permission-condition-draft-block' : undefined}>
+    <div className={styles.dataSectionHeader}>
+      <h3 className={styles.dataSectionTitle}>可见列<span className={styles.dataSectionCount}>{policy.columns.mode === 'all' ? columnUnits.length : selectedUnits.length} / {columnUnits.length}</span></h3>
+      <Popover trigger="click" title="可见列" content={columnEditor} placement="bottomRight" open={columnOpen} onOpenChange={setColumnOpen}><Button icon={<SettingOutlined />} disabled={columnControlsDisabled || !columnFields.length}>列设置</Button></Popover>
     </div>
-    {policy.columns.mode === 'selected' && <div className={styles.chips} aria-label="已生效可见列">{!selectedColumns.length && <span className={styles.muted}>未选择可见列</span>}{columnFields.filter(field => selectedColumns.includes(field.key)).map(field => <span key={field.key} className="pms-active-filter-chip">
-      <Tooltip title={field.required ? `${field.label}：视图必要识别列，必须保留` : field.label}><button type="button" aria-label={`配置可见列：${field.label}`} disabled={columnControlsDisabled} onClick={() => setColumnOpen(true)} className={`pms-active-filter-chip__content ${field.required ? styles.locked : ''}`}>
-        <span className="pms-active-filter-chip__field">{field.label}</span>{field.required && <LockOutlined />}
-      </button></Tooltip>{!field.required && <button type="button" className="pms-active-filter-chip__remove" disabled={columnControlsDisabled} aria-label={`取消可见列：${field.label}`} onClick={() => updateColumns(selectedColumns.filter(key => key !== field.key))}><CloseCircleFilled /></button>}
-    </span>)}</div>}</> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可配置列" />}
-  </section>
+    {columnFields.length ? <>
+    <div className={styles.dataRow}><Radio.Group value={policy.columns.mode} disabled={columnControlsDisabled}
+      onChange={event => updateColumns(selectedColumns, event.target.value)}><Radio value="all">全部列</Radio><Radio value="selected">指定列</Radio></Radio.Group></div>
+    {policy.columns.mode === 'all' && <div className={styles.dataSummary}>可查看全部 {columnUnits.length} 项列设置</div>}
+    {policy.columns.mode === 'selected' && <div className={styles.dataSummary}>
+      <div className={styles.muted}>已选择 {selectedUnits.length} 项列设置</div>
+      <div className={styles.chips} aria-label="已生效可见列">{!selectedUnits.length && <span className={styles.muted}>未选择可见列</span>}{previewUnits.map(unit => {
+        const state = getPermissionColumnUnitState(unit, selectedColumns)
+        const label = `${unit.label}${state.indeterminate ? '（部分）' : ''}`
+        const hint = unit.required ? `${unit.label}：视图必要识别列，必须保留` : state.indeterminate ? `${unit.label}：已授权 ${state.selectedCount}/${unit.fieldKeys.length} 个节点` : unit.label
+        return <span key={unit.key} className="pms-active-filter-chip">
+          <Tooltip title={hint}><button type="button" aria-label={`配置可见列：${unit.label}`} disabled={columnControlsDisabled} onClick={() => setColumnOpen(true)} className={`pms-active-filter-chip__content ${unit.required ? styles.locked : ''}`}>
+            <span className="pms-active-filter-chip__field">{label}</span>{unit.required && <LockOutlined />}
+          </button></Tooltip>{!unit.required && <button type="button" className="pms-active-filter-chip__remove" disabled={columnControlsDisabled} aria-label={`取消可见列：${unit.label}`} onClick={() => updateColumns(togglePermissionColumnUnit(selectedColumns, unit, false))}><CloseCircleFilled /></button>}
+        </span>
+      })}</div>
+      {selectedUnits.length > 8 && <Button type="link" className={styles.expandColumns} icon={columnsExpanded ? <UpOutlined /> : <DownOutlined />} aria-expanded={columnsExpanded} onClick={() => setColumnsExpanded(!columnsExpanded)}>{columnsExpanded ? '收起' : `展开全部（${selectedUnits.length}）`}</Button>}
+    </div>}</> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可配置列" />}
+    </section>
+  </div>
 }

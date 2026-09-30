@@ -3,6 +3,7 @@
 import { Empty, Tag } from 'antd'
 import { getPermissionColumnFields, getPermissionFields, PERMISSION_USER_DEPARTMENTS, SUPER_ADMIN_ROLE_ID } from '@/constants/permissionCenter'
 import { isRoleAssignedToUser, validateMenuPolicy } from '@/lib/permissionCenter'
+import { getPermissionColumnUnits, getPermissionColumnUnitState, getSelectedPermissionColumns } from '@/lib/permissionColumnUnits'
 import { getProjectDataPolicy } from '@/lib/projectPermissionScope'
 import type { MenuPolicy, PermissionCenterModel, PermissionCenterRole, PermissionMenu, ProjectDataScope } from '@/types/permissionCenter'
 import styles from '@/components/permission-center/PermissionCenter.module.css'
@@ -30,9 +31,12 @@ export default function PersonDataView({ model, person, menu, projectScope }: Pr
     <div className={styles.muted}>多个角色的授权按角色取并集；每个角色的筛选条件与可见列保持成组生效，不跨角色组合。</div>
     {grants.length ? grants.map(({ role, policy }) => {
       const provenance = role.members.includes(person) ? '直接授权' : '部门授权：' + (role.departments ?? []).filter(department => PERMISSION_USER_DEPARTMENTS[person]?.includes(department)).join('、')
-      const aliases: Record<string, string> = { name: 'projectName', code: 'projectCode', type: 'projectCategory' }
-      const selectedColumns = policy?.columns.fields.map(key => projectScope ? aliases[key] ?? key : key) ?? []
-      const columns = !columnFields.length ? '暂无可配置列' : !policy || policy.columns.mode === 'all' ? '全部列' : columnFields.filter(field => selectedColumns.includes(field.key)).map(field => field.label).join('、') || '暂无可见列'
+      const selectedColumns = policy ? getSelectedPermissionColumns(menu.id, policy.columns, projectScope) : []
+      const columnLabels = getPermissionColumnUnits(menu.id, projectScope).flatMap(unit => {
+        const state = getPermissionColumnUnitState(unit, selectedColumns)
+        return state.selectedCount ? [`${unit.label}${state.indeterminate ? '（部分）' : ''}`] : []
+      })
+      const columns = !columnFields.length ? '暂无可配置列' : !policy || policy.columns.mode === 'all' ? '全部列' : columnLabels.join('、') || '暂无可见列'
       return <section className={styles.sourcePolicy} key={role.id}>
         <div className={styles.sourceHeading}><strong>{role.name}</strong><Tag>{provenance}</Tag></div>
         <div className={styles.sourceLine}><span>可见数据</span><strong>{!policy || policy.data.mode === 'all' ? '全部数据' : policy.data.conjunction === 'all' ? '满足所有条件' : '满足任一条件'}</strong></div>
