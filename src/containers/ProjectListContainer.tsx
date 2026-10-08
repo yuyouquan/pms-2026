@@ -13,7 +13,7 @@ import {
 import { useUiStore } from '@/stores/ui'
 import { useProjectStore } from '@/stores/project'
 import { usePlanStore } from '@/stores/plan'
-import { usePermissionStore } from '@/stores/permission'
+import { usePermissionStore, hasAllProjectSpaceView } from '@/stores/permission'
 import { evaluateMenuPermission, getAuthorizedColumns } from '@/lib/permissionCenter'
 import { projectPermissionSource, projectSummaryRows, projectFieldAllowed, registerProjectPermissionFields, hasAllProjectFields, getReadableProjectClassificationSource, matchesAuthorizedProjectClassification } from '@/lib/projectMenuPermissions'
 import { ProjectCard } from '@/components/workspace/WorkspaceModule'
@@ -272,6 +272,7 @@ export default function ProjectListContainer() {
     currentLoginUser,
     rolesByProject,
     isAdminUser,
+    hasAllProjectSpaceView(currentLoginUser),
   )
   const showProjectAccessDenied = () => messageApi.warning({
     key: 'project-space-access-denied',

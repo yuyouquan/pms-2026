@@ -176,7 +176,7 @@ export function migrateLegacyPermissionCenter(roles: readonly { name: string; me
   const compatibilityId = 'compat:existing-navigation'
   model.roles.push({ id: compatibilityId, groupId: 'group-compat', name: '历史公开入口', description: '原先未配置全局权限的入口；可在此撤销', members: [], departments: [] })
   model.roles.find(role => role.id === compatibilityId)!.members = [...PERMISSION_USERS]
-  PERMISSION_MENUS.filter(menu => !menu.id.startsWith('roadmap.') && menu.id !== 'permission.center' && menu.id !== 'project.config').forEach(menu => {
+  PERMISSION_MENUS.filter(menu => !menu.id.startsWith('roadmap.') && menu.id !== 'permission.center' && menu.id !== 'project.config' && menu.id !== 'project.space').forEach(menu => {
     const actions: PermissionAction[] = ['view']
     if (menu.id === 'project.view' || menu.id.startsWith('config.transfer:') || menu.id.startsWith('config.hrPipeline:') || menu.id.startsWith('hr.config/')) {
       if (menu.actions.includes('export')) actions.push('export')

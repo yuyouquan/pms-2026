@@ -1,7 +1,7 @@
 'use client'
 
 import { App, Card, Empty, Segmented } from 'antd'
-import { useMenuPermission, usePermissionStore, isGlobalAdmin } from '@/stores/permission'
+import { useMenuPermission, usePermissionStore, isGlobalAdmin, hasAllProjectSpaceView } from '@/stores/permission'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import JointMrVersionPlan from '@/components/joint/JointMrVersionPlan'
 import { useActivateProject } from '@/hooks/useActivateProject'
@@ -27,7 +27,7 @@ export default function JointProjectSpaceContainer() {
   const handleOpenProject = (projectId: string, mrTosVersion: string) => {
     const project = projects.find(item => item.id === projectId)
     if (!project || !permission.can('view', project)) return
-    if (!canEnterProjectSpace(projectId, currentLoginUser, rolesByProject, isGlobalAdmin(currentLoginUser))) { message.warning('当前用户未配置该项目空间角色，无法进入项目空间'); return }
+    if (!canEnterProjectSpace(projectId, currentLoginUser, rolesByProject, isGlobalAdmin(currentLoginUser), hasAllProjectSpaceView(currentLoginUser))) { message.warning('当前用户未配置该项目空间角色，无法进入项目空间'); return }
     navigateWithEditGuard(() => {
       activateProject(project)
       setMrPlanNavigationIntent({ source: 'joint-mr', projectId, mrTosVersion })

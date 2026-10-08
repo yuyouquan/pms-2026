@@ -1,5 +1,5 @@
 import { ALL_USERS } from '@/constants/permissions'
-import { hasPermission, isProjectTeamReadOnly, resolvePermissionProjectId } from '@/stores/permission'
+import { hasPermission, isProjectSpaceReadOnly, resolvePermissionProjectId } from '@/stores/permission'
 import type { TransferApplication } from '@/mock/transfer-maintenance'
 import { getTransferMember, getTransferRoleConfig, getTransferProjectType } from '@/lib/transferConfig'
 import { matchesTransferActor, matchesTransferProject, type TransferActor, type TransferItem } from '@/lib/transferWorkflow'
@@ -18,7 +18,7 @@ export function getTransferRoleSubmission(
   const coordinates = matchesTransferActor(actor, coordinator?.id, coordinator?.name)
   const remaining = rows.filter(item => item.reviewStatus !== 'passed')
   const ready = rows.length > 0 && rows.every(item => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed' && ['not_reviewed', 'rejected', 'passed'].includes(item.reviewStatus))
-  const canSubmit = !isProjectTeamReadOnly(actor.name, project?.id) && canView && matchesTransferProject(application, project) && application.status === 'in_progress'
+  const canSubmit = !isProjectSpaceReadOnly(actor.name, project?.id) && canView && matchesTransferProject(application, project) && application.status === 'in_progress'
     && application.pipeline.maintenanceSpmReview !== 'success' && coordinates && ready && remaining.length > 0
   return { canSubmit, itemIds: canSubmit ? remaining.map(item => item.id) : [] }
 }
@@ -34,7 +34,7 @@ export function canAppendTransferRoleLegacy(
 ): boolean {
   const rows = allItems.filter(item => item.applicationId === application.id && item.responsibleRole === role)
   const coordinator = getTransferMember(application.team.maintenance, role, application.teamConfig)
-  return !isProjectTeamReadOnly(actor.name, project?.id) && canView && matchesTransferProject(application, project) && application.status === 'in_progress'
+  return !isProjectSpaceReadOnly(actor.name, project?.id) && canView && matchesTransferProject(application, project) && application.status === 'in_progress'
     && application.pipeline.maintenanceSpmReview !== 'success'
     && matchesTransferActor(actor, coordinator?.id, coordinator?.name)
     && rows.length > 0 && rows.every(item => item.entryStatus === 'entered' && item.aiCheckStatus === 'passed' && item.reviewStatus === 'passed')
@@ -91,7 +91,7 @@ export function canAssignTransferParticipant(
   if (!project || !ALL_USERS.includes(person.name)
     || !matchesTransferActor({ id: `login-${person.name}`, name: person.name }, person.id, person.name)) return false
   const projectId = resolvePermissionProjectId(project.id, typeof project.parentProjectId === 'string' ? project.parentProjectId : undefined)
-  return !isProjectTeamReadOnly(person.name, projectId) && hasPermission(person.name, projectId, 'basicInfo:transferView')
+  return !isProjectSpaceReadOnly(person.name, projectId) && hasPermission(person.name, projectId, 'basicInfo:transferView')
 }
 
 /** Single-item dialogs show the current assignee; a batch always starts empty. */

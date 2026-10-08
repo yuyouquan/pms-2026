@@ -16,7 +16,7 @@ assert.equal(new Set(ids).size, ids.length)
 const groupKeys = tree.getMenuGroupKeys(nodes)
 assert.equal(new Set(groupKeys).size, groupKeys.length, 'same labels under different parents must collapse independently')
 assert(groupKeys.every(key => !ids.includes(key)), 'group controls must never target menu policies')
-assert.deepEqual(rows.filter(row => row.parents[0] === '项目管理').map(row => row.label), ['项目视图', '项目配置'])
+assert.deepEqual(rows.filter(row => row.parents[0] === '项目管理').map(row => row.label), ['项目视图', '项目配置', '所有项目空间'])
 assert(rows.filter(row => row.id.startsWith('config.transfer:')).every(row => row.parents.length === 3 && !row.label.includes(' / ')), 'transfer templates retain category and project-type hierarchy')
 for (const query of ['配置中心 计划模板', '整机产品项目', '项目配置']) {
   const filtered = leaves(tree.buildPermissionMenuTree(query))
