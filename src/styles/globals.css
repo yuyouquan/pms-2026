@@ -10249,3 +10249,24 @@ button.cockpit-filter-chip:hover { border-color: #bba9dc; background: #f0eaf9; }
 .cockpit-detail-drawer .cockpit-detail-rule, .cockpit-detail-drawer .cockpit-detail-footnote { color: #667388; }
 @media (max-width: 720px) { .cockpit-source-coverage { padding: 14px; } .cockpit-source-filters { gap: 6px; } .cockpit-source-filters button { padding: 6px 9px; } .cockpit-detail-basis { gap: 20px; flex-wrap: wrap; } }
 @media (prefers-reduced-motion: reduce) { .cockpit-coverage-track i, .cockpit-source-filters button { transition: none; } }
+
+/* Trend exploration uses one keyboard stop and an explicit date drilldown. */
+.cockpit-legend button { color: #596780; }
+.cockpit-legend button.is-muted { opacity: 1; color: #667388; }
+.cockpit-legend button.is-muted i { opacity: .4; }
+.cockpit-chart-readout { color: #667388; }
+.cockpit-chart-readout.is-active { color: #596780; }
+.cockpit-legend-reset { font-size: 10px; color: #6651a0; }
+.cockpit-period-target { cursor: pointer; }
+.cockpit-period-target:focus { outline: none; }
+.cockpit-period-target:focus-visible { outline: none; stroke: #8170b7; stroke-width: 1.5; stroke-dasharray: 4 4; fill: #7963b70b; }
+.cockpit-trend-selection { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 7px 12px; padding: 12px 14px; border: 1px solid #e1d9f0; border-radius: 9px; background: #f7f4fd; color: #66567f; font-size: 11px; animation: cockpit-enter .2s ease both; }
+.cockpit-trend-selection > span { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.cockpit-trend-selection b { font-weight: 500; font-variant-numeric: tabular-nums; }
+.cockpit-trend-selection > div { display: flex; align-items: center; gap: 12px; }
+.cockpit-period-inspect { display: flex; align-items: center; gap: 6px; border: 0; border-radius: 6px; background: #7862b2; color: white; padding: 7px 10px; font-size: 11px; transition: background .18s; }
+.cockpit-period-inspect:hover { background: #65519b; }
+.cockpit-period-inspect:disabled { cursor: default; background: #eee9f5; color: #766a8a; }
+.cockpit-chart-instructions { padding: 0 7px 13px; margin: 0; color: #667388; font-size: 10px; line-height: 1.7; }
+.cockpit-trend-selection button:focus-visible, .cockpit-legend button:focus-visible, .cockpit-legend-reset:focus-visible { outline: 2px solid #7963bc; outline-offset: 3px; }
+@media (max-width: 720px) { .cockpit-trend-selection { margin-left: 9px; margin-right: 9px; padding: 11px; } .cockpit-trend-selection > div { margin-left: auto; } .cockpit-chart-instructions { padding-left: 9px; padding-right: 9px; } }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Button, DatePicker, Empty, Input, Popover, Segmented, Select, Tooltip } from 'antd'
 import { ApartmentOutlined, ArrowRightOutlined, BarChartOutlined, CalendarOutlined, DashboardOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -18,10 +18,11 @@ import CockpitFiltersSummary from '@/components/cockpit/CockpitFiltersSummary'
 import CockpitChart from '@/components/cockpit/CockpitChart'
 import CockpitTable, { type CockpitColumn } from '@/components/cockpit/CockpitTable'
 import CockpitMetricDetail, { type CockpitMetric } from '@/components/cockpit/CockpitMetricDetail'
+import { cockpitDepartmentSelection, cockpitTrendDrilldown } from '@/components/cockpit/cockpitTrendInteraction'
 import { collectCockpitInputs } from '@/components/cockpit/cockpitSources'
 import {
-  COCKPIT_CATEGORIES, SOFTWARE_DEPARTMENTS, buildCockpitFacts, canReadCockpitDepartment, cockpitOverview, cockpitRatios, cockpitShares, cockpitTrend,
-  defaultCockpitScope, filterCockpitFacts, formatCockpit, isSoftwareDepartment, summarizeCockpit,
+  COCKPIT_CATEGORIES, buildCockpitFacts, canReadCockpitDepartment, cockpitOverview, cockpitRatios, cockpitShares, cockpitTrend,
+  defaultCockpitScope, filterCockpitFacts, formatCockpit, summarizeCockpit,
   type AmountKey, type CockpitMode, type CockpitRow, type CockpitScope,
 } from '@/components/cockpit/cockpitData'
 
@@ -65,8 +66,15 @@ function Cockpit() {
   const savedPreferences = useCockpitUiStore(state => state.preferencesByActor[actor])
   const updatePreferences = useCockpitUiStore(state => state.updatePreferences)
   const preferences = useMemo(() => savedPreferences ?? createCockpitPreferences(), [savedPreferences])
-  const { view, dates, scopePreference, departments, mode, trendTab, grain, shareTab, shareScopePreferences, overviewTab, projectCategory, projectSearch } = preferences
+  const { view, dates, scopePreference, departments, mode, trendTab, grain, hiddenTrendSeries, shareTab, shareScopePreferences, overviewTab, projectCategory, projectSearch } = preferences
   const setPreference = <K extends keyof CockpitPreferences>(key: K, value: CockpitPreferences[K]) => updatePreferences(actor, { [key]: value })
+  const trendPanel = useRef<HTMLElement>(null), pendingPeriodFocus = useRef(false)
+  useEffect(() => {
+    if (!pendingPeriodFocus.current) return
+    pendingPeriodFocus.current = false
+    const target = trendPanel.current?.querySelector<SVGRectElement>('.cockpit-period-target[tabindex="0"]')
+    target?.focus(); target?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' })
+  }, [dates])
   const [detailMetric, setDetailMetric] = useState<CockpitMetric>()
   const [today, setToday] = useState(() => dayjs().format('YYYY-MM-DD'))
   useEffect(() => { COCKPIT_CATEGORIES.forEach(item => resourceStore(item.key).getState().refreshFormalProjects()) }, [registry])
@@ -77,8 +85,7 @@ function Cockpit() {
   const allFacts = useMemo(() => buildCockpitFacts(inputs, dateFilter, rate, today, (input, primary, secondary) => canReadCockpitDepartment(model, actor, input.project, input.category, primary, secondary)), [inputs, dateFilter, rate, today, model, actor])
   const defaultScope = defaultCockpitScope(allFacts), scope = scopePreference ?? defaultScope
   const shareScopes = { research: shareScopePreferences.research ?? defaultScope, category: shareScopePreferences.category ?? defaultScope }
-  const departmentOptions = useMemo(() => [...new Set([...SOFTWARE_DEPARTMENTS, ...allFacts.filter(row => scope === 'all' || isSoftwareDepartment(row.primary)).map(row => row.secondary)])], [allFacts, scope])
-  const effectiveDepartments = departments.filter(department => departmentOptions.includes(department))
+  const { options: departmentOptions, departments: effectiveDepartments } = useMemo(() => cockpitDepartmentSelection(allFacts, scope, departments), [allFacts, scope, departments])
   const facts = filterCockpitFacts(allFacts, { scope, departments: effectiveDepartments }), total = summarizeCockpit(facts), ratios = cockpitRatios(total, mode)
   const projectCount = new Set(facts.map(row => row.project.id)).size
   const warnings = [...new Set(facts.flatMap(row => row.issues))]
@@ -156,10 +163,12 @@ function Cockpit() {
       </div>
       {!facts.length && <div className="cockpit-scope-note"><InfoCircleOutlined /><span>当前日期与部门范围暂无可用资源数据。</span>{scope === 'software' && <button onClick={() => { updatePreferences(actor, { scopePreference: 'all', departments: [] }) }}>查看全研发 <ArrowRightOutlined /></button>}</div>}
       <div className="cockpit-analysis-grid">
-        <section className="cockpit-panel cockpit-trend-panel" aria-label="投入趋势">
+        <section ref={trendPanel} className="cockpit-panel cockpit-trend-panel" aria-label="投入趋势">
           <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">TREND</span><h2>投入趋势</h2></div><div className="cockpit-panel-tools">{trendTab === 'category' && <Segmented aria-label="趋势粒度" options={[{ label: '月', value: 'month' }, { label: '周', value: 'week' }]} value={grain} onChange={value => setPreference('grain', value as 'month' | 'week')} />}</div></div>
           <div className="cockpit-tabs" role="tablist" aria-label="趋势类型">{[{ key: 'resource', label: '资源管道总趋势' }, { key: 'category', label: '项目分类投入趋势' }].map(item => <button key={item.key} role="tab" aria-selected={trendTab === item.key} onClick={() => setPreference('trendTab', item.key as CockpitPreferences['trendTab'])}>{item.label}</button>)}</div>
-          <div key={`${trendTab}:${grain}:${mode}:${dates.join()}:${scope}:${effectiveDepartments.join()}`} className="cockpit-tab-content"><CockpitChart {...trend} mode={mode} bars={trendTab === 'category'} grain={grain} /></div>
+          <div key={`${trendTab}:${grain}:${mode}:${dates.join()}:${scope}:${effectiveDepartments.join()}`} className="cockpit-tab-content"><CockpitChart {...trend} mode={mode} bars={trendTab === 'category'} grain={trendTab === 'resource' ? 'month' : grain} dates={dates}
+            hidden={hiddenTrendSeries[trendTab]} onHiddenChange={hidden => setPreference('hiddenTrendSeries', { ...hiddenTrendSeries, [trendTab]: hidden })}
+            onInspectPeriod={period => { const patch = cockpitTrendDrilldown(period, trendTab === 'resource' ? 'month' : grain, dates, scope, shareScopes); if (patch) { pendingPeriodFocus.current = true; updatePreferences(actor, patch) } }} /></div>
         </section>
         <section className="cockpit-panel cockpit-share-panel" aria-label="投入结构">
           <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">ALLOCATION</span><h2>投入结构</h2></div><Segmented aria-label={`${shareTab === 'research' ? '三级研发' : '项目分类'}投入范围`} value={shareScopes[shareTab]} options={[{ label: '软工', value: 'software' }, { label: '全研发', value: 'all' }]} onChange={value => setPreference('shareScopePreferences', { ...shareScopePreferences, [shareTab]: value as CockpitScope })} /></div>

@@ -10,6 +10,7 @@ export interface CockpitPreferences {
   mode: CockpitMode
   trendTab: 'resource' | 'category'
   grain: 'month' | 'week'
+  hiddenTrendSeries: Record<'resource' | 'category', string[]>
   shareTab: 'research' | 'category'
   shareScopePreferences: Partial<Record<'research' | 'category', CockpitScope>>
   overviewTab: 'category' | 'department' | 'project'
@@ -21,7 +22,7 @@ export function createCockpitPreferences(now = new Date()): CockpitPreferences {
   const year = now.getFullYear()
   return {
     view: 'management', dates: [`${year}-01-01`, `${year}-12-31`], departments: [], mode: 'labor',
-    trendTab: 'resource', grain: 'month', shareTab: 'research', shareScopePreferences: {},
+    trendTab: 'resource', grain: 'month', hiddenTrendSeries: { resource: [], category: [] }, shareTab: 'research', shareScopePreferences: {},
     overviewTab: 'category', projectCategory: 'all', projectSearch: '',
   }
 }
