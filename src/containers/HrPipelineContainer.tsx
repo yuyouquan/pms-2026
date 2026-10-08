@@ -19,6 +19,7 @@ import CockpitChart from '@/components/cockpit/CockpitChart'
 import CockpitTable, { type CockpitColumn } from '@/components/cockpit/CockpitTable'
 import CockpitMetricDetail, { type CockpitMetric } from '@/components/cockpit/CockpitMetricDetail'
 import CockpitProjectRanking from '@/components/cockpit/CockpitProjectRanking'
+import { cockpitProjectColumns, type CockpitProjectLens } from '@/components/cockpit/cockpitProjectLens'
 import { cockpitDepartmentSelection, cockpitTrendDrilldown } from '@/components/cockpit/cockpitTrendInteraction'
 import { collectCockpitInputs } from '@/components/cockpit/cockpitSources'
 import {
@@ -77,9 +78,15 @@ function Cockpit() {
     if (!pendingOverviewFocus.current) return
     pendingOverviewFocus.current = false
     overviewPanel.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
+    const scroller = overviewPanel.current?.querySelector<HTMLElement>('.cockpit-table-scroll')
+    if (scroller) scroller.scrollLeft = 0
     const input = overviewPanel.current?.querySelector<HTMLInputElement>('input[aria-label="搜索项目总览"]')
     input?.focus({ preventScroll: true }); input?.select()
   }, [preferences])
+  useEffect(() => {
+    const scroller = overviewPanel.current?.querySelector<HTMLElement>('.cockpit-table-scroll')
+    if (scroller) scroller.scrollLeft = 0
+  }, [preferences.projectLens, overviewTab])
   useEffect(() => {
     if (pendingDateFocus.current) {
       pendingDateFocus.current = false
@@ -136,6 +143,11 @@ function Cockpit() {
   const amountColumns: { key: AmountKey; label: string }[] = [{ key: 'annual', label: '年度预算' }, { key: 'estimate', label: '项目概算' }, { key: 'budget', label: '项目预算' }, { key: 'cumulativeBudget', label: '累至今日项目预算' }, { key: 'actual', label: '项目核算' }]
   amountColumns.forEach(field => overviewColumns.push({ ...field, numeric: true, width: field.key === 'cumulativeBudget' ? 190 : 145, value: row => row[field.key]?.[mode], render: row => formatCockpit(row[field.key]?.[mode]) }))
   ;([{ key: 'deviation', label: '概算→预算偏差' }, { key: 'toDate', label: '累至今日预算执行率' }, { key: 'annualExecution', label: '年度执行率' }] as const).forEach(field => overviewColumns.push({ ...field, numeric: true, width: 190, value: row => cockpitRatios(row, mode)[field.key], render: row => percentage(cockpitRatios(row, mode)[field.key]) }))
+  const projectColumns = overviewTab === 'project' && preferences.projectLens === 'actual' ? [...overviewColumns, {
+    key: 'cumulative', label: '累至今日预估投入', numeric: true, width: 190,
+    value: (row: CockpitRow) => row.cumulative?.[mode], render: (row: CockpitRow) => formatCockpit(row.cumulative?.[mode]),
+  }] : overviewColumns
+  const visibleOverviewColumns = overviewTab === 'project' ? cockpitProjectColumns(projectColumns, preferences.projectLens) : overviewColumns
   const shareColumns: CockpitColumn<typeof shares.rows[number]>[] = [
     { key: 'label', label: shareTab === 'research' ? '三级研发' : '项目分类', width: 166, render: row => <span className="cockpit-share-name"><i style={{ background: row.color }} />{row.label}</span> },
     { key: 'total', label: '总投入比', width: 128, numeric: true, render: row => <strong>{percentage(row.total)}</strong> },
@@ -204,12 +216,16 @@ function Cockpit() {
         </section>
       </div>
       <CockpitProjectRanking facts={facts} metric={preferences.rankingMetric} mode={mode} onMetricChange={value => setPreference('rankingMetric', value)} onOpenProject={openProjectResources}
-        onLocateProject={(name = '') => { pendingOverviewFocus.current = true; updatePreferences(actor, { overviewTab: 'project', projectCategory: 'all', projectSearch: name }) }} />
+        onLocateProject={(name = '') => { pendingOverviewFocus.current = true; updatePreferences(actor, { overviewTab: 'project', projectCategory: 'all', projectSearch: name, projectLens: preferences.rankingMetric }) }} />
       <section ref={overviewPanel} className="cockpit-panel cockpit-overview" aria-label="资源总览明细">
         <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">OVERVIEW</span><h2>资源总览 <small>{unit}</small></h2></div><div className="cockpit-panel-tools">{overviewTab === 'project' && <Input className="cockpit-project-search" aria-label="搜索项目总览" placeholder="搜索项目" prefix={<SearchOutlined />} value={projectSearch} onChange={event => setPreference('projectSearch', event.target.value)} allowClear />}{overviewTab === 'project' && <Select aria-label="项目分类" value={projectCategory} onChange={value => setPreference('projectCategory', value)} options={[{ value: 'all', label: '全部项目分类' }, ...COCKPIT_CATEGORIES.map(item => ({ value: item.key, label: item.label }))]} />}<span className="cockpit-table-hint"><BarChartOutlined /> 点击表头排序 · 拖动边缘调宽</span></div></div>
         <div className="cockpit-tabs" role="tablist" aria-label="总览类型">{[{ key: 'category' as const, label: '项目分类总览' }, { key: 'department' as const, label: '二级部门总览' }, { key: 'project' as const, label: '项目总览' }].map(item => <button role="tab" key={item.key} aria-selected={overviewTab === item.key} onClick={() => setPreference('overviewTab', item.key)}>{item.label}</button>)}</div>
         {overviewTab === 'project' && <div className="cockpit-project-results" role="status"><span>匹配 <b>{overviewRows.length}</b> 个项目 <span>/ 当前全局范围 {projectCount} 个</span></span><small>分类和搜索仅筛选项目明细</small>{(projectSearch.trim() || projectCategory !== 'all') && <button className="cockpit-text-button" onClick={() => updatePreferences(actor, { projectCategory: 'all', projectSearch: '' })}>清除项目明细筛选</button>}</div>}
-        <div className="cockpit-tab-content" key={overviewTab}><CockpitTable rows={overviewRows} columns={overviewColumns} label="资源总览明细" footer={overviewTotal}
+        {overviewTab === 'project' && <div className="cockpit-project-lens" role="group" aria-label="项目明细核对设置">
+          <Segmented aria-label="项目明细视图" value={preferences.projectLens} onChange={value => setPreference('projectLens', value as CockpitProjectLens)} options={[{ label: '全部字段', value: 'all' }, { label: '预算核对', value: 'budget' }, { label: '核算核对', value: 'actual' }]} />
+          <p>{preferences.projectLens === 'actual' ? '执行率使用累至今日预估投入，预算缺失时沿用概算或年度预算来源。' : preferences.projectLens === 'budget' ? '对照项目预算、概算偏差和年度预算；缺失来源保留为“—”。' : '展示项目信息与全部原有投入指标，横向滚动查看。'}</p>
+        </div>}
+        <div className="cockpit-tab-content" key={overviewTab}><CockpitTable rows={overviewRows} columns={visibleOverviewColumns} label="资源总览明细" footer={overviewTotal}
           view={preferences.overviewTables[overviewTab] ?? { widths: {} }} onViewChange={value => useCockpitUiStore.getState().updateOverviewTable(actor, overviewTab, value)} /></div>
       </section>
       <footer className="cockpit-footer"><span>资源正式版本 + 工时核算</span><span>仅展示当前角色授权范围内的数据</span></footer>

@@ -32,5 +32,5 @@ assert.equal(reset.overviewTab, 'project', 'filter reset preserves selected view
 assert.equal(reset.trendTab, 'category')
 assert.equal(reset.grain, 'week')
 assert.equal(read('乙').projectSearch, '另一位用户', 'reset never clears another identity')
-assert.ok(Object.keys(reset).every(key => ['view', 'dates', 'periodHistory', 'scopePreference', 'departments', 'mode', 'trendTab', 'grain', 'hiddenTrendSeries', 'shareTab', 'shareScopePreferences', 'overviewTab', 'projectCategory', 'projectSearch', 'overviewTables', 'rankingMetric'].includes(key)), 'store holds choices only, no project facts or permission results')
+assert.ok(Object.keys(reset).every(key => ['view', 'dates', 'periodHistory', 'scopePreference', 'departments', 'mode', 'trendTab', 'grain', 'hiddenTrendSeries', 'shareTab', 'shareScopePreferences', 'overviewTab', 'projectCategory', 'projectSearch', 'overviewTables', 'rankingMetric', 'projectLens'].includes(key)), 'store holds choices only, no project facts or permission results')
 console.log('PASS cockpit navigation context: calendar defaults, per-user isolation, immutable updates, filter reset and presentation retention')

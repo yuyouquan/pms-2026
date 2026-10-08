@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { CockpitMode, CockpitScope } from '@/components/cockpit/cockpitData'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import type { CockpitTableView } from '@/components/cockpit/cockpitTableView'
+import type { CockpitProjectLens } from '@/components/cockpit/cockpitProjectLens'
 import { validDashboardDate } from '@/components/project-resources/resourceDashboardPeriods'
 
 export interface CockpitPreferences {
@@ -21,6 +22,7 @@ export interface CockpitPreferences {
   projectSearch: string
   overviewTables: Partial<Record<'category' | 'department' | 'project', CockpitTableView>>
   rankingMetric: 'budget' | 'actual'
+  projectLens: CockpitProjectLens
 }
 
 export function createCockpitPreferences(now = new Date()): CockpitPreferences {
@@ -28,7 +30,7 @@ export function createCockpitPreferences(now = new Date()): CockpitPreferences {
   return {
     view: 'management', dates: [`${year}-01-01`, `${year}-12-31`], periodHistory: [], departments: [], mode: 'labor',
     trendTab: 'resource', grain: 'month', hiddenTrendSeries: { resource: [], category: [] }, shareTab: 'research', shareScopePreferences: {},
-    overviewTab: 'category', projectCategory: 'all', projectSearch: '', overviewTables: {}, rankingMetric: 'actual',
+    overviewTab: 'category', projectCategory: 'all', projectSearch: '', overviewTables: {}, rankingMetric: 'actual', projectLens: 'all',
   }
 }
 
