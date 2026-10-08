@@ -10225,3 +10225,27 @@ button.cockpit-filter-chip:hover { border-color: #bba9dc; background: #f0eaf9; }
 .cockpit-project-results .cockpit-text-button { color: #8370ab; font-size: 10px; }
 @media (max-width: 720px) { .cockpit-context-memory { flex-basis: 100%; margin: 2px 0 0; } .cockpit-filter-summary { gap: 6px; } .cockpit-project-results { padding: 12px 15px; gap: 8px; } .cockpit-project-results small { flex-basis: 100%; order: 2; margin-left: 0; } .cockpit-project-results .cockpit-text-button { margin-left: auto; } }
 @media (prefers-reduced-motion: reduce) { .cockpit-filter-chip { transition: none; } }
+
+/* Cockpit source reconciliation: availability is scoped to the current window and unit. */
+.cockpit-source-coverage { padding: 16px 18px; margin-bottom: 20px; border: 1px solid #e5e7ef; border-radius: 12px; background: #fff; }
+.cockpit-source-coverage > div:first-child { display: flex; justify-content: space-between; gap: 12px; color: #596780; font-size: 12px; }
+.cockpit-source-coverage strong { color: #6552a0; font-variant-numeric: tabular-nums; }
+.cockpit-coverage-track { height: 6px; margin: 12px 0; overflow: hidden; border-radius: 6px; background: #eef0f5; }
+.cockpit-coverage-track i { display: block; height: 100%; border-radius: inherit; background: #8270be; transition: width .35s ease; }
+.cockpit-source-coverage p { color: #667388; margin: 10px 0 16px; font-size: 11px; line-height: 1.8; }
+.cockpit-source-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.cockpit-source-filters button { display: flex; align-items: center; gap: 9px; min-height: 36px; padding: 6px 12px; border: 1px solid #e6e8ef; border-radius: 8px; background: #fff; color: #596780; font-size: 12px; transition: background .18s, border-color .18s; }
+.cockpit-source-filters button:hover { background: #f5f2fc; border-color: #c5b9e5; }
+.cockpit-source-filters button[aria-pressed=true] { background: #f0ebfa; border-color: #b5a5dc; color: #604798; }
+.cockpit-source-filters b { padding: 0 5px; min-width: 20px; background: #f3f4f8; border-radius: 4px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.cockpit-source-results { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; color: #596780; font-size: 12px; }
+.cockpit-source-results small { color: #667388; font-size: 11px; }
+.cockpit-source-cell { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.cockpit-source-cell > span, .cockpit-source-cell > div > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cockpit-source-cell > div { display: flex; align-items: center; gap: 8px; color: #667388; font-size: 10px; }
+.cockpit-source-status { flex: none; padding: 2px 6px; border-radius: 4px; background: #f1f2f6; color: #596780; }
+.cockpit-source-status.is-available { background: #e8f4ee; color: #287150; }
+.cockpit-source-filters button:focus-visible, .cockpit-source-results button:focus-visible { outline: 2px solid #7963bc; outline-offset: 3px; }
+.cockpit-detail-drawer .cockpit-detail-rule, .cockpit-detail-drawer .cockpit-detail-footnote { color: #667388; }
+@media (max-width: 720px) { .cockpit-source-coverage { padding: 14px; } .cockpit-source-filters { gap: 6px; } .cockpit-source-filters button { padding: 6px 9px; } .cockpit-detail-basis { gap: 20px; flex-wrap: wrap; } }
+@media (prefers-reduced-motion: reduce) { .cockpit-coverage-track i, .cockpit-source-filters button { transition: none; } }
