@@ -1,227 +1,178 @@
 'use client'
 
-import { useEffect, useMemo } from 'react'
-import { Card, Empty, Tooltip } from 'antd'
-import type { CSSProperties, ReactNode } from 'react'
-import {
-  DashboardOutlined,
-  TeamOutlined,
-  FundOutlined,
-  SettingOutlined,
-  RightOutlined,
-  DownOutlined,
-  AppstoreOutlined,
-} from '@ant-design/icons'
-import { useUiStore } from '@/stores/ui'
-import { useHrPipelineStore } from '@/stores/hrPipeline'
-import { CollapsibleSidebarShell } from '@/components/shared/CollapsibleWorkspace'
-import {
-  HR_SIDEBAR_NAV,
-  resolveGroupOfLeaf,
-  resolveLeafLabel,
-  type HrSidebarGroupKey,
-} from '@/constants/hrPipeline'
-import { resolveConfigModule } from '@/constants/hrConfig'
-import MachineProjectContent from '@/components/hr-machine/MachineProjectContent'
-import TosProjectContent from '@/components/hr-tos/TosProjectContent'
-import TechnicalProjectContent from '@/components/hr-technical/TechnicalProjectContent'
-import CapabilityProjectContent from '@/components/hr-capability/CapabilityProjectContent'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { Button, DatePicker, Empty, Popover, Segmented, Select, Tooltip } from 'antd'
+import { ApartmentOutlined, ArrowRightOutlined, BarChartOutlined, CalendarOutlined, DashboardOutlined, InfoCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
-import { canRunGlobalMenuAction, getAccessibleHrGroups } from '@/lib/globalMenuPermissions'
-import type { HrSidebarGroup } from '@/constants/hrPipeline'
-import ConfigContent from '@/components/hr-config/ConfigContent'
+import { useHrConfigStore } from '@/stores/hrConfig'
+import { useResourceStore, resourceStore } from '@/components/project-resources/resourceVersionAdapter'
+import { dashboardSources, DASHBOARD_BUDGETS, selectDashboardSource } from '@/components/project-resources/resourceDashboardData'
+import { resourceAccountingDataset } from '@/mock/resourceAccounting'
+import { matchesHrCategory } from '@/lib/hrFormalProjectSource'
+import { canResourceAction } from '@/lib/hrProjectRegistry'
+import { getProjectAttribute } from '@/types/projectRegistry'
+import { evaluateMenuPermission } from '@/lib/permissionCenter'
+import { getProjectInfoValue } from '@/lib/projectInfoValues'
+import CockpitChart from '@/components/cockpit/CockpitChart'
+import CockpitTable, { type CockpitColumn } from '@/components/cockpit/CockpitTable'
+import {
+  COCKPIT_CATEGORIES, SOFTWARE_DEPARTMENTS, buildCockpitFacts, canReadCockpitDepartment, cockpitOverview, cockpitRatios, cockpitShares, cockpitTrend,
+  filterCockpitFacts, formatCockpit, isSoftwareDepartment, summarizeCockpit,
+  type AmountKey, type CockpitInput, type CockpitMode, type CockpitRow, type CockpitScope,
+} from '@/components/cockpit/cockpitData'
 
-/* ── Icon resolver ─────────────────────────────────────────────────── */
-
-const ICON_MAP: Record<string, ReactNode> = {
-  DashboardOutlined: <DashboardOutlined />,
-  TeamOutlined: <TeamOutlined />,
-  FundOutlined: <FundOutlined />,
-  SettingOutlined: <SettingOutlined />,
+const yearDates = (): [string, string] => [`${dayjs().year()}-01-01`, `${dayjs().year()}-12-31`]
+function AnimatedNumber({ value, suffix = '' }: { value?: number; suffix?: string }) {
+  const [display, setDisplay] = useState(value)
+  useEffect(() => {
+    if (value === undefined || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setDisplay(value); return }
+    const start = performance.now(), from = display ?? 0
+    let frame: number
+    const tick = (time: number) => { const progress = Math.min(1, (time - start) / 650); setDisplay(from + (value - from) * (1 - Math.pow(1 - progress, 3))); if (progress < 1) frame = requestAnimationFrame(tick) }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  // Animate between committed values, never restart for an intermediate frame.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value])
+  return <span aria-label={`${formatCockpit(value)}${suffix}`}><span aria-hidden="true">{formatCockpit(display)}{value === undefined ? '' : suffix}</span></span>
 }
-
-/* ── Sidebar tree item ────────────────────────────────────────────── */
-
-interface SidebarTreeProps {
-  collapsed: boolean
-  groups: HrSidebarGroup[]
-  actor: string
-}
-
-function HrSidebarTree({ collapsed, groups, actor }: SidebarTreeProps) {
-  const { activeLeaf, expandedGroups, setActiveLeaf, toggleGroup } = useHrPipelineStore()
-
-  if (collapsed) {
-    // Collapsed mode: show only parent group icons
-    return (
-      <nav className="pms-hr-sidebar-tree pms-hr-sidebar-tree--collapsed" role="navigation" aria-label="人力资源管道导航">
-        {groups.map(group => {
-          const isActive = resolveGroupOfLeaf(activeLeaf) === group.key
-          return (
-            <Tooltip key={group.key} title={group.label} placement="right">
-              <button
-                className={`pms-hr-sidebar-icon-btn${isActive ? ' is-active' : ''}`}
-                onClick={() => {
-                  // When collapsed, clicking a group icon activates its first child
-                  const firstChild = group.children[0]
-                  if (firstChild && canRunGlobalMenuAction(actor, `hr.${firstChild.key}`, 'view')) setActiveLeaf(firstChild.key)
-                }}
-                aria-label={group.label}
-              >
-                {ICON_MAP[group.icon] ?? <AppstoreOutlined />}
-              </button>
-            </Tooltip>
-          )
-        })}
-      </nav>
-    )
-  }
-
-  // Expanded mode: full tree with expandable groups
-  return (
-    <nav className="pms-hr-sidebar-tree" role="navigation" aria-label="人力资源管道导航">
-      {groups.map(group => {
-        const isExpanded = expandedGroups.has(group.key)
-        const hasActiveChild = group.children.some(c => c.key === activeLeaf)
-        return (
-          <div key={group.key} className="pms-hr-sidebar-group">
-            <button
-              className={`pms-hr-sidebar-group-header${hasActiveChild ? ' has-active-child' : ''}`}
-              onClick={() => toggleGroup(group.key)}
-              aria-expanded={isExpanded}
-              aria-label={`${group.label} ${isExpanded ? '收起' : '展开'}`}
-            >
-              <span className="pms-hr-sidebar-group-icon">
-                {ICON_MAP[group.icon] ?? <AppstoreOutlined />}
-              </span>
-              <span className="pms-hr-sidebar-group-label">{group.label}</span>
-              <span className="pms-hr-sidebar-group-arrow">
-                {isExpanded ? <DownOutlined /> : <RightOutlined />}
-              </span>
-            </button>
-            {isExpanded && (
-              <div className="pms-hr-sidebar-children">
-                {group.children.map(child => {
-                  const isActive = activeLeaf === child.key
-                  return (
-                    <button
-                      key={child.key}
-                      className={`pms-hr-sidebar-leaf${isActive ? ' is-active' : ''}`}
-                      onClick={() => { if (canRunGlobalMenuAction(actor, `hr.${child.key}`, 'view')) setActiveLeaf(child.key) }}
-                      title={child.description ?? child.label}
-                    >
-                      <span className="pms-hr-sidebar-leaf-dot" />
-                      <span className="pms-hr-sidebar-leaf-label">{child.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )
-      })}
-    </nav>
-  )
-}
-
-/* ── Placeholder content ──────────────────────────────────────────── */
-
-function HrContentPlaceholder({ leafKey }: { leafKey: string }) {
-  const label = resolveLeafLabel(leafKey)
-  const groupKey = resolveGroupOfLeaf(leafKey)
-  const groupLabel = groupKey ? HR_SIDEBAR_NAV.find(g => g.key === groupKey)?.label : ''
-
-  return (
-    <Card className="pms-hr-content-card" variant="borderless">
-      <Empty
-        description={
-          <span style={{ color: '#817b90', fontSize: 13 }}>
-            {groupLabel} / {label} — 内容开发中...
-          </span>
-        }
-        image={Empty.PRESENTED_IMAGE_SIMPLE}
-      />
-    </Card>
-  )
-}
-
-/* ── Content router ─────────────────────────────────────────────────── */
-
-function HrContentRouter({ leafKey }: { leafKey: string }) {
-  // Route to specific content based on active leaf
-  if (leafKey === 'investment/machine') {
-    return <MachineProjectContent />
-  }
-
-  if (leafKey === 'investment/tos') {
-    return <TosProjectContent />
-  }
-
-  if (leafKey === 'investment/tech') {
-    return <TechnicalProjectContent />
-  }
-
-  if (leafKey === 'investment/capability') {
-    return <CapabilityProjectContent />
-  }
-
-  // 配置中心路由
-  const configModule = resolveConfigModule(leafKey)
-  if (configModule) {
-    return <ConfigContent moduleKey={configModule} />
-  }
-
-  // Default: placeholder for unimplemented sections
-  return <HrContentPlaceholder leafKey={leafKey} />
-}
-
-/* ── Main container ───────────────────────────────────────────────── */
+const metricDefinitions: { key: AmountKey | 'deviation' | 'toDate' | 'annualExecution'; label: string; note: string; color: string }[] = [
+  { key: 'annual', label: '年度预算', note: '年度预算 · 正式版本', color: '#7561d1' },
+  { key: 'estimate', label: '项目概算', note: '项目概算 · 正式版本', color: '#3c99a0' },
+  { key: 'budget', label: '项目预算', note: '项目预算 · 正式版本', color: '#cd9550' },
+  { key: 'cumulative', label: '累至今日预估投入', note: '选定日期内，累计至今日', color: '#698dc8' },
+  { key: 'actual', label: '项目核算', note: '工时核算 · 人天 / 当月工作日', color: '#39957d' },
+  { key: 'deviation', label: '概算 → 预算偏差', note: '(项目预算 − 项目概算) / 项目概算', color: '#ad7c51' },
+  { key: 'toDate', label: '累至今日预算执行率', note: '项目核算 / 累至今日预估投入', color: '#6d80b3' },
+  { key: 'annualExecution', label: '全年执行率', note: '选定日期内，项目核算 / 项目预算', color: '#8775b7' },
+]
 
 export default function HrPipelineContainer() {
-  const { hrSidebarCollapsed, setHrSidebarCollapsed } = useUiStore()
-  const { activeLeaf, setActiveLeaf } = useHrPipelineStore()
   const actor = useProjectStore(state => state.currentLoginUser)
-  const model = usePermissionStore(state => state.permissionCenter)
-  const groups = useMemo(() => getAccessibleHrGroups(model, actor), [model, actor])
-  const selectedAccessible = groups.some(group => group.children.some(leaf => leaf.key === activeLeaf))
-  useEffect(() => {
-    if (!selectedAccessible && groups[0]?.children[0]) setActiveLeaf(groups[0].children[0].key)
-  }, [selectedAccessible, groups, setActiveLeaf])
-
-  const sidebarWidth = hrSidebarCollapsed ? 64 : 240
-
-  const containerStyle = {
-    '--pms-hr-sidebar-width': `${sidebarWidth}px`,
-  } as CSSProperties
-
-  const sidebarTitle = useMemo(() => (
-    <div className="pms-hr-sidebar-title">
-      <TeamOutlined style={{ marginRight: 8, color: 'var(--pms-brand)' }} />
-      <span>人力资源管道</span>
-    </div>
-  ), [])
-
-  return (
-    <div className="pms-hr-pipeline pms-page-shell" style={containerStyle}>
-      <div className="pms-main-content pms-hr-main-content">
-        <section className={`pms-hr-workspace${hrSidebarCollapsed ? ' is-collapsed' : ''}`}>
-          <CollapsibleSidebarShell
-            collapsed={hrSidebarCollapsed}
-            onCollapsedChange={setHrSidebarCollapsed}
-            title={sidebarTitle}
-            ariaLabel="人力资源管道侧栏"
-            expandedWidth={240}
-            collapsedWidth={64}
-            className="pms-hr-sidebar"
-          >
-            <HrSidebarTree collapsed={hrSidebarCollapsed} groups={groups} actor={actor} />
-          </CollapsibleSidebarShell>
-          <div className="pms-hr-workspace__content">
-            {selectedAccessible ? <HrContentRouter key={`${actor}:${activeLeaf}`} leafKey={activeLeaf} /> : <Empty description="暂无可访问的人力资源菜单" />}
+  return <Cockpit key={actor} />
+}
+function Cockpit() {
+  const registry = useProjectStore(state => state.projects), actor = useProjectStore(state => state.currentLoginUser)
+  const permission = usePermissionStore(), model = permission.permissionCenter
+  const config = useHrConfigStore(state => state.data), rate = Number(config.feeRate?.[0]?.value ?? 5)
+  const machine = useResourceStore('machine'), tos = useResourceStore('tos'), technical = useResourceStore('technical'), capability = useResourceStore('capability')
+  const canManagement = evaluateMenuPermission(model, actor, 'cockpit.resources'), canTechnical = evaluateMenuPermission(model, actor, 'cockpit.technical')
+  const [view, setView] = useState('management'), [dates, setDates] = useState<[string, string]>(yearDates), [scope, setScope] = useState<CockpitScope>('software')
+  const [departments, setDepartments] = useState<string[]>([]), [mode, setMode] = useState<CockpitMode>('labor')
+  const [trendTab, setTrendTab] = useState('resource'), [grain, setGrain] = useState<'month' | 'week'>('month')
+  const [shareTab, setShareTab] = useState<'research' | 'category'>('research'), [shareScopes, setShareScopes] = useState({ research: 'software' as CockpitScope, category: 'software' as CockpitScope })
+  const [overviewTab, setOverviewTab] = useState<'category' | 'department' | 'project'>('category'), [projectCategory, setProjectCategory] = useState('all')
+  const [today, setToday] = useState(() => dayjs().format('YYYY-MM-DD'))
+  useEffect(() => { COCKPIT_CATEGORIES.forEach(item => resourceStore(item.key).getState().refreshFormalProjects()) }, [registry])
+  useEffect(() => { const timer = setInterval(() => setToday(dayjs().format('YYYY-MM-DD')), 60000); return () => clearInterval(timer) }, [])
+  const selectedView = view === 'management' && canManagement ? 'management' : view === 'technical' && canTechnical ? 'technical' : canManagement ? 'management' : 'technical'
+  const inputs = useMemo<CockpitInput[]>(() => {
+    if (!canManagement) return []
+    const stores = { machine, tos, technical, capability }
+    return registry.flatMap(project => {
+      if (getProjectAttribute(project) === 'roadmap' || project.boundFormalProjectId || !canResourceAction({ pmsProjectId: project.id }, 'view', project.id, actor)) return []
+      const category = COCKPIT_CATEGORIES.find(item => matchesHrCategory(project, item.key))?.key
+      if (!category) return []
+      const store = stores[category]
+      return [{ project, category, monthly: store.monthlyInvestments, dataset: resourceAccountingDataset(project.id),
+        sources: DASHBOARD_BUDGETS.map(item => selectDashboardSource(dashboardSources(store.projects, project.id, item.key))),
+      }]
+    })
+  }, [registry, machine, tos, technical, capability, actor, permission, canManagement])
+  const dateFilter = useMemo(() => ({ startDate: dates[0], endDate: dates[1] }), [dates])
+  const allFacts = useMemo(() => buildCockpitFacts(inputs, dateFilter, rate, today, (input, primary, secondary) => canReadCockpitDepartment(model, actor, input.project, input.category, primary, secondary)), [inputs, dateFilter, rate, today, model, actor])
+  const departmentOptions = useMemo(() => [...new Set([...SOFTWARE_DEPARTMENTS, ...allFacts.filter(row => scope === 'all' || isSoftwareDepartment(row.primary)).map(row => row.secondary)])], [allFacts, scope])
+  const effectiveDepartments = departments.filter(department => departmentOptions.includes(department))
+  const facts = filterCockpitFacts(allFacts, { scope, departments: effectiveDepartments }), total = summarizeCockpit(facts), ratios = cockpitRatios(total, mode)
+  const projectCount = new Set(facts.map(row => row.project.id)).size
+  const warnings = [...new Set(facts.flatMap(row => row.issues))]
+  const trend = cockpitTrend(facts, dateFilter, mode, trendTab as 'resource' | 'category', grain)
+  const shareFacts = filterCockpitFacts(allFacts, { scope: shareScopes[shareTab], departments: effectiveDepartments })
+  const shares = cockpitShares(shareFacts, dateFilter, shareTab)
+  const overviewFacts = overviewTab === 'project' && projectCategory !== 'all' ? facts.filter(row => row.category === projectCategory) : facts
+  const overviewRows = cockpitOverview(overviewFacts, overviewTab, mode)
+  const overviewTotal: CockpitRow = { key: 'total', name: '合计', count: new Set(overviewFacts.map(row => row.project.id)).size, ...summarizeCockpit(overviewFacts) }
+  const unit = mode === 'labor' ? '人月' : '万元'
+  const percentage = (value?: number) => value === undefined ? '—' : `${formatCockpit(value)}%`
+  const overviewColumns: CockpitColumn<CockpitRow>[] = [{ key: 'name', label: overviewTab === 'category' ? '项目分类' : overviewTab === 'department' ? '二级部门' : '项目名称', width: overviewTab === 'project' ? 270 : 216, value: row => row.name,
+    render: row => <div className="cockpit-row-name"><i style={{ background: COCKPIT_CATEGORIES.find(item => item.key === row.category)?.color ?? '#8995a8' }} /><span title={row.name}>{row.name}</span>{overviewTab === 'category' && <small>{row.count} 项</small>}</div> }]
+  if (overviewTab === 'project') {
+    overviewColumns.push({ key: 'category', label: '项目分类', width: 160, value: row => row.category, render: row => COCKPIT_CATEGORIES.find(item => item.key === row.category)?.label ?? '—' })
+    const fields = [
+      ...(projectCategory === 'all' || projectCategory === 'machine' ? [{ key: 'firstSaleTosVersion', label: '首销tOS版本' }] : []),
+      { key: 'status', label: '项目状态' },
+      ...(projectCategory === 'all' || projectCategory === 'machine' ? [{ key: 'softwareProjectLevel', label: '项目等级' }, { key: 'researchMode', label: '研发模式' }] : []),
+    ]
+    fields.forEach(field => { const read = (row: CockpitRow) => row.project && (field.key === 'status' || row.category === 'machine') ? String((field.key === 'firstSaleTosVersion' ? row.project.firstSaleTosVersionId || getProjectInfoValue({ ...row.project }, field.key) : getProjectInfoValue({ ...row.project }, field.key)) ?? '') || undefined : undefined
+      overviewColumns.push({ ...field, width: 146, value: read, render: row => read(row) ?? '—' }) })
+  }
+  const amountColumns: { key: AmountKey; label: string }[] = [{ key: 'annual', label: '年度预算' }, { key: 'estimate', label: '项目概算' }, { key: 'budget', label: '项目预算' }, { key: 'cumulativeBudget', label: '累至今日项目预算' }, { key: 'actual', label: '项目核算' }]
+  amountColumns.forEach(field => overviewColumns.push({ ...field, numeric: true, width: field.key === 'cumulativeBudget' ? 190 : 145, value: row => row[field.key]?.[mode], render: row => formatCockpit(row[field.key]?.[mode]) }))
+  ;([{ key: 'deviation', label: '概算→预算偏差' }, { key: 'toDate', label: '累至今日预算执行率' }, { key: 'annualExecution', label: '年度执行率' }] as const).forEach(field => overviewColumns.push({ ...field, numeric: true, width: 190, value: row => cockpitRatios(row, mode)[field.key], render: row => percentage(cockpitRatios(row, mode)[field.key]) }))
+  const shareColumns: CockpitColumn<typeof shares.rows[number]>[] = [
+    { key: 'label', label: shareTab === 'research' ? '三级研发' : '项目分类', width: 166, render: row => <span className="cockpit-share-name"><i style={{ background: row.color }} />{row.label}</span> },
+    { key: 'total', label: '总投入比', width: 128, numeric: true, render: row => <strong>{percentage(row.total)}</strong> },
+    ...shares.months.map((month, index) => ({ key: month, label: month.replace('-', ''), width: 104, numeric: true, render: (row: typeof shares.rows[number]) => percentage(row.months[index]) })),
+  ]
+  const resetFilters = () => { setDates(yearDates()); setScope('software'); setDepartments([]) }
+  if (!canManagement && !canTechnical) return <Empty description="暂无驾驶舱访问权限" />
+  return <main className="cockpit" aria-label="驾驶舱">
+    <header className="cockpit-heading">
+      <div className="cockpit-title-group"><span className="cockpit-title-icon"><DashboardOutlined /></span><div><div className="cockpit-eyebrow">驾驶舱 <span>/</span> 资源管理</div><h1>资源全景</h1></div></div>
+      <div className="cockpit-view-switch" role="tablist" aria-label="驾驶舱视角">
+        {canManagement && <button role="tab" aria-selected={selectedView === 'management'} onClick={() => setView('management')}>管理层 / 部门经理 / 部门运营</button>}
+        {canTechnical && <button role="tab" aria-selected={selectedView === 'technical'} onClick={() => setView('technical')}>技术运营</button>}
+      </div>
+    </header>
+    {selectedView === 'technical' ? <section className="cockpit-technical-blank" role="tabpanel" aria-label="技术运营" /> : <section role="tabpanel" aria-label="资源管理看板" className="cockpit-management">
+      <div className="cockpit-filterbar">
+        <div className="cockpit-date-filter"><CalendarOutlined /><span className="cockpit-filter-label">统计日期</span><DatePicker.RangePicker aria-label="统计日期" allowClear={false} value={[dayjs(dates[0]), dayjs(dates[1])]} onChange={value => { if (value?.[0] && value[1]) setDates([value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')]) }} presets={[{ label: '本年度', value: [dayjs().startOf('year'), dayjs().endOf('year')] }, { label: '本季度', value: [dayjs().month(Math.floor(dayjs().month() / 3) * 3).startOf('month'), dayjs().month(Math.floor(dayjs().month() / 3) * 3 + 2).endOf('month')] }, { label: '本月', value: [dayjs().startOf('month'), dayjs().endOf('month')] }]} /></div>
+        <div className="cockpit-dept-filter"><ApartmentOutlined /><Select aria-label="部门范围" value={scope} onChange={value => { setScope(value); setDepartments([]) }} options={[{ value: 'software', label: '软件工程部' }, { value: 'all', label: '全研发' }]} /><Select aria-label="二级部门" mode="multiple" placeholder="全部二级部门" value={effectiveDepartments} onChange={setDepartments} options={departmentOptions.map(value => ({ value, label: value }))} maxTagCount="responsive" allowClear /></div>
+        <Tooltip title="恢复本年度与软件工程部"><Button type="text" icon={<ReloadOutlined />} aria-label="重置筛选" onClick={resetFilters} /></Tooltip>
+        <Segmented aria-label="统计单位" value={mode} options={[{ label: '人月', value: 'labor' }, { label: '万元', value: 'cost' }]} onChange={value => setMode(value as CockpitMode)} />
+      </div>
+      <div className="cockpit-context"><span><i />可见资源汇总 <b>{projectCount}</b> 个项目 <span className="cockpit-divider">/</span> 截至 {today}</span>
+        <Popover title="数据口径" content={<div className="cockpit-rule-content"><p>预算仅取唯一正式版本，已绑定年度预算计入对应正式项目一次。未设置正式版本的指标不计入汇总，以“—”表示无可用来源。</p><p>核算 = 工时人天 / 来源月份工作日；费用含非人力费用。日期与部门筛选同时作用于所有指标。累至今日按日历日分摊，预算缺失时依次使用概算、年度预算。</p><p>比例由汇总值计算，不平均项目百分比。投入比使用工时人天占比；两个投入比可各自选择软工或全研发。</p><p>当前沿用系统演示资源与工时数据。{warnings.length ? `${warnings.length} 项来源记录待完善：${warnings.slice(0, 3).join('；')}` : '只汇总当前角色可访问的项目与部门。'}</p></div>}><button className="cockpit-text-button"><InfoCircleOutlined /> 数据口径{warnings.length ? ` · ${warnings.length} 项待完善` : ''}</button></Popover>
+      </div>
+      <div className="cockpit-metrics" role="group" aria-label="八项核心指标">
+        {metricDefinitions.map((metric, index) => {
+          const ratio = ['deviation', 'toDate', 'annualExecution'].includes(metric.key)
+          const value = ratio ? ratios[metric.key as keyof typeof ratios] : total[metric.key as AmountKey]?.[mode]
+          const other = total[metric.key as AmountKey]?.[mode === 'labor' ? 'cost' : 'labor']
+          const covered = new Set(facts.filter(row => row[metric.key as AmountKey]?.[mode] !== undefined).map(row => row.project.id)).size
+          return <article className={`cockpit-metric${metric.key === 'actual' ? ' cockpit-metric-emphasis' : ''}`} key={metric.key} style={{ '--metric-color': metric.color, '--entry-delay': `${index * 45}ms` } as CSSProperties}>
+            <div className="cockpit-metric-title"><h2>{metric.label}</h2><Tooltip title={`${metric.note}。${ratio ? "按可用来源汇总后计算，缺失项不作为零值。" : `可用来源 ${covered}/${projectCount} 项；缺失或无效来源未纳入汇总。`}`}><button aria-label={`${metric.label}计算规则`}><InfoCircleOutlined /></button></Tooltip></div>
+            <div className="cockpit-metric-value"><AnimatedNumber value={value} suffix={ratio ? '%' : ''} />{!ratio && <small>{unit}</small>}</div>
+            <div className="cockpit-metric-bottom">{ratio ? <><span>{metric.key === 'deviation' ? '概算与预算对比' : '预算执行进度'}</span><span className="cockpit-mini-meter"><i style={{ width: `${Math.min(100, Math.max(0, value ?? 0))}%` }} /></span></> : <><span>{formatCockpit(other)} {mode === 'labor' ? '万元' : '人月'}</span><small>{covered ? `${covered}/${projectCount} 项` : '暂无来源'}</small></>}</div>
+          </article>
+        })}
+      </div>
+      {!facts.length && <div className="cockpit-scope-note"><InfoCircleOutlined /><span>当前日期与部门范围暂无可用资源数据。</span>{scope === 'software' && <button onClick={() => { setScope('all'); setDepartments([]) }}>查看全研发 <ArrowRightOutlined /></button>}</div>}
+      <div className="cockpit-analysis-grid">
+        <section className="cockpit-panel cockpit-trend-panel" aria-label="投入趋势">
+          <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">TREND</span><h2>投入趋势</h2></div><div className="cockpit-panel-tools">{trendTab === 'category' && <Segmented aria-label="趋势粒度" options={[{ label: '月', value: 'month' }, { label: '周', value: 'week' }]} value={grain} onChange={value => setGrain(value as 'month' | 'week')} />}</div></div>
+          <div className="cockpit-tabs" role="tablist" aria-label="趋势类型">{[{ key: 'resource', label: '资源管道总趋势' }, { key: 'category', label: '项目分类投入趋势' }].map(item => <button key={item.key} role="tab" aria-selected={trendTab === item.key} onClick={() => setTrendTab(item.key)}>{item.label}</button>)}</div>
+          <div key={`${trendTab}:${grain}:${mode}:${dates.join()}:${scope}:${effectiveDepartments.join()}`} className="cockpit-tab-content"><CockpitChart {...trend} mode={mode} bars={trendTab === 'category'} grain={grain} /></div>
+        </section>
+        <section className="cockpit-panel cockpit-share-panel" aria-label="投入结构">
+          <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">ALLOCATION</span><h2>投入结构</h2></div><Segmented aria-label={`${shareTab === 'research' ? '三级研发' : '项目分类'}投入范围`} value={shareScopes[shareTab]} options={[{ label: '软工', value: 'software' }, { label: '全研发', value: 'all' }]} onChange={value => setShareScopes(current => ({ ...current, [shareTab]: value as CockpitScope }))} /></div>
+          <div className="cockpit-tabs" role="tablist" aria-label="投入比例类型">{[{ key: 'research' as const, label: '三级研发投入比' }, { key: 'category' as const, label: '项目分类投入比' }].map(item => <button key={item.key} role="tab" aria-selected={shareTab === item.key} onClick={() => setShareTab(item.key)}>{item.label}</button>)}</div>
+          <div className="cockpit-tab-content" key={shareTab}>
+            <div className="cockpit-share-summary"><span>工时总投入 <strong>{shares.total ? formatCockpit(shares.total) : '—'}</strong> 人天</span><small>{shareScopes[shareTab] === 'software' ? '软件工程部' : '全研发'} · 选定日期</small></div>
+            <div className="cockpit-share-bar" aria-label="投入比例分布">{shares.rows.map(row => <Tooltip key={row.key} title={`${row.label} ${percentage(row.total)}`}><span style={{ width: `${row.total ?? 0}%`, background: row.color }} /></Tooltip>)}</div>
+            <CockpitTable rows={shares.rows} columns={shareColumns} label={shareTab === 'research' ? '三级研发投入比' : '项目分类投入比'} />
+            <p className="cockpit-panel-note">月度占比随所选日期计算，横向滚动查看各月。{shares.rows.some(row => row.label === '未归类') ? '未配置研发分类的工时保留为未归类。' : ''}</p>
           </div>
         </section>
       </div>
-    </div>
-  )
+      <section className="cockpit-panel cockpit-overview" aria-label="资源总览明细">
+        <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">OVERVIEW</span><h2>资源总览 <small>{unit}</small></h2></div><div className="cockpit-panel-tools">{overviewTab === 'project' && <Select aria-label="项目分类" value={projectCategory} onChange={setProjectCategory} options={[{ value: 'all', label: '全部项目分类' }, ...COCKPIT_CATEGORIES.map(item => ({ value: item.key, label: item.label }))]} />}<span className="cockpit-table-hint"><BarChartOutlined /> 点击表头排序 · 拖动边缘调宽</span></div></div>
+        <div className="cockpit-tabs" role="tablist" aria-label="总览类型">{[{ key: 'category' as const, label: '项目分类总览' }, { key: 'department' as const, label: '二级部门总览' }, { key: 'project' as const, label: '项目总览' }].map(item => <button role="tab" key={item.key} aria-selected={overviewTab === item.key} onClick={() => setOverviewTab(item.key)}>{item.label}</button>)}</div>
+        <div className="cockpit-tab-content" key={overviewTab}><CockpitTable rows={overviewRows} columns={overviewColumns} label="资源总览明细" footer={overviewTotal} /></div>
+      </section>
+      <footer className="cockpit-footer"><span>资源正式版本 + 工时核算</span><span>仅展示当前角色授权范围内的数据</span></footer>
+    </section>}
+  </main>
 }

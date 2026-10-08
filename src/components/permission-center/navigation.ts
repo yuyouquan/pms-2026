@@ -8,7 +8,7 @@ export const PERMISSION_MAIN_NAV: { key: Exclude<MainModule, 'projectSpace'>; la
   { key: 'projectManagement', label: '项目管理' },
   { key: 'jointProjectSpace', label: '项目组合管理' },
   { key: 'roadmap', label: 'tOS路标' },
-  { key: 'hrPipeline', label: '人力资源管道' },
+  { key: 'hrPipeline', label: '驾驶舱' },
   { key: 'config', label: '配置中心' },
   { key: 'globalPermission', label: '权限中心' },
 ]
@@ -20,7 +20,7 @@ export function canAccessMainModule(model: PermissionCenterModel | undefined, us
       case 'projectManagement': return id.startsWith('project.')
       case 'jointProjectSpace': return id === 'joint.plan'
       case 'roadmap': return id.startsWith('roadmap.')
-      case 'hrPipeline': return id.startsWith('hr.')
+      case 'hrPipeline': return id.startsWith('cockpit.')
       case 'config': return id.startsWith('config.')
       case 'globalPermission': return id === 'permission.center'
       default: return false
