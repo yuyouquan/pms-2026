@@ -24,7 +24,7 @@ assert.match(configNavigation, /评审要素/, 'shared configuration navigation 
 assert.doesNotMatch(transferConfig, /管理转维CheckList模板/, 'transfer configuration removes the launcher-card homepage')
 assert.doesNotMatch(enumConfig, /<ConfigWorkspaceShell/, 'enum content uses the configuration center shared sidebar')
 assert.match(projectSpace, /projectSpaceSidebarCollapsed/, 'project-space navigation uses its independent state')
-assert.match(projectSpace, /inlineCollapsed=\{projectSpaceSidebarCollapsed\}/, 'project-space menu switches to icon-only mode')
+assert.match(projectSpace, /inlineCollapsed=\{navigationCollapsed\}/, 'project-space menu follows the effective navigation state, including the compact permission override')
 assert.match(styles, /\.pms-config-workspace[\s\S]*align-items:\s*stretch/, 'configuration columns stretch to equal height')
 assert.match(styles, /\.pms-config-workspace\s*\{[^}]*flex:\s*1 1 auto;[^}]*height:\s*100%;[^}]*max-height:\s*100%;[^}]*overflow:\s*hidden/s, 'configuration workspace fills the bounded flex area below its header')
 assert.match(configContainer, /pms-config-center/, 'configuration center exposes a viewport boundary hook')

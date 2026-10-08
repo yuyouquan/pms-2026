@@ -1,4 +1,4 @@
-.permissions { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.permissions { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 13px; }
 .permissions th, .permissions td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #eeedf2; vertical-align: top; }
 .permissions thead th { position: sticky; top: 0; background: #f7f5fb; color: #535a66; z-index: 2; }
 .permissions th:first-child { width: var(--permission-menu-width, 164px); }
@@ -27,6 +27,12 @@
 .groupRow button > span { font-size: 10px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px 20px; min-height: 20px; }
 .actions :global(.ant-checkbox-wrapper) { margin-inline-start: 0; white-space: nowrap; }
+/* Disabled controls in effective-permission views still convey granted state. */
+.permissions.readOnly :global(.ant-checkbox-wrapper-disabled), .permissions.readOnly :global(.ant-checkbox-disabled + span) { color: #53515f; cursor: default; }
+.permissions.readOnly :global(.ant-checkbox-disabled) { cursor: default; background: #f8f7fb; border-color: #ccc7da; }
+.permissions.readOnly :global(.ant-checkbox-disabled.ant-checkbox-checked) { background: #8062bd; border-color: #8062bd; }
+.permissions.readOnly :global(.ant-checkbox-disabled.ant-checkbox-checked::after) { border-color: #fff; }
+.permissions.readOnly :global(.ant-checkbox-disabled.ant-checkbox-indeterminate::after) { background: #8062bd; }
 @media (max-width: 760px) {
   .permissions th, .permissions td { padding: 9px 8px; }
   .permissions thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

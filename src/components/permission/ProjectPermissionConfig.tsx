@@ -128,13 +128,13 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
     <CollapsibleSidebarShell className={shared.sidebar} collapsed={collapsed} onCollapsedChange={setCollapsed} title={null} ariaLabel="项目角色" expandedWidth={180} collapsedWidth={40} expandLabel="展开项目角色侧栏" collapseLabel="收起项目角色侧栏">
       <Input className={shared.search} prefix={<SearchOutlined />} placeholder="搜索角色" aria-label="搜索项目角色" value={search} onChange={event => setSearch(event.target.value)} allowClear />
       {canManage && <Button className={shared.addRole} icon={<PlusOutlined />} onClick={() => navigate(() => setFormRole('new'))}>添加角色</Button>}
-      {roleTree.length ? <Tree className={styles.roleList} blockNode treeData={roleTree} selectedKeys={displayName ? [currentKey] : []} onSelect={keys => { const next = String(keys[0] ?? ''); if (next) navigate(() => { setSelectedKey(next); setTab('functional'); if (narrow) setCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}
+      <div className={shared.sidebarList}>{roleTree.length ? <Tree className={styles.roleList} blockNode treeData={roleTree} selectedKeys={displayName ? [currentKey] : []} onSelect={keys => { const next = String(keys[0] ?? ''); if (next) navigate(() => { setSelectedKey(next); setTab('functional'); if (narrow) setCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}</div>
     </CollapsibleSidebarShell>
     <div className={`${shared.content} ${styles.content}`}>
       {displayName ? <>
         <div className={shared.roleHeader}><div className={shared.roleCopy}>
           <div className={shared.roleTitle}>{displayName} {sourceRole && <Tag color="purple">IPM 同步</Tag>}</div>
-          {sourceRole && <div className={shared.muted}>IPM角色编码：{sourceRole.ipmRoleCode} · PMS角色编码：{sourceRole.pmsRoleCode || '未配置模板'} {sourceRole.templateId ? '' : '· 未配置模板'}</div>}
+          {sourceRole && <div className={shared.muted}>IPM角色编码：{sourceRole.ipmRoleCode} · PMS角色编码：{sourceRole.pmsRoleCode || '—'} {sourceRole.templateId ? '' : '· 未配置模板'}</div>}
           {role?.description && <div className={`${shared.muted} ${shared.description}`}>{role.description}</div>}
         </div>{role && canManage && <Space><Button icon={<EditOutlined />} onClick={() => navigate(() => setFormRole(role))}>编辑</Button><Button danger icon={<DeleteOutlined />} disabled={role.isFixed} onClick={() => deleteRole(role)}>删除</Button></Space>}</div>
         {error && <Alert className={shared.alert} type="error" showIcon message={error} action={retry.current && <Button onClick={() => { if (retry.current) mutate(retry.current.key, retry.current.action) }}>重试</Button>} />}

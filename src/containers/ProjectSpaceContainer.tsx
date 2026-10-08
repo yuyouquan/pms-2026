@@ -822,6 +822,26 @@ export default function ProjectSpaceContainer() {
     tosTypeConfigsByProjectId, setTosTypeConfigForProject,
     projectMemberMap, setProjectMember, updateProject, syncTosTeamPermissionMembersGuarded,
   } = proj
+  const [compactPermissionNavigation, setCompactPermissionNavigation] = useState(false)
+  const [permissionSidebarOverride, setPermissionSidebarOverride] = useState<boolean | null>(null)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1100px)')
+    const update = () => setCompactPermissionNavigation(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  useEffect(() => {
+    setPermissionSidebarOverride(null)
+  }, [projectSpaceModule, selectedProject?.id, compactPermissionNavigation])
+  // Compact permission pages have two sidebars. Keep the navigation preference
+  // local to this visit so returning to plans preserves the user's saved layout.
+  const useCompactPermissionSidebar = projectSpaceModule === 'permission' && compactPermissionNavigation
+  const navigationCollapsed = useCompactPermissionSidebar ? permissionSidebarOverride ?? true : projectSpaceSidebarCollapsed
+  const setNavigationCollapsed = (collapsed: boolean) => {
+    if (useCompactPermissionSidebar) setPermissionSidebarOverride(collapsed)
+    else setProjectSpaceSidebarCollapsed(collapsed)
+  }
   const mrIntentInstances = useMrVersionPlanStore(state => {
     if (!selectedProject) return []
     if (isMachineProjectType(selectedProject.type)) {
@@ -5768,8 +5788,8 @@ export default function ProjectSpaceContainer() {
         {/* Sidebar */}
         {!isTransferPage && <CollapsibleSidebarShell
           className="pms-sidebar pms-project-space-sidebar pms-glass-surface"
-          collapsed={projectSpaceSidebarCollapsed}
-          onCollapsedChange={setProjectSpaceSidebarCollapsed}
+          collapsed={navigationCollapsed}
+          onCollapsedChange={setNavigationCollapsed}
           title={null}
           ariaLabel="项目空间导航"
           expandedWidth={200}
@@ -5777,7 +5797,7 @@ export default function ProjectSpaceContainer() {
         >
           <Menu
             mode="inline"
-            inlineCollapsed={projectSpaceSidebarCollapsed}
+            inlineCollapsed={navigationCollapsed}
             selectedKeys={[projectSpaceModule]}
             style={{ border: 'none', fontSize: 13, width: '100%', background: 'transparent' }}
             items={menuItems.filter(item => !getProjectSpaceModules(selectedProject) || getProjectSpaceModules(selectedProject)!.includes(item.key)).map(item => ({

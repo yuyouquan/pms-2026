@@ -1,4 +1,4 @@
-.workspace { --permission-menu-width: 280px; display: flex; gap: 12px; position: relative; height: 100%; min-height: 420px; }
+.workspace { --permission-menu-width: clamp(180px, 20vw, 280px); display: flex; gap: 12px; position: relative; height: 100%; min-height: 420px; }
 .workspace .content { box-shadow: none; border: 1px solid #eeeaf6; border-top: 2px solid var(--pms-brand); }
 .roleList :global(.ant-tree-switcher) { display: none; }
 .roleList :global(.ant-tree-node-content-wrapper) { padding-inline: 8px; }
