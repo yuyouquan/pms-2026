@@ -10205,3 +10205,23 @@ button.cockpit-metric-value { width: 100%; padding: 0; border: 0; background: tr
 @media (prefers-reduced-motion: reduce) { .cockpit-project-link .anticon, .cockpit-metric-drill { transition: none; } }
 
 .cockpit-project-link > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Analysis context stays visible while the user moves between summaries and project resources. */
+.cockpit-filter-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 11px; min-height: 28px; font-size: 11px; }
+.cockpit-filter-summary-label { display: inline-flex; align-items: center; gap: 6px; color: #667388; margin-right: 3px; }
+.cockpit-filter-chip { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; border: 1px solid #e4ddf2; border-radius: 6px; padding: 4px 8px; background: #f7f4fd; color: #756390; font: inherit; line-height: 1.4; transition: border-color .18s, background .18s; }
+button.cockpit-filter-chip { cursor: pointer; }
+button.cockpit-filter-chip:hover { border-color: #bba9dc; background: #f0eaf9; }
+.cockpit-filter-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cockpit-filter-chip .anticon { font-size: 8px; opacity: .7; flex-shrink: 0; }
+.cockpit-filter-chip.is-default { border-color: #e8ebf1; color: #667388; background: #ffffff80; }
+.cockpit-filter-summary-all { color: #667388; padding: 4px 3px; }
+.cockpit-context-memory { margin-left: auto; color: #667388; font-size: 10px; }
+.cockpit-filter-chip:focus-visible { outline: 2px solid #9681df; outline-offset: 3px; }
+.cockpit-project-results { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 13px 22px; border-bottom: 1px solid #eef0f5; background: #fbfcfe; font-size: 12px; color: #667388; }
+.cockpit-project-results b { color: #62547e; font-variant-numeric: tabular-nums; }
+.cockpit-project-results span > span { color: #667388; }
+.cockpit-project-results small { color: #667388; font-size: 10px; margin-left: auto; }
+.cockpit-project-results .cockpit-text-button { color: #8370ab; font-size: 10px; }
+@media (max-width: 720px) { .cockpit-context-memory { flex-basis: 100%; margin: 2px 0 0; } .cockpit-filter-summary { gap: 6px; } .cockpit-project-results { padding: 12px 15px; gap: 8px; } .cockpit-project-results small { flex-basis: 100%; order: 2; margin-left: 0; } .cockpit-project-results .cockpit-text-button { margin-left: auto; } }
+@media (prefers-reduced-motion: reduce) { .cockpit-filter-chip { transition: none; } }
