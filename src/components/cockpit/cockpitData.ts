@@ -21,6 +21,8 @@ export const COCKPIT_CATEGORIES = [
 export const SOFTWARE_DEPARTMENTS = ['软件项目管理部', '软件产品规划部', '软件架设与技术规划部', '底软通信开发部', '系统应用开发部', '集成维护开发部', '用户体验部', '创新产品部']
 export const isSoftwareDepartment = (primary: string) => primary === '软件工程部'
 export type CockpitScope = 'software' | 'all'
+// Existing project resources may use other organizations. Never default them out of the dashboard.
+export const defaultCockpitScope = (facts: readonly Pick<CockpitFact, 'primary'>[]): CockpitScope => facts.some(row => isSoftwareDepartment(row.primary)) ? 'software' : 'all'
 export type CockpitMode = 'labor' | 'cost'
 export type Amount = { labor?: number; cost?: number }
 export type AmountKey = 'annual' | 'estimate' | 'budget' | 'cumulative' | 'cumulativeBudget' | 'actual'

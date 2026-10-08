@@ -238,6 +238,8 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
       ? '返回项目组合管理'
       : projectSpaceOrigin?.module === 'roadmap'
       ? '返回tOS路标'
+      : projectSpaceOrigin?.module === 'hrPipeline'
+      ? '返回驾驶舱'
       : '返回工作台'
 
   // Click outside to close search
