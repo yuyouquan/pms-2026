@@ -4,7 +4,7 @@ import { useEffect, type ReactNode } from 'react'
 import { Button, Card, Empty } from 'antd'
 import { MainHeader } from '@/containers/AppShell'
 import { useProjectStore } from '@/stores/project'
-import { usePermissionStore, resolvePermissionProjectId, isGlobalAdmin } from '@/stores/permission'
+import { usePermissionStore, resolvePermissionProjectId, isGlobalAdmin, hasAllProjectSpaceView } from '@/stores/permission'
 import { useProjectTeamStore } from '@/stores/projectTeam'
 import { useUiStore } from '@/stores/ui'
 import { useTransferStore } from '@/stores/transfer'
@@ -24,6 +24,7 @@ export default function ProjectSpaceAccessBoundary({ children }: { children: Rea
     currentLoginUser,
     rolesByProject,
     isGlobalAdmin(currentLoginUser),
+    hasAllProjectSpaceView(currentLoginUser),
   )
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export default function ProjectSpaceAccessBoundary({ children }: { children: Rea
     <MainHeader />
     <div className="pms-main-content">
       <Card>
-        <Empty description="当前用户不在该项目团队中，且未配置项目空间角色，无法查看项目内容">
+        <Empty description="当前用户暂无该项目空间的访问权限">
           <Button type="primary" onClick={() => {
             useUiStore.getState().returnFromProjectSpace()
             useProjectStore.getState().setSelectedProject(null)

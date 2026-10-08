@@ -5,7 +5,7 @@ import { App, Button, Descriptions, Dropdown, Input, Modal, Select, Space, Table
 import { ClearOutlined, DeleteOutlined, EditOutlined, ExportOutlined, HistoryOutlined, PlusOutlined, FilterOutlined } from '@ant-design/icons'
 import { PROJECT_TYPES } from '@/constants/projectTypes'
 import type { ColumnsType } from 'antd/es/table'
-import { resolvePermissionProjectId, usePermissionStore } from '@/stores/permission'
+import { resolvePermissionProjectId, usePermissionStore, hasAllProjectSpaceView } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 import { useActivateProject } from '@/hooks/useActivateProject'
@@ -194,6 +194,7 @@ export default function ProjectConfiguration() {
     currentLoginUser,
     rolesByProject,
     isAdmin,
+    hasAllProjectSpaceView(currentLoginUser),
   )
 
   const openProject = (project: ProjectItem) => {

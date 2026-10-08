@@ -17,7 +17,7 @@ export function canAccessMainModule(model: PermissionCenterModel | undefined, us
   const matches = (id: string) => {
     switch (module) {
       case 'workbench': return id === 'workbench'
-      case 'projectManagement': return id.startsWith('project.')
+      case 'projectManagement': return id === 'project.view' || id === 'project.config'
       case 'jointProjectSpace': return id === 'joint.plan'
       case 'roadmap': return id.startsWith('roadmap.')
       case 'hrPipeline': return id.startsWith('hr.')

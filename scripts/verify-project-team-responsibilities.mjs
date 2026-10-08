@@ -41,6 +41,9 @@ const { useProjectStore } = get('src/stores/project.ts')
 const { usePlanStore } = get('src/stores/plan.ts')
 useProjectStore.setState({ currentLoginUser: member, selectedProject: project })
 useProjectTeamStore.getState().syncProjects([project, { id: '2' }])
+// An opening with existing project access (before source membership arrives).
+// The guard must also reject callbacks after all project access is revoked.
+usePermissionStore.getState().setRolesForProject('1', [{ name: '已有项目职责', members: [member], departments: [], isFixed: false }])
 // Opening before source membership arrives must not preserve a write grant.
 assert.equal(canExecuteProjectTeamWrite(member, '1', useProjectStore.getState()), true)
 useProjectTeamStore.getState().syncProjects([{ ...project, sourceBid: 'EXT-001' }, { id: '2' }])

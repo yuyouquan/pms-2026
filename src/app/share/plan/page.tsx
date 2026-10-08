@@ -24,7 +24,7 @@ import {
 } from '@/lib/columnSettings'
 import { isMachineProjectType, PROJECT_TYPE_TECH, PROJECT_TYPE_TOS_VERSION } from '@/constants/projectTypes'
 import { useProjectStore } from '@/stores/project'
-import { usePermissionStore, useHasPermission } from '@/stores/permission'
+import { usePermissionStore, useHasPermission, hasAllProjectSpaceView } from '@/stores/permission'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import { isPermissionCenterAdmin } from '@/lib/permissionCenter'
 import { usePlanStore } from '@/stores/plan'
@@ -50,7 +50,7 @@ function SharePlanContent() {
   const projectRoles = usePermissionStore(state => state.rolesByProject)
   const canProject = useHasPermission(actor, projectId ?? undefined)
   useEffect(() => { usePermissionStore.getState().ensurePermissionCenter() }, [])
-  const canViewSharedPlan = !!projectId && !!permissionModel && canEnterProjectSpace(projectId, actor, projectRoles, isPermissionCenterAdmin(permissionModel, actor)) && canProject('plan:一级计划-查看')
+  const canViewSharedPlan = !!projectId && !!permissionModel && canEnterProjectSpace(projectId, actor, projectRoles, isPermissionCenterAdmin(permissionModel, actor), hasAllProjectSpaceView(actor)) && canProject('plan:一级计划-查看')
   const level = searchParams.get('level') || 'level1'
   const technical = searchParams.get('technical')
   const technicalKind = searchParams.get('kind')
