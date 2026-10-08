@@ -1,7 +1,7 @@
 'use client'
 
 import { canExecuteProjectTeamWrite, projectTeamScopeToken } from '@/lib/projectTeamMutationGuard'
-import { useIsProjectTeamReadOnly } from '@/stores/permission'
+import { useIsProjectSpaceReadOnly } from '@/stores/permission'
 import { applyLevel1BusinessTasks, captureLevel1BusinessTasks, getLevel1BusinessScopeKey, selectLevel1BusinessSeedTasks } from '@/lib/level1SharedBusinessTasks'
 
 import { BOUND_MACHINE_METADATA_HINT, MACHINE_BUDGET_METADATA_KEYS, isBoundMachineBudget, withBoundMachineBudgetMetadata } from '@/lib/boundMachineBudgetMetadata'
@@ -954,7 +954,7 @@ export default function ProjectSpaceContainer() {
     selectedProject?.id ?? '',
     typeof selectedProject?.parentProjectId === 'string' ? selectedProject.parentProjectId : undefined,
   )
-  const teamReadOnly = useIsProjectTeamReadOnly(currentLoginUser, _permProjectId)
+  const teamReadOnly = useIsProjectSpaceReadOnly(currentLoginUser, _permProjectId)
   const sourceScopeToken = projectTeamScopeToken(selectedProject?.id)
   const canMutateCurrentProject = (operationKey?: string) => canExecuteProjectTeamWrite(currentLoginUser, selectedProject?.id, useProjectStore.getState(), _permProjectId, operationKey, sourceScopeToken)
   const canDo = useHasPermission(currentLoginUser, _permProjectId)

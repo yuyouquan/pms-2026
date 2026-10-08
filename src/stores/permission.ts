@@ -5,6 +5,7 @@ import { projectGrantKeys } from '@/lib/rolePermissionTemplates'
 import type { ProjectRoleTarget } from '@/types/rolePermissionTemplate'
 export { getSyncedProjectRoles, useSyncedProjectRoles } from '@/stores/rolePermissionTemplates'
 import { roleAppliesToUser, normalizeProjectRoleDepartments } from '@/lib/projectRoleMembership'
+import { ALL_PROJECT_SPACE_VIEW_KEYS, canViewAllProjectSpaces } from '@/lib/allProjectSpaceAccess'
 import { isProjectTeamMember, useIsProjectTeamMember } from '@/lib/projectTeam'
 import { createPermissionCenterSeed } from '@/lib/permissionCenterSeed'
 import { PERMISSION_DEPARTMENTS, PERMISSION_USERS, SUPER_ADMIN_ROLE_ID, getPermissionMenu } from '@/constants/permissionCenter'
@@ -873,14 +874,26 @@ export function isProjectTeamReadOnly(userName: string, projectId: string | unde
   return isProjectTeamMember(userName, projectId) && !isGlobalAdmin(userName)
 }
 
-export function useIsProjectTeamReadOnly(userName: string, projectId: string | undefined): boolean {
-  const member = useIsProjectTeamMember(userName, projectId)
-  const permissionCenter = usePermissionStore(state => state.permissionCenter)
-  const globalRoles = usePermissionStore(state => state.globalRoles)
-  const admin = permissionCenter
-    ? isPermissionCenterAdmin(permissionCenter, userName)
-    : globalRoles.some(role => role.name === '管理组' && role.members.includes(userName))
-  return member && !admin
+/** Space-only viewing must not change separate joint-plan responsibility grants. */
+export function isProjectSpaceReadOnly(userName: string, projectId: string | undefined): boolean {
+  if (isGlobalAdmin(userName)) return false
+  if (isProjectTeamMember(userName, projectId)) return true
+  // A global-only observer cannot acquire responsibility-based edits just by
+  // entering a space. Existing local memberships retain their original rights.
+  const roles = projectId ? usePermissionStore.getState().rolesByProject[effectiveTeamProjectId(projectId)] ?? [] : []
+  return hasAllProjectSpaceView(userName) && !roles.some(role => roleAppliesToUser(role, userName))
+}
+
+export function useIsProjectSpaceReadOnly(userName: string, projectId: string | undefined): boolean {
+  useIsProjectTeamMember(userName, projectId)
+  usePermissionStore(state => state.permissionCenter)
+  usePermissionStore(state => state.globalRoles)
+  usePermissionStore(state => state.rolesByProject)
+  return isProjectSpaceReadOnly(userName, projectId)
+}
+
+export function hasAllProjectSpaceView(userName: string): boolean {
+  return canViewAllProjectSpaces(usePermissionStore.getState().permissionCenter, userName)
 }
 
 // Global permission check used by cross-project modules such as Project Roadmap.
@@ -914,6 +927,7 @@ export function hasPermission(userName: string, projectId: string | undefined, p
   if (!userName) return false
   if (isGlobalAdmin(userName)) return true
   if (!projectId) return false
+  if (ALL_PROJECT_SPACE_VIEW_KEYS.has(permKey) && hasAllProjectSpaceView(userName)) return true
   projectId = effectiveTeamProjectId(projectId)
   if (isProjectTeamMember(userName, projectId)) return hasSyncedPermission(userName, projectId, permKey)
   const s = usePermissionStore.getState()

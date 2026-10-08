@@ -1,4 +1,4 @@
-import { isProjectTeamReadOnly } from '@/stores/permission'
+import { isProjectSpaceReadOnly } from '@/stores/permission'
 import { mapTransferOwnerToPmsUser } from '@/lib/todoAggregation'
 import { MOCK_TM_USERS, type TransferApplication, type CheckListItem, type ReviewElement, type RoleNodeStatus, type LegacyTask } from '@/mock/transfer-maintenance'
 import { createTransferTemplateVersions, getCurrentTransferTemplates, getTransferProjectType, getTransferMember, getTransferRoleConfig, type TransferTemplateSet, type TransferTeamRole } from '@/lib/transferConfig'
@@ -20,15 +20,15 @@ const active = (app: TransferApplication, project: TransferProject) => matchesTr
 const entryOpen = (app: TransferApplication, item: TransferItem, project: TransferProject) => active(app, project) && item.applicationId === app.id && app.pipeline.maintenanceSpmReview !== 'success' && ['not_reviewed', 'rejected'].includes(item.reviewStatus)
 const reviewOpen = (app: TransferApplication, item: TransferItem, project: TransferProject) => active(app, project) && item.applicationId === app.id && app.pipeline.maintenanceReview === 'in_progress' && item.entryStatus === 'entered' && item.aiCheckStatus === 'passed' && ['reviewing', 'rejected'].includes(item.reviewStatus)
 export function canEnterTransferItem(app: TransferApplication, item: TransferItem, actor: TransferActor, project: TransferProject): boolean {
-  if (isProjectTeamReadOnly(actor.name, project?.id)) return false
+  if (isProjectSpaceReadOnly(actor.name, project?.id)) return false
   return entryOpen(app, item, project) && (matchesTransferActor(actor, item.entryPersonId, item.entryPerson) || matchesTransferDelegate(actor, item.delegatedTo))
 }
 export function canReviewTransferItem(app: TransferApplication, item: TransferItem, actor: TransferActor, project: TransferProject): boolean {
-  if (isProjectTeamReadOnly(actor.name, project?.id)) return false
+  if (isProjectSpaceReadOnly(actor.name, project?.id)) return false
   return reviewOpen(app, item, project) && (matchesTransferActor(actor, item.reviewPersonId, item.reviewPerson) || matchesTransferDelegate(actor, item.reviewDelegatedTo))
 }
 export function canDelegateTransferItem(app: TransferApplication, item: TransferItem, actor: TransferActor, project: TransferProject, side: 'entry' | 'review'): boolean {
-  if (isProjectTeamReadOnly(actor.name, project?.id)) return false
+  if (isProjectSpaceReadOnly(actor.name, project?.id)) return false
   if (!active(app, project) || item.applicationId !== app.id || app.pipeline.maintenanceSpmReview === 'success') return false
   if (side === 'entry') return item.reviewStatus !== 'passed'
     && (matchesTransferActor(actor, item.entryPersonId, item.entryPerson) || matchesTransferDelegate(actor, item.delegatedTo))
@@ -41,12 +41,12 @@ export function getTransferRoleLabel(app: TransferApplication, role: string): st
   return app.teamConfig?.find(config => config.roleName === role || config.ipmRoleCode === role)?.roleName ?? role
 }
 export function canManageTransfer(app: TransferApplication, actor: TransferActor, project: TransferProject, canApply: boolean): boolean {
-  if (isProjectTeamReadOnly(actor.name, project?.id)) return false
+  if (isProjectSpaceReadOnly(actor.name, project?.id)) return false
   const owner = getTransferMember(app.team.research, app.finalReviewRole ?? 'SPM', app.teamConfig)
   return Boolean(canApply && matchesTransferProject(app, project) && (actor.isAdmin || matchesTransferActor(actor, owner?.id, owner?.name)))
 }
 export function canCloseTransfer(app: TransferApplication, actor: TransferActor, project: TransferProject, canApply: boolean): boolean {
-  if (isProjectTeamReadOnly(actor.name, project?.id)) return false
+  if (isProjectSpaceReadOnly(actor.name, project?.id)) return false
   return Boolean(canApply && active(app, project) && matchesTransferActor(actor, app.applicantId, app.applicant)
     && app.pipeline.maintenanceSpmReview !== 'in_progress' && app.pipeline.maintenanceSpmReview !== 'success'
     && (app.pipeline.maintenanceReview === 'not_started' || !app.pipeline.roleProgress.some(role => role.reviewStatus === 'in_progress' || role.reviewStatus === 'completed')))
@@ -59,7 +59,7 @@ export function getMaintenanceSpmReviewAccess(app: TransferApplication | undefin
   const finalOpen = app?.pipeline.maintenanceSpmReview === 'not_started' || app?.pipeline.maintenanceSpmReview === 'in_progress'
   const isRejectionMode = Boolean(finalOpen && app?.pipeline.maintenanceReview === 'in_progress' && roleProgress.some(role => role.reviewStatus === 'rejected'))
   const ready = app?.pipeline.maintenanceSpmReview === 'in_progress' && allPassed
-  const allowed = Boolean(app && active(app, project) && isReviewer && !isProjectTeamReadOnly(actor.name, project?.id))
+  const allowed = Boolean(app && active(app, project) && isReviewer && !isProjectSpaceReadOnly(actor.name, project?.id))
   return { reviewer, isReviewer, isRejectionMode, canApprove: allowed && ready && !isRejectionMode, canReject: allowed && (ready || isRejectionMode) }
 }
 export function canEditTransferLegacy(app: TransferApplication, actor: TransferActor, project: TransferProject): boolean {
@@ -68,7 +68,7 @@ export function canEditTransferLegacy(app: TransferApplication, actor: TransferA
 }
 /** Follow-up owners can finish an existing task after the transfer itself has ended. */
 export function canResolveTransferLegacy(app: TransferApplication, task: LegacyTask, actor: TransferActor, project: TransferProject, canView: boolean): boolean {
-  if (isProjectTeamReadOnly(actor.name, project?.id)) return false
+  if (isProjectSpaceReadOnly(actor.name, project?.id)) return false
   return canView && matchesTransferProject(app, project) && task.applicationId === app.id
     && task.status === 'open' && task.responsiblePerson === actor.name
 }

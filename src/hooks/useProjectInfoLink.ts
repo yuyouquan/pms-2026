@@ -5,7 +5,7 @@ import { useActivateProject } from '@/hooks/useActivateProject'
 import { parseProjectInfoLink } from '@/lib/projectInfoLink'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import { resolveProjectSpaceModule } from '@/lib/projectSpaceNavigation'
-import { hasPermission, isGlobalAdmin, resolvePermissionProjectId, usePermissionStore } from '@/stores/permission'
+import { hasPermission, isGlobalAdmin, hasAllProjectSpaceView, resolvePermissionProjectId, usePermissionStore } from '@/stores/permission'
 import { useProjectStore } from '@/stores/project'
 import { useUiStore } from '@/stores/ui'
 
@@ -31,7 +31,7 @@ export function useProjectInfoLink() {
       const project = projects.find(item => item.id === target.projectId)
       if (!project) { setLinkError('该项目不存在或已删除，无法打开通知中的项目。'); return }
       const permissionId = resolvePermissionProjectId(project.id, typeof project.parentProjectId === 'string' ? project.parentProjectId : undefined)
-      if (!canEnterProjectSpace(permissionId, currentLoginUser, usePermissionStore.getState().rolesByProject, isGlobalAdmin(currentLoginUser))) {
+      if (!canEnterProjectSpace(permissionId, currentLoginUser, usePermissionStore.getState().rolesByProject, isGlobalAdmin(currentLoginUser), hasAllProjectSpaceView(currentLoginUser))) {
         setLinkError('当前用户无权访问该项目空间。'); return
       }
       const canEdit = hasPermission(currentLoginUser, permissionId, 'basicInfo:查看')

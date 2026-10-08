@@ -17,6 +17,7 @@ export const PERMISSION_MENUS: PermissionMenu[] = [
   { id: 'workbench', label: '工作台', category: '工作台', actions: ['view'], fields: [] },
   { id: 'project.view', label: '项目视图', category: '项目管理', actions: ['view', 'export'], fields: PERMISSION_PROJECT_FIELDS },
   { id: 'project.config', label: '项目配置', category: '项目管理', actions: ['view', 'export', 'create', 'edit', 'delete'], fields: PERMISSION_PROJECT_FIELDS },
+  { id: 'project.space', label: '所有项目空间', category: '项目管理', actions: ['view'], fields: [] },
   { id: 'joint.plan', label: 'tOS&整机1+N项目计划', category: '项目组合管理', actions: ['view', 'edit'], fields: [] },
   ...(['table', 'evolution'] as const).map(view => ({ id: `roadmap.${view}` as PermissionMenuId, label: view === 'table' ? '表单视图' : '版本演进图', category: 'tOS路标', actions: ['view', 'export', 'edit', 'create', 'delete'] as PermissionAction[], fields: roadmapFields(view === 'evolution') })),
   ...HR_SIDEBAR_NAV.flatMap(group => group.children.map(leaf => ({ id: `hr.${leaf.key}` as PermissionMenuId, label: leaf.label, category: `人力资源管道 / ${group.label}`, actions: (group.key === 'config' ? ['view', 'edit', 'import', 'export'] : ['view']) as PermissionAction[], fields: [] }))),

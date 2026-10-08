@@ -16,6 +16,8 @@ import { usePermissionStore, resolvePermissionProjectId } from '@/stores/permiss
 import { isPermissionCenterAdmin } from '@/lib/permissionCenter'
 import { canAccessMainModule, PERMISSION_MAIN_NAV } from '@/components/permission-center/navigation'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
+import { canViewAllProjectSpaces } from '@/lib/allProjectSpaceAccess'
+import AllProjectSpacesButton from '@/components/permission/AllProjectSpacesButton'
 import { getProjectAttribute, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import { useTransferStore } from '@/stores/transfer'
 import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
@@ -31,7 +33,7 @@ function UserSwitcher() {
 
   const countVisibleProjects = (user: string) => projects.filter(project => canEnterProjectSpace(
     resolvePermissionProjectId(project.id, typeof project.parentProjectId === 'string' ? project.parentProjectId : undefined),
-    user, rolesByProject, isPermissionCenterAdmin(permissionCenter, user),
+    user, rolesByProject, isPermissionCenterAdmin(permissionCenter, user), canViewAllProjectSpaces(permissionCenter, user),
   )).length
 
   const switchUser = (user: string) => {
@@ -141,6 +143,7 @@ export function MainHeader() {
   const permissionCenter = usePermissionStore(state => state.permissionCenter)
   const isCurrentDraft = activeModule === 'projectSpace' && versions.find(version => version.id === currentVersion)?.status === '修订中'
 
+  const allSpaces = canViewAllProjectSpaces(permissionCenter, currentLoginUser)
   const teamProjects = projects.filter(project => isProjectTeamMember(currentLoginUser, project.id))
 
   return (
@@ -177,7 +180,7 @@ export function MainHeader() {
           </Space>
         </Col>
         <Col className="pms-main-header__user">
-          <Space size={8}>{teamProjects.length > 0 && <Dropdown trigger={['click']} menu={{ items: teamProjects.map(project => ({ key: project.id, label: project.name, onClick: () => navigateWithEditGuard(() => {
+          <Space size={8}><AllProjectSpacesButton />{!allSpaces && teamProjects.length > 0 && <Dropdown trigger={['click']} menu={{ items: teamProjects.map(project => ({ key: project.id, label: project.name, onClick: () => navigateWithEditGuard(() => {
             const latest = useProjectStore.getState()
             const target = latest.projects.find(row => row.id === project.id)
             if (!target || !isProjectTeamMember(latest.currentLoginUser, target.id)) return
@@ -217,13 +220,14 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
 
   const isAdminUser = isPermissionCenterAdmin(permissionCenter, currentLoginUser)
 
+  const allSpaces = canViewAllProjectSpaces(permissionCenter, currentLoginUser)
   const visibleProjects = useMemo(() => {
-    if (isAdminUser) return projects
+    if (isAdminUser || allSpaces) return projects
     return projects.filter(p => canEnterProjectSpace(
       resolvePermissionProjectId(p.id, typeof p.parentProjectId === 'string' ? p.parentProjectId : undefined),
       currentLoginUser, rolesByProject, isAdminUser,
     ))
-  }, [projects, isAdminUser, currentLoginUser, rolesByProject, teamSnapshot])
+  }, [projects, isAdminUser, allSpaces, currentLoginUser, rolesByProject, teamSnapshot])
 
   const filteredProjects = visibleProjects.filter(p => {
     if (!projectSearchText) return true
@@ -316,7 +320,15 @@ export function ProjectSpaceHeader({ navigateWithEditGuard }: ProjectSpaceHeader
                         onMouseLeave={(e) => { if (selectedProject?.id !== p.id) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                         onClick={() => {
                           navigateWithEditGuard(() => {
-                            activateProject(p)
+                            const live = useProjectStore.getState()
+                            const authority = usePermissionStore.getState()
+                            const target = live.projects.find(project => project.id === p.id)
+                            if (live.currentLoginUser !== currentLoginUser || !target || !canEnterProjectSpace(
+                              resolvePermissionProjectId(target.id, typeof target.parentProjectId === 'string' ? target.parentProjectId : undefined),
+                              live.currentLoginUser, authority.rolesByProject, isPermissionCenterAdmin(authority.permissionCenter, live.currentLoginUser),
+                              canViewAllProjectSpaces(authority.permissionCenter, live.currentLoginUser),
+                            )) return
+                            activateProject(target)
                             setProjectSpaceModule('basic')
                             setShowProjectSearch(false)
                             setProjectSearchText('')

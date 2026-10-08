@@ -3,10 +3,11 @@ import { buildTechnicalPlanTabs, getTechnicalPlanKey, useTechnicalPlanStore, typ
 import { useTechnicalProjectStore } from '@/stores/technicalProject'
 import { getTechnicalLevel1MaintainerUsers } from '@/lib/projectSpaceLevel1Rules'
 import { isProjectTeamMember } from '@/lib/projectTeam'
+import { matchesAboutMine } from '@/lib/projectListFilters'
 import { canMaintainLevel1Plan } from '@/lib/level1PlanRules'
 import { useProjectTeamStore } from '@/stores/projectTeam'
 import { effectiveTeamProjectId } from '@/stores/rolePermissionTemplates'
-import { hasPermission, isProjectTeamReadOnly, isGlobalAdmin, usePermissionStore } from '@/stores/permission'
+import { hasPermission, isProjectSpaceReadOnly, isGlobalAdmin, usePermissionStore } from '@/stores/permission'
 
 export function projectTeamScopeToken(projectId: string | undefined): string {
   if (!projectId) return ''
@@ -26,7 +27,9 @@ export function canExecuteProjectTeamWrite(
   return Boolean(projectId) && live.currentLoginUser === actor && live.selectedProject?.id === projectId
     && (openingSourceToken === undefined || openingSourceToken === projectTeamScopeToken(projectId))
     && permissionProjectId === effectiveTeamProjectId(projectId!)
-    && (operationKey ? hasPermission(actor, permissionProjectId, operationKey) : !isProjectTeamReadOnly(actor, permissionProjectId))
+    && (operationKey ? hasPermission(actor, permissionProjectId, operationKey)
+      : !isProjectSpaceReadOnly(actor, permissionProjectId)
+        && (isGlobalAdmin(actor) || matchesAboutMine(permissionProjectId!, actor, usePermissionStore.getState().rolesByProject)))
 }
 
 /** Import is a separate configured operation; it never enables general L1 maintenance. */
