@@ -10144,6 +10144,12 @@ input.ant-input,
 .cockpit-share-name { display: inline-flex; align-items: center; gap: 8px; }
 .cockpit-panel-note { padding: 13px 22px; margin: 0; color: #a3aab8; font-size: 10px; line-height: 1.7; }
 .cockpit-table-scroll { width: 100%; overflow: auto; scrollbar-width: thin; scrollbar-color: #d9dfea transparent; }
+.cockpit-table-view { min-width: 0; }
+.cockpit-table-controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 12px 22px; color: #596780; background: #fafafe; border-bottom: 1px solid #edf0f5; font-size: 11px; }
+.cockpit-table-controls > span { display: flex; align-items: center; gap: 9px; }
+.cockpit-table-controls i { width: 3px; height: 3px; border-radius: 50%; background: #a6afbf; flex-shrink: 0; }
+.cockpit-table-controls > div { display: flex; gap: 15px; }
+.cockpit-table-controls button:disabled { color: #778294; cursor: default; opacity: .7; }
 :is(.cockpit, .cockpit-detail-drawer) table.cockpit-table { border-collapse: separate; border-spacing: 0; table-layout: fixed; font-size: 11px; }
 :is(.cockpit, .cockpit-detail-drawer) table.cockpit-table > thead > tr > th { position: relative; height: 45px; padding: 0 17px; background: #f7f8fb; color: #8c96a8; font-size: 10px; font-weight: 500; border: 0; border-bottom: 1px solid #edf0f5; white-space: nowrap; }
 :is(.cockpit, .cockpit-detail-drawer) table.cockpit-table > :is(tbody,tfoot) > tr > td { height: 48px; padding: 11px 17px; border: 0; border-bottom: 1px solid #f0f2f6; background: #fff; color: #596780; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
