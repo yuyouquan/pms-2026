@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, Button, Empty, Input, Modal, Space, Tabs, Tag, Tooltip, Tree, message } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, SyncOutlined, UserOutlined } from '@ant-design/icons'
 import type { DataNode } from 'antd/es/tree'
 import { CollapsibleSidebarShell } from '@/components/shared/CollapsibleWorkspace'
 import RoleForm from '@/components/permission-center/RoleForm'
@@ -79,28 +79,41 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
   const navigate = (action: () => void) => useUiStore.getState().navigateWithEditGuard(() => {
     setDraft(false); setFormRole(null); setEpoch(value => value + 1); setError(''); action()
   }, false)
-  const title = (value: string, local = false) => <Tooltip title={value} placement="right"><span className={styles.roleItem}>
-    {local && <UserOutlined className={styles.localRoleIcon} aria-label="自建角色" />}<span className={shared.node}>{value}</span>
-  </span></Tooltip>
+  const deleteRole = (targetRole: Role) => {
+    if (targetRole.isFixed || !canManage) return
+    const key = currentKey
+    navigate(() => Modal.confirm({ title: `删除角色“${targetRole.name}”？`, content: '删除后将立即撤销此角色的项目权限。', okText: '删除', cancelText: '取消', okButtonProps: { danger: true },
+      onOk: () => {
+        const result = mutate(key, () => usePermissionStore.getState().deleteProjectRole(actor, projectId, targetRole.name))
+        if (!result.ok) return Promise.reject(new Error(result.error))
+        if (key === localKey(targetRole.name)) {
+          const latestSourceRoles = getSyncedProjectRoles(projectId)
+          setSelectedKey(latestSourceRoles[0] ? sourceKey(latestSourceRoles[0].id) : localKey(usePermissionStore.getState().rolesByProject[projectId]?.[0]?.name ?? ''))
+          setTab('functional')
+        }
+      },
+    }))
+  }
+  const title = (value: string, localRole?: Role) => <span className={styles.roleItem}>
+    <Tooltip title={`${value} · ${localRole ? '自建角色' : 'IPM 同步角色'}`} placement="right">
+      <span className={styles.roleLabel}>
+        {localRole ? <UserOutlined className={styles.localRoleIcon} aria-label="自建角色" /> : <SyncOutlined className={styles.syncedRoleIcon} aria-label="IPM 同步角色" />}
+        <span className={shared.node}>{value}</span>
+      </span>
+    </Tooltip>
+    {localRole && !localRole.isFixed && canManage && <Tooltip title="删除角色">
+      <Button type="text" size="small" danger className={styles.roleDelete} icon={<DeleteOutlined />} aria-label={`删除自建角色：${value}`}
+        onMouseDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}
+        onClick={event => { event.stopPropagation(); deleteRole(localRole) }} />
+    </Tooltip>}
+  </span>
   const query = search.trim().toLocaleLowerCase()
   const sourceMatches = sourceRoles.filter(item => `${item.roleName} ${item.sourceRoleName} ${item.ipmRoleCode}`.toLocaleLowerCase().includes(query))
   const localMatches = roles.filter(item => item.name.toLocaleLowerCase().includes(query))
   const roleTree: DataNode[] = [
     ...sourceMatches.map(item => ({ key: sourceKey(item.id), title: title(item.roleName), isLeaf: true })),
-    ...localMatches.map(item => ({ key: localKey(item.name), title: title(item.name, true), isLeaf: true })),
+    ...localMatches.map(item => ({ key: localKey(item.name), title: title(item.name, item), isLeaf: true })),
   ]
-  const deleteRole = () => {
-    if (!role || !canManage) return
-    const key = currentKey
-    navigate(() => Modal.confirm({ title: `删除角色“${role.name}”？`, content: '删除后将立即撤销此角色的项目权限。', okText: '删除', cancelText: '取消', okButtonProps: { danger: true },
-      onOk: () => {
-        const result = mutate(key, () => usePermissionStore.getState().deleteProjectRole(actor, projectId, role.name))
-        if (!result.ok) return Promise.reject(new Error(result.error))
-        setSelectedKey(sourceRoles[0] ? sourceKey(sourceRoles[0].id) : localKey(usePermissionStore.getState().rolesByProject[projectId]?.[0]?.name ?? ''))
-        setTab('functional')
-      },
-    }))
-  }
   const onGrants = (keys: string[], enabled: boolean) => {
     if (!target) return
     const allowed = new Set(getProjectPermissionCatalog(project).flatMap(group => group.rows.flatMap(row => row.actions.map(action => action.key))))
@@ -123,7 +136,7 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
           <div className={shared.roleTitle}>{displayName} {sourceRole && <Tag color="purple">IPM 同步</Tag>}</div>
           {sourceRole && <div className={shared.muted}>IPM角色编码：{sourceRole.ipmRoleCode} · PMS角色编码：{sourceRole.pmsRoleCode || '未配置模板'} {sourceRole.templateId ? '' : '· 未配置模板'}</div>}
           {role?.description && <div className={`${shared.muted} ${shared.description}`}>{role.description}</div>}
-        </div>{role && canManage && <Space><Button icon={<EditOutlined />} onClick={() => navigate(() => setFormRole(role))}>编辑</Button><Button danger icon={<DeleteOutlined />} onClick={deleteRole}>删除</Button></Space>}</div>
+        </div>{role && canManage && <Space><Button icon={<EditOutlined />} onClick={() => navigate(() => setFormRole(role))}>编辑</Button><Button danger icon={<DeleteOutlined />} disabled={role.isFixed} onClick={() => deleteRole(role)}>删除</Button></Space>}</div>
         {error && <Alert className={shared.alert} type="error" showIcon message={error} action={retry.current && <Button onClick={() => { if (retry.current) mutate(retry.current.key, retry.current.action) }}>重试</Button>} />}
         <Tabs className={shared.contentTabs} activeKey={tab} onChange={key => navigate(() => setTab(key))} items={[{ key: 'functional', label: '功能权限' }, { key: 'assignees', label: sourceRole ? '人员列表' : '人员配置' }]} />
         {tab === 'assignees' ? sourceRole ? <ProjectTeamMembers key={sourceRole.id} projectId={projectId} ipmRoleCode={sourceRole.ipmRoleCode} roleName={sourceRole.sourceRoleName} /> : role ? <ProjectRoleAssignees key={`${role.name}:${epoch}`} role={role} disabled={!canManage} onDirtyChange={onDirty} onCommit={(kind, values) => mutate(currentKey, () => {
