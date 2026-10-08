@@ -95,7 +95,7 @@ export default function ProjectPermissionConfig({ project, projectId, actor }: P
     }))
   }
   const title = (value: string, localRole?: Role) => <span className={styles.roleItem}>
-    <Tooltip title={`${value} · ${localRole ? '自建角色' : 'IPM 同步角色'}`} placement="right">
+    <Tooltip title={`${value} · ${localRole ? '自建角色' : 'IPM 同步角色'}`} placement="top">
       <span className={styles.roleLabel}>
         {localRole ? <UserOutlined className={styles.localRoleIcon} aria-label="自建角色" /> : <SyncOutlined className={styles.syncedRoleIcon} aria-label="IPM 同步角色" />}
         <span className={shared.node}>{value}</span>

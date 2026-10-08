@@ -5,11 +5,11 @@
 .roleItem { display: flex; align-items: center; gap: 4px; min-width: 0; }
 .roleLabel { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
 .roleLabel > :last-child { flex: 1; min-width: 0; }
-.roleDelete:global(.ant-btn) { flex: 0 0 24px; width: 24px; height: 24px; opacity: 0; pointer-events: none; }
-.roleItem:hover .roleDelete, .roleItem:focus-within .roleDelete { opacity: 1; pointer-events: auto; }
+.roleList .roleDelete:global(.ant-btn.ant-btn-text) { flex: 0 0 24px; width: 24px; height: 24px !important; min-height: 24px !important; padding: 0; border-color: transparent !important; box-shadow: none !important; opacity: 0; pointer-events: none; }
+.roleList .roleItem:hover .roleDelete:global(.ant-btn), .roleList .roleItem:focus-within .roleDelete:global(.ant-btn) { opacity: 1; pointer-events: auto; }
 .syncedRoleIcon { flex: 0 0 auto; color: var(--pms-brand); font-size: 13px; }
 @media (hover: none) {
-  .roleDelete:global(.ant-btn) { opacity: 1; pointer-events: auto; }
+  .roleList .roleDelete:global(.ant-btn.ant-btn-text) { opacity: 1; pointer-events: auto; }
 }
 .localRoleIcon { flex: 0 0 auto; color: #8062bd; font-size: 13px; }
 .mobileRoleToggle { display: none; }
