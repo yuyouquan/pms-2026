@@ -20,6 +20,7 @@ export interface CockpitPreferences {
   projectCategory: 'all' | HrProjectCategory
   projectSearch: string
   overviewTables: Partial<Record<'category' | 'department' | 'project', CockpitTableView>>
+  rankingMetric: 'budget' | 'actual'
 }
 
 export function createCockpitPreferences(now = new Date()): CockpitPreferences {
@@ -27,7 +28,7 @@ export function createCockpitPreferences(now = new Date()): CockpitPreferences {
   return {
     view: 'management', dates: [`${year}-01-01`, `${year}-12-31`], periodHistory: [], departments: [], mode: 'labor',
     trendTab: 'resource', grain: 'month', hiddenTrendSeries: { resource: [], category: [] }, shareTab: 'research', shareScopePreferences: {},
-    overviewTab: 'category', projectCategory: 'all', projectSearch: '', overviewTables: {},
+    overviewTab: 'category', projectCategory: 'all', projectSearch: '', overviewTables: {}, rankingMetric: 'actual',
   }
 }
 

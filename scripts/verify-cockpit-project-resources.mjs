@@ -8,6 +8,7 @@ globalThis.window = { localStorage }
 const load = createTypeScriptModuleLoader(), get = file => load(path.resolve(file))
 const data = get('src/components/cockpit/cockpitData.ts')
 const { collectCockpitInputs } = get('src/components/cockpit/cockpitSources.ts')
+const { cockpitProjectRanking } = get('src/components/cockpit/cockpitRankingData.ts')
 const { buildDashboardAnalysis } = get('src/components/project-resources/resourceDashboardData.ts')
 const { buildAccountingAnalysis } = get('src/components/project-resources/resourceAccounting.ts')
 const { useProjectStore } = get('src/stores/project.ts')
@@ -20,6 +21,7 @@ const dates = { startDate: '2026-01-01', endDate: '2026-12-31' }, today = '2026-
 const facts = () => data.buildCockpitFacts(inputs(), dates, 5, today, () => true)
 const close = (a, b, label) => assert.ok(Math.abs(a - b) < 0.00002, `${label}: ${a} != ${b}`)
 const initialInputs = inputs(), initialFacts = facts()
+const rankings = Object.fromEntries(['budget', 'actual'].map(metric => [metric, Object.fromEntries(['labor', 'cost'].map(mode => [mode, cockpitProjectRanking(initialFacts, metric, mode)]))]))
 assert.ok(initialInputs.length >= 8 && initialFacts.length > 0, 'use existing project registry and all four real resource stores')
 assert.equal(data.defaultCockpitScope(initialFacts), 'all', 'existing R&D departments remain visible on first entry')
 assert.equal(data.defaultCockpitScope([...initialFacts, { primary: '软件工程部' }]), 'software', 'prefer the documented department when its resources are present')
@@ -29,11 +31,17 @@ for (const input of initialInputs) {
     if (!source) return
     const projectView = buildDashboardAnalysis(input.category, source, input.monthly, 5, dates)
     if (!projectView.months.length) return
-    for (const mode of ['labor', 'cost']) close(row[['annual', 'estimate', 'budget'][index]][mode], projectView[mode], `${input.project.id} ${source.version.budgetType} ${mode} matches project-space resource overview`)
+    for (const mode of ['labor', 'cost']) {
+      close(row[['annual', 'estimate', 'budget'][index]][mode], projectView[mode], `${input.project.id} ${source.version.budgetType} ${mode} matches project-space resource overview`)
+      if (index === 2) close(rankings.budget[mode].rows.find(row => row.key === input.project.id).value, projectView[mode], `${input.project.id} ${mode} ranking matches independently calculated project budget`)
+    }
   })
   if (input.dataset) {
     const projectActual = buildAccountingAnalysis(input.dataset, 5, { ...dates, endDate: today })
-    for (const mode of ['labor', 'cost']) close(row.actual[mode], projectActual[mode], `${input.project.id} ${mode} accounting uses same date window and ledger`)
+    for (const mode of ['labor', 'cost']) {
+      close(row.actual[mode], projectActual[mode], `${input.project.id} ${mode} accounting uses same date window and ledger`)
+      close(rankings.actual[mode].rows.find(row => row.key === input.project.id).value, projectActual[mode], `${input.project.id} ${mode} ranking uses independently calculated project ledger`)
+    }
   }
 }
 const bound = useProjectStore.getState().projects.filter(project => project.boundFormalProjectId)
@@ -60,12 +68,14 @@ for (const row of monthly()) {
   for (const month of months) store.getState().updateResourceMonthlyInvestment(ownerId, draftId, row.id, month, month === months.at(-1) ? row.estimatedTotal : 0, scopeId)
 }
 close(data.summarizeCockpit(facts()).budget.labor, before.budget.labor, 'draft edits do not change official cockpit totals')
+close(cockpitProjectRanking(facts(), 'budget', 'labor').total, before.budget.labor, 'draft cannot change ranking total')
 store.getState().setVersionActive(ownerId, draftId, true)
 const published = inputs().find(item => item.project.id === scopeId)
 assert.equal(published.sources[2].version.id, draftId, 'new official version is immediately selected from the shared store')
 const projectAfter = buildDashboardAnalysis('capability', published.sources[2], published.monthly, 5, firstHalf)
 const cockpitAfter = data.summarizeCockpit(firstHalfFacts().filter(row => row.project.id === scopeId))
 close(cockpitAfter.budget.labor, projectAfter.labor, 'published project-space edit updates cockpit without copied data')
+close(cockpitProjectRanking(firstHalfFacts(), 'budget', 'labor').rows.find(row => row.key === scopeId).value, projectAfter.labor, 'formalized allocation updates ranking from shared store')
 assert.notEqual(data.summarizeCockpit(firstHalfFacts()).budget.labor, firstHalfBefore.budget.labor, 'published allocation change is reflected in the selected period')
 close(data.summarizeCockpit(facts()).actual.labor, before.actual.labor, 'budget revision does not mutate actual worklogs')
-console.log(`PASS cockpit uses ${initialInputs.length} real project sources: all-category value parity, existing department defaults, bound-budget deduplication, draft isolation and official-version updates`)
+console.log(`PASS cockpit uses ${initialInputs.length} real project sources: all-category value parity, project ranking/ledger parity, existing department defaults, bound-budget deduplication, draft isolation and official-version updates`)

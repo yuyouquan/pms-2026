@@ -18,6 +18,7 @@ import CockpitFiltersSummary from '@/components/cockpit/CockpitFiltersSummary'
 import CockpitChart from '@/components/cockpit/CockpitChart'
 import CockpitTable, { type CockpitColumn } from '@/components/cockpit/CockpitTable'
 import CockpitMetricDetail, { type CockpitMetric } from '@/components/cockpit/CockpitMetricDetail'
+import CockpitProjectRanking from '@/components/cockpit/CockpitProjectRanking'
 import { cockpitDepartmentSelection, cockpitTrendDrilldown } from '@/components/cockpit/cockpitTrendInteraction'
 import { collectCockpitInputs } from '@/components/cockpit/cockpitSources'
 import {
@@ -71,6 +72,14 @@ function Cockpit() {
   const trendPanel = useRef<HTMLElement>(null), pendingPeriodFocus = useRef(false)
   const dateControls = useRef<HTMLDivElement>(null), pendingDateFocus = useRef(false)
   const previousPeriod = preferences.periodHistory.at(-1)
+  const overviewPanel = useRef<HTMLElement>(null), pendingOverviewFocus = useRef(false)
+  useEffect(() => {
+    if (!pendingOverviewFocus.current) return
+    pendingOverviewFocus.current = false
+    overviewPanel.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
+    const input = overviewPanel.current?.querySelector<HTMLInputElement>('input[aria-label="搜索项目总览"]')
+    input?.focus({ preventScroll: true }); input?.select()
+  }, [preferences])
   useEffect(() => {
     if (pendingDateFocus.current) {
       pendingDateFocus.current = false
@@ -93,7 +102,8 @@ function Cockpit() {
   const defaultScope = defaultCockpitScope(allFacts), scope = scopePreference ?? defaultScope
   const shareScopes = { research: shareScopePreferences.research ?? defaultScope, category: shareScopePreferences.category ?? defaultScope }
   const { options: departmentOptions, departments: effectiveDepartments } = useMemo(() => cockpitDepartmentSelection(allFacts, scope, departments), [allFacts, scope, departments])
-  const facts = filterCockpitFacts(allFacts, { scope, departments: effectiveDepartments }), total = summarizeCockpit(facts), ratios = cockpitRatios(total, mode)
+  const facts = useMemo(() => filterCockpitFacts(allFacts, { scope, departments: effectiveDepartments }), [allFacts, scope, effectiveDepartments])
+  const total = summarizeCockpit(facts), ratios = cockpitRatios(total, mode)
   const projectCount = new Set(facts.map(row => row.project.id)).size
   const warnings = [...new Set(facts.flatMap(row => row.issues))]
   const trend = cockpitTrend(facts, dateFilter, mode, trendTab as 'resource' | 'category', grain)
@@ -193,7 +203,9 @@ function Cockpit() {
           </div>
         </section>
       </div>
-      <section className="cockpit-panel cockpit-overview" aria-label="资源总览明细">
+      <CockpitProjectRanking facts={facts} metric={preferences.rankingMetric} mode={mode} onMetricChange={value => setPreference('rankingMetric', value)} onOpenProject={openProjectResources}
+        onLocateProject={(name = '') => { pendingOverviewFocus.current = true; updatePreferences(actor, { overviewTab: 'project', projectCategory: 'all', projectSearch: name }) }} />
+      <section ref={overviewPanel} className="cockpit-panel cockpit-overview" aria-label="资源总览明细">
         <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">OVERVIEW</span><h2>资源总览 <small>{unit}</small></h2></div><div className="cockpit-panel-tools">{overviewTab === 'project' && <Input className="cockpit-project-search" aria-label="搜索项目总览" placeholder="搜索项目" prefix={<SearchOutlined />} value={projectSearch} onChange={event => setPreference('projectSearch', event.target.value)} allowClear />}{overviewTab === 'project' && <Select aria-label="项目分类" value={projectCategory} onChange={value => setPreference('projectCategory', value)} options={[{ value: 'all', label: '全部项目分类' }, ...COCKPIT_CATEGORIES.map(item => ({ value: item.key, label: item.label }))]} />}<span className="cockpit-table-hint"><BarChartOutlined /> 点击表头排序 · 拖动边缘调宽</span></div></div>
         <div className="cockpit-tabs" role="tablist" aria-label="总览类型">{[{ key: 'category' as const, label: '项目分类总览' }, { key: 'department' as const, label: '二级部门总览' }, { key: 'project' as const, label: '项目总览' }].map(item => <button role="tab" key={item.key} aria-selected={overviewTab === item.key} onClick={() => setPreference('overviewTab', item.key)}>{item.label}</button>)}</div>
         {overviewTab === 'project' && <div className="cockpit-project-results" role="status"><span>匹配 <b>{overviewRows.length}</b> 个项目 <span>/ 当前全局范围 {projectCount} 个</span></span><small>分类和搜索仅筛选项目明细</small>{(projectSearch.trim() || projectCategory !== 'all') && <button className="cockpit-text-button" onClick={() => updatePreferences(actor, { projectCategory: 'all', projectSearch: '' })}>清除项目明细筛选</button>}</div>}
