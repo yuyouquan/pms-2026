@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Button, DatePicker, Empty, Input, Popover, Segmented, Select, Tooltip } from 'antd'
-import { ApartmentOutlined, ArrowRightOutlined, BarChartOutlined, CalendarOutlined, DashboardOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
+import { ApartmentOutlined, ArrowLeftOutlined, ArrowRightOutlined, BarChartOutlined, CalendarOutlined, DashboardOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
@@ -69,7 +69,14 @@ function Cockpit() {
   const { view, dates, scopePreference, departments, mode, trendTab, grain, hiddenTrendSeries, shareTab, shareScopePreferences, overviewTab, projectCategory, projectSearch } = preferences
   const setPreference = <K extends keyof CockpitPreferences>(key: K, value: CockpitPreferences[K]) => updatePreferences(actor, { [key]: value })
   const trendPanel = useRef<HTMLElement>(null), pendingPeriodFocus = useRef(false)
+  const dateControls = useRef<HTMLDivElement>(null), pendingDateFocus = useRef(false)
+  const previousPeriod = preferences.periodHistory.at(-1)
   useEffect(() => {
+    if (pendingDateFocus.current) {
+      pendingDateFocus.current = false
+      dateControls.current?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true })
+      return
+    }
     if (!pendingPeriodFocus.current) return
     pendingPeriodFocus.current = false
     const target = trendPanel.current?.querySelector<SVGRectElement>('.cockpit-period-target[tabindex="0"]')
@@ -136,7 +143,7 @@ function Cockpit() {
     </header>
     {selectedView === 'technical' ? <section className="cockpit-technical-blank" role="tabpanel" aria-label="技术运营" /> : <section role="tabpanel" aria-label="资源管理看板" className="cockpit-management">
       <div className="cockpit-filterbar">
-        <div className="cockpit-date-filter"><CalendarOutlined /><span className="cockpit-filter-label">统计日期</span><DatePicker.RangePicker aria-label="统计日期" allowClear={false} value={[dayjs(dates[0]), dayjs(dates[1])]} onChange={value => { if (value?.[0] && value[1]) setPreference('dates', [value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')]) }} presets={[{ label: '截至今日', value: [dayjs().startOf('year'), dayjs()] }, { label: '本年度', value: [dayjs().startOf('year'), dayjs().endOf('year')] }, { label: '本季度', value: [dayjs().month(Math.floor(dayjs().month() / 3) * 3).startOf('month'), dayjs().month(Math.floor(dayjs().month() / 3) * 3 + 2).endOf('month')] }, { label: '本月', value: [dayjs().startOf('month'), dayjs().endOf('month')] }]} /></div>
+        <div ref={dateControls} className="cockpit-date-filter"><CalendarOutlined /><span className="cockpit-filter-label">统计日期</span><DatePicker.RangePicker aria-label="统计日期" allowClear={false} value={[dayjs(dates[0]), dayjs(dates[1])]} onChange={value => { if (value?.[0] && value[1]) setPreference('dates', [value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')]) }} presets={[{ label: '截至今日', value: [dayjs().startOf('year'), dayjs()] }, { label: '本年度', value: [dayjs().startOf('year'), dayjs().endOf('year')] }, { label: '本季度', value: [dayjs().month(Math.floor(dayjs().month() / 3) * 3).startOf('month'), dayjs().month(Math.floor(dayjs().month() / 3) * 3 + 2).endOf('month')] }, { label: '本月', value: [dayjs().startOf('month'), dayjs().endOf('month')] }]} /></div>
         <div className="cockpit-dept-filter"><ApartmentOutlined /><Select aria-label="部门范围" value={scope} onChange={value => updatePreferences(actor, { scopePreference: value, departments: [] })} options={[{ value: 'software', label: '软件工程部' }, { value: 'all', label: '全研发' }]} /><Select aria-label="二级部门" mode="multiple" placeholder="全部二级部门" value={effectiveDepartments} onChange={value => setPreference('departments', value)} options={departmentOptions.map(value => ({ value, label: value }))} maxTagCount="responsive" allowClear /></div>
         <Tooltip title="重置全部筛选，保留单位与视图"><Button type="text" icon={<ReloadOutlined />} aria-label="重置筛选" onClick={resetFilters} /></Tooltip>
         <Segmented aria-label="统计单位" value={mode} options={[{ label: '人月', value: 'labor' }, { label: '万元', value: 'cost' }]} onChange={value => setPreference('mode', value as CockpitMode)} />
@@ -145,6 +152,11 @@ function Cockpit() {
         onResetDates={() => setPreference('dates', yearDates())}
         onResetScope={() => updatePreferences(actor, { scopePreference: undefined, departments: [] })}
         onRemoveDepartment={department => setPreference('departments', departments.filter(item => item !== department))} />
+      {previousPeriod && <div className="cockpit-period-return" role="group" aria-label="期间探索导航">
+        <button type="button" aria-label={`返回上级日期 ${previousPeriod[0]} 至 ${previousPeriod[1]}`} onClick={() => { pendingDateFocus.current = useCockpitUiStore.getState().returnToPeriod(actor) }}>
+          <ArrowLeftOutlined /><span>返回上级日期</span><b>{previousPeriod[0]} — {previousPeriod[1]}</b>
+        </button><small>仅恢复日期，保留部门、单位与视图</small>
+      </div>}
       <div className="cockpit-context"><span><i />可见资源汇总 <b>{projectCount}</b> 个项目 <span className="cockpit-divider">/</span> 截至 {today}</span>
         <Popover title="数据口径" content={<div className="cockpit-rule-content"><p>预算仅取唯一正式版本，已绑定年度预算计入对应正式项目一次。未设置正式版本的指标不计入汇总，以“—”表示无可用来源。</p><p>核算 = 工时人天 / 来源月份工作日；费用含非人力费用。日期与部门筛选同时作用于所有指标。累至今日按日历日分摊，预算缺失时依次使用概算、年度预算。</p><p>比例由汇总值计算，不平均项目百分比。投入比使用工时人天占比；两个投入比可各自选择软工或全研发。</p><p>当前沿用系统演示资源与工时数据。{warnings.length ? `${warnings.length} 项来源记录待完善：${warnings.slice(0, 3).join('；')}` : '只汇总当前角色可访问的项目与部门。'}</p></div>}><button className="cockpit-text-button"><InfoCircleOutlined /> 数据口径{warnings.length ? ` · ${warnings.length} 项待完善` : ''}</button></Popover>
       </div>
@@ -168,7 +180,7 @@ function Cockpit() {
           <div className="cockpit-tabs" role="tablist" aria-label="趋势类型">{[{ key: 'resource', label: '资源管道总趋势' }, { key: 'category', label: '项目分类投入趋势' }].map(item => <button key={item.key} role="tab" aria-selected={trendTab === item.key} onClick={() => setPreference('trendTab', item.key as CockpitPreferences['trendTab'])}>{item.label}</button>)}</div>
           <div key={`${trendTab}:${grain}:${mode}:${dates.join()}:${scope}:${effectiveDepartments.join()}`} className="cockpit-tab-content"><CockpitChart {...trend} mode={mode} bars={trendTab === 'category'} grain={trendTab === 'resource' ? 'month' : grain} dates={dates}
             hidden={hiddenTrendSeries[trendTab]} onHiddenChange={hidden => setPreference('hiddenTrendSeries', { ...hiddenTrendSeries, [trendTab]: hidden })}
-            onInspectPeriod={period => { const patch = cockpitTrendDrilldown(period, trendTab === 'resource' ? 'month' : grain, dates, scope, shareScopes); if (patch) { pendingPeriodFocus.current = true; updatePreferences(actor, patch) } }} /></div>
+            onInspectPeriod={period => { const patch = cockpitTrendDrilldown(period, trendTab === 'resource' ? 'month' : grain, dates, scope, shareScopes); if (patch) pendingPeriodFocus.current = useCockpitUiStore.getState().focusPeriod(actor, patch) }} /></div>
         </section>
         <section className="cockpit-panel cockpit-share-panel" aria-label="投入结构">
           <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">ALLOCATION</span><h2>投入结构</h2></div><Segmented aria-label={`${shareTab === 'research' ? '三级研发' : '项目分类'}投入范围`} value={shareScopes[shareTab]} options={[{ label: '软工', value: 'software' }, { label: '全研发', value: 'all' }]} onChange={value => setPreference('shareScopePreferences', { ...shareScopePreferences, [shareTab]: value as CockpitScope })} /></div>
