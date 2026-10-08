@@ -112,9 +112,9 @@ export default function PermissionCenter() {
         {viewMode === 'role' ? <>
           <Input className={styles.search} prefix={<SearchOutlined />} placeholder="搜索角色" aria-label="搜索角色" value={roleSearch} onChange={event => setRoleSearch(event.target.value)} allowClear />
           <Button className={styles.addRole} icon={<PlusOutlined />} onClick={() => navigate(() => setFormRole('new'))}>添加角色</Button>
-          {roleTree.length ? <Tree blockNode treeData={roleTree} selectedKeys={role ? [role.id] : []} expandedKeys={roleSearch ? roleTree.map(node => node.key) : roleExpanded}
+          <div className={styles.sidebarList}>{roleTree.length ? <Tree blockNode treeData={roleTree} selectedKeys={role ? [role.id] : []} expandedKeys={roleSearch ? roleTree.map(node => node.key) : roleExpanded}
             onClick={(_, node) => { if (!node.isLeaf) setRoleExpanded(previous => previous.includes(node.key) ? previous.filter(key => key !== node.key) : [...previous, node.key]) }}
-            onExpand={setRoleExpanded} onSelect={keys => { const selected = model.roles.find(item => item.id === keys[0]); if (selected) navigate(() => { setRoleId(selected.id); if (narrow) setRoleCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}
+            onExpand={setRoleExpanded} onSelect={keys => { const selected = model.roles.find(item => item.id === keys[0]); if (selected) navigate(() => { setRoleId(selected.id); if (narrow) setRoleCollapsed(true) }) }} /> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到角色" />}</div>
         </> : <>
           <Input className={styles.search} prefix={<SearchOutlined />} placeholder="搜索已授权人员" aria-label="搜索已授权人员" value={personSearch} onChange={event => setPersonSearch(event.target.value)} allowClear />
           <div className={styles.personList} role="list" aria-label="已授权人员">{assignedUsers.filter(user => user.toLocaleLowerCase().includes(personSearch.toLocaleLowerCase())).map(user =>

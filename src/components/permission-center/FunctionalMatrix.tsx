@@ -16,13 +16,12 @@ interface Props { model: PermissionCenterModel; actor?: string; role?: Permissio
 
 export default function FunctionalMatrix({ model, actor, role, person, conditionDirty }: Props) {
   const [search, setSearch] = useState('')
+  const [onlyGranted, setOnlyGranted] = useState(false)
   const [collapsed, setCollapsed] = useState<string[]>([])
   const [error, setError] = useState('')
   const retry = useRef<(() => PermissionMutationResult) | null>(null)
-  const nodes = buildPermissionMenuTree(search)
-  const groupKeys = getMenuGroupKeys(nodes)
   const searching = !!search.trim()
-  const allCollapsed = groupKeys.length > 0 && groupKeys.every(key => collapsed.includes(key))
+  const filtering = searching || onlyGranted
   const superRole = role?.id === SUPER_ADMIN_ROLE_ID && role.builtin === 'superadmin'
   const sourceRoles = person ? model.roles.filter(item => isRoleAssignedToUser(item, person)) : []
   const mutate = (action: () => PermissionMutationResult) => {
@@ -31,19 +30,18 @@ export default function FunctionalMatrix({ model, actor, role, person, condition
     retry.current = result.ok ? null : action
   }
   const liveActor = () => !!actor && useProjectStore.getState().currentLoginUser === actor
-  const allNodes = buildPermissionMenuTree()
   const descendants = (node: PermissionMenuNode): PermissionMenu[] => node.children ? node.children.flatMap(descendants) : CONFIGURABLE_PERMISSION_MENUS.filter(menu => menu.id === node.key)
-  const findFull = (key: string, items: PermissionMenuNode[] = allNodes): PermissionMenuNode | undefined => {
-    for (const item of items) { if (item.key === key) return item; const nested = item.children && findFull(key, item.children); if (nested) return nested }
-  }
   const isGranted = (menu: PermissionMenu, action: PermissionAction) => {
     if (person) return evaluateMenuPermission(model, person, menu.id, action)
     if (superRole) return true
     const policy = role && model.policies.find(item => item.roleId === role.id && item.menuId === menu.id)
     try { return !!policy && validateMenuPolicy(policy).ok && policy.actions.includes(action) } catch { return false }
   }
+  const nodes = buildPermissionMenuTree(search, menu => !onlyGranted || menu.actions.some(action => isGranted(menu, action)))
+  const groupKeys = getMenuGroupKeys(nodes)
+  const allCollapsed = groupKeys.length > 0 && groupKeys.every(key => collapsed.includes(key))
   const bulkControls = (node: PermissionMenuNode, path: string) => {
-    const all = descendants(findFull(node.key) ?? node)
+    const all = descendants(node)
     const invalid = !!role && all.some(menu => { const policy = model.policies.find(item => item.roleId === role.id && item.menuId === menu.id); if (!policy) return false; try { return !validateMenuPolicy(policy).ok } catch { return true } })
     const disabled = !role || !actor || !!person || !!superRole || !!conditionDirty || invalid || !all.length
     const change = (enabled: boolean) => {
@@ -52,7 +50,7 @@ export default function FunctionalMatrix({ model, actor, role, person, condition
     }
     const values = all.flatMap(menu => menu.actions.map(action => isGranted(menu, action)))
     const checked = values.length > 0 && values.every(Boolean)
-    return <Tooltip title={searching ? '作用于完整目录，包括搜索未显示的权限' : '全选 / 取消全选'}>
+    return <Tooltip title={filtering ? '全选 / 取消全选当前筛选菜单的权限' : '全选 / 取消全选'}>
       <Checkbox className={tableStyles.bulkCheckbox} aria-label={`${path}全部权限`} disabled={disabled}
         checked={checked} indeterminate={!checked && values.some(Boolean)} onChange={event => change(event.target.checked)} />
     </Tooltip>
@@ -71,10 +69,10 @@ export default function FunctionalMatrix({ model, actor, role, person, condition
     const indent = 12 + parents.length * 18
     const path = [...parents, node.label].join(' / ')
     if (node.children) {
-      const expanded = searching || !collapsed.includes(node.key)
+      const expanded = filtering || !collapsed.includes(node.key)
       return <Fragment key={node.key}>
         <tr className={tableStyles.groupRow}><th colSpan={2}>
-          <div className={tableStyles.groupHeader} style={{ paddingInlineStart: indent }}>{bulkControls(node, path)}<button type="button" aria-label={`${expanded ? '收起' : '展开'}${path}功能`} aria-expanded={expanded} disabled={searching}
+          <div className={tableStyles.groupHeader} style={{ paddingInlineStart: indent }}>{bulkControls(node, path)}<button type="button" aria-label={`${expanded ? '收起' : '展开'}${path}功能`} aria-expanded={expanded} disabled={filtering}
             onClick={() => setCollapsed(previous => previous.includes(node.key) ? previous.filter(key => key !== node.key) : [...previous, node.key])}>
             {expanded ? <DownOutlined /> : <RightOutlined />} {node.label}
           </button></div>
@@ -106,13 +104,14 @@ export default function FunctionalMatrix({ model, actor, role, person, condition
   return <div className={styles.matrixPane}>
     <div className={styles.matrixToolbar}>
       <Input prefix={<SearchOutlined />} allowClear placeholder="搜索功能菜单" aria-label="搜索功能菜单" value={search} onChange={event => setSearch(event.target.value)} />
-      <Button type="text" disabled={searching || !nodes.length} onClick={() => setCollapsed(allCollapsed ? [] : groupKeys)}>{allCollapsed ? '展开全部' : '收起全部'}</Button>
-      <span className={styles.muted}>{person ? '有效权限只读，按来源角色合并' : '勾选后立即生效'}</span>
+      <Checkbox aria-label="仅看已授权" checked={onlyGranted} onChange={event => setOnlyGranted(event.target.checked)}>仅看已授权</Checkbox>
+      <Button type="text" disabled={filtering || !nodes.length} onClick={() => setCollapsed(allCollapsed ? [] : groupKeys)}>{allCollapsed ? '展开全部' : '收起全部'}</Button>
+      <span className={styles.muted}>{person ? '有效权限只读，按来源角色合并' : superRole ? '系统超级管理员拥有全部权限' : filtering ? '实时生效 · 全选仅作用于筛选菜单' : '勾选后立即生效'}</span>
     </div>
     {error && <Alert className={styles.alert} type="error" showIcon message={error} action={<Button onClick={() => { if (retry.current) mutate(retry.current) }}>重试</Button>} />}
-    {nodes.length ? <div className={styles.matrixScroll}><table className={`${tableStyles.permissions} ${styles.functionalTable}`} aria-label={person ? '人员有效功能权限' : '角色功能权限'}>
+    {nodes.length ? <div className={styles.matrixScroll}><table className={`${tableStyles.permissions} ${styles.functionalTable} ${person || superRole ? tableStyles.readOnly : ''}`} aria-label={person ? '人员有效功能权限' : '角色功能权限'}>
       <thead><tr><th scope="col">菜单</th><th scope="col">功能权限</th></tr></thead>
       <tbody>{renderNodes(nodes)}</tbody>
-    </table></div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到菜单" />}
+    </table></div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={onlyGranted ? searching ? '当前搜索下暂无已授权菜单' : '暂无已授权菜单' : '未找到菜单'} />}
   </div>
 }

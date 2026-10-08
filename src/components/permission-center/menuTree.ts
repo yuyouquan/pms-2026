@@ -17,10 +17,11 @@ function getMenuPath(menu: PermissionMenu): string[] {
 }
 
 /** Search the full path, retaining each matching leaf's expandable ancestors. */
-export function buildPermissionMenuTree(query = ''): PermissionMenuNode[] {
+export function buildPermissionMenuTree(query = '', includeMenu: (menu: PermissionMenu) => boolean = () => true): PermissionMenuNode[] {
   const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
   const roots: PermissionMenuNode[] = []
   for (const menu of CONFIGURABLE_PERMISSION_MENUS) {
+    if (!includeMenu(menu)) continue
     const path = getMenuPath(menu)
     if (!terms.every(term => path.join(' ').toLocaleLowerCase().includes(term))) continue
     let siblings = roots
