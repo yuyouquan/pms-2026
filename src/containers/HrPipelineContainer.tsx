@@ -20,6 +20,9 @@ import CockpitTable, { type CockpitColumn } from '@/components/cockpit/CockpitTa
 import CockpitMetricDetail, { type CockpitMetric } from '@/components/cockpit/CockpitMetricDetail'
 import CockpitProjectRanking from '@/components/cockpit/CockpitProjectRanking'
 import { cockpitProjectColumns, type CockpitProjectLens } from '@/components/cockpit/cockpitProjectLens'
+import CockpitNumber from '@/components/cockpit/CockpitNumber'
+import CockpitMotionContent from '@/components/cockpit/CockpitMotionContent'
+import { useCockpitMotion } from '@/components/cockpit/useCockpitMotion'
 import { cockpitDepartmentSelection, cockpitTrendDrilldown } from '@/components/cockpit/cockpitTrendInteraction'
 import { collectCockpitInputs } from '@/components/cockpit/cockpitSources'
 import {
@@ -29,20 +32,6 @@ import {
 } from '@/components/cockpit/cockpitData'
 
 const yearDates = (): [string, string] => [`${dayjs().year()}-01-01`, `${dayjs().year()}-12-31`]
-function AnimatedNumber({ value, suffix = '' }: { value?: number; suffix?: string }) {
-  const [display, setDisplay] = useState(value)
-  useEffect(() => {
-    if (value === undefined || window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setDisplay(value); return }
-    const start = performance.now(), from = display ?? 0
-    let frame: number
-    const tick = (time: number) => { const progress = Math.min(1, (time - start) / 650); setDisplay(from + (value - from) * (1 - Math.pow(1 - progress, 3))); if (progress < 1) frame = requestAnimationFrame(tick) }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  // Animate between committed values, never restart for an intermediate frame.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value])
-  return <span aria-label={`${formatCockpit(value)}${suffix}`}><span aria-hidden="true">{formatCockpit(display)}{value === undefined ? '' : suffix}</span></span>
-}
 const metricDefinitions: { key: AmountKey | 'deviation' | 'toDate' | 'annualExecution'; label: string; note: string; color: string }[] = [
   { key: 'annual', label: '年度预算', note: '年度预算 · 正式版本', color: '#7561d1' },
   { key: 'estimate', label: '项目概算', note: '项目概算 · 正式版本', color: '#3c99a0' },
@@ -103,6 +92,8 @@ function Cockpit() {
   useEffect(() => { COCKPIT_CATEGORIES.forEach(item => resourceStore(item.key).getState().refreshFormalProjects()) }, [registry])
   useEffect(() => { const timer = setInterval(() => setToday(dayjs().format('YYYY-MM-DD')), 60000); return () => clearInterval(timer) }, [])
   const selectedView = view === 'management' && canManagement ? 'management' : view === 'technical' && canTechnical ? 'technical' : canManagement ? 'management' : 'technical'
+  const pageRoot = useRef<HTMLElement>(null)
+  useCockpitMotion(pageRoot, selectedView, 'page', selectedView === 'management')
   const inputs = useMemo(() => canManagement ? collectCockpitInputs(registry, { machine, tos, technical, capability }, actor) : [], [registry, machine, tos, technical, capability, actor, permission, canManagement])
   const dateFilter = useMemo(() => ({ startDate: dates[0], endDate: dates[1] }), [dates])
   const allFacts = useMemo(() => buildCockpitFacts(inputs, dateFilter, rate, today, (input, primary, secondary) => canReadCockpitDepartment(model, actor, input.project, input.category, primary, secondary)), [inputs, dateFilter, rate, today, model, actor])
@@ -155,7 +146,7 @@ function Cockpit() {
   ]
   const resetFilters = () => useCockpitUiStore.getState().resetFilters(actor)
   if (!canManagement && !canTechnical) return <Empty description="暂无驾驶舱访问权限" />
-  return <main className="cockpit" aria-label="驾驶舱">
+  return <main ref={pageRoot} className="cockpit" aria-label="驾驶舱">
     <header className="cockpit-heading">
       <div className="cockpit-title-group"><span className="cockpit-title-icon"><DashboardOutlined /></span><div><div className="cockpit-eyebrow">驾驶舱 <span>/</span> 资源管理</div><h1>资源全景</h1></div></div>
       <div className="cockpit-view-switch" role="tablist" aria-label="驾驶舱视角">
@@ -183,14 +174,14 @@ function Cockpit() {
         <Popover title="数据口径" content={<div className="cockpit-rule-content"><p>预算仅取唯一正式版本，已绑定年度预算计入对应正式项目一次。未设置正式版本的指标不计入汇总，以“—”表示无可用来源。</p><p>核算 = 工时人天 / 来源月份工作日；费用含非人力费用。日期与部门筛选同时作用于所有指标。累至今日按日历日分摊，预算缺失时依次使用概算、年度预算。</p><p>比例由汇总值计算，不平均项目百分比。投入比使用工时人天占比；两个投入比可各自选择软工或全研发。</p><p>当前沿用系统演示资源与工时数据。{warnings.length ? `${warnings.length} 项来源记录待完善：${warnings.slice(0, 3).join('；')}` : '只汇总当前角色可访问的项目与部门。'}</p></div>}><button className="cockpit-text-button"><InfoCircleOutlined /> 数据口径{warnings.length ? ` · ${warnings.length} 项待完善` : ''}</button></Popover>
       </div>
       <div className="cockpit-metrics" role="group" aria-label="八项核心指标">
-        {metricDefinitions.map((metric, index) => {
+        {metricDefinitions.map(metric => {
           const ratio = ['deviation', 'toDate', 'annualExecution'].includes(metric.key)
           const value = ratio ? ratios[metric.key as keyof typeof ratios] : total[metric.key as AmountKey]?.[mode]
           const other = total[metric.key as AmountKey]?.[mode === 'labor' ? 'cost' : 'labor']
           const covered = new Set(facts.filter(row => row[metric.key as AmountKey]?.[mode] !== undefined).map(row => row.project.id)).size
-          return <article className={`cockpit-metric${metric.key === 'actual' ? ' cockpit-metric-emphasis' : ''}`} key={metric.key} style={{ '--metric-color': metric.color, '--entry-delay': `${index * 45}ms` } as CSSProperties}>
+          return <article className={`cockpit-metric${metric.key === 'actual' ? ' cockpit-metric-emphasis' : ''}`} key={metric.key} style={{ '--metric-color': metric.color } as CSSProperties}>
             <div className="cockpit-metric-title"><h2>{metric.label}</h2><Tooltip title={`${metric.note}。${ratio ? "按可用来源汇总后计算，缺失项不作为零值。" : `可用来源 ${covered}/${projectCount} 项；缺失或无效来源未纳入汇总。`}`}><button aria-label={`${metric.label}计算规则`}><InfoCircleOutlined /></button></Tooltip></div>
-            <button className="cockpit-metric-value" aria-label={`查看${metric.label}来源明细`} onClick={() => setDetailMetric(metric)}><AnimatedNumber value={value} suffix={ratio ? '%' : ''} />{!ratio && <small>{unit}</small>}<ArrowRightOutlined className="cockpit-metric-drill" /></button>
+            <button className="cockpit-metric-value" aria-label={`查看${metric.label}来源明细`} onClick={() => setDetailMetric(metric)}><CockpitNumber value={value} suffix={ratio ? '%' : ''} context={mode} />{!ratio && <small>{unit}</small>}<ArrowRightOutlined className="cockpit-metric-drill" /></button>
             <div className="cockpit-metric-bottom">{ratio ? <><span>{metric.key === 'deviation' ? '概算与预算对比' : '预算执行进度'}</span><span className="cockpit-mini-meter"><i style={{ width: `${Math.min(100, Math.max(0, value ?? 0))}%` }} /></span></> : <><span>{formatCockpit(other)} {mode === 'labor' ? '万元' : '人月'}</span><small>{covered ? `${covered}/${projectCount} 项` : '暂无来源'}</small></>}</div>
           </article>
         })}
@@ -200,19 +191,19 @@ function Cockpit() {
         <section ref={trendPanel} className="cockpit-panel cockpit-trend-panel" aria-label="投入趋势">
           <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">TREND</span><h2>投入趋势</h2></div><div className="cockpit-panel-tools">{trendTab === 'category' && <Segmented aria-label="趋势粒度" options={[{ label: '月', value: 'month' }, { label: '周', value: 'week' }]} value={grain} onChange={value => setPreference('grain', value as 'month' | 'week')} />}</div></div>
           <div className="cockpit-tabs" role="tablist" aria-label="趋势类型">{[{ key: 'resource', label: '资源管道总趋势' }, { key: 'category', label: '项目分类投入趋势' }].map(item => <button key={item.key} role="tab" aria-selected={trendTab === item.key} onClick={() => setPreference('trendTab', item.key as CockpitPreferences['trendTab'])}>{item.label}</button>)}</div>
-          <div key={`${trendTab}:${grain}:${mode}:${dates.join()}:${scope}:${effectiveDepartments.join()}`} className="cockpit-tab-content"><CockpitChart {...trend} mode={mode} bars={trendTab === 'category'} grain={trendTab === 'resource' ? 'month' : grain} dates={dates}
+          <CockpitMotionContent key={`${trendTab}:${grain}:${mode}:${dates.join()}:${scope}:${effectiveDepartments.join()}`} motionKey={`${trendTab}:${grain}`}><CockpitChart {...trend} mode={mode} bars={trendTab === 'category'} grain={trendTab === 'resource' ? 'month' : grain} dates={dates}
             hidden={hiddenTrendSeries[trendTab]} onHiddenChange={hidden => setPreference('hiddenTrendSeries', { ...hiddenTrendSeries, [trendTab]: hidden })}
-            onInspectPeriod={period => { const patch = cockpitTrendDrilldown(period, trendTab === 'resource' ? 'month' : grain, dates, scope, shareScopes); if (patch) pendingPeriodFocus.current = useCockpitUiStore.getState().focusPeriod(actor, patch) }} /></div>
+            onInspectPeriod={period => { const patch = cockpitTrendDrilldown(period, trendTab === 'resource' ? 'month' : grain, dates, scope, shareScopes); if (patch) pendingPeriodFocus.current = useCockpitUiStore.getState().focusPeriod(actor, patch) }} /></CockpitMotionContent>
         </section>
         <section className="cockpit-panel cockpit-share-panel" aria-label="投入结构">
           <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">ALLOCATION</span><h2>投入结构</h2></div><Segmented aria-label={`${shareTab === 'research' ? '三级研发' : '项目分类'}投入范围`} value={shareScopes[shareTab]} options={[{ label: '软工', value: 'software' }, { label: '全研发', value: 'all' }]} onChange={value => setPreference('shareScopePreferences', { ...shareScopePreferences, [shareTab]: value as CockpitScope })} /></div>
           <div className="cockpit-tabs" role="tablist" aria-label="投入比例类型">{[{ key: 'research' as const, label: '三级研发投入比' }, { key: 'category' as const, label: '项目分类投入比' }].map(item => <button key={item.key} role="tab" aria-selected={shareTab === item.key} onClick={() => setPreference('shareTab', item.key)}>{item.label}</button>)}</div>
-          <div className="cockpit-tab-content" key={shareTab}>
+          <CockpitMotionContent key={shareTab} motionKey={shareTab}>
             <div className="cockpit-share-summary"><span>工时总投入 <strong>{shares.total ? formatCockpit(shares.total) : '—'}</strong> 人天</span><small>{shareScopes[shareTab] === 'software' ? '软件工程部' : '全研发'} · 选定日期</small></div>
             <div className="cockpit-share-bar" aria-label="投入比例分布">{shares.rows.map(row => <Tooltip key={row.key} title={`${row.label} ${percentage(row.total)}`}><span style={{ width: `${row.total ?? 0}%`, background: row.color }} /></Tooltip>)}</div>
             <CockpitTable rows={shares.rows} columns={shareColumns} label={shareTab === 'research' ? '三级研发投入比' : '项目分类投入比'} />
             <p className="cockpit-panel-note">月度占比随所选日期计算，横向滚动查看各月。{shares.rows.some(row => row.label === '未归类') ? '未配置研发分类的工时保留为未归类。' : ''}</p>
-          </div>
+          </CockpitMotionContent>
         </section>
       </div>
       <CockpitProjectRanking facts={facts} metric={preferences.rankingMetric} mode={mode} onMetricChange={value => setPreference('rankingMetric', value)} onOpenProject={openProjectResources}
@@ -225,8 +216,8 @@ function Cockpit() {
           <Segmented aria-label="项目明细视图" value={preferences.projectLens} onChange={value => setPreference('projectLens', value as CockpitProjectLens)} options={[{ label: '全部字段', value: 'all' }, { label: '预算核对', value: 'budget' }, { label: '核算核对', value: 'actual' }]} />
           <p>{preferences.projectLens === 'actual' ? '执行率使用累至今日预估投入，预算缺失时沿用概算或年度预算来源。' : preferences.projectLens === 'budget' ? '对照项目预算、概算偏差和年度预算；缺失来源保留为“—”。' : '展示项目信息与全部原有投入指标，横向滚动查看。'}</p>
         </div>}
-        <div className="cockpit-tab-content" key={overviewTab}><CockpitTable rows={overviewRows} columns={visibleOverviewColumns} label="资源总览明细" footer={overviewTotal}
-          view={preferences.overviewTables[overviewTab] ?? { widths: {} }} onViewChange={value => useCockpitUiStore.getState().updateOverviewTable(actor, overviewTab, value)} /></div>
+        <CockpitMotionContent key={overviewTab} motionKey={`${overviewTab}:${preferences.projectLens}`}><CockpitTable rows={overviewRows} columns={visibleOverviewColumns} label="资源总览明细" footer={overviewTotal}
+          view={preferences.overviewTables[overviewTab] ?? { widths: {} }} onViewChange={value => useCockpitUiStore.getState().updateOverviewTable(actor, overviewTab, value)} /></CockpitMotionContent>
       </section>
       <footer className="cockpit-footer"><span>资源正式版本 + 工时核算</span><span>仅展示当前角色授权范围内的数据</span></footer>
     </section>}

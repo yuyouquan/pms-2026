@@ -1,19 +1,22 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { Segmented, Tooltip } from 'antd'
 import { ArrowRightOutlined, SearchOutlined } from '@ant-design/icons'
 import { COCKPIT_CATEGORIES, formatCockpit, type CockpitFact, type CockpitMode } from '@/components/cockpit/cockpitData'
 import { cockpitProjectRanking } from '@/components/cockpit/cockpitRankingData'
+import { useCockpitMotion } from '@/components/cockpit/useCockpitMotion'
 
 export default function CockpitProjectRanking({ facts, metric, mode, onMetricChange, onOpenProject, onLocateProject }: {
   facts: readonly CockpitFact[]; metric: 'budget' | 'actual'; mode: CockpitMode
   onMetricChange: (metric: 'budget' | 'actual') => void; onOpenProject: (id: string) => void; onLocateProject: (name?: string) => void
 }) {
   const ranking = useMemo(() => cockpitProjectRanking(facts, metric, mode), [facts, metric, mode])
+  const panel = useRef<HTMLElement>(null)
+  useCockpitMotion(panel, JSON.stringify([metric, mode, ranking.rows.map(row => [row.key, row.value])]), 'ranking')
   const label = metric === 'budget' ? '项目预算' : '项目核算', unit = mode === 'labor' ? '人月' : '万元'
   const share = (value?: number) => value === undefined ? '—' : `${formatCockpit(value)}%`
-  return <section className="cockpit-panel cockpit-ranking" aria-label="项目投入排行">
+  return <section ref={panel} className="cockpit-panel cockpit-ranking" aria-label="项目投入排行">
     <div className="cockpit-panel-header"><div><span className="cockpit-section-kicker">PROJECTS</span><h2>项目投入排行 <small>{unit}</small></h2></div>
       <Segmented aria-label="项目排行指标" value={metric} onChange={value => onMetricChange(value as 'budget' | 'actual')} options={[{ label: '项目核算', value: 'actual' }, { label: '项目预算', value: 'budget' }]} />
     </div>
