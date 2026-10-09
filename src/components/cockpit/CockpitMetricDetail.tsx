@@ -41,7 +41,7 @@ export default function CockpitMetricDetail({ metric, facts, inputs, mode, dates
   ratioFields.forEach(field => columns.push({ key: field.key, label: `${field.label}（${unit}）`, width: 180, numeric: true, value: row => row[field.key]?.[mode], render: row => formatCockpit(row[field.key]?.[mode]) }))
   const clearDetailFilters = () => { setSearch(''); setSourceFilter('all') }
   const filtered = sourceFilter !== 'all' || !!search.trim()
-  return <Drawer open title={`${metric.label} · 来源明细`} onClose={onClose} width="min(980px, 100vw)" className="cockpit-detail-drawer">
+  return <Drawer getContainer={false} open title={`${metric.label} · 来源明细`} onClose={onClose} size="min(980px, 100vw)" className="cockpit-detail-drawer">
     <div className="cockpit-detail-summary"><div><span>当前筛选范围</span><strong>{formatCockpit(valueOf(total))}<small>{isRatio ? '%' : unit}</small></strong></div><div><span>{dates[0]} 至 {dates[1]}</span><p>{detail.available} / {detail.count} 个项目有可用值</p></div></div>
     <p className="cockpit-detail-rule">{metric.note}。{isRatio ? '总比例按汇总金额或人月重新计算，不平均下方项目百分比。' : '与项目空间使用同一份正式版本和核算数据，按当前日期及部门范围统计。'}核算只累计至今日，缺失来源显示“—”。</p>
     {isRatio && <div className="cockpit-detail-basis">{ratioFields.map(field => <span key={field.key}>{field.label}<b>{formatCockpit(total[field.key]?.[mode])} {unit}</b></span>)}</div>}
@@ -53,8 +53,8 @@ export default function CockpitMetricDetail({ metric, facts, inputs, mode, dates
         {([{ key: 'all', label: '全部', count: detail.count }, { key: 'available', label: '可用', count: detail.available }, { key: 'unavailable', label: '无可用值', count: detail.unavailable }] as const).map(item => <button key={item.key} type="button" aria-pressed={sourceFilter === item.key} onClick={() => setSourceFilter(item.key)}>{item.label}<b>{item.count}</b></button>)}
       </div>
     </section>
-    <div className="cockpit-detail-toolbar"><Input aria-label="搜索指标来源项目" placeholder="搜索来源项目" prefix={<SearchOutlined />} value={search} onChange={event => setSearch(event.target.value)} allowClear /><span>点击项目名称查看资源详情</span></div>
-    <div className="cockpit-source-results" role="status"><span>匹配 <b>{detail.rows.length}</b> / {detail.count} 个项目</span>{filtered ? <button type="button" className="cockpit-text-button" onClick={clearDetailFilters}>清除来源筛选</button> : <small>默认按可用值优先、贡献绝对值降序</small>}</div>
+    <div className="cockpit-detail-toolbar"><Input aria-label="搜索指标来源项目" placeholder="搜索来源项目" prefix={<SearchOutlined />} value={search} onChange={event => setSearch(event.target.value)} allowClear /></div>
+    <div className="cockpit-source-results" role="status"><span>匹配 <b>{detail.rows.length}</b> / {detail.count} 个项目</span>{filtered ? <button type="button" className="cockpit-text-button" onClick={clearDetailFilters}>清除来源筛选</button> : null}</div>
     <CockpitTable rows={detail.rows} columns={columns} label="指标来源明细" footer={detail.total} />
     <p className="cockpit-detail-footnote">项目空间默认查看全周期；核对时请选择相同日期和部门。已绑定年度预算归入正式项目，不重复计数。来源筛选与搜索只改变明细及表尾的匹配合计，不改变上方总值。</p>
   </Drawer>
