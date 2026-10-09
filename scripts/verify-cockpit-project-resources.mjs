@@ -44,6 +44,29 @@ for (const input of initialInputs) {
     }
   }
 }
+// A shared upstream ledger refresh must update all consumer projections together.
+for (const input of initialInputs.filter(item => item.dataset)) {
+  const entry = input.dataset.worklogs.find(row => row.date >= dates.startDate && row.date <= today)
+  assert.ok(entry)
+  const original = entry.personDays, beforeActual = data.summarizeCockpit(facts()).actual
+  try {
+    entry.personDays += 0.1
+    const refreshedFacts = facts(), projectView = buildAccountingAnalysis(input.dataset, 5, { ...dates, endDate: today })
+    for (const mode of ['labor', 'cost']) {
+      const delta = 0.1 / entry.monthWorkingDays * (mode === 'cost' ? 5 : 1)
+      close(data.summarizeCockpit(refreshedFacts).actual[mode] - beforeActual[mode], delta, `${input.category} source refresh updates global ${mode}`)
+      close(cockpitProjectRanking(refreshedFacts, 'actual', mode).rows.find(row => row.key === input.project.id).value, projectView[mode], `${input.category} refreshed ranking/project space parity`)
+      for (const grain of ['month', 'week']) {
+        const trend = data.cockpitTrend(refreshedFacts.filter(row => row.project.id === input.project.id), dates, mode, 'category', grain)
+        close(trend.series.find(row => row.key === input.category).values.reduce((sum, value) => sum + (value ?? 0), 0), projectView[mode], `${input.category} refreshed ${grain} trend uses ledger`)
+      }
+    }
+  } finally { entry.personDays = original }
+  const scopedDates = { startDate: '2026-03-10', endDate: '2026-06-18' }
+  const scopedFacts = data.filterCockpitFacts(data.buildCockpitFacts(inputs(), scopedDates, 5, today, () => true), { scope: 'all', departments: ['软件部'] }).filter(row => row.project.id === input.project.id)
+  const scopedProject = buildAccountingAnalysis(input.dataset, 5, { ...scopedDates, department: '软件部' })
+  for (const mode of ['labor', 'cost']) close(data.summarizeCockpit(scopedFacts).actual[mode], scopedProject[mode], `${input.category} partial-period department ${mode} parity`)
+}
 const bound = useProjectStore.getState().projects.filter(project => project.boundFormalProjectId)
 assert.ok(bound.length > 0)
 assert.ok(bound.every(project => !initialInputs.some(input => input.project.id === project.id)), 'bound annual budget never becomes a second project')
@@ -78,4 +101,4 @@ close(cockpitAfter.budget.labor, projectAfter.labor, 'published project-space ed
 close(cockpitProjectRanking(firstHalfFacts(), 'budget', 'labor').rows.find(row => row.key === scopeId).value, projectAfter.labor, 'formalized allocation updates ranking from shared store')
 assert.notEqual(data.summarizeCockpit(firstHalfFacts()).budget.labor, firstHalfBefore.budget.labor, 'published allocation change is reflected in the selected period')
 close(data.summarizeCockpit(facts()).actual.labor, before.actual.labor, 'budget revision does not mutate actual worklogs')
-console.log(`PASS cockpit uses ${initialInputs.length} real project sources: all-category value parity, project ranking/ledger parity, existing department defaults, bound-budget deduplication, draft isolation and official-version updates`)
+console.log(`PASS cockpit uses ${initialInputs.length} real project sources: all-category value parity, project ranking/ledger parity, existing department defaults, bound-budget deduplication, draft isolation, official-version updates, upstream ledger refresh and department/date parity`)

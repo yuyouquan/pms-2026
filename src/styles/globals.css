@@ -10402,14 +10402,16 @@ button.cockpit-filter-chip:hover { border-color: #bba9dc; background: #f0eaf9; }
 .cockpit-screen .cockpit-ranking-total { margin-top: 10px; }
 .cockpit-screen .cockpit-ranking-total b { color: #302a43; font-size: 23px; }
 .cockpit-screen .cockpit-ranking-coverage, .cockpit-screen .cockpit-ranking-total small { color: var(--pms-text-secondary); font-size: 11px; }
-.cockpit-screen .cockpit-ranking-list li { gap: 10px; padding: 8px 0 10px; border-color: var(--pms-brand-border); }
-.cockpit-screen .cockpit-rank-position { color: var(--pms-text-secondary); font-size: 15px; }
+.cockpit-screen .cockpit-ranking-list li { gap: 10px; padding: 8px 0 10px; border-bottom: 0; }
+.cockpit-screen .cockpit-rank-position { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 7px; background: var(--pms-brand-surface); color: var(--pms-brand-strong); font-size: 12px; font-weight: 600; }
 .cockpit-screen .cockpit-rank-heading { gap: 8px; }
 .cockpit-screen .cockpit-project-link { color: var(--pms-brand-strong); }
 .cockpit-screen .cockpit-rank-value { color: #302a43; font-size: 14px; }
 .cockpit-screen .cockpit-rank-value small, .cockpit-screen .cockpit-rank-meta { color: var(--pms-text-secondary); }
-.cockpit-screen .cockpit-rank-track { background: #ede9f7; height: 5px; }
-.cockpit-screen .cockpit-rank-bar { background: linear-gradient(90deg, #8063e4, #b19aef); }
+.cockpit-screen .cockpit-rank-track { background: #f0ecf9; height: 8px; border-radius: 999px; overflow: hidden; }
+.cockpit-screen .cockpit-rank-bar { background: #8063e4; border-radius: inherit; }
+.cockpit-screen .cockpit-rank-bar.is-negative { background: #c4b5e8; border: 0; }
+.cockpit-screen .cockpit-rank-zero { top: 0; height: 100%; background: #8e7bab; }
 .cockpit-screen .cockpit-rank-locate { color: var(--pms-brand-strong); }
 .cockpit-screen .cockpit-ranking-empty { color: var(--pms-text-secondary); }
 .cockpit-ledger-link { display: flex; align-items: center; gap: 9px; margin: 15px 0 0 auto; background: transparent; border: 0; color: var(--pms-brand-strong); font-size: 13px; }
@@ -10461,7 +10463,7 @@ button.cockpit-filter-chip:hover { border-color: #bba9dc; background: #f0eaf9; }
 }
 @media (max-width: 720px) { .cockpit-screen .cockpit-metric-ratio h2 { white-space: normal; } }
 @media (min-width: 1200px) {
-  .cockpit-screen .cockpit-rank-track { margin-block: 9px 4px; }
+  .cockpit-screen .cockpit-rank-track { margin-block: 8px 4px; }
   .cockpit-screen .cockpit-ranking-list li { min-height: 56px; }
   .cockpit-screen:fullscreen { padding: 20px 28px; }
   .cockpit-screen:fullscreen .cockpit-echart-wrap { height: clamp(180px, 20dvh, 320px); }

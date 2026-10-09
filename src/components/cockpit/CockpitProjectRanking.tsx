@@ -34,7 +34,7 @@ export default function CockpitProjectRanking({ facts, category, mode, onCategor
             <span className="cockpit-rank-value">{formatCockpit(row.value)} <small>{unit}</small></span>
           </div>
           <div className="cockpit-rank-track" role="img" aria-label={`${row.name} ${formatCockpit(row.value)} ${unit}，占已知合计 ${share(row.share)}`}>
-            <i className={`cockpit-rank-bar${row.value < 0 ? ' is-negative' : ''}`} style={{ left: `${row.barStart}%`, width: `${row.barWidth}%` }} /><i className="cockpit-rank-zero" style={{ left: `${ranking.zero}%` }} />
+            <i className={`cockpit-rank-bar${row.value < 0 ? ' is-negative' : ''}`} style={{ left: `${row.barStart}%`, width: `${row.barWidth}%` }} />{ranking.zero > 0 && ranking.zero < 100 && <i className="cockpit-rank-zero" style={{ left: `${ranking.zero}%` }} />}
           </div>
 
         </div><Tooltip title="在项目总览中定位"><button type="button" className="cockpit-rank-locate" aria-label={`在总览中定位 ${row.name}`} onClick={() => onLocateProject(row.name)}><SearchOutlined /><span>明细</span></button></Tooltip>
