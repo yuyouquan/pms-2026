@@ -16,10 +16,15 @@ export default function CockpitEChart({ option, label, className = '', onSelect,
   const syncSelection = () => {
     const instance = chart.current, { activeIndex: index, option: latest } = current.current
     if (!instance) return
-    if (index === undefined) { instance.dispatchAction({ type: 'hideTip' }); return }
+    if (index === undefined || !latest.series || (Array.isArray(latest.series) && !latest.series.length)) { instance.dispatchAction({ type: 'hideTip' }); return }
     const xAxis = Array.isArray(latest.xAxis) ? latest.xAxis[0] : latest.xAxis
     const count = xAxis && 'data' in xAxis ? xAxis.data?.length ?? 0 : 0
-    if (count > 24) instance.dispatchAction({ type: 'dataZoom', startValue: Math.max(0, Math.min(count - 24, index - 12)), endValue: Math.min(count - 1, Math.max(23, index + 11)) })
+    const zoom = (instance.getOption().dataZoom as { startValue?: number; endValue?: number }[] | undefined)?.[0]
+    if (zoom && typeof zoom.startValue === 'number' && typeof zoom.endValue === 'number' && (index < zoom.startValue || index > zoom.endValue)) {
+      const window = zoom.endValue - zoom.startValue + 1
+      const start = Math.max(0, Math.min(count - window, index - Math.floor(window / 2)))
+      instance.dispatchAction({ type: 'dataZoom', startValue: start, endValue: Math.min(count - 1, start + window - 1) })
+    }
     instance.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: index })
   }
   useEffect(() => {
@@ -31,10 +36,14 @@ export default function CockpitEChart({ option, label, className = '', onSelect,
       chart.current = init(host.current, undefined, { renderer: 'svg' })
       chart.current.getZr().on('click', event => {
         const instance = chart.current
-        if (!instance || !current.current.onSelect || !instance.containPixel({ gridIndex: 0 }, [event.offsetX, event.offsetY])) return
-        const position = instance.convertFromPixel({ xAxisIndex: 0 }, event.offsetX)
-        const axis = current.current.option.xAxis
-        const count = axis && !Array.isArray(axis) && 'data' in axis ? axis.data?.length ?? 0 : 0
+        if (!instance || !current.current.onSelect) return
+        const axes = current.current.option.xAxis
+        const list = Array.isArray(axes) ? axes : axes ? [axes] : []
+        const gridIndex = list.findIndex((_, index) => instance.containPixel({ gridIndex: index }, [event.offsetX, event.offsetY]))
+        if (gridIndex < 0) return
+        const position = instance.convertFromPixel({ xAxisIndex: gridIndex }, event.offsetX)
+        const axis = list[gridIndex]
+        const count = axis && 'data' in axis ? axis.data?.length ?? 0 : 0
         if (count && typeof position === 'number' && Number.isFinite(position)) current.current.onSelect(Math.max(0, Math.min(count - 1, Math.round(position))))
       })
       apply(); syncSelection()

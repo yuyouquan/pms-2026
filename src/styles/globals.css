@@ -10517,3 +10517,24 @@ button.cockpit-filter-chip:hover { border-color: #bba9dc; background: #f0eaf9; }
   .cockpit-screen .cockpit-metric-value, .cockpit-screen .cockpit-metric-ratio .cockpit-metric-value { font-size: 22px; gap: 4px; }
   .cockpit-screen .cockpit-metric-value small { font-size: 10px; }
 }
+
+/* Classification small multiples: shared time/amount scales, fixed category names. */
+.cockpit-category-chart .cockpit-trend-graphic { padding-left: 104px; }
+.cockpit-category-divider { position: absolute; left: 0; right: 0; border-top: 1px solid #d8d1eb; pointer-events: none; }
+.cockpit-category-labels { position: absolute; inset: 0 auto 0 0; width: 104px; z-index: 1; }
+.cockpit-category-labels button { position: absolute; left: 0; width: 100%; transform: translateY(-50%); padding: 8px 4px; border: 0; border-radius: 5px; background: transparent; color: var(--pms-text-primary); font-size: 12px; line-height: 1.5; font-weight: 600; cursor: pointer; }
+.cockpit-category-labels button:hover { background: var(--pms-brand-surface); color: var(--pms-brand-strong); }
+.cockpit-category-labels button[aria-pressed=false] { color: var(--pms-text-secondary); text-decoration: line-through; }
+.cockpit-category-labels button:focus-visible { outline: 2px solid var(--pms-brand-strong); outline-offset: -2px; }
+.cockpit-category-scroll { overflow-x: auto; scrollbar-width: thin; }
+.cockpit-category-chart .cockpit-echart-wrap { min-width: 640px; height: 380px; }
+.cockpit-category-chart .cockpit-graphic-empty { left: 104px; }
+@media (max-width: 720px) {
+  .cockpit-category-chart .cockpit-trend-graphic { padding-left: 90px; }
+  .cockpit-category-labels { width: 90px; }
+  .cockpit-category-labels button { font-size: 11px; }
+  .cockpit-category-chart .cockpit-graphic-empty { left: 90px; }
+}
+@media (min-width: 1200px) {
+  .cockpit-screen:fullscreen .cockpit-category-chart .cockpit-echart-wrap { height: 276px; }
+}
