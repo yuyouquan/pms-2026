@@ -73,7 +73,7 @@ assert.deepEqual(PERMISSION_MAIN_NAV, [
   { key: 'projectManagement', label: '项目管理' },
   { key: 'jointProjectSpace', label: '项目组合管理' },
   { key: 'roadmap', label: 'tOS路标' },
-  { key: 'hrPipeline', label: '人力资源管道' },
+  { key: 'hrPipeline', label: '驾驶舱' },
   { key: 'config', label: '配置中心' },
   { key: 'globalPermission', label: '权限中心' },
 ], 'shared header directory preserves business menu order and appends permission center after configuration')

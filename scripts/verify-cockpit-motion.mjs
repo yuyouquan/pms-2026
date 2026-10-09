@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict'
+import path from 'node:path'
+import { createTypeScriptModuleLoader } from './lib/typescript-module-loader.mjs'
+const load = createTypeScriptModuleLoader()
+const { cockpitMotionProgress, cockpitMotionFrames, cockpitTweenValue } = load(path.resolve('src/components/cockpit/cockpitMotion.ts'))
+assert.equal(cockpitMotionProgress(-10, 24), 0)
+assert.equal(cockpitMotionProgress(24, 24), 1)
+assert.equal(cockpitMotionProgress(100, 24), 1)
+const progress = Array.from({ length: 25 }, (_, frame) => cockpitMotionProgress(frame, 24))
+assert.ok(progress.every((value, index) => value >= 0 && value <= 1 && (!index || value >= progress[index - 1])), 'bounded monotone motion never overshoots financial values')
+assert.equal(cockpitTweenValue(-20, 100, 0), -20)
+assert.equal(cockpitTweenValue(-20, 100, 1), 100)
+for (const value of progress) assert.ok(cockpitTweenValue(-20, 100, value) >= -20 && cockpitTweenValue(-20, 100, value) <= 100)
+const entry = cockpitMotionFrames('enter', .4)
+assert.equal(entry[0].offset, 0); assert.equal(entry.at(-1).offset, 1)
+assert.equal(entry.at(-1).opacity, 1); assert.equal(entry.at(-1).transform, 'translateY(0px)')
+assert.equal(cockpitMotionFrames('line', .5)[0].strokeDashoffset, '1')
+assert.equal(cockpitMotionFrames('line', .5).at(-1).strokeDashoffset, '0')
+assert.equal(cockpitMotionFrames('bar', .5).at(-1).transform, 'scaleY(1)')
+assert.deepEqual(cockpitMotionFrames('enter', .4), entry, 'same virtual frames produce identical motion')
+console.log('PASS Remotion cockpit motion: deterministic frames, explicit timing, bounded easing/tweening, final geometry and no financial overshoot')
