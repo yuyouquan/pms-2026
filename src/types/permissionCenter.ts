@@ -1,5 +1,5 @@
 export type PermissionAction = 'view' | 'export' | 'import' | 'create' | 'edit' | 'delete' | 'publish' | 'share' | 'baseline' | 'manage'
-export type PermissionMenuId = 'project.view' | 'project.config' | 'project.space' | 'joint.plan' | 'roadmap.table' | 'roadmap.evolution' | 'workbench' | 'permission.center' | `config.${string}` | `hr.${string}`
+export type PermissionMenuId = 'project.view' | 'project.config' | 'project.space' | 'joint.plan' | 'roadmap.table' | 'roadmap.evolution' | 'workbench' | 'permission.center' | 'cockpit.resources' | 'cockpit.technical' | `config.${string}` | `hr.${string}`
 export type PermissionOperator = 'eq' | 'neq' | 'contains' | 'notContains' | 'in' | 'notIn' | 'empty' | 'notEmpty' | 'gt' | 'gte' | 'lt' | 'lte'
 export interface PermissionField { key: string; label: string; kind: 'text' | 'enum' | 'number' | 'date'; options?: readonly string[]; required?: boolean; source?: 'system' | 'projectInfo' | 'templateTask' }
 export interface PermissionMenu { id: PermissionMenuId; label: string; category: string; actions: readonly PermissionAction[]; fields: readonly PermissionField[] }
