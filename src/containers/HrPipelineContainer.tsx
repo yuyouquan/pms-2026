@@ -65,16 +65,14 @@ function Cockpit() {
   const dateControls = useRef<HTMLDivElement>(null), pendingDateFocus = useRef(false)
   const previousPeriod = preferences.periodHistory.at(-1)
   const overviewPanel = useRef<HTMLElement>(null), pendingOverviewFocus = useRef(false)
-  useEffect(() => {
-    if (!pendingOverviewFocus.current) return
-    if (!overviewPanel.current) return
+  const focusOverviewProject = () => {
+    if (!pendingOverviewFocus.current || !overviewPanel.current) return
     pendingOverviewFocus.current = false
-    overviewPanel.current?.scrollIntoView({ block: 'start', behavior: 'auto' })
-    const scroller = overviewPanel.current?.querySelector<HTMLElement>('.cockpit-table-scroll')
+    const scroller = overviewPanel.current.querySelector<HTMLElement>('.cockpit-table-scroll')
     if (scroller) scroller.scrollLeft = 0
-    const input = overviewPanel.current?.querySelector<HTMLInputElement>('input[aria-label="搜索项目总览"]')
+    const input = overviewPanel.current.querySelector<HTMLInputElement>('input[aria-label="搜索项目总览"]')
     input?.focus({ preventScroll: true }); input?.select()
-  }, [preferences])
+  }
   useEffect(() => {
     const scroller = overviewPanel.current?.querySelector<HTMLElement>('.cockpit-table-scroll')
     if (scroller) scroller.scrollLeft = 0
@@ -216,11 +214,11 @@ function Cockpit() {
       </div>
       <div className="cockpit-bottom-grid">
       <CockpitComparison facts={facts} mode={mode} onDetails={() => updatePreferences(actor, { overviewOpen: true, overviewTab: 'category' })} />
-      <CockpitProjectRanking facts={facts} metric={preferences.rankingMetric} mode={mode} onMetricChange={value => setPreference('rankingMetric', value)} onOpenProject={openProjectResources}
-        onLocateProject={(name = '') => { pendingOverviewFocus.current = true; updatePreferences(actor, { overviewOpen: true, overviewTab: 'project', projectCategory: 'all', projectSearch: name, projectLens: preferences.rankingMetric }) }} />
+      <CockpitProjectRanking facts={facts} category={preferences.rankingCategory} mode={mode} onCategoryChange={value => setPreference('rankingCategory', value)} onOpenProject={openProjectResources}
+        onLocateProject={(name = '') => { pendingOverviewFocus.current = true; updatePreferences(actor, { overviewOpen: true, overviewTab: 'project', projectCategory: preferences.rankingCategory, projectSearch: name, projectLens: 'actual' }) }} />
       </div>
       <button className="cockpit-ledger-link" onClick={() => setPreference('overviewOpen', true)}>资源总览明细 <ArrowRightOutlined /></button>
-      <Drawer title="资源总览明细" open={preferences.overviewOpen} onClose={() => setPreference('overviewOpen', false)} size="min(1280px, 96vw)" getContainer={false} rootClassName="cockpit-data-drawer" afterOpenChange={open => { if (open && pendingOverviewFocus.current) { pendingOverviewFocus.current = false; const input = overviewPanel.current?.querySelector<HTMLInputElement>('input[aria-label="搜索项目总览"]'); input?.focus(); input?.select() } }}>
+      <Drawer title="资源总览明细" open={preferences.overviewOpen} onClose={() => setPreference('overviewOpen', false)} size="min(1280px, 96vw)" getContainer={false} rootClassName="cockpit-data-drawer" afterOpenChange={open => { if (open) focusOverviewProject() }}>
       <section ref={overviewPanel} className="cockpit-panel cockpit-overview" aria-label="资源总览明细">
         <div className="cockpit-panel-header"><div><h2>资源总览 <small>{unit}</small></h2></div><div className="cockpit-panel-tools">{overviewTab === 'project' && <Input className="cockpit-project-search" aria-label="搜索项目总览" placeholder="搜索项目" prefix={<SearchOutlined />} value={projectSearch} onChange={event => setPreference('projectSearch', event.target.value)} allowClear />}{overviewTab === 'project' && <Select aria-label="项目分类" value={projectCategory} onChange={value => setPreference('projectCategory', value)} options={[{ value: 'all', label: '全部项目分类' }, ...COCKPIT_CATEGORIES.map(item => ({ value: item.key, label: item.label }))]} />}</div></div>
         <div className="cockpit-tabs" role="tablist" aria-label="总览类型">{[{ key: 'category' as const, label: '项目分类总览' }, { key: 'department' as const, label: '二级部门总览' }, { key: 'project' as const, label: '项目总览' }].map(item => <button role="tab" key={item.key} aria-selected={overviewTab === item.key} onClick={() => setPreference('overviewTab', item.key)}>{item.label}</button>)}</div>

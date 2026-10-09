@@ -10488,3 +10488,25 @@ button.cockpit-filter-chip:hover { border-color: #bba9dc; background: #f0eaf9; }
   .cockpit-screen:fullscreen .cockpit-allocation { min-height: 220px; }
   .cockpit-screen:fullscreen .cockpit-ledger-link { margin-top: 12px; }
 }
+
+/* Keep all eight headline measures together on the desktop cockpit. */
+@media (min-width: 1200px) {
+  .cockpit-screen .cockpit-metrics { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+  .cockpit-screen .cockpit-metric, .cockpit-screen:fullscreen .cockpit-metric { grid-column: span 1; display: block; padding: 14px 12px; }
+  .cockpit-screen .cockpit-metric-title { min-height: 32px; gap: 4px; align-items: flex-start; }
+  .cockpit-screen .cockpit-metric h2 { font-size: 12px; line-height: 16px; white-space: normal; }
+  .cockpit-screen .cockpit-metric-title button { flex: none; }
+  .cockpit-screen .cockpit-metric-value, .cockpit-screen:fullscreen .cockpit-metric-value,
+  .cockpit-screen .cockpit-metric-ratio .cockpit-metric-value, .cockpit-screen:fullscreen .cockpit-metric-ratio .cockpit-metric-value { font-size: clamp(23px, 1.75vw, 34px); line-height: 1.3; margin: 7px 0 4px; gap: 4px; letter-spacing: -.8px; white-space: nowrap; }
+  .cockpit-screen .cockpit-metric-value small { font-size: 10px; }
+  .cockpit-screen .cockpit-metric-drill { display: none; }
+  .cockpit-screen .cockpit-metric-ratio::before { display: block; }
+}
+.cockpit-ranking-limit { color: var(--pms-brand-strong); background: var(--pms-brand-surface); border-radius: 5px; padding: 3px 8px; font-size: 11px; letter-spacing: 1px; white-space: nowrap; }
+.cockpit-ranking-types { padding: 12px 20px 0; overflow-x: auto; }
+.cockpit-ranking-types .ant-segmented { white-space: nowrap; }
+@media (max-width: 720px) {
+  .cockpit-ranking-types { padding-inline: 14px; }
+  .cockpit-screen .cockpit-metric-value small { white-space: nowrap; flex: none; }
+  .cockpit-screen .cockpit-metric-drill { display: none; }
+}
