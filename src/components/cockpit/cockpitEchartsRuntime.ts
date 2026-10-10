@@ -1,7 +1,7 @@
 import { init, use } from 'echarts/core'
 import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, DataZoomComponent } from 'echarts/components'
+import { GridComponent, TooltipComponent, DataZoomComponent, MarkAreaComponent, MarkLineComponent } from 'echarts/components'
 import { SVGRenderer } from 'echarts/renderers'
 
-use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, DataZoomComponent, SVGRenderer])
+use([BarChart, LineChart, PieChart, GridComponent, TooltipComponent, DataZoomComponent, MarkAreaComponent, MarkLineComponent, SVGRenderer])
 export { init }

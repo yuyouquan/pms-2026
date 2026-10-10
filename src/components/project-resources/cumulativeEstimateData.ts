@@ -98,7 +98,9 @@ export function buildResourceDepartmentDetails(category: HrProjectCategory, sour
     ...monthly.filter(row => sources.some(source => source?.version.id === row.versionId) && !row.isArchived),
     ...(dataset?.worklogs ?? []), ...(dataset?.expenses ?? []),
   ]) }
-  const cumulative = buildCumulativeEstimate(category, sources, rate, filter, today, monthly, projectStart)
+  const cumulativeStart = projectStart && filter.cumulativeFromDate && filter.cumulativeFromDate > projectStart ? filter.cumulativeFromDate : projectStart
+  const cutoff = filter.asOfDate && filter.endDate && filter.endDate < today ? filter.endDate : today
+  const cumulative = buildCumulativeEstimate(category, sources, rate, filter, cutoff, monthly, cumulativeStart)
   const analyses = sources.map(source => source && buildDashboardAnalysis(category, source, monthly, rate, filter))
   const actual = buildAccountingAnalysis(dataset, rate, filter)
   const departments = new Map<string, { primary: string; secondary: string }>()
@@ -123,6 +125,6 @@ export function buildResourceDepartmentDetails(category: HrProjectCategory, sour
   const total: ResourceDepartmentDetail = { key: 'total', primary: '合计', secondary: '', annual: visible(analyses[0]), estimate: visible(analyses[1]), budget: visible(analyses[2]),
     cumulative, actual: visible(actual), toDateExecution: executionPercent(visible(actual)?.labor, cumulative?.labor), toDateCostExecution: executionPercent(visible(actual)?.cost, cumulative?.cost),
     lifecycleExecution: executionPercent(visible(actual)?.labor, visible(analyses[2])?.labor), lifecycleCostExecution: executionPercent(visible(actual)?.cost, visible(analyses[2])?.cost) }
-  return { cumulative, rows, total, today }
+  return { cumulative, rows, total, today: cutoff, rangeStart: filter.cumulativeFromDate }
 }
 export type ResourceDepartmentDetails = ReturnType<typeof buildResourceDepartmentDetails>

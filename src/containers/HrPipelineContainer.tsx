@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { Button, ConfigProvider, DatePicker, Drawer, Empty, Input, Popover, Segmented, Select, Tooltip, theme } from 'antd'
 import { ApartmentOutlined, ArrowLeftOutlined, ArrowRightOutlined, CalendarOutlined, DashboardOutlined, FullscreenOutlined, FullscreenExitOutlined, InfoCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import { RESOURCE_CHART_COLORS } from '@/theme/resourceChartTheme'
 import { PMS_COLORS } from '@/theme/pmsTheme'
 import { useProjectStore } from '@/stores/project'
 import { usePermissionStore } from '@/stores/permission'
@@ -36,11 +37,11 @@ import {
 
 const yearDates = (): [string, string] => [`${dayjs().year()}-01-01`, `${dayjs().year()}-12-31`]
 const metricDefinitions: { key: AmountKey | 'deviation' | 'toDate' | 'annualExecution'; label: string; note: string; color: string }[] = [
-  { key: 'annual', label: '年度预算', note: '年度预算 · 正式版本', color: '#8063e4' },
-  { key: 'estimate', label: '项目概算', note: '项目概算 · 正式版本', color: '#32a995' },
-  { key: 'budget', label: '项目预算', note: '项目预算 · 正式版本', color: '#b87c32' },
-  { key: 'cumulative', label: '累至今日预估投入', note: '选定日期内，累计至今日', color: '#7590db' },
-  { key: 'actual', label: '项目核算', note: '工时核算 · 人天 / 当月工作日', color: '#32a995' },
+  { key: 'annual', label: '年度预算', note: '年度预算 · 正式版本', color: RESOURCE_CHART_COLORS.annual },
+  { key: 'estimate', label: '项目概算', note: '项目概算 · 正式版本', color: RESOURCE_CHART_COLORS.estimate },
+  { key: 'budget', label: '项目预算', note: '项目预算 · 正式版本', color: RESOURCE_CHART_COLORS.budget },
+  { key: 'cumulative', label: '累至今日预估投入', note: '选定日期内，累计至今日', color: RESOURCE_CHART_COLORS.cumulative },
+  { key: 'actual', label: '项目核算', note: '工时核算 · 人天 / 当月工作日', color: RESOURCE_CHART_COLORS.actual },
   { key: 'deviation', label: '概算 → 预算偏差', note: '(项目预算 − 项目概算) / 项目概算', color: '#ad7c51' },
   { key: 'toDate', label: '累至今日预算执行率', note: '项目核算 / 累至今日预估投入', color: '#6d80b3' },
   { key: 'annualExecution', label: '全年执行率', note: '选定日期内，项目核算 / 项目预算', color: '#8775b7' },
@@ -123,10 +124,10 @@ function Cockpit() {
   const percentage = (value?: number) => value === undefined ? '—' : `${formatCockpit(value)}%`
   const openProjectResources = (id: string) => useUiStore.getState().navigateWithEditGuard(() => {
     const latest = useProjectStore.getState(), project = latest.projects.find(item => item.id === id)
-    if (!project || !canResourceAction({ pmsProjectId: id }, 'view', id, latest.currentLoginUser)) return
+    if (latest.currentLoginUser !== actor || !project || !canResourceAction({ pmsProjectId: id }, 'view', id, latest.currentLoginUser)) return
     activateProject(project)
     useUiStore.getState().setProjectSpaceModule('resources')
-    useUiStore.getState().enterProjectSpace({ module: 'hrPipeline' })
+    useUiStore.getState().enterProjectSpace({ module: 'hrPipeline', resourceContext: { actor: latest.currentLoginUser, projectId: id, dates: [...dates], scope, departments: [...effectiveDepartments], mode } })
   }, false)
   const overviewColumns: CockpitColumn<CockpitRow>[] = [{ key: 'name', label: overviewTab === 'category' ? '项目分类' : overviewTab === 'department' ? '二级部门' : '项目名称', width: overviewTab === 'project' ? 270 : 216, value: row => row.name,
     render: row => <div className="cockpit-row-name"><i style={{ background: COCKPIT_CATEGORIES.find(item => item.key === row.category)?.color ?? '#8995a8' }} />{overviewTab === 'project' && row.project ? <button className="cockpit-project-link" title={`查看 ${row.name} 的项目资源`} onClick={() => openProjectResources(row.project!.id)}><span>{row.name}</span><ArrowRightOutlined /></button> : <span title={row.name}>{row.name}</span>}{overviewTab === 'category' && <small>{row.count} 项</small>}</div> }]
@@ -197,16 +198,17 @@ function Cockpit() {
         })}
       </div>
       {!facts.length && <div className="cockpit-scope-note"><InfoCircleOutlined /><span>当前日期与部门范围暂无可用资源数据。</span>{scope === 'software' && <button onClick={() => { updatePreferences(actor, { scopePreference: 'all', departments: [] }) }}>查看全研发 <ArrowRightOutlined /></button>}</div>}
+      <div className={`cockpit-visual-grid${trendTab === 'category' ? ' cockpit-category-layout' : ''}`}>
       <div className="cockpit-analysis-grid">
         <section ref={trendPanel} className="cockpit-panel cockpit-trend-panel" aria-label="投入趋势">
           <div className="cockpit-panel-header"><div><h2>投入趋势</h2></div><div className="cockpit-panel-tools">{trendTab === 'category' && <Segmented aria-label="趋势粒度" options={[{ label: '月', value: 'month' }, { label: '周', value: 'week' }]} value={grain} onChange={value => setPreference('grain', value as 'month' | 'week')} />}</div></div>
           <div className="cockpit-tabs" role="tablist" aria-label="趋势类型">{[{ key: 'resource', label: '资源管道总趋势' }, { key: 'category', label: '项目分类投入趋势' }].map(item => <button key={item.key} role="tab" aria-selected={trendTab === item.key} onClick={() => setPreference('trendTab', item.key as CockpitPreferences['trendTab'])}>{item.label}</button>)}</div>
-          <CockpitMotionContent key={`${trendTab}:${grain}:${mode}:${dates.join()}:${scope}:${effectiveDepartments.join()}`} motionKey={`${trendTab}:${grain}`}><CockpitChart {...trend} mode={mode} bars={trendTab === 'category'} grain={trendTab === 'resource' ? 'month' : grain} dates={dates}
+          <CockpitMotionContent key={`${trendTab}:${grain}:${mode}:${dates.join()}:${scope}:${effectiveDepartments.join()}`} motionKey={`${trendTab}:${grain}`}><CockpitChart {...trend} mode={mode} bars={trendTab === 'category'} grain={trendTab === 'resource' ? 'month' : grain} dates={dates} today={today}
             hidden={hiddenTrendSeries[trendTab]} onHiddenChange={hidden => setPreference('hiddenTrendSeries', { ...hiddenTrendSeries, [trendTab]: hidden })}
             onInspectPeriod={period => { const patch = cockpitTrendDrilldown(period, trendTab === 'resource' ? 'month' : grain, dates, scope, shareScopes); if (patch) pendingPeriodFocus.current = useCockpitUiStore.getState().focusPeriod(actor, patch) }} /></CockpitMotionContent>
         </section>
         <section className="cockpit-panel cockpit-share-panel" aria-label="投入结构">
-          <div className="cockpit-panel-header"><div><h2>投入结构</h2></div><Segmented aria-label={`${shareTab === 'research' ? '三级研发' : '项目分类'}投入范围`} value={shareScopes[shareTab]} options={[{ label: '软工', value: 'software' }, { label: '全研发', value: 'all' }]} onChange={value => setPreference('shareScopePreferences', { ...shareScopePreferences, [shareTab]: value as CockpitScope })} /></div>
+          <div className="cockpit-panel-header"><div><h2>工时投入结构</h2></div><Segmented aria-label={`${shareTab === 'research' ? '三级研发' : '项目分类'}投入范围`} value={shareScopes[shareTab]} options={[{ label: '软工', value: 'software' }, { label: '全研发', value: 'all' }]} onChange={value => setPreference('shareScopePreferences', { ...shareScopePreferences, [shareTab]: value as CockpitScope })} /></div>
           <div className="cockpit-tabs" role="tablist" aria-label="投入比例类型">{[{ key: 'research' as const, label: '三级研发投入比' }, { key: 'category' as const, label: '项目分类投入比' }].map(item => <button key={item.key} role="tab" aria-selected={shareTab === item.key} onClick={() => setPreference('shareTab', item.key)}>{item.label}</button>)}</div>
           <CockpitMotionContent key={shareTab} motionKey={shareTab}>
             <CockpitAllocation shares={shares} onDetails={() => setShareDetails(true)} />
@@ -217,6 +219,7 @@ function Cockpit() {
       <CockpitComparison facts={facts} mode={mode} onDetails={() => updatePreferences(actor, { overviewOpen: true, overviewTab: 'category' })} />
       <CockpitProjectRanking facts={facts} category={preferences.rankingCategory} mode={mode} onCategoryChange={value => setPreference('rankingCategory', value)} onOpenProject={openProjectResources}
         onLocateProject={(name = '') => { pendingOverviewFocus.current = true; updatePreferences(actor, { overviewOpen: true, overviewTab: 'project', projectCategory: preferences.rankingCategory, projectSearch: name, projectLens: 'actual' }) }} />
+      </div>
       </div>
       <button className="cockpit-ledger-link" onClick={() => setPreference('overviewOpen', true)}>资源总览明细 <ArrowRightOutlined /></button>
       <Drawer title="资源总览明细" open={preferences.overviewOpen} onClose={() => setPreference('overviewOpen', false)} size="min(1280px, 96vw)" getContainer={false} rootClassName="cockpit-data-drawer" afterOpenChange={open => { if (open) focusOverviewProject() }}>

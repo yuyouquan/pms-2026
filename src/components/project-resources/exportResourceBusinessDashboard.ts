@@ -9,9 +9,10 @@ import { resourceProjectName } from '@/components/project-resources/resourceVers
 const amount = (key: string, title: string, precision = 3): ExportColumn => ({ key, title, formatter: (value: number | undefined) => value === undefined ? '—' : Number(value.toFixed(precision)) })
 export function exportResourceBusinessDashboard(projectName: string, analyses: (DashboardAnalysis | undefined)[], accounting: AccountingAnalysis | undefined, filter: DashboardFilter, mode: 'labor' | 'cost', grain: DashboardTrendGrain, stages: readonly (DashboardStageDefinition | undefined)[] = [], details?: ResourceDepartmentDetails) {
   const trend = dashboardBusinessTrend(analyses, accounting, mode, grain, stages), metrics = dashboardBusinessMetrics(analyses, accounting)
-  const context = { primaryFilter: !filter.primary || filter.primary === 'all' ? '全部一级部门' : filter.primary, departmentFilter: !filter.department || filter.department === 'all' ? '全部二级部门' : filter.department,
+  const context = { primaryFilter: filter.primaryLabel ?? (!filter.primary || filter.primary === 'all' ? '全部一级部门' : filter.primary), departmentFilter: filter.departmentLabel ?? (!filter.department || filter.department === 'all' ? '全部二级部门' : filter.department),
+    asOfDate: filter.asOfDate && filter.endDate && filter.endDate < filter.asOfDate ? filter.endDate : filter.asOfDate,
     range: filter.startDate && filter.endDate ? `${filter.startDate}～${filter.endDate}` : '全周期' }
-  const contextColumns = [{ key: 'primaryFilter', title: '一级部门筛选' }, { key: 'departmentFilter', title: '二级部门筛选' }, { key: 'range', title: '日期范围' }]
+  const contextColumns = [{ key: 'primaryFilter', title: '一级部门筛选' }, { key: 'departmentFilter', title: '二级部门筛选' }, { key: 'range', title: '日期范围' }, ...(filter.asOfDate ? [{ key: 'asOfDate', title: '核算截止日期' }] : [])]
   const rowsWithContext = <T extends object>(rows: readonly T[]) => rows.map(row => ({ ...context, ...row }))
   exportMultiSheet([
     { sheetName: '四类投入', columns: [...contextColumns, { key: 'type', title: '分类' }, { key: 'version', title: '版本' }, { key: 'source', title: '来源' }, amount('labor', '人月'), amount('laborCost', '人力费用（万元）', 2), amount('nonLaborYuan', '非人力费用（元）', 2), amount('cost', '费用合计（万元）', 2)],
@@ -21,7 +22,7 @@ export function exportResourceBusinessDashboard(projectName: string, analyses: (
       })) },
     { sheetName: '偏差及执行率', columns: [...contextColumns, { key: 'name', title: '指标' }, { key: 'formula', title: '计算口径' }, amount('percent', '人月百分比（%）', 2), amount('costPercent', '费用百分比（%）', 2), amount('labor', '预估人月', 6), amount('cost', '预估总费用（万元）', 2), amount('laborDelta', '人月差'), amount('costDelta', '费用差（万元）', 2)], rows: rowsWithContext([
       { name: '概算→预算偏差', formula: '（预算－概算）÷概算，分别按人月、总费用计算', percent: metrics.laborDelta?.percent, costPercent: metrics.costDelta?.percent, laborDelta: metrics.laborDelta?.amount, costDelta: metrics.costDelta?.amount },
-      { name: '累至今日预估投入', formula: `月度预估÷当月自然日数×项目开始至今日落入当月的天数（含今天）；来源 ${details?.cumulative?.source.version.budgetType ?? '无'} ${details?.cumulative?.source.version.versionNumber ?? ''}`, labor: details?.cumulative?.labor, cost: details?.cumulative?.cost, range: `截至 ${details?.today ?? '—'}` },
+      { name: '累至今日预估投入', formula: `月度预估÷当月自然日数×${details?.rangeStart ? '所选范围与项目开始至截止日期交集' : '项目开始至今日'}落入当月的天数（含起止日）；来源 ${details?.cumulative?.source.version.budgetType ?? '无'} ${details?.cumulative?.source.version.versionNumber ?? ''}`, labor: details?.cumulative?.labor, cost: details?.cumulative?.cost, range: `截至 ${details?.today ?? '—'}` },
       { name: '累至今日预算执行率', formula: '项目核算÷累至今日预估投入，分别按人月、总费用计算；分子与项目核算一致', percent: details?.total.toDateExecution, costPercent: details?.total.toDateCostExecution },
       { name: '全生命周期预算执行率', formula: '项目核算÷项目预算，分别按人月、总费用计算', percent: metrics.laborExecution, costPercent: metrics.execution },
     ]) },
@@ -37,7 +38,7 @@ export function exportResourceBusinessDashboard(projectName: string, analyses: (
       { title: '计划折算', detail: '预算的周度、阶段和部分月份按当月周一至周五均摊，并非实际发生时间；阶段采用各来源里程碑，核算使用正式项目里程碑，无法归类的投入列为未归属阶段；空缺不补零。' },
       { title: '核算来源', detail: '独立 Mock 人天及实际非人力费用，尚未接入 IPM。人月=人天/来源当月工作日，逐条折算后汇总；Mock 日历为周一至周五。' },
       { title: '费用口径', detail: `人月×配置费率 ${accounting?.rate ?? analyses.find(Boolean)?.rate ?? '—'} 万元/人月+非人力元/10000，逐条计算不提前四舍五入。` },
-      { title: '累至今日预估', detail: '依次选取正式项目预算、正式项目概算、正式年度预算；月度预估按当月自然日均摊，从项目开始日期累计至今天，包含起算日及今天。月度修改同步影响累计预估，忽略顶部日期筛选；费用为预估人月×费率+同期非人力月度计划元/10000，非人力也按自然日累计。缺少项目开始日期或月度来源时不计算，不自动降级来源。' },
+      { title: '累至今日预估', detail: details?.rangeStart ? `当前范围 ${details.rangeStart} 至 ${details.today}；依次选取正式项目预算、概算、年度预算，按自然日均摊，与项目开始日期取交集。核算截至 ${details.today}。` : '依次选取正式项目预算、正式项目概算、正式年度预算；月度预估按当月自然日均摊，从项目开始日期累计至今天，包含起算日及今天。月度修改同步影响累计预估，忽略顶部日期筛选；费用为预估人月×费率+同期非人力月度计划元/10000，非人力也按自然日累计。缺少项目开始日期或月度来源时不计算，不自动降级来源。' },
       ...details?.cumulative?.issues.map(detail => ({ title: '累至今日来源检查', detail })) ?? [],
       ...analyses.flatMap(analysis => analysis?.issues.map(row => ({ title: row.title, detail: `${analysis.source.version.versionNumber} · ${row.detail}` })) ?? []),
       ...accounting?.issues.map(detail => ({ title: '核算来源检查', detail })) ?? [],

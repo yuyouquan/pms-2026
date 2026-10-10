@@ -43,6 +43,7 @@ export type ProjectSpaceOrigin = {
   module: Exclude<MainModule, 'projectSpace'>
   workbenchTab?: WorkbenchTab
   projectManagementTab?: ProjectManagementTab
+  resourceContext?: import('@/components/project-resources/resourceDashboardContext').ResourceDashboardContext
 } | null
 
 export interface UiState {
@@ -96,6 +97,7 @@ export interface UiActions {
   setProjectListAboutMineOnly: (v: boolean | ((previous: boolean) => boolean)) => void
   setProjectListTablePage: (v: number) => void
   enterProjectSpace: (origin: NonNullable<ProjectSpaceOrigin>) => void
+  clearResourceDashboardContext: () => void
   returnFromProjectSpace: () => void
   setConfigTab: (v: string) => void
   setHrConfigModule: (v: ConfigModuleKey) => void
@@ -221,8 +223,11 @@ export const useUiStore = create<UiState & UiActions>()((set, get) => ({
       ? { module: 'workbench', workbenchTab: origin.workbenchTab ?? get().workbenchTab }
       : origin.module === 'projectManagement'
         ? { module: 'projectManagement', projectManagementTab: origin.projectManagementTab ?? get().projectManagementTab }
-        : { module: origin.module },
+        : { module: origin.module, ...(origin.module === 'hrPipeline' && origin.resourceContext ? { resourceContext: { ...origin.resourceContext, dates: [...origin.resourceContext.dates] as [string, string], departments: [...origin.resourceContext.departments] } } : {}) },
   }),
+  clearResourceDashboardContext: () => set(state => ({
+    projectSpaceOrigin: state.projectSpaceOrigin ? { ...state.projectSpaceOrigin, resourceContext: undefined } : null,
+  })),
   returnFromProjectSpace: () => {
     const projectSpaceOrigin = get().projectSpaceOrigin ?? {
       module: 'workbench' as const,

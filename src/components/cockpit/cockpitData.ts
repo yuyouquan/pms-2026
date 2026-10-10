@@ -1,3 +1,4 @@
+import { RESOURCE_CHART_COLORS } from '@/theme/resourceChartTheme'
 import type { ProjectItem } from '@/types/app'
 import type { HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import type { PermissionCenterModel } from '@/types/permissionCenter'
@@ -135,8 +136,8 @@ export function cockpitPeriods(dates: Pick<CockpitFilter, 'startDate' | 'endDate
 export function cockpitTrend(facts: readonly CockpitFact[], dates: Pick<CockpitFilter, 'startDate' | 'endDate'>, mode: CockpitMode, kind: 'resource' | 'category', grain: 'month' | 'week') {
   const periods = cockpitPeriods(dates, kind === 'resource' ? 'month' : grain)
   const definitions = kind === 'resource' ? [
-    { key: 'annual', label: '年度预算', color: '#7561d1' }, { key: 'estimate', label: '项目概算', color: '#3c99a0' },
-    { key: 'budget', label: '项目预算', color: '#cd9550' }, { key: 'actual', label: '项目核算', color: '#698dc8' },
+    { key: 'annual', label: '年度预算', color: RESOURCE_CHART_COLORS.annual }, { key: 'estimate', label: '项目概算', color: RESOURCE_CHART_COLORS.estimate },
+    { key: 'budget', label: '项目预算', color: RESOURCE_CHART_COLORS.budget }, { key: 'actual', label: '项目核算', color: RESOURCE_CHART_COLORS.actual },
   ] : COCKPIT_CATEGORIES
   return { periods, series: definitions.map(item => {
     const sums = new Map<string, number>()

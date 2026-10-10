@@ -4,15 +4,24 @@ import { useEffect, useRef, useState, type KeyboardEventHandler } from 'react'
 import type { EChartsOption, EChartsType } from 'echarts'
 import { useCockpitReducedMotion } from '@/components/cockpit/useCockpitMotion'
 
-export default function CockpitEChart({ option, label, className = '', onSelect, onKeyDown, tabIndex, activeIndex }: {
+export default function CockpitEChart({ option, label, className = '', onSelect, onKeyDown, tabIndex, activeIndex, onPeriodWindowChange }: {
   option: EChartsOption; label: string; className?: string; onSelect?: (index: number) => void
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>; tabIndex?: number; activeIndex?: number
+  onPeriodWindowChange?: (window: { start: number; end: number }) => void
 }) {
-  const host = useRef<HTMLDivElement>(null), chart = useRef<EChartsType>(), current = useRef({ option, onSelect, activeIndex })
-  current.current = { option, onSelect, activeIndex }
+  const host = useRef<HTMLDivElement>(null), chart = useRef<EChartsType>(), current = useRef({ option, onSelect, activeIndex, onPeriodWindowChange })
+  current.current = { option, onSelect, activeIndex, onPeriodWindowChange }
   const reduced = useCockpitReducedMotion(), reducedRef = useRef(reduced)
   reducedRef.current = reduced
   const [error, setError] = useState(false)
+  const syncPeriodWindow = () => {
+    const instance = chart.current, { option: latest, onPeriodWindowChange: notify } = current.current
+    if (!instance || !notify) return
+    const xAxis = Array.isArray(latest.xAxis) ? latest.xAxis[0] : latest.xAxis
+    const count = xAxis && 'data' in xAxis ? xAxis.data?.length ?? 0 : 0
+    const zoom = (instance.getOption().dataZoom as { startValue?: number; endValue?: number }[] | undefined)?.[0]
+    notify({ start: typeof zoom?.startValue === 'number' ? zoom.startValue : 0, end: typeof zoom?.endValue === 'number' ? zoom.endValue : Math.max(0, count - 1) })
+  }
   const syncSelection = () => {
     const instance = chart.current, { activeIndex: index, option: latest } = current.current
     if (!instance) return
@@ -30,10 +39,19 @@ export default function CockpitEChart({ option, label, className = '', onSelect,
   useEffect(() => {
     let cancelled = false, resize: ResizeObserver | undefined
     const apply = () => chart.current?.setOption({ ...current.current.option, animation: !reducedRef.current && !document.hidden }, { notMerge: true })
-    const visibility = () => { if (document.hidden) { chart.current?.clear(); apply() } }
+    const visibility = () => {
+      if (!document.hidden || !chart.current) return
+      const zoom = (chart.current.getOption().dataZoom as { startValue?: number; endValue?: number }[] | undefined)?.[0]
+      chart.current.clear(); apply()
+      if (typeof zoom?.startValue === 'number' && typeof zoom.endValue === 'number') {
+        chart.current.dispatchAction({ type: 'dataZoom', startValue: zoom.startValue, endValue: zoom.endValue })
+      }
+      syncSelection(); syncPeriodWindow()
+    }
     void import('@/components/cockpit/cockpitEchartsRuntime').then(({ init }) => {
       if (cancelled || !host.current) return
       chart.current = init(host.current, undefined, { renderer: 'svg' })
+      chart.current.on('datazoom', syncPeriodWindow)
       chart.current.getZr().on('click', event => {
         const instance = chart.current
         if (!instance || !current.current.onSelect) return
@@ -46,7 +64,7 @@ export default function CockpitEChart({ option, label, className = '', onSelect,
         const count = axis && 'data' in axis ? axis.data?.length ?? 0 : 0
         if (count && typeof position === 'number' && Number.isFinite(position)) current.current.onSelect(Math.max(0, Math.min(count - 1, Math.round(position))))
       })
-      apply(); syncSelection()
+      apply(); syncSelection(); syncPeriodWindow()
       resize = new ResizeObserver(() => chart.current?.resize({ animation: { duration: 0 } }))
       resize.observe(host.current)
       document.addEventListener('visibilitychange', visibility)
@@ -57,7 +75,7 @@ export default function CockpitEChart({ option, label, className = '', onSelect,
     // Clear in-flight graphic transitions immediately when motion is disabled.
     if (reduced) chart.current?.clear()
     chart.current?.setOption({ ...option, animation: !reduced && !document.hidden }, { notMerge: true })
-    syncSelection()
+    syncSelection(); syncPeriodWindow()
   }, [option, reduced])
   useEffect(() => { syncSelection() }, [activeIndex])
   return <div className={`cockpit-echart-wrap ${className}`}>
