@@ -7,6 +7,9 @@ import type { ProjectItem } from '@/types/app'
 import { resolveHrFormalSource, type HrProjectCategory } from '@/lib/hrFormalProjectSource'
 import { resourceStore, useResourceStore } from '@/components/project-resources/resourceVersionAdapter'
 import { useProjectStore } from '@/stores/project'
+import { useUiStore } from '@/stores/ui'
+import { canReadCockpitDepartment } from '@/components/cockpit/cockpitData'
+import { cockpitResourceFilter, resolveResourceDashboardContext, resourceDashboardDepartmentParents, type ResourceDashboardContext } from '@/components/project-resources/resourceDashboardContext'
 import { usePermissionStore } from '@/stores/permission'
 import { useHrConfigStore } from '@/stores/hrConfig'
 import { resolveMachineDepartmentInvestments } from '@/lib/resourceAllocation'
@@ -29,14 +32,22 @@ import type { DashboardTrendGrain } from '@/components/project-resources/resourc
 export default function ProjectResourceDashboard({ project, category }: {
   project: ProjectItem; category: HrProjectCategory
 }) {
+  const actor = useProjectStore(state => state.currentLoginUser)
+  const origin = useUiStore(state => state.projectSpaceOrigin)
+  const context = origin?.module === 'hrPipeline' ? resolveResourceDashboardContext(origin.resourceContext, actor, project.id) : undefined
+  return <ResourceDashboard key={`${actor}:${project.id}`} project={project} category={category} initialContext={context} />
+}
+
+function ResourceDashboard({ project, category, initialContext }: { project: ProjectItem; category: HrProjectCategory; initialContext?: ResourceDashboardContext }) {
   const { message } = App.useApp(), store = useResourceStore(category)
-  useProjectStore(state => state.currentLoginUser)
-  useProjectStore(state => state.projects)
+  const [inherited, setInherited] = useState(initialContext)
+  const actor = useProjectStore(state => state.currentLoginUser)
   usePermissionStore()
+  useProjectStore(state => state.projects)
   const config = useHrConfigStore(state => state.data), rate = Number(config.feeRate?.[0]?.value ?? 5)
   const [primary, setPrimary] = useState('all'), [department, setDepartment] = useState('all')
-  const [dates, setDates] = useState<[string, string]>()
-  const [mode, setMode] = useState<'labor' | 'cost'>('labor'), [grain, setGrain] = useState<DashboardTrendGrain>('month')
+  const [dates, setDates] = useState<[string, string] | undefined>(initialContext?.dates)
+  const [mode, setMode] = useState<'labor' | 'cost'>(initialContext?.mode ?? 'labor'), [grain, setGrain] = useState<DashboardTrendGrain>('month')
   useEffect(() => { resourceStore(category).getState().refreshFormalProjects() }, [category, project.id])
   const [today, setToday] = useState(() => dayjs().format('YYYY-MM-DD'))
   useEffect(() => { const timer = setInterval(() => setToday(dayjs().format('YYYY-MM-DD')), 60_000); return () => clearInterval(timer) }, [])
@@ -54,14 +65,17 @@ export default function ProjectResourceDashboard({ project, category }: {
   ] : []).map(row => ({ primaryDepartment: row.primaryDepartment, secondaryDepartment: row.secondaryDepartment }))
   const actualPairs = [...(dataset?.worklogs ?? []), ...(dataset?.expenses ?? [])]
   const fallbackParents = dashboardDepartmentParents((config.hrModel ?? []).map(row => ({ primaryDepartment: String(row.primaryDepartment ?? ''), secondaryDepartment: String(row.secondaryDepartment ?? '') })))
-  const departmentParents = { ...fallbackParents, ...dashboardDepartmentParents([...pairs, ...actualPairs]) }
+  const departmentParents = resourceDashboardDepartmentParents([...pairs, ...actualPairs], fallbackParents, !!inherited)
   const expensePairs = sources.flatMap(source => source?.version.nonLaborInvestment?.items.map(item => ({ primaryDepartment: item.primaryDepartment || departmentParents[item.secondaryDepartment] || UNASSIGNED_PRIMARY, secondaryDepartment: item.secondaryDepartment })) ?? [])
   const allPairs = [...pairs, ...actualPairs, ...expensePairs]
   const primaries = [...new Set(allPairs.map(row => row.primaryDepartment || UNASSIGNED_PRIMARY))].sort()
   const effectivePrimary = primaries.includes(primary) ? primary : 'all'
   const departments = [...new Set(allPairs.filter(row => effectivePrimary === 'all' || (row.primaryDepartment || UNASSIGNED_PRIMARY) === effectivePrimary).map(row => row.secondaryDepartment))].filter(Boolean).sort()
   const effectiveDepartment = departments.includes(department) ? department : 'all'
-  const filter: DashboardFilter = { primary: effectivePrimary, department: effectiveDepartment, startDate: dates?.[0], endDate: dates?.[1], departmentParents }
+  const filter: DashboardFilter = { primary: effectivePrimary, department: effectiveDepartment, startDate: dates?.[0], endDate: dates?.[1], departmentParents,
+    ...(inherited && dates ? cockpitResourceFilter(inherited, dates, today, (p, s) => canReadCockpitDepartment(usePermissionStore.getState().permissionCenter, actor, project, category, p, s || '未填二级部门')) : {}),
+  }
+  const showFullCycle = () => { useUiStore.getState().clearResourceDashboardContext(); setInherited(undefined); setPrimary('all'); setDepartment('all'); setDates(undefined) }
   const analyses = sources.map(source => source && buildDashboardAnalysis(category, source, store.monthlyInvestments, rate, filter))
   const accounting = buildAccountingAnalysis(dataset, rate, filter)
   const stagesFor = (items: typeof sources) => [...items.map(source => {
@@ -87,14 +101,15 @@ export default function ProjectResourceDashboard({ project, category }: {
     exportResourceBusinessDashboard(project.name, currentAnalyses, buildAccountingAnalysis(dataset, currentRate, filter), filter, mode, grain, stagesFor(currentSources), buildResourceDepartmentDetails(category, currentSources, current.monthlyInvestments, currentRate, dataset, filter, dayjs().format('YYYY-MM-DD'), project.planStartDate))
   }
   return <section className="pms-resource-dashboard" aria-label="资源总览">
+    {inherited && <div className="pms-dashboard-origin" role="group" aria-label="驾驶舱筛选范围"><strong>驾驶舱范围</strong><span>{inherited.scope === 'software' ? '软件工程部' : '全研发'}{inherited.departments.length ? ` / ${inherited.departments.join('、')}` : ' / 全部二级部门'}</span><Button size="small" onClick={showFullCycle}>查看全周期</Button></div>}
     <div className="pms-dashboard-filters">
-      <label><span>一级部门</span><Select aria-label="看板一级部门" showSearch optionFilterProp="label" value={effectivePrimary} onChange={value => { setPrimary(value); setDepartment('all') }} options={[{ value: 'all', label: '全部一级部门' }, ...primaries.map(value => ({ value, label: value }))]} /></label>
-      <label><span>二级部门</span><Select aria-label="看板二级部门" showSearch optionFilterProp="label" value={effectiveDepartment} onChange={setDepartment} options={[{ value: 'all', label: '全部二级部门' }, ...departments.map(value => ({ value, label: value }))]} /></label>
-      <label><span>日期</span><DatePicker.RangePicker aria-label="看板日期范围" value={dates ? [dayjs(dates[0]), dayjs(dates[1])] : null} onChange={value => setDates(value?.[0] && value[1] ? [value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')] : undefined)} /></label>
+      {!inherited && <><label><span>一级部门</span><Select aria-label="看板一级部门" showSearch optionFilterProp="label" value={effectivePrimary} onChange={value => { setPrimary(value); setDepartment('all') }} options={[{ value: 'all', label: '全部一级部门' }, ...primaries.map(value => ({ value, label: value }))]} /></label>
+      <label><span>二级部门</span><Select aria-label="看板二级部门" showSearch optionFilterProp="label" value={effectiveDepartment} onChange={setDepartment} options={[{ value: 'all', label: '全部二级部门' }, ...departments.map(value => ({ value, label: value }))]} /></label></>}
+      <label><span>日期</span><DatePicker.RangePicker aria-label="看板日期范围" allowClear={!inherited} value={dates ? [dayjs(dates[0]), dayjs(dates[1])] : null} onChange={value => setDates(value?.[0] && value[1] ? [value[0].format('YYYY-MM-DD'), value[1].format('YYYY-MM-DD')] : undefined)} /></label>
       <span className="pms-dashboard-filter-note">{period} · 正式版本</span>
-      <div className="pms-dashboard-filter-actions"><Button icon={<ReloadOutlined />} onClick={() => { setPrimary('all'); setDepartment('all'); setDates(undefined) }}>重置筛选</Button>{canExport && <Button icon={<DownloadOutlined />} disabled={!sources.some(Boolean) && !accounting} onClick={exportAnalysis}>导出分析</Button>}</div>
+      <div className="pms-dashboard-filter-actions"><Button icon={<ReloadOutlined />} onClick={showFullCycle}>重置筛选</Button>{canExport && <Button icon={<DownloadOutlined />} disabled={!sources.some(Boolean) && !accounting} onClick={exportAnalysis}>导出分析</Button>}</div>
     </div>
-    <ResourceDashboardMetrics sources={sources} analyses={analyses} accounting={accounting} details={details} />
+    <ResourceDashboardMetrics sources={sources} analyses={analyses} accounting={accounting} details={details} mode={mode} />
     <section className="pms-resource-panel pms-dashboard-trend-panel">
       <div className="pms-dashboard-panel-head"><h3>四类投入趋势</h3><div><Segmented aria-label="趋势指标" value={mode} options={[{ value: 'labor', label: '投入人月' }, { value: 'cost', label: '费用（万元）' }]} onChange={value => setMode(value as 'labor' | 'cost')} /><Segmented aria-label="趋势周期" value={grain} options={[{ value: 'month', label: '月度' }, { value: 'week', label: '周度' }, { value: 'stage', label: '阶段' }]} onChange={value => setGrain(value as DashboardTrendGrain)} /></div></div>
       <ResourceBusinessTrend trend={trend} />

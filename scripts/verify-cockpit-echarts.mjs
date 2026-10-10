@@ -3,6 +3,8 @@ import path from 'node:path'
 import { createTypeScriptModuleLoader } from './lib/typescript-module-loader.mjs'
 const load = createTypeScriptModuleLoader()
 const { cockpitTrendOption, cockpitAllocationOption, cockpitComparisonOption } = load(path.resolve('src/components/cockpit/cockpitChartOptions.ts'))
+const { RESOURCE_CHART_COLORS } = load(path.resolve('src/theme/resourceChartTheme.ts'))
+const { cockpitCurrentPeriod, cockpitInitialPeriodIndex, cockpitPeriodWindow, cockpitPeriodScrollLeft } = load(path.resolve('src/components/cockpit/cockpitChartPresentation.ts'))
 const { createCockpitPreferences, useCockpitUiStore } = load(path.resolve('src/stores/cockpitUi.ts'))
 const source = [{ key: 'budget', label: '预算', color: '#000', values: [0, undefined, -20, 80] }, { key: 'actual', label: '核算', color: '#000', values: [2, 3, undefined, 4] }]
 const line = cockpitTrendOption(['2026-01','2026-02','2026-03','2026-04'], source, [], false, 'cost')
@@ -11,6 +13,11 @@ assert.equal(line.series[0].connectNulls, false, 'no interpolation over absent s
 assert.equal(line.yAxis.min, undefined, 'no zero minimum clipping negative values')
 assert.equal(line.tooltip.valueFormatter(80), '80.0 万元')
 assert.equal(line.tooltip.valueFormatter(null), '—')
+assert.deepEqual(line.series.map(row => row.itemStyle.color), source.map(row => row.color), 'line colors belong to source measures, not their order')
+const semanticSeries = Object.entries(RESOURCE_CHART_COLORS).map(([key, color]) => ({ key, label: key, color, values: [1] }))
+assert.deepEqual(cockpitTrendOption(['2026-10'], [...semanticSeries].reverse(), ['estimate'], false, 'labor').series.map(row => [row.id, row.itemStyle.color]),
+  [...semanticSeries].reverse().filter(row => row.key !== 'estimate').map(row => [row.key, row.color]), 'reordering/hiding semantic series never changes color')
+assert.deepEqual(RESOURCE_CHART_COLORS, { annual: '#6b50dc', estimate: '#168b88', budget: '#c77d25', actual: '#31976c', cumulative: '#497dc0' })
 const hidden = cockpitTrendOption(['x'], source, ['budget'], true, 'labor')
 assert.deepEqual(hidden.series.map(row => row.id), ['actual'])
 assert.equal(hidden.series[0].stack, undefined, 'categories are separate rows, never stacked')
@@ -40,10 +47,43 @@ assert.deepEqual(pie.series[0].data.map(row => [row.name, row.value]), [['未归
 assert.equal(cockpitAllocationOption([{ label: 'x', days: 0 }]).series[0].data.length, 0, 'empty dataset never becomes an equal-slice chart')
 const bars = cockpitComparisonOption([{ key: 'x', name: '类别', budget: { cost: -10 }, actual: { labor: 2 } }], 'cost')
 assert.deepEqual(bars.series.map(row => row.data), [[-10],[null]], 'comparison uses requested unit and preserves missing values')
+assert.deepEqual(bars.series.map(row => row.itemStyle.color), [RESOURCE_CHART_COLORS.budget, RESOURCE_CHART_COLORS.actual], 'comparison has the same budget and actual colors')
+const months = Array.from({ length: 12 }, (_, index) => `2026-${String(index + 1).padStart(2, '0')}`)
+const context = { today: '2026-10-10', dates: ['2026-01-01', '2026-12-31'], grain: 'month' }
+assert.deepEqual(cockpitCurrentPeriod(months, context), { index: 9, period: '2026-10', cutoff: '2026-10-10', label: '本月核算截至 10/10' })
+for (const dates of [['2026-01-01', '2026-09-30'], ['2026-10-01', '2026-10-09'], ['2026-10-01', '2026-10-10'], ['2026-11-01', '2026-12-31']]) {
+  assert.equal(cockpitCurrentPeriod(months, { ...context, dates }), undefined, `completed/future selection ${dates} is never marked incomplete`)
+}
+assert.equal(cockpitCurrentPeriod(months, { ...context, today: '2026-10-31' }), undefined, 'last day completes the calendar month')
+assert.equal(cockpitCurrentPeriod(months, { ...context, today: '2026-02-30' }), undefined, 'invalid supplied date is ignored')
+assert.equal(cockpitCurrentPeriod(months, { ...context, dates: ['2026-11-01', '2026-10-01'] }), undefined, 'inverted selection is ignored')
+const weekContext = { ...context, grain: 'week' }
+assert.equal(cockpitCurrentPeriod(['2026-10-05', '2026-10-12'], weekContext).index, 0)
+assert.equal(cockpitCurrentPeriod(['2026-10-05', '2026-10-12'], { ...weekContext, today: '2026-10-11' }), undefined, 'Sunday completes the calendar week')
+assert.equal(cockpitCurrentPeriod(['2025-12-29', '2026-01-05'], { today: '2026-01-01', dates: ['2026-01-01', '2026-12-31'], grain: 'week' }).index, 0, 'current week may start in the prior year')
+const markedLine = cockpitTrendOption(months, semanticSeries, ['annual'], false, 'labor', context)
+assert.deepEqual(markedLine.series[0].markLine.data, [{ xAxis: 9 }], 'current line marker stays on the first visible series')
+assert.ok(markedLine.series.slice(1).every(row => row.markLine === undefined), 'line marker is not duplicated')
+const markedBars = cockpitTrendOption(months, source, [], true, 'labor', context)
+assert.ok(markedBars.series.every(row => row.markArea.data[0][0].xAxis === 9 && row.markArea.data[0][1].xAxis === 9), 'each category highlights the same current bucket')
+assert.deepEqual(markedBars.series[0].data, [0, null, -20, 80], 'period markers never change or pad numerical series')
+assert.ok(cockpitTrendOption(months, source, [], true, 'labor', { ...context, dates: ['2026-01-01', '2026-10-09'] }).series.every(row => row.markArea === undefined && row.markLine === undefined))
+assert.equal(cockpitInitialPeriodIndex(months, context.today, 'month'), 9)
+assert.equal(cockpitInitialPeriodIndex(months, '2027-10-10', 'month'), 11, 'past year starts at its end')
+assert.equal(cockpitInitialPeriodIndex(months, '2025-10-10', 'month'), 0, 'future year starts at its beginning')
+assert.deepEqual(cockpitPeriodWindow(53, 12, 0), { start: 0, end: 11 })
+assert.deepEqual(cockpitPeriodWindow(53, 12, 52), { start: 41, end: 52 })
+assert.deepEqual(cockpitPeriodWindow(53, 12, 30), { start: 24, end: 35 })
+for (const index of [0, 9, 11]) {
+  const window = cockpitPeriodWindow(12, 12, index), left = cockpitPeriodScrollLeft(640, 190, index, window)
+  const center = 48 + (640 - 72) * (index + .5) / 12
+  assert.ok(left >= 0 && left <= 450 && center >= left && center <= left + 190, 'keyboard/current category slot remains visible on the narrowest viewport')
+}
+assert.equal(cockpitPeriodScrollLeft(640, 700, 9, { start: 0, end: 11 }), 0, 'desktop chart does not scroll when it fits')
 assert.equal(createCockpitPreferences().shareTab, 'category', 'default chart shows existing project classifications')
 assert.equal(createCockpitPreferences().overviewOpen, false, 'no ledger table on default dashboard')
 useCockpitUiStore.getState().updatePreferences('甲', { overviewOpen: true, projectSearch: 'DEMO017', projectLens: 'budget' })
 useCockpitUiStore.getState().resetFilters('甲')
 assert.equal(useCockpitUiStore.getState().preferencesByActor['甲'].overviewOpen, true, 'reading context survives filter changes and project navigation')
 assert.equal(createCockpitPreferences().overviewOpen, false, 'other actors default closed')
-console.log('PASS ECharts mapping: missing/zero/negative values, source units, legend visibility, week zoom, genuine person-days, immutable data and actor-scoped detail state')
+console.log('PASS ECharts mapping: source colors, current month/week cutoffs, completed selections, narrow-screen period visibility, missing/zero/negative values, immutable data and actor-scoped detail state')

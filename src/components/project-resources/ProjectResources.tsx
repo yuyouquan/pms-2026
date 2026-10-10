@@ -19,7 +19,8 @@ export default function ProjectResources({ project }: { project: ProjectItem }) 
 function ResourceNavigation({ project }: { project: ProjectItem }) {
   const actor = useProjectStore(state => state.currentLoginUser)
   const can = useHasPermission(actor, project.id)
-  const [tab, setTab] = useState<ResourceTab>(getProjectAttribute(project) === 'budget' ? 'annual' : 'dashboard')
+  const fromCockpit = useUiStore(state => state.projectSpaceOrigin?.module === 'hrPipeline')
+  const [tab, setTab] = useState<ResourceTab>(getProjectAttribute(project) === 'budget' && !fromCockpit ? 'annual' : 'dashboard')
   const [detailVersionId, setDetailVersionId] = useState<string>()
   const category = matchesHrCategory(project, 'machine') ? 'machine' : matchesHrCategory(project, 'tos') ? 'tos'
     : matchesHrCategory(project, 'technical') ? 'technical' : 'capability'
@@ -28,7 +29,7 @@ function ResourceNavigation({ project }: { project: ProjectItem }) {
     <div className={tab === 'dashboard' ? 'pms-project-resources' : undefined}>
     <ProjectSpaceTabs className="pms-project-resource-tabs" navigationOnly activeKey={tab}
       onChange={key => useUiStore.getState().navigateWithEditGuard(() => { setTab(key as ResourceTab); setDetailVersionId(undefined) }, false)}
-      items={RESOURCE_TABS.filter(item => getProjectAttribute(project) !== 'budget' || item.key === 'annual').map(item => ({ ...item }))} />
+      items={RESOURCE_TABS.filter(item => getProjectAttribute(project) !== 'budget' || item.key === 'annual' || (fromCockpit && item.key === 'dashboard')).map(item => ({ ...item }))} />
     {tab === 'dashboard' ? <ProjectResourceDashboard project={project} category={category} /> : tab === 'accounting'
       ? <div className="pms-resource-placeholder"><Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="项目核算待建设" /></div>
       : getProjectAttribute(project) === 'roadmap' ? <Empty description="路标项目暂无预算版本" />
