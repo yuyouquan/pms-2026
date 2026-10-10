@@ -19,6 +19,7 @@ const table = Object.assign(() => null, { Summary: { Row: 'SummaryRow', Cell: 'S
 const stateStore = { getState: () => current }
 const registry = Object.assign(selector => selector?.({ currentLoginUser: actor, projects: [project] }), { getState: () => ({ currentLoginUser: actor, projects: [project] }) })
 const config = Object.assign(selector => selector({ data: { hrModel: [], feeRate: [{ value: 5 }] } }), { getState: () => ({ data: { feeRate: [{ value: 5 }] } }) })
+const uiState = { projectSpaceOrigin: undefined, navigateWithEditGuard: callback => { if (defer) pending = callback; else callback() }, clearResourceDashboardContext: noop }
 const imports = {
   '@/lib/resourceMutationContext': resourceOpeningHarness(() => ({ currentLoginUser: actor, selectedProject: project })),
   react: { useEffect: noop, useRef: value => { const i = refCursor++; return refs[i] ??= { current: value } }, useState: initial => { const index = hookCursor++; return [index in hooks ? hooks[index] : typeof initial === 'function' ? initial() : initial, value => { hooks[index] = value }] } },
@@ -27,7 +28,13 @@ const imports = {
   xlsx: { read: () => ({ SheetNames: ['sheet'], Sheets: { sheet: {} } }), utils: { sheet_to_json: () => [['一级部门', '二级部门', '预估投入'], ['A', 'B', 15]] } },
   '@/stores/project': { useProjectStore: registry },
   '@/stores/permission': { usePermissionStore: noop, useHasPermission: () => key => actor === 'owner' && granted.has(key.replace('resource:', '')) },
-  '@/stores/ui': { useUiStore: { getState: () => ({ navigateWithEditGuard: callback => { if (defer) pending = callback; else callback() } }) } },
+  '@/stores/ui': { useUiStore: Object.assign(selector => selector(uiState), { getState: () => uiState }) },
+  // These fixtures enter resources directly; cockpit scope behavior has its own integration regression.
+  '@/components/cockpit/cockpitData': { canReadCockpitDepartment: () => { throw new Error('unexpected cockpit scope in direct-entry permission fixture') } },
+  '@/components/project-resources/resourceDashboardContext': {
+    resolveResourceDashboardContext: () => undefined,
+    resourceDashboardDepartmentParents: (_pairs, fallback) => fallback,
+  },
   '@/stores/plan': { usePlanStore: () => ({}) },
   '@/stores/technicalPlan': { useTechnicalPlanStore: () => ({}) },
   '@/lib/budgetMilestoneScheduling': { resolveBudgetScheduleDisplay: () => ({}) },
@@ -204,7 +211,7 @@ assert.equal(formalMachine.find(node => node.type === 'InlineField' && node.prop
 imports['@/lib/hrProjectRegistry'].isHrFormalRecord = () => false
 console.log('PASS detail labor/nonlabor/setup field separation and independent async import revalidation')
 
-const renderDashboard = () => { hookCursor = 0; hooks = []; return elements(Dashboard({ project, category: 'capability', onOpenVersion: noop })) }
+const renderDashboard = () => { hookCursor = 0; hooks = []; const dashboard = Dashboard({ project, category: 'capability' }); return elements(dashboard.type(dashboard.props)) }
 for (const change of ['revoke', 'switch', 'unlink', 'official']) {
   reset()
   const callback = button(renderDashboard(), '导出分析').props.onClick
