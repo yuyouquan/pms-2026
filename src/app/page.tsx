@@ -139,7 +139,7 @@ export default function Home() {
               }}>重试</Button>} />}
               {!permissionInitError && !canAccessActiveModule && <Empty description={permissionReady
                 ? canViewAllProjectSpaces(permissionCenter, currentLoginUser)
-                  ? '请通过顶部“所有项目空间”进入项目'
+                  ? '当前用户没有可访问的菜单，请联系管理员配置项目管理的查看权限后，从项目列表进入项目空间'
                   : '当前用户没有可访问的菜单；如有团队项目，请通过顶部“我的团队项目”进入'
                 : '正在恢复权限配置'} />}
               {permissionReady && canAccessActiveModule && <>
