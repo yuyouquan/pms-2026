@@ -13,7 +13,6 @@ import {
   UpOutlined,
 } from '@ant-design/icons'
 import { Button, Flex, Segmented, Select, Tooltip, Typography } from 'antd'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
 import { formatTosVersionDisplay, formatTosVersionFull } from '@/lib/roadmapValidation'
 import type { RoadmapBrand, RoadmapProductType, RoadmapViewMode, TosVersionConfig } from '@/types/roadmap'
 
@@ -114,8 +113,6 @@ export default function RoadmapToolbar({
   ]
   if (productTypeFilter === 'custom') productTypeOptions.push({ label: '自定义', value: 'custom', disabled: true })
 
-  const descendingVersions = [...versions].sort((left, right) => compareSemanticTos(right, left))
-
   return (
     <div
       className="roadmap-toolbar-glass pms-toolbar"
@@ -141,7 +138,7 @@ export default function RoadmapToolbar({
                 value={selectedTosVersionId ?? 'all'}
                 options={[
                   { label: '全部', value: 'all' },
-                  ...descendingVersions.map(version => ({
+                  ...versions.map(version => ({
                     label: formatTosVersionDisplay(version),
                     title: formatTosVersionFull(version),
                     value: version.id,

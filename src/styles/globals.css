@@ -2787,6 +2787,29 @@ body:not(.pms-project-list-is-resizing) .pms-project-list-column-resize-handle:h
   font-variant-numeric: tabular-nums;
 }
 
+.pms-enum-drag-handle:not(:disabled) {
+  cursor: grab;
+  touch-action: none;
+  color: var(--pms-text-secondary);
+}
+
+.pms-enum-table .pms-enum-sort {
+  padding-inline: 8px;
+}
+
+.pms-enum-top-placeholder {
+  width: 32px;
+  flex: 0 0 32px;
+}
+
+.pms-enum-drag-handle:active {
+  cursor: grabbing;
+}
+
+.pms-enum-row-dragging > td {
+  background: var(--pms-brand-surface) !important;
+}
+
 .pms-enum-values-card > .ant-card-body {
   padding: 0;
 }
