@@ -17,7 +17,6 @@ import { isPermissionCenterAdmin } from '@/lib/permissionCenter'
 import { canAccessMainModule, PERMISSION_MAIN_NAV } from '@/components/permission-center/navigation'
 import { canEnterProjectSpace } from '@/lib/projectListFilters'
 import { canViewAllProjectSpaces } from '@/lib/allProjectSpaceAccess'
-import AllProjectSpacesButton from '@/components/permission/AllProjectSpacesButton'
 import { getProjectAttribute, PROJECT_ATTRIBUTE_LABELS } from '@/types/projectRegistry'
 import { useTransferStore } from '@/stores/transfer'
 import { PROJECT_USER_CHOICES } from '@/lib/projectUserDirectory'
@@ -180,7 +179,7 @@ export function MainHeader() {
           </Space>
         </Col>
         <Col className="pms-main-header__user">
-          <Space size={8}><AllProjectSpacesButton />{!allSpaces && teamProjects.length > 0 && <Dropdown trigger={['click']} menu={{ items: teamProjects.map(project => ({ key: project.id, label: project.name, onClick: () => navigateWithEditGuard(() => {
+          <Space size={8}>{!allSpaces && teamProjects.length > 0 && <Dropdown trigger={['click']} menu={{ items: teamProjects.map(project => ({ key: project.id, label: project.name, onClick: () => navigateWithEditGuard(() => {
             const latest = useProjectStore.getState()
             const target = latest.projects.find(row => row.id === project.id)
             if (!target || !isProjectTeamMember(latest.currentLoginUser, target.id)) return
