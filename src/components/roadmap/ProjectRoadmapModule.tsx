@@ -25,6 +25,7 @@ import type { PermissionAction } from '@/types/permissionCenter'
 import { useProjectStore } from '@/stores/project'
 import { useRoadmapStore } from '@/stores/roadmap'
 import { useEnumStore } from '@/stores/enums'
+import { orderProjectEnumOptions } from '@/lib/enumConsumers'
 import { useUiStore } from '@/stores/ui'
 import { useEnumHydration, useSingleEnumOptions } from '@/hooks/useEnumOptions'
 import { exportSheet, exportTimestamp, type ExportColumn } from '@/utils/exportExcel'
@@ -134,6 +135,7 @@ export default function ProjectRoadmapModule({
   const plannedProjects = useMemo(() => projects.filter(project => getProjectAttribute(project) === 'roadmap').map(projectRegistryToPlanned), [projects])
   const storedVersionDetails = useRoadmapStore(state => state.tosVersions)
   const enumTosOptions = useSingleEnumOptions('roadmap-tos', undefined, true, 'filter')
+  const enumRowsByType = useEnumStore(state => state.rowsByType)
   const {
     hasHydrated: enumHasHydrated,
     hydrationError: enumHydrationError,
@@ -197,12 +199,7 @@ export default function ProjectRoadmapModule({
         updatedAt: existing?.updatedAt ?? '2026-01-01T00:00:00.000Z',
         selectable: currentValues.includes(normalizedValue),
       }
-    }).sort((left, right) => (
-      Number.isFinite(left.major) && Number.isFinite(left.minor)
-        && Number.isFinite(right.major) && Number.isFinite(right.minor)
-        ? Number(right.major) - Number(left.major) || Number(right.minor) - Number(left.minor)
-        : left.name.localeCompare(right.name, 'zh-CN')
-    ))
+    })
   }, [enumTosOptions, filters, plannedProjects, projects, selectedTosVersionId, storedVersionDetails])
   const sourceNormalRows = useMemo(
     () => projects.map(project => adaptNormalProject(project, sourceVersions)).filter(isPresent),
@@ -251,8 +248,10 @@ export default function ProjectRoadmapModule({
   }, [])
 
   const filterFieldDefinitions = useMemo(
-    () => buildAuthorizedRoadmapFilterDefinitions(allRows, versions, permittedColumns),
-    [allRows, versions, permittedColumns.join('|')],
+    () => buildAuthorizedRoadmapFilterDefinitions(allRows, versions, permittedColumns).map(field => field.options
+      ? { ...field, options: orderProjectEnumOptions(enumRowsByType, '整机产品项目', field.key, field.options) }
+      : field),
+    [allRows, versions, permittedColumns.join('|'), enumRowsByType],
   )
   const filterDefinitionsByKey = useMemo(
     () => new Map(filterFieldDefinitions.map(definition => [definition.key, definition])),

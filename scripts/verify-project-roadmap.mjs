@@ -3501,7 +3501,7 @@ registerAssertion('roadmap toolbar owns the table tOS selector and table keeps f
   ]) {
     if (!toolbar.includes(contract)) throw new Error(`roadmap all-tOS toolbar scope is missing ${contract}`)
   }
-  if (toolbar.indexOf("{ label: '全部', value: 'all' }") > toolbar.indexOf('descendingVersions.map')) {
+  if (toolbar.indexOf("{ label: '全部', value: 'all' }") > toolbar.indexOf('versions.map')) {
     throw new Error('all must be the first tOS selector option')
   }
   if (table.includes('>只读</Typography.Text>')) throw new Error('normal project action still renders read-only text')
@@ -3706,8 +3706,8 @@ registerAssertion('roadmap defers enum policy until hydration and preserves save
   const tosDefinition = filtersModule.buildRoadmapFilterFieldDefinitions(versions, savedValues)
     .find(definition => definition.key === 'firstSaleTosVersionId')
   if (JSON.stringify(tosDefinition?.options) !== JSON.stringify([
-    { label: 'tOS19.4（已停用）', value: '19.4', disabled: true },
     { label: 'tOS17.2', value: '17.2' },
+    { label: 'tOS19.4（已停用）', value: '19.4', disabled: true },
   ])) {
     throw new Error(`filter options leaked unrelated history or lost the saved orphan: ${JSON.stringify(tosDefinition?.options)}`)
   }

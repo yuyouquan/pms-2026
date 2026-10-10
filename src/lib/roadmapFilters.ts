@@ -5,7 +5,6 @@ import {
   isValuelessFilterOperator,
   type FilterFieldDefinition,
 } from '@/lib/filterConditions'
-import { compareSemanticTos } from '@/lib/roadmapSorting'
 import {
   normalizeColumnSettings,
   type SortableColumnDefinition,
@@ -212,15 +211,12 @@ export function buildRoadmapFilterFieldDefinitions(
   }> = {},
 ): FilterFieldDefinition[] {
   const productLines = [...new Set(Object.values(PRODUCT_LINES_BY_BRAND).flat())]
-  const selectableVersions = [...versions]
-    .filter(version => version.selectable !== false)
-    .sort((left, right) => compareSemanticTos(right, left))
+  const selectableVersions = versions.filter(version => version.selectable !== false)
   const selectableIds = new Set(selectableVersions.map(version => version.id))
   const savedOrphanOptions = [...new Set(savedTosVersionValues
     .map(value => normalizeRoadmapTosReference(value, versions))
     .filter(Boolean))]
     .filter(value => !selectableIds.has(value))
-    .sort((left, right) => compareSemanticTos(right, left))
     .map(value => ({
       label: `${formatRoadmapTosValue(value)}（已停用）`,
       value,
@@ -232,8 +228,8 @@ export function buildRoadmapFilterFieldDefinitions(
       label: 'tOS版本',
       kind: 'enum',
       options: [
-        ...savedOrphanOptions,
         ...selectableVersions.map(version => ({ label: version.name, value: version.id })),
+        ...savedOrphanOptions,
       ],
     },
     { key: 'brand', label: '品牌', kind: 'enum', options: ['示例品牌A', '示例品牌B', '示例品牌C', '待定', '其他品牌'].map(option) },
