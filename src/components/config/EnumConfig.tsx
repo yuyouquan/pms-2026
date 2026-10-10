@@ -19,7 +19,10 @@ import {
   Tooltip,
   Typography,
 } from 'antd'
-import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons'
+import { CheckCircleOutlined, DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, StopOutlined, VerticalAlignTopOutlined } from '@ant-design/icons'
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { EnumDragHandle, EnumSortableRow } from '@/components/config/EnumSortableRow'
 import type { ColumnsType } from 'antd/es/table'
 import {
   ENUM_DEFINITIONS,
@@ -83,6 +86,7 @@ export default function EnumConfig({
   const updateEnumRow = useEnumStore(state => state.updateEnumRow)
   const setEnumRowEnabled = useEnumStore(state => state.setEnumRowEnabled)
   const deleteEnumRow = useEnumStore(state => state.deleteEnumRow)
+  const moveEnumRow = useEnumStore(state => state.moveEnumRow)
   const hasHydrated = useEnumStore(state => state.hasHydrated)
   const hydrationError = useEnumStore(state => state.hydrationError)
   const hydrateEnumStore = useEnumStore(state => state.hydrateEnumStore)
@@ -106,6 +110,10 @@ export default function EnumConfig({
     values: {},
   })
   const { captureTrigger, restoreTriggerFocus, tryBeginSubmit, releaseSubmission } = useOverlayInteraction()
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  )
 
   useEffect(() => {
     if (!hasHydrated) void hydrateEnumStore()
@@ -118,6 +126,26 @@ export default function EnumConfig({
   const filterStatus = filterState.type === selectedType ? filterState.status ?? 'all' : 'all'
   const hasActiveFilters = filterStatus !== 'all' || Object.values(filterValues).some(value => value?.trim())
   const filteredRows = filterEnumRows(selectedType, rows, filterValues, filterStatus)
+
+  const moveRow = (rowId: string, targetRowId: string, toTop = false) => {
+    if (!canEditType(selectedType) || !hasHydrated || hydrationError || rowId === targetRowId) return
+    const result = moveEnumRow(selectedType, rowId, targetRowId)
+    if (!result.ok) {
+      const errorMessage = resultMessage(result)
+      if (result.reason === 'storage') {
+        setStorageWriteContext(true)
+        setSaveError(errorMessage)
+      }
+      message.error(errorMessage)
+      return
+    }
+    setSaveError(null)
+    message.success(toTop ? '配置值已置顶' : '顺序已更新')
+  }
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || !filteredRows.some(row => row.id === active.id) || !filteredRows.some(row => row.id === over.id)) return
+    moveRow(String(active.id), String(over.id))
+  }
 
   useEffect(() => {
     setFilterState({ type: selectedType, values: {} })
@@ -394,6 +422,14 @@ export default function EnumConfig({
     ),
   }))
   const columns: ColumnsType<EnumRow> = [
+    ...(canEditEnums ? [{
+      title: '',
+      key: 'sort',
+      width: 40,
+      className: 'pms-enum-sort',
+      align: 'center' as const,
+      render: (_value: unknown, row: EnumRow) => <EnumDragHandle label={getEnumRowSummary(selectedType, row)} disabled={filteredRows.length < 2 || Boolean(hydrationError)} />,
+    }] : []),
     {
       title: '序号',
       key: 'sequence',
@@ -412,7 +448,7 @@ export default function EnumConfig({
     ...(canEditEnums ? [{
       title: '操作',
       key: 'actions',
-      width: 136,
+      width: 176,
       fixed: 'right' as const,
       align: 'right' as const,
       render: (_value: unknown, row: EnumRow) => {
@@ -447,6 +483,19 @@ export default function EnumConfig({
                 onClick={event => confirmDelete(row, event.currentTarget)}
               />
             </Tooltip>
+            {row.id !== rows[0]?.id ? <Tooltip title="置顶">
+              <Button
+                type="text"
+                aria-label={`置顶配置值 ${summary}`}
+                data-testid={`enum-top-${row.id}`}
+                disabled={Boolean(hydrationError)}
+                icon={<VerticalAlignTopOutlined />}
+                onClick={() => {
+                  const first = useEnumStore.getState().rowsByType[selectedType][0]
+                  if (first) moveRow(row.id, first.id, true)
+                }}
+              />
+            </Tooltip> : <span className="pms-enum-top-placeholder" aria-hidden="true" />}
           </div>
         )
       },
@@ -700,11 +749,14 @@ export default function EnumConfig({
                 onClick={() => setFilterState({ type: selectedType, values: {} })}
               >清空筛选</Button>
             </div>
+            <DndContext key={`${selectedType}:${currentLoginUser}:${canEditEnums}`} sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={filteredRows.map(row => row.id)} strategy={verticalListSortingStrategy}>
             <Table
               className="pms-table pms-enum-table"
               rowKey="id"
               columns={columns}
               dataSource={filteredRows}
+              components={canEditEnums ? { body: { row: EnumSortableRow } } : undefined}
               pagination={false}
               size="middle"
               scroll={{ x: 'max-content' }}
@@ -725,6 +777,8 @@ export default function EnumConfig({
                 ),
               }}
             />
+            </SortableContext>
+            </DndContext>
           </Card>
       {editorModal}
     </>

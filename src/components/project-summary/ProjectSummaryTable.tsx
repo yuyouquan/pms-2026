@@ -7,6 +7,9 @@ import { getProjectListExportValue } from '@/lib/projectListExport'
 import { formatMarketName } from '@/lib/marketNameDisplay'
 import { getPmsLocalStorage } from '@/lib/mockDatasetStorage'
 import { useProjectStore } from '@/stores/project'
+import { useEnumStore } from '@/stores/enums'
+import { useEnumHydration } from '@/hooks/useEnumOptions'
+import { orderProjectEnumOptions } from '@/lib/enumConsumers'
 import { usePermissionStore, hasMenuPermission } from '@/stores/permission'
 import { getAuthorizedColumns } from '@/lib/permissionCenter'
 import { projectFieldAllowed, projectPermissionSource, projectSummaryRows } from '@/lib/projectMenuPermissions'
@@ -175,7 +178,7 @@ const getFilterKind = (
   return 'text'
 }
 
-const collectOptions = (
+const collectRowOptions = (
   rows: readonly ProjectSummaryRow[],
   field: string,
 ) => {
@@ -228,6 +231,11 @@ export default function ProjectSummaryTable({
   onTablePageChange,
 }: ProjectSummaryTableProps) {
   const currentLoginUser = useProjectStore(state => state.currentLoginUser)
+  const enumRowsByType = useEnumStore(state => state.rowsByType)
+  useEnumHydration()
+  const collectOptions = useCallback((rows: readonly ProjectSummaryRow[], field: string) => (
+    orderProjectEnumOptions(enumRowsByType, projectType, field, collectRowOptions(rows, field))
+  ), [enumRowsByType, projectType])
   const permissionCenter = usePermissionStore(state => state.permissionCenter)
   const sources = useMemo(() => permissionSources ?? new Map([...projects, ...optionProjects].map(project => [project.id, projectPermissionSource(project)])), [permissionSources, projects, optionProjects])
   const allowedFields = permissionCenter ? getAuthorizedColumns(permissionCenter, currentLoginUser, 'project.view', 'view', undefined, matrixVariant) : null
@@ -366,7 +374,7 @@ export default function ProjectSummaryTable({
           { key: 'tmg', label: 'TMG及技术领域', options: optionsFor('tmg') },
         ]
     return technicalDefinitions.filter(field => !allowedFields || projectFieldAllowed(allowedFields, field.key))
-  }, [baseRows, matrixVariant, optionRows, projectType, allowedFieldKey])
+  }, [baseRows, matrixVariant, optionRows, projectType, allowedFieldKey, collectOptions])
   const quickFilterByKey = useMemo(
     () => new Map(quickFilterDefinitions.map(definition => [definition.key, definition])),
     [quickFilterDefinitions],
@@ -397,7 +405,7 @@ export default function ProjectSummaryTable({
       })
     })
     return definitions
-  }, [baseRows, fieldDefinitions, quickFilterByKey, quickFilterDefinitions])
+  }, [baseRows, fieldDefinitions, quickFilterByKey, quickFilterDefinitions, collectOptions])
 
   const filterDefinitionByKey = useMemo(
     () => new Map(filterFieldDefinitions.map(definition => [definition.key, definition])),

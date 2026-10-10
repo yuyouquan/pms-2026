@@ -30,6 +30,7 @@ export interface EnumActions {
   updateEnumRow: <K extends EnumTypeKey>(type: K, rowId: string, draft: EnumRowDraftByType[K]) => EnumActionResult
   setEnumRowEnabled: (type: EnumTypeKey, rowId: string, enabled: boolean) => EnumActionResult
   deleteEnumRow: (type: EnumTypeKey, rowId: string) => EnumActionResult
+  moveEnumRow: (type: EnumTypeKey, rowId: string, targetRowId: string) => EnumActionResult
   hydrateEnumStore: () => Promise<boolean>
   resetLocalConfig: (authorize?: () => boolean) => Promise<boolean>
   completeHydration: (error?: unknown) => void
@@ -323,6 +324,20 @@ function deleteRow(rowsByType: EnumRowsByType, type: EnumTypeKey, rowId: string)
   }
 }
 
+/** Resolve both positions against the complete live list, including filtered-out rows. */
+function moveRow(rowsByType: EnumRowsByType, type: EnumTypeKey, rowId: string, targetRowId: string): RowMutation {
+  if (!isEnumTypeKey(type)) return { result: { ok: false, reason: 'invalid' }, rowsByType }
+  const rows = rowsByType[type]
+  const from = rows.findIndex(row => row.id === rowId)
+  const to = rows.findIndex(row => row.id === targetRowId)
+  if (from < 0 || to < 0) return { result: { ok: false, reason: 'missing' }, rowsByType }
+  if (from === to) return { result: { ok: true }, rowsByType }
+  const reordered = [...rows]
+  const [moved] = reordered.splice(from, 1)
+  reordered.splice(to, 0, moved)
+  return { result: { ok: true }, rowsByType: { ...rowsByType, [type]: reordered } as EnumRowsByType }
+}
+
 export function createEnumStore(initial?: Partial<PersistedEnumState>, idFactory: IdFactory = defaultIdFactory) {
   let rowsByType = mergeInitialRows(initial)
   let selectedType: EnumTypeKey = 'first-sale-tos'
@@ -352,6 +367,7 @@ export function createEnumStore(initial?: Partial<PersistedEnumState>, idFactory
       apply(updateRow(rowsByType, type, rowId, draft)),
     setEnumRowEnabled: (type: EnumTypeKey, rowId: string, enabled: boolean) => apply(setRowEnabled(rowsByType, type, rowId, enabled)),
     deleteEnumRow: (type: EnumTypeKey, rowId: string) => apply(deleteRow(rowsByType, type, rowId)),
+    moveEnumRow: (type: EnumTypeKey, rowId: string, targetRowId: string) => apply(moveRow(rowsByType, type, rowId, targetRowId)),
     hydrateEnumStore: async () => {
       hasHydrated = true
       hydrationError = null
@@ -429,6 +445,12 @@ export const useEnumStore = create<EnumStore>()((rawSet, get, api) => {
           const previousRows = get().rowsByType
           const next = deleteRow(previousRows, type, rowId)
           if (!next.result.ok) return next.result
+          return commitRows(previousRows, next.rowsByType)
+        },
+        moveEnumRow: (type, rowId, targetRowId) => {
+          const previousRows = get().rowsByType
+          const next = moveRow(previousRows, type, rowId, targetRowId)
+          if (!next.result.ok || next.rowsByType === previousRows) return next.result
           return commitRows(previousRows, next.rowsByType)
         },
         completeHydration: (error) => {

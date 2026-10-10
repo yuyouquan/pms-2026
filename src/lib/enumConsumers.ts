@@ -1,4 +1,5 @@
 import { formatEnumCellValue, normalizeTosValue } from '@/lib/enumValues'
+import { getProjectStatusEnumType } from '@/lib/projectStatus'
 import type {
   EnumRowByType,
   EnumRowsByType,
@@ -123,6 +124,57 @@ export function buildEnumOptions(
   }
 
   return options
+}
+
+/** Reorder existing candidates only; never introduce values outside a caller's data scope. */
+export function orderOptionsByEnumValues<T extends { value: unknown }>(
+  options: readonly T[],
+  values: readonly string[],
+  normalize = nonemptyString,
+): T[] {
+  const ranks = new Map<string, number>()
+  values.forEach(value => {
+    const key = normalize(value)
+    if (key && !ranks.has(key)) ranks.set(key, ranks.size)
+  })
+  return options.map((option, index) => ({ option, index, rank: ranks.get(normalize(option.value)) ?? Infinity }))
+    .sort((left, right) => (left.rank - right.rank) || left.index - right.index)
+    .map(({ option }) => option)
+}
+
+const PROJECT_FILTER_ENUM_TYPES: Partial<Record<string, SingleEnumTypeKey>> = {
+  firstSaleTosVersion: 'first-sale-tos', currentTosVersion: 'first-sale-tos',
+  firstSaleTosVersionId: 'roadmap-tos', versionType: 'version-type',
+  softwareProjectLevel: 'software-project-level', productSeries: 'product-series', researchMode: 'research-mode',
+  dimensionUpgradeStrategy: 'upgrade-strategy', systemType: 'system-type', kernelVersion: 'kernel-version',
+  memorySize: 'memory-size', startRam: 'memory-size', startingRam: 'memory-size',
+  androidVersion: 'android-version', healthStatus: 'machine-health-status',
+  coreValue: 'core-value', projectValue: 'core-value', buildOption: 'build-option', buildMarket: 'build-market',
+}
+
+export function orderProjectEnumOptions<T extends { value: unknown }>(
+  rowsByType: EnumRowsByType,
+  projectType: string,
+  field: string,
+  options: readonly T[],
+): T[] {
+  const type = field === 'status' ? getProjectStatusEnumType(projectType)
+    : field === 'developmentMode' || field === 'developMode' ? (projectType === '技术项目' ? 'technical-development-mode' : 'machine-development-mode')
+      : PROJECT_FILTER_ENUM_TYPES[field]
+  if (type) {
+    return orderOptionsByEnumValues(
+      options,
+      getSingleEnumValues(rowsByType, type, 'filter'),
+      type === 'first-sale-tos' || type === 'roadmap-tos' ? normalizeTosSnapshot : nonemptyString,
+    )
+  }
+  if (field === 'chipCode' || field === 'chipModel' || field === 'chipPlatform') {
+    return orderOptionsByEnumValues(options, rowsByType['chip-mapping'].map(row => row[field]))
+  }
+  if (field === 'tmg' || field === 'subdomain') {
+    return orderOptionsByEnumValues(options, rowsByType['tmg-subdomain-mapping'].map(row => field === 'tmg' ? row.domain : row.subdomain))
+  }
+  return [...options]
 }
 
 const chipSnapshotKey = (snapshot: ProjectChipSnapshot): string => JSON.stringify([
