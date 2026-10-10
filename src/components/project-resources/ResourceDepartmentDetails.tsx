@@ -15,7 +15,7 @@ export default function ResourceDepartmentDetails({ details }: { details: Detail
     { title: <Tooltip title="项目核算 ÷ 项目预算，分别按人月和总费用计算；沿用当前部门和日期筛选。">全生命周期预算执行率</Tooltip>, key: 'lifecycleExecution', width: 180, align: 'right', render: (_, row) => rates(row.lifecycleExecution, row.lifecycleCostExecution) },
   ]
   return <div aria-label="部门投入明细">
-    <p className="pms-dashboard-ledger-note">投入及执行率均为人月在上、费用在下；总费用包含人力和非人力费用。累至今日预估截至 {details.today}，只随部门筛选变化；按正式项目预算 → 正式项目概算 → 正式年度预算取数；月度预估按当月自然日均摊，自项目开始日期累计至今天，包含起算日和今天。预估费用 = 预估人月 × 费率 + 截至今日非人力计划费用（同样按自然日累计）。两种执行率的分子均与项目核算列一致。</p>
+    <p className="pms-dashboard-ledger-note">投入及执行率均为人月在上、费用在下；总费用包含人力和非人力费用。累至今日预估截至 {details.today}，{details.rangeStart ? `从 ${details.rangeStart} 起按当前范围统计` : '只随部门筛选变化'}；按正式项目预算 → 正式项目概算 → 正式年度预算取数；月度预估按当月自然日均摊，{details.rangeStart ? '按当前范围与项目起止日期交集累计。' : '自项目开始日期累计至今天，包含起算日和今天。'}预估费用 = 预估人月 × 费率 + 截至今日非人力计划费用（同样按自然日累计）。两种执行率的分子均与项目核算列一致。</p>
     {details.cumulative?.issues.length ? <Alert type="warning" showIcon message="累至今日预估暂无法完整计算" description={details.cumulative.issues.join('；')} /> : null}
     <Table<ResourceDepartmentDetail> className="pms-table" size="small" rowKey="key" dataSource={details.rows} columns={columns} pagination={false} scroll={{ x: 1330 }} locale={{ emptyText: '当前筛选范围暂无部门投入数据' }} summary={() => details.rows.length ? <Table.Summary.Row>
       <Table.Summary.Cell index={0} colSpan={2}>合计</Table.Summary.Cell>

@@ -1,9 +1,10 @@
+import { RESOURCE_CHART_COLORS } from '@/theme/resourceChartTheme'
 import { dashboardStageForDate, UNASSIGNED_STAGE, type DashboardStageDefinition } from '@/components/project-resources/resourceDashboardStages'
 export type DashboardTrendGrain = 'month' | 'week' | 'stage'
 import { DASHBOARD_BUDGETS, dashboardDelta, type DashboardAnalysis } from '@/components/project-resources/resourceDashboardData'
 import type { AccountingAnalysis } from '@/components/project-resources/resourceAccounting'
 import { aggregateDashboardDays, dashboardDates, dashboardWeekLabel } from '@/components/project-resources/resourceDashboardPeriods'
-export const DASHBOARD_SERIES = [...DASHBOARD_BUDGETS.map(item => ({ ...item, label: item.key === 'annual' ? '项目年度预算' : item.label })), { key: 'accounting', label: '项目核算', color: '#31976c' }]
+export const DASHBOARD_SERIES = [...DASHBOARD_BUDGETS.map(item => ({ ...item, label: item.key === 'annual' ? '项目年度预算' : item.label })), { key: 'accounting', label: '项目核算', color: RESOURCE_CHART_COLORS.actual }]
 export function dashboardBusinessMetrics(analyses: readonly (DashboardAnalysis | undefined)[], accounting: AccountingAnalysis | undefined) {
   const estimate = analyses[1]?.months.length ? analyses[1] : undefined
   const budget = analyses[2]?.months.length ? analyses[2] : undefined

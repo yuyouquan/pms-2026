@@ -1,3 +1,4 @@
+import { RESOURCE_CHART_COLORS } from '@/theme/resourceChartTheme'
 import { dashboardMonthDates, dashboardMonthFraction, matchesDashboardDate, spreadDashboardPlan } from '@/components/project-resources/resourceDashboardPeriods'
 import { dashboardDepartmentParents, matchesDashboardDepartment, UNASSIGNED_PRIMARY, type DashboardFilter } from '@/components/project-resources/resourceAccounting'
 import { isHrVersionVisible } from '@/lib/hrProjectRegistry'
@@ -11,9 +12,9 @@ import { buildResourceMonthlyView, type ResourceBudgetType, type ResourceMonthly
 import { resourceInvestmentStages, summarizeResourceMonths, sumMonthlyRow } from '@/components/project-resources/resourceMonthlyPresentation'
 
 export const DASHBOARD_BUDGETS: { key: ResourceBudgetType; label: string; color: string }[] = [
-  { key: 'annual', label: '年度预算', color: '#6b50dc' },
-  { key: 'projectEstimate', label: '项目概算', color: '#168b88' },
-  { key: 'projectBudget', label: '项目预算', color: '#c77d25' },
+  { key: 'annual', label: '年度预算', color: RESOURCE_CHART_COLORS.annual },
+  { key: 'projectEstimate', label: '项目概算', color: RESOURCE_CHART_COLORS.estimate },
+  { key: 'projectBudget', label: '项目预算', color: RESOURCE_CHART_COLORS.budget },
 ]
 export interface DashboardSource { owner: ResourceProject; version: ResourceVersion }
 export function dashboardSources(projects: readonly ResourceProject[], scopeId: string, type: ResourceBudgetType): DashboardSource[] {
@@ -110,7 +111,7 @@ export function buildDashboardAnalysis(category: HrProjectCategory, source: Dash
   const departmentRows = [...departments.values()].map(item => ({ ...item, target: rounded(item.target), allocated: rounded(item.allocated), selected: rounded(item.selected),
     cost: rounded(item.selected * validRate), delta: rounded(item.allocated - item.target), share: labor > 0 ? item.selected / labor * 100 : 0 }))
     .sort((a, b) => b.selected - a.selected || a.key.localeCompare(b.key))
-  const target = department === 'all' && (!filter.primary || filter.primary === 'all') ? number(version.estimatedInvestment) : rounded(departmentRows.reduce((sum, item) => sum + item.target, 0))
+  const target = department === 'all' && (!filter.primary || filter.primary === 'all') && !filter.acceptDepartment ? number(version.estimatedInvestment) : rounded(departmentRows.reduce((sum, item) => sum + item.target, 0))
   const allocated = rounded(departmentRows.reduce((sum, item) => sum + item.allocated, 0))
   if (department === 'all' && target > 0 && !departmentRows.length) issues.push({ key: 'missing-detail', title: '版本投入明细缺失', detail: `版本保存了 ${target.toFixed(1)} 人月预估，但未保存可还原的部门与月度明细，请前往来源版本核对。`, severity: 'warning' })
   const deficit = rounded(departmentRows.reduce((sum, item) => sum + item.deficit, 0))

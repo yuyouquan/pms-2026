@@ -56,6 +56,6 @@ export default function CockpitMetricDetail({ metric, facts, inputs, mode, dates
     <div className="cockpit-detail-toolbar"><Input aria-label="搜索指标来源项目" placeholder="搜索来源项目" prefix={<SearchOutlined />} value={search} onChange={event => setSearch(event.target.value)} allowClear /></div>
     <div className="cockpit-source-results" role="status"><span>匹配 <b>{detail.rows.length}</b> / {detail.count} 个项目</span>{filtered ? <button type="button" className="cockpit-text-button" onClick={clearDetailFilters}>清除来源筛选</button> : null}</div>
     <CockpitTable rows={detail.rows} columns={columns} label="指标来源明细" footer={detail.total} />
-    <p className="cockpit-detail-footnote">项目空间默认查看全周期；核对时请选择相同日期和部门。已绑定年度预算归入正式项目，不重复计数。来源筛选与搜索只改变明细及表尾的匹配合计，不改变上方总值。</p>
+    <p className="cockpit-detail-footnote">进入项目资源时沿用当前日期、部门与单位。已绑定年度预算归入正式项目，不重复计数。来源筛选与搜索只改变明细及表尾的匹配合计，不改变上方总值。</p>
   </Drawer>
 }

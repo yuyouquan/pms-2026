@@ -1,10 +1,18 @@
 import type { ResourceAccountingDataset } from '@/types/resourceAccounting'
 import { aggregateDashboardDays, dashboardDates, emptyDashboardAmounts, matchesDashboardDate, validDashboardDate, type DashboardDateFilter } from '@/components/project-resources/resourceDashboardPeriods'
 export const UNASSIGNED_PRIMARY = '未归属一级部门'
-export interface DashboardFilter extends DashboardDateFilter { primary?: string; department?: string; departmentParents?: Record<string, string> }
+export interface DashboardFilter extends DashboardDateFilter {
+  primary?: string; department?: string; departmentParents?: Record<string, string>
+  acceptDepartment?: (primary: string, secondary: string) => boolean
+  /** Optional reporting cutoff; plans retain the full requested date window. */
+  asOfDate?: string
+  cumulativeFromDate?: string
+  primaryLabel?: string; departmentLabel?: string
+}
 export function matchesDashboardDepartment(primary: string, secondary: string, filter: DashboardFilter) {
   return (!filter.primary || filter.primary === 'all' || (primary || UNASSIGNED_PRIMARY) === filter.primary)
     && (filter.department === undefined || filter.department === 'all' || secondary === filter.department)
+    && (!filter.acceptDepartment || filter.acceptDepartment(primary || UNASSIGNED_PRIMARY, secondary))
 }
 /** Ambiguous secondary names stay unassigned; never allocate the same expense into two parent departments. */
 export function dashboardDepartmentParents(pairs: readonly { primaryDepartment: string; secondaryDepartment: string }[]) {
@@ -14,6 +22,7 @@ export function dashboardDepartmentParents(pairs: readonly { primaryDepartment: 
 }
 export function buildAccountingAnalysis(dataset: ResourceAccountingDataset | undefined, rate: number, filter: DashboardFilter = {}) {
   if (!dataset) return undefined
+  if (filter.asOfDate) filter = { ...filter, endDate: !filter.endDate || filter.endDate > filter.asOfDate ? filter.asOfDate : filter.endDate }
   const validRate = Number.isFinite(rate) && rate >= 0 ? rate : 0
   const inScope = (row: { date: string; primaryDepartment: string; secondaryDepartment: string }) => validDashboardDate(row.date)
     && row.date >= dataset.startDate && row.date <= dataset.endDate && matchesDashboardDate(row.date, filter)
